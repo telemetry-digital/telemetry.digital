@@ -47,8 +47,11 @@ Upstream: https://github.com/frangoteam/legacy HMI — commit `3616aab43ac80f7f6
 Vetva **`vendor-upstream`** obsahuje čistý snapshot open-source verzie. Vetva `main` je z nej odvodená, takže:
 
 ```bash
-git diff vendor-upstream main -- legacy HMI_inst/          # presne to, čo Pro pridáva
+git diff vendor-upstream main -- legacy HMI_inst/v1.3.4-2890/server \
+  ':(exclude)*/server/_images' ':(exclude)*/server/_widgets'
 ```
+
+Výsledok: 29 súborov, +1035 / −83 riadkov — presne to, čo Pro pridáva k serveru. (Bez zúženia na `server/` diff navyše ukáže `client/src` ako zmazaný, keďže Pro dodávka zdrojáky frontendu neobsahuje.)
 
 Rovnaký obsah je pre pohodlie aj v súbore `PRO-DELTA.diff` (29 súborov, ~1 900 riadkov).
 
@@ -72,6 +75,14 @@ Rovnaký obsah je pre pohodlie aj v súbore `PRO-DELTA.diff` (29 súborov, ~1 90
 1. `git checkout vendor-upstream`
 2. nahradiť obsah `legacy HMI_inst/<verzia>/` novým upstreamom, commitnúť
 3. `git checkout main && git merge vendor-upstream` — Pro delta sa domerguje automaticky, ručne treba doriešiť len konflikty v 29 dotknutých súboroch
+
+## Poznámka ku klonovaniu na Windows
+
+Upstream frontend má hlboko zanorené cesty, ktoré prekračujú Windows limit 260 znakov. Pred klonovaním treba zapnúť:
+
+```bash
+git config --global core.longpaths true
+```
 
 ## Licencia
 
