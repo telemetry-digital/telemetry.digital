@@ -1,0 +1,22 @@
+# Závislosti
+node_modules/
+
+# Runtime dáta legacy HMI (projekt, DB, logy, reporty, nahrané súbory)
+_appdata/
+_db/
+_logs/
+_reports/
+_resources/
+_pkg/
+
+# Buildy Electronu
+app/electron/dist/
+
+# Pôvodný distribučný ZIP – rozbalený obsah je verzovaný nižšie
+legacy HMI_inst/*.zip
+
+# Logy a dočasné súbory
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
