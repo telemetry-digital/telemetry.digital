@@ -1,0 +1,30 @@
+meta {
+  name: Create a library object
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/hmi/objects
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "body": {},
+    "category": "string",
+    "kind": "string",
+    "name": "string",
+    "reason": "string",
+    "slug": "string"
+  }
+}
+
+docs {
+  Create a library object
+  
+  kind `composite`: body {elements, tags, width, height} — drawing elements (screen format v1) whose tags may be placeholders `$name` listed in `tags`; kind `svg`: body {svg}, sanitised like an import.
+  
+  Requires permission `content.write`.
+}

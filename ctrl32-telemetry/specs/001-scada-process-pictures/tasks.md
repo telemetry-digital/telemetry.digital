@@ -94,12 +94,12 @@ description: "Tasks for SCADA process pictures and editor"
 
 ## Phase 8: User Story 6 — object library, SVG import, schemes (P3)
 
-- [ ] T028 [US6] Migration `core.hmi_object` (id, org_id, slug `^[a-z0-9][a-z0-9-]{0,62}$`, kind `svg|composite`, name ≤ 128, category ≤ 64, version, body jsonb, checksum, created_by, created_at, valid_to, reason) with grants SELECT/INSERT/UPDATE to ctrl32_app in db/migrations/0021_hmi_objects.sql
-- [ ] T029 [US6] SVG sanitiser (element/attribute whitelist, href only `#…`, style url only `url(#…)`, no on*, no foreignObject/script/image/a/animate/set, ≤ 512 KiB, ≤ 20 000 elements, returns removed items) with unit tests incl. XSS vectors in internal/httpapi/svgsanitize.go and svgsanitize_test.go
-- [ ] T030 [US6] Library API per contracts/hmi-objects-api.md (list, get, create, update, retire, import-svg, svg serving with CSP sandbox, public svg route checked against the picture) with audit in internal/httpapi/hmi_objects.go, routes in server.go, OpenAPI in openapi.go, regenerate clients (`go run ./tools/apigen`)
-- [ ] T031 [US6] Composite placement (tag placeholder re-binding dialog), store selection as composite, import SVG dialog, image element rendering via `<image href>` in internal/httpapi/static/scada-editor.js and scada.js
-- [ ] T032 [US6] Picture settings: background, grid, scheme (classic/isa101) in internal/httpapi/static/dashboards.html
-- [ ] T033 [P] [US6] e2e library suite (create, version, retire, import with script stripped, serving headers, public access only when referenced) in tests/e2e/hmi_objects.sh
+- [x] T028 [US6] Migration `core.hmi_object` (id, org_id, slug `^[a-z0-9][a-z0-9-]{0,62}$`, kind `svg|composite`, name ≤ 128, category ≤ 64, version, body jsonb, checksum, created_by, created_at, valid_to, reason) with grants SELECT/INSERT/UPDATE to ctrl32_app in db/migrations/0021_hmi_objects.sql
+- [x] T029 [US6] SVG sanitiser (element/attribute whitelist, href only `#…`, style url only `url(#…)`, no on*, no foreignObject/script/image/a/animate/set, ≤ 512 KiB, ≤ 20 000 elements, returns removed items) with unit tests incl. XSS vectors in internal/httpapi/svgsanitize.go and svgsanitize_test.go
+- [x] T030 [US6] Library API per contracts/hmi-objects-api.md (list, get, create, update, retire, import-svg, svg serving with CSP sandbox, public svg route checked against the picture) with audit in internal/httpapi/hmi_objects.go, routes in server.go, OpenAPI in openapi.go, regenerate clients (`go run ./tools/apigen`)
+- [x] T031 [US6] Composite placement (tag placeholder re-binding dialog), store selection as composite, import SVG dialog, image element rendering via `<image href>` in internal/httpapi/static/scada-editor.js and scada.js
+- [x] T032 [US6] Picture settings: background, grid, scheme (classic/isa101) in internal/httpapi/static/dashboards.html
+- [x] T033 [P] [US6] e2e library suite (create, version, retire, import with script stripped, serving headers, public access only when referenced) in tests/e2e/hmi_objects.sh
 
 ---
 

@@ -1,0 +1,21 @@
+meta {
+  name: Library object with its body
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/hmi/objects/:slug
+  body: none
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+docs {
+  Library object with its body
+  
+  Requires permission `data.read`.
+}

@@ -89,6 +89,23 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   expect("binding set through the panel", await ev(`(() => { const s = document.querySelector('#scadaEd .se-props select[data-f="tag"]'); s.value = s.options[1].value; s.dispatchEvent(new Event('change', {bubbles:true})); return !!SPEC.elements.find(e => e.id === '${tankId}').tag; })()`), true);
   expect("dynamic added (state by default for symbols)", await ev(`(() => { document.querySelector('#scadaEd .se-props [data-dadd]').click(); return SPEC.elements.find(e => e.id === '${tankId}').dyn[0].prop; })()`), "state");
   expect("dynamic switched to level", await ev(`(() => { const s = document.querySelector('#scadaEd .se-props select[data-dp="0"]'); s.value = 'level'; s.dispatchEvent(new Event('change', {bubbles:true})); return JSON.stringify(SPEC.elements.find(e => e.id === '${tankId}').dyn[0]); })()`), JSON.stringify({ prop: "level", lin: [0, 100, 0, 1] }));
+  // Organization library (US6): store the tank + pump as a composite, import an SVG, place both.
+  const libName = "probe-lib-" + Math.floor(Math.random() * 1e6);
+  await ev(`window.__scadaEditor.select(SPEC.elements.filter(e => e.type === 'symbol').map(e => 'e:' + e.id))`);
+  await send("Runtime.evaluate", { expression: `(() => { const orig = ctrl32.ask; ctrl32.ask = (t) => (t.startsWith('Name') ? '${libName}' : 'probe'); document.querySelector('#scadaEd [data-lib="save"]').click(); setTimeout(() => (ctrl32.ask = orig), 2000); })()` });
+  await sleep(1500);
+  const comp = await ev(`fetch('/api/v1/hmi/objects/${libName}',{credentials:'same-origin'}).then(r => r.ok ? r.json() : null).then(o => o && (o.kind + ' ' + o.body.elements.length + ' ' + JSON.stringify(o.body.tags)))`);
+  expect("selection stored as a composite with a tag placeholder", comp, (v) => typeof v === "string" && v.startsWith("composite 2 [") && v.includes('"'));
+  const svgSlug = await ev(`(async () => { const h = {'Content-Type':'application/json','X-CSRF-Token': (await (await fetch('/api/v1/auth/me',{credentials:'same-origin'})).json()).csrf_token};
+    const r = await (await fetch('/api/v1/hmi/objects/import-svg',{method:'POST',headers:h,credentials:'same-origin',body:JSON.stringify({name:'${libName}-logo', svg:'<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80"><rect width="200" height="80" fill="#1e3a8a"/><script>alert(1)</script></svg>', reason:'probe'})})).json(); return r.slug; })()`);
+  await ev(`window.__scadaEditor._debug.loadLibrary()`); await sleep(500);
+  expect("library tiles listed", await ev(`document.querySelectorAll('#scadaEd .se-libobj').length >= 2`), true);
+  await ev(`window.__scadaEditor._debug.placeLibrary('${svgSlug}', 'svg')`); await sleep(400);
+  expect("imported graphic placed as an image", await ev(`(() => { const e = SPEC.elements.find(e => e.type === 'image'); return e ? e.src + ' ' + !!document.querySelector('#scadaEd [data-eid="' + e.id + '"] image') : 'none'; })()`), svgSlug + " true");
+  await send("Runtime.evaluate", { expression: `window.__scadaEditor._debug.placeLibrary('${libName}', 'composite')` }); await sleep(800);
+  expect("re-binding dialog for the placeholder", await ev(`(() => { const d = document.querySelector('dialog.se-dlg'); if (!d) return 'no dialog'; const s = d.querySelector('select'); s.value = s.options[1].value; d.querySelector('form').requestSubmit(); return 'ok'; })()`), "ok");
+  await sleep(500);
+  expect("composite placed as one group with the chosen tag", await ev(`(() => { const g = SPEC.elements.filter(e => e.group); const groups = new Set(g.map(e => e.group)); return g.length + ' ' + groups.size + ' ' + g.some(e => e.tag && !e.tag.startsWith('$')); })()`), "2 1 true");
   const s1 = await send("Page.captureScreenshot", { format: "png" }); fs.writeFileSync(out + "/scada-editor.png", Buffer.from(s1.result.data, "base64"));
 
   // Save with a reason, reload and compare.
@@ -103,7 +120,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   expect("reloaded editor shows the same objects", await ev(`JSON.stringify(SPEC.elements.map(e => [e.id, e.type, e.symbol || '', Math.round(e.x), Math.round(e.y)]))`), local);
   expect("rendered layer has every element", await ev(`document.querySelectorAll('#scadaEd .sc-root > [data-eid]').length === SPEC.elements.length`), true);
 
-  const del = await ev(`(async () => { const h = {'X-CSRF-Token': (await (await fetch('/api/v1/auth/me',{credentials:'same-origin'})).json()).csrf_token}; return (await fetch('/api/v1/dashboards/${slug}?reason=probe',{method:'DELETE',headers:h,credentials:'same-origin'})).status; })()`);
+  const del = await ev(`(async () => { const h = {'X-CSRF-Token': (await (await fetch('/api/v1/auth/me',{credentials:'same-origin'})).json()).csrf_token}; for (const s of ['${libName}', '${svgSlug}']) await fetch('/api/v1/hmi/objects/' + s + '?reason=probe',{method:'DELETE',headers:h,credentials:'same-origin'}); return (await fetch('/api/v1/dashboards/${slug}?reason=probe',{method:'DELETE',headers:h,credentials:'same-origin'})).status; })()`);
   console.log("cleanup:", del);
   console.log("problems:", problems.length ? JSON.stringify(problems) : "none");
   proc.kill(); process.exit(problems.length ? 1 : 0);

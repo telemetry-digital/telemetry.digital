@@ -1510,7 +1510,7 @@ export class Ctrl32Client {
   /** A starter dashboard spec built from the organization's data
    *
    * Requires permission `data.read`. */
-  getDashboardsStarter(query?: { kind?: string; /** overview (default), showcase, or mimic (process picture on a canvas) */ }): Promise<{
+  getDashboardsStarter(query?: { kind?: string; /** overview (default), showcase, mimic (widget symbols on a canvas) or plant (mixing plant process picture) */ }): Promise<{
     kind?: string;
     name?: string;
     spec?: DashboardSpec;
@@ -2194,6 +2194,92 @@ export class Ctrl32Client {
   }>('DELETE', `/api/v1/fota/campaigns/${encodeURIComponent(id)}`, query, undefined, false);
   }
 
+  /** Library objects for process pictures (current versions)
+   *
+   * Requires permission `data.read`. */
+  getHmiObjects(query?: { kind?: string; /** svg or composite (empty = all) */ }): Promise<(Record<string, unknown>)[]> {
+    return this.request<(Record<string, unknown>)[]>('GET', `/api/v1/hmi/objects`, query, undefined, false);
+  }
+
+  /** Create a library object
+   *
+   * kind `composite`: body {elements, tags, width, height} — drawing elements (screen format v1) whose tags may be placeholders `$name` listed in `tags`; kind `svg`: body {svg}, sanitised like an import.
+   * 
+   * Requires permission `content.write`. */
+  postHmiObjects(body: {
+    /** object body */
+    body: Record<string, unknown>;
+    category?: string;
+    /** svg | composite */
+    kind: string;
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    slug?: string;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/hmi/objects`, undefined, body, false);
+  }
+
+  /** Import an SVG graphic
+   *
+   * The SVG is sanitised by a whitelist (no script, event handlers, foreignObject, images, links, animations or external references); the response lists what was removed.
+   * 
+   * Requires permission `content.write`. */
+  postHmiObjectsImportSvg(body: {
+    category?: string;
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    slug?: string;
+    /** SVG document, at most 512 KiB */
+    svg: string;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/hmi/objects/import-svg`, undefined, body, false);
+  }
+
+  /** Library object with its body
+   *
+   * Requires permission `data.read`. */
+  getHmiObjectsSlug(slug: string): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('GET', `/api/v1/hmi/objects/${encodeURIComponent(slug)}`, undefined, undefined, false);
+  }
+
+  /** Save a new version of a library object
+   *
+   * Requires permission `content.write`. */
+  putHmiObjectsSlug(slug: string, body: {
+    /** object body */
+    body: Record<string, unknown>;
+    category?: string;
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('PUT', `/api/v1/hmi/objects/${encodeURIComponent(slug)}`, undefined, body, false);
+  }
+
+  /** Retire a library object
+   *
+   * Requires permission `content.write`. */
+  deleteHmiObjectsSlug(slug: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/hmi/objects/${encodeURIComponent(slug)}`, query, undefined, false);
+  }
+
+  /** The sanitised SVG of a graphic
+   *
+   * Served as image/svg+xml with a sandbox Content-Security-Policy.
+   * 
+   * Requires permission `data.read`. */
+  getHmiObjectsSlugSvg(slug: string): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/hmi/objects/${encodeURIComponent(slug)}/svg`, undefined, undefined, true);
+  }
+
   /** Supported and enabled languages */
   getI18nLanguages(): Promise<{
     default?: string;
@@ -2595,6 +2681,13 @@ export class Ctrl32Client {
   /** Devices shown in the shared dashboard */
   getPublicTokenDevices(token: string): Promise<Device[]> {
     return this.request<Device[]>('GET', `/api/v1/public/${encodeURIComponent(token)}/devices`, undefined, undefined, false);
+  }
+
+  /** A library graphic shown by the shared picture
+   *
+   * Only graphics that the linked process picture references. */
+  getPublicTokenHmiObjectsSlugSvg(token: string, slug: string): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/public/${encodeURIComponent(token)}/hmi/objects/${encodeURIComponent(slug)}/svg`, undefined, undefined, true);
   }
 
   /** Observations (bound datastreams only)

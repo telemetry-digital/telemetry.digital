@@ -1,0 +1,30 @@
+meta {
+  name: Save a new version of a library object
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{baseUrl}}/api/v1/hmi/objects/:slug
+  body: json
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+body:json {
+  {
+    "body": {},
+    "category": "string",
+    "name": "string",
+    "reason": "string"
+  }
+}
+
+docs {
+  Save a new version of a library object
+  
+  Requires permission `content.write`.
+}

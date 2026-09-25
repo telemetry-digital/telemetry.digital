@@ -99,6 +99,7 @@ const (
 	tagNotify   = "Notifications"
 	tagRules    = "Automation rules"
 	tagDash     = "Dashboards"
+	tagHMI      = "HMI object library"
 	tagPublic   = "Public dashboards"
 	tagLive     = "Live stream"
 	tagConn     = "Connectors"
@@ -126,7 +127,8 @@ var apiTags = []struct{ Name, Desc string }{
 	{tagAlarms, "Alarm rules (limits on a datastream), active/cleared alarms and acknowledgement."},
 	{tagNotify, "Notification channels (e-mail, webhook, SMS gateway, voice provider, Web Push), escalation policies and the delivery log."},
 	{tagRules, "Automation rules \"condition → action\" over datastreams: notify, webhook, device command, alarm, derived datastream."},
-	{tagDash, "Dashboards (screen format v1) and their widget catalog."},
+	{tagDash, "Dashboards and process pictures (screen format v1: widgets and the drawing layer) and the widget catalog."},
+	{tagHMI, "Library of process-picture objects: imported SVG graphics (sanitised) and composites with tag placeholders."},
 	{tagPublic, "Read-only access to a dashboard shared by token, no sign-in."},
 	{tagLive, "Server-Sent Events with observations, device state, alarms and command status."},
 	{tagConn, "Inbound and outbound connectors: ChirpStack (LoRaWAN), OPC UA, Modbus TCP."},
@@ -337,7 +339,14 @@ var apiOps = []apiOp{
 	{M: "PUT /api/v1/dashboards/{slug}", T: tagDash, S: "Save a new version of a dashboard", P: "content.write", B: obj(S{"name": str(""), "spec": ref("DashboardSpec"), "is_default": boolean(""), "reason": reason}, "reason"), R: ref("Dashboard")},
 	{M: "DELETE /api/v1/dashboards/{slug}", T: tagDash, S: "Delete a dashboard", P: "content.write", Q: []apiParam{qr("reason", "")}, R: okResp},
 	{M: "GET /api/v1/dashboards/catalog", T: tagDash, S: "Widget catalog and time ranges", P: "data.read", R: obj(S{"widgets": arr(anyObj("widget type definition")), "ranges": arr(str(""))})},
-	{M: "GET /api/v1/dashboards/starter", T: tagDash, S: "A starter dashboard spec built from the organization's data", P: "data.read", Q: []apiParam{q("kind", "overview (default), showcase, or mimic (process picture on a canvas)")}, R: obj(S{"kind": str(""), "name": str(""), "spec": ref("DashboardSpec")})},
+	{M: "GET /api/v1/dashboards/starter", T: tagDash, S: "A starter dashboard spec built from the organization's data", P: "data.read", Q: []apiParam{q("kind", "overview (default), showcase, mimic (widget symbols on a canvas) or plant (mixing plant process picture)")}, R: obj(S{"kind": str(""), "name": str(""), "spec": ref("DashboardSpec")})},
+	{M: "GET /api/v1/hmi/objects", T: tagHMI, S: "Library objects for process pictures (current versions)", P: "data.read", Q: []apiParam{q("kind", "svg or composite (empty = all)")}, R: arr(anyObj("library object summary: slug, kind, name, category, version, width, height, created_at"))},
+	{M: "POST /api/v1/hmi/objects", T: tagHMI, S: "Create a library object", D: "kind `composite`: body {elements, tags, width, height} — drawing elements (screen format v1) whose tags may be placeholders `$name` listed in `tags`; kind `svg`: body {svg}, sanitised like an import.", P: "content.write", C: 201, B: obj(S{"name": str(""), "slug": str(""), "kind": str("svg | composite"), "category": str(""), "body": anyObj("object body"), "reason": reason}, "name", "kind", "body", "reason"), R: anyObj("library object")},
+	{M: "POST /api/v1/hmi/objects/import-svg", T: tagHMI, S: "Import an SVG graphic", D: "The SVG is sanitised by a whitelist (no script, event handlers, foreignObject, images, links, animations or external references); the response lists what was removed.", P: "content.write", C: 201, B: obj(S{"name": str(""), "slug": str(""), "category": str(""), "svg": str("SVG document, at most 512 KiB"), "reason": reason}, "name", "svg", "reason"), R: anyObj("library object with removed[]")},
+	{M: "GET /api/v1/hmi/objects/{slug}", T: tagHMI, S: "Library object with its body", P: "data.read", R: anyObj("library object")},
+	{M: "PUT /api/v1/hmi/objects/{slug}", T: tagHMI, S: "Save a new version of a library object", P: "content.write", B: obj(S{"name": str(""), "category": str(""), "body": anyObj("object body"), "reason": reason}, "body", "reason"), R: anyObj("library object")},
+	{M: "DELETE /api/v1/hmi/objects/{slug}", T: tagHMI, S: "Retire a library object", P: "content.write", Q: []apiParam{qr("reason", "")}, R: okResp},
+	{M: "GET /api/v1/hmi/objects/{slug}/svg", T: tagHMI, S: "The sanitised SVG of a graphic", D: "Served as image/svg+xml with a sandbox Content-Security-Policy.", P: "data.read", CT: "image/svg+xml", RD: "SVG document"},
 	{M: "GET /api/v1/dashboards/{slug}/share", T: tagDash, S: "Public share of a dashboard", P: "content.write", R: ref("Share")},
 	{M: "POST /api/v1/dashboards/{slug}/share", T: tagDash, S: "Publish a dashboard under a public link", D: "Creates the share token; the response carries the public URL and a QR code.", P: "content.write", C: 201, B: reasonBody, R: ref("Share")},
 	{M: "DELETE /api/v1/dashboards/{slug}/share", T: tagDash, S: "Withdraw the public link", P: "content.write", Q: []apiParam{qr("reason", "")}, R: ref("Share")},
@@ -350,6 +359,7 @@ var apiOps = []apiOp{
 	{M: "GET /api/v1/public/{token}/devices", T: tagPublic, S: "Devices shown in the shared dashboard", P: "public", R: arr(ref("Device"))},
 	{M: "GET /api/v1/public/{token}/alarms", T: tagPublic, S: "Alarms of the bound datastreams", P: "public", R: arr(ref("Alarm"))},
 	{M: "GET /api/v1/public/{token}/stream", T: tagPublic, S: "Live stream of the shared dashboard (SSE)", P: "public", CT: "text/event-stream", RD: "Server-Sent Events, see Live stream"},
+	{M: "GET /api/v1/public/{token}/hmi/objects/{slug}/svg", T: tagPublic, S: "A library graphic shown by the shared picture", D: "Only graphics that the linked process picture references.", P: "public", CT: "image/svg+xml", RD: "SVG document"},
 
 	// ---- live
 	{M: "GET /api/v1/stream", T: tagLive, S: "Live events (Server-Sent Events)", D: "Long-lived `text/event-stream`. Events: `hello`, `observation` {datastream_id, key, value, measured_at}, `device` {device_id, connected}, `alarm` {alarm_id, datastream_id, state, severity, value}, `command` {device_id, command_id, method, status, detail}; `ping` every 25 s with the count of dropped events. Filters: `datastreams` (comma-separated ids), `devices` (`all` or ids), `alarms=1`.", P: "data.read",

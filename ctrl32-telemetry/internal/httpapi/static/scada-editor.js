@@ -55,6 +55,11 @@
       <div class="se-main">
         <aside class="se-lib">
           <div class="se-tools">${['select', 'rect', 'ellipse', 'line', 'polyline', 'polygon', 'pipe', 'text'].map((t) => `<button type="button" class="se-tool${t === 'select' ? ' on' : ''}" data-tool="${t}" title="${esc({ select: 'Select (V)', rect: 'Rectangle (R)', ellipse: 'Ellipse (E)', line: 'Line (L)', polyline: 'Polyline (P)', polygon: 'Polygon (G)', pipe: 'Pipe (I)', text: 'Text (T)' }[t])}">${ICON[t]}</button>`).join('')}</div>
+          <details class="se-orglib" open><summary>Organization library</summary>
+            <div class="row" style="gap:4px;margin:2px 0 6px"><button type="button" class="btn small" data-lib="import" title="Import an SVG graphic (logo, special machine); it is sanitised on the server">Import SVG</button><button type="button" class="btn small" data-lib="save" title="Store the selected objects as a reusable composite; bound tags become placeholders">Save selection</button></div>
+            <input type="file" class="se-file" accept=".svg,image/svg+xml" hidden>
+            <div class="se-libgrid"></div>
+          </details>
           <input class="se-search" type="search" placeholder="Search symbols…">
           <div class="se-syms"></div>
         </aside>
@@ -393,6 +398,67 @@
     }
     $('.se-search').oninput = renderLibrary;
 
+    // ---- organization library: imported SVG graphics and composites (hmi_objects API) ---------------------------------
+    let LIB = [];
+    const ask = (t, d) => (window.ctrl32 && ctrl32.ask ? ctrl32.ask(t, d) : window.prompt(t, d));
+    const toast = (m, k) => (window.ctrl32 && ctrl32.toast ? ctrl32.toast(m, k) : null);
+    const viewCenter = () => ({ x: (view.scrollLeft + view.clientWidth / 2 - 12) / Z, y: (view.scrollTop + view.clientHeight / 2 - 12) / Z });
+    async function loadLibrary() {
+      try { LIB = await ctrl32.api('GET', '/api/v1/hmi/objects'); } catch (_) { LIB = []; }
+      const grid = $('.se-libgrid');
+      grid.innerHTML = LIB.length ? `<div class="se-symgrid">${LIB.map((o) => `<button type="button" class="se-sym se-libobj" data-slug="${esc(o.slug)}" data-kind="${o.kind}" title="${esc(o.name)} · ${esc(o.kind)} v${o.version}">${o.kind === 'svg' ? `<img src="/api/v1/hmi/objects/${encodeURIComponent(o.slug)}/svg" alt="" style="width:40px;height:40px;object-fit:contain">` : ICON.group}<span>${esc(o.name)}</span></button>`).join('')}</div>` : '<div class="muted" style="font-size:11px">Empty. Import an SVG or save a selection.</div>';
+      grid.querySelectorAll('.se-libobj').forEach((b) => b.onclick = () => placeLibrary(b.dataset.slug, b.dataset.kind));
+    }
+    async function placeLibrary(slug, kind, at) {
+      const o = LIB.find((x) => x.slug === slug); if (!o) return; const c = at || viewCenter();
+      if (kind === 'svg') {
+        const k = Math.min(1, 240 / Math.max(o.width || 100, o.height || 100)); const w = Math.max(10, Math.round((o.width || 100) * k)), h = Math.max(10, Math.round((o.height || 100) * k));
+        const e = addEl({ type: 'image', src: slug, x: snap(c.x - w / 2), y: snap(c.y - h / 2), w, h, name: o.name }); drawLayer(); commit(); select(['e:' + e.id]); return;
+      }
+      let full; try { full = await ctrl32.api('GET', '/api/v1/hmi/objects/' + encodeURIComponent(slug)); } catch (x) { toast(x.message, 'bad'); return; }
+      const map = await mapTags(full.body.tags || [], full.name); if (map === null) return;
+      const taken = takenIds(), g = newId('g', taken), ox = snap(c.x - full.body.width / 2), oy = snap(c.y - full.body.height / 2), keys = [];
+      const bind = (holder) => { if (typeof holder.tag === 'string' && holder.tag[0] === '$') { const v = map[holder.tag.slice(1)]; if (v) holder.tag = v; else delete holder.tag; } };
+      for (const src of full.body.elements) {
+        const e = clone(src); e.id = newId('e', taken); taken.add(e.id); e.group = g; bind(e); (e.dyn || []).forEach(bind);
+        if (e.points) e.points = e.points.map((q) => [r2(q[0] + ox), r2(q[1] + oy)]); e.x = r2((e.x || 0) + ox); e.y = r2((e.y || 0) + oy);
+        spec.elements.push(e); keys.push('e:' + e.id);
+      }
+      drawLayer(); commit(); select(keys); refreshValues();
+    }
+    // Re-binding dialog: one datastream per tag placeholder of a composite.
+    function mapTags(tags, name) {
+      if (!tags.length) return Promise.resolve({});
+      return new Promise((resolve) => {
+        const d = document.createElement('dialog'); d.className = 'se-dlg';
+        d.innerHTML = `<form class="form" method="dialog"><h2 style="margin-top:0">${esc(name)}</h2><p class="muted">Choose the datastream for each tag of the composite.</p>${tags.map((t) => `<label>${esc(t)} <select name="${esc(t)}">${dsOptions('', '— none —')}</select></label>`).join('')}<div class="actions"><button class="btn primary" type="submit">Place</button><button class="btn" type="button" data-cancel>Cancel</button></div></form>`;
+        document.body.appendChild(d); d.showModal();
+        const done = (v) => { d.close(); d.remove(); resolve(v); };
+        d.querySelector('[data-cancel]').onclick = () => done(null);
+        d.querySelector('form').onsubmit = (ev) => { ev.preventDefault(); const m = {}; for (const t of tags) m[t] = d.querySelector(`select[name="${CSS.escape(t)}"]`).value; done(m); };
+      });
+    }
+    async function saveSelection() {
+      const es = selEls(); if (!es.length) { toast('Select the objects to store first.', 'bad'); return; }
+      const name = (ask('Name of the library object', '') || '').trim(); if (!name) return;
+      const reason = (ask('Reason (audit trail)', '') || '').trim(); if (!reason) return;
+      const u = union(es.map((e) => 'e:' + e.id)); const names = {}, used = new Set();
+      const holder = (id) => { if (!id) return undefined; if (!names[id]) { const d = (o.datastreams || []).find((x) => x.id === id); let n = ((d && d.key) || 'tag').toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^[^a-z]+/, '') || 'tag'; n = n.slice(0, 28); let k = n, i = 2; while (used.has(k)) k = n + '_' + i++; used.add(k); names[id] = k; } return '$' + names[id]; };
+      const elements = es.map((src) => { const e = clone(src); delete e.id; delete e.group; delete e.locked; if (e.tag) e.tag = holder(e.tag); (e.dyn || []).forEach((dd) => { if (dd.tag) dd.tag = holder(dd.tag); });
+        if (e.points) e.points = e.points.map((q) => [r2(q[0] - u.x), r2(q[1] - u.y)]); e.x = r2((e.x || 0) - u.x); e.y = r2((e.y || 0) - u.y); return e; });
+      try { const r = await ctrl32.api('POST', '/api/v1/hmi/objects', { name, kind: 'composite', category: 'Composites', reason, body: { width: Math.max(1, Math.ceil(u.w)), height: Math.max(1, Math.ceil(u.h)), tags: Object.values(names), elements } });
+        toast('Stored in the library: ' + r.name, 'ok'); await loadLibrary(); } catch (x) { toast(x.message, 'bad'); }
+    }
+    host.querySelector('.se-orglib').addEventListener('click', (ev) => { const b = ev.target.closest('[data-lib]'); if (!b) return; if (b.dataset.lib === 'save') saveSelection(); else $('.se-file').click(); });
+    $('.se-file').onchange = async () => {
+      const f = $('.se-file').files[0]; $('.se-file').value = ''; if (!f) return;
+      if (f.size > 512 * 1024) { toast('The SVG is larger than 512 KiB.', 'bad'); return; }
+      const name = (ask('Name of the graphic', f.name.replace(/\.svg$/i, '')) || '').trim(); if (!name) return;
+      const reason = (ask('Reason (audit trail)', '') || '').trim(); if (!reason) return;
+      try { const r = await ctrl32.api('POST', '/api/v1/hmi/objects/import-svg', { name, category: 'Imported', svg: await f.text(), reason });
+        toast(r.removed.length ? 'Imported; removed: ' + r.removed.join(', ') : 'Imported', r.removed.length ? 'warn' : 'ok'); await loadLibrary(); placeLibrary(r.slug, 'svg'); } catch (x) { toast(x.message, 'bad'); }
+    };
+
     // ---- layers panel ----------------------------------------------------------------------------------------------
     host.querySelector('.se-tabs').addEventListener('click', (ev) => { const b = ev.target.closest('[data-tab]'); if (!b) return; host.querySelectorAll('.se-tabs button').forEach((x) => x.classList.toggle('on', x === b)); props.hidden = b.dataset.tab !== 'props'; layers.hidden = b.dataset.tab !== 'layers'; renderLayers(); });
     function renderLayers() {
@@ -421,9 +487,10 @@
       if (one) h += `<details open><summary>Object</summary>${txt('name', e.name, 'Name (tooltip, faceplate)', 'maxlength="64"')}<div class="row">${chk('locked', e.locked, 'Locked')}${chk('hidden', e.hidden, 'Hidden in operation')}</div>${e.group ? `<div class="muted" style="font-size:12px">Group ${esc(e.group)}</div>` : ''}</details>`;
       if (one) { const b = S.bbox(e); h += `<details open><summary>Geometry</summary><div class="row se-geo">${num('@x', r2(b.x), 'X')}${num('@y', r2(b.y), 'Y')}${num('@w', r2(b.w), 'W', 'min="0"')}${num('@h', r2(b.h), 'H', 'min="0"')}${t !== 'line' ? num('r', e.r || 0, 'Rotation °', 'min="-360" max="360"') : ''}</div>${e.points ? `<div class="muted" style="font-size:12px">${e.points.length} points · drag a point, double-click a segment to add one, Alt-click a point to remove it</div>` : ''}</details>`; }
       if (one && t === 'symbol') h += `<details open><summary>Symbol</summary><label>Symbol <select data-f="symbol" data-kind="text">${Object.keys(S.CATS).map((c) => `<optgroup label="${esc(S.CATS[c])}">${S.SYMBOL_IDS.filter((id) => S.symbols[id].cat === c).map((id) => `<option value="${id}"${id === e.symbol ? ' selected' : ''}>${esc(S.symbols[id].name)}</option>`).join('')}</optgroup>`).join('')}</select></label>${txt('text', e.text, 'Label (instruments, buttons)', 'maxlength="500"')}</details>`;
+      if (one && t === 'image') h += `<details open><summary>Graphic</summary><label>Library graphic <select data-f="src" data-kind="text">${LIB.filter((x) => x.kind === 'svg').map((x) => `<option value="${esc(x.slug)}"${x.slug === e.src ? ' selected' : ''}>${esc(x.name)}</option>`).join('') || `<option>${esc(e.src)}</option>`}</select></label></details>`;
       if (one && t === 'text') h += `<details open><summary>Text</summary><label>Text <textarea rows="2" data-f="text" data-kind="text" maxlength="500">${esc(e.text || '')}</textarea></label><div class="muted" style="font-size:11px">Placeholders: {value} {unit} {name} {time}</div></details>`;
       h += `<details open><summary>Appearance</summary>`;
-      if (t !== 'line' && t !== 'polyline') h += `<label>${t === 'pipe' ? 'Medium colour' : t === 'text' ? 'Background' : 'Fill'} ${colorIn(t === 'pipe' ? 'style.medium' : t === 'text' ? 'style.bg' : 'style.fill', t === 'pipe' ? st.medium : t === 'text' ? st.bg : st.fill, true)}</label>`;
+      if (t !== 'line' && t !== 'polyline' && t !== 'image') h += `<label>${t === 'pipe' ? 'Medium colour' : t === 'text' ? 'Background' : 'Fill'} ${colorIn(t === 'pipe' ? 'style.medium' : t === 'text' ? 'style.bg' : 'style.fill', t === 'pipe' ? st.medium : t === 'text' ? st.bg : st.fill, true)}</label>`;
       h += `<label>${t === 'pipe' ? 'Outline' : 'Line'} ${colorIn('style.stroke', st.stroke, true)}</label><div class="row">${num('style.sw', st.sw, t === 'pipe' ? 'Diameter px' : 'Line width', 'min="0" max="100"')}${num('style.opacity', st.opacity, 'Opacity', 'min="0" max="1" step="0.05"')}</div>`;
       if (t !== 'pipe' && t !== 'symbol') h += sel('style.dash', st.dash, 'Line style', [['', 'solid'], ['dash', 'dashed'], ['dot', 'dotted'], ['dashdot', 'dash-dot']]);
       if (t === 'rect' || t === 'text') h += num('style.radius', st.radius, 'Corner radius', 'min="0"');
@@ -513,7 +580,7 @@
     }
 
     // ---- lifecycle -------------------------------------------------------------------------------------------------
-    renderLibrary(); setTool('select');
+    renderLibrary(); loadLibrary(); setTool('select');
     const ready = render().then(() => { commit(true); fit(); renderProps(); toolbarState(); });
     return {
       ready,
@@ -521,7 +588,7 @@
       commit: () => commit(), select: (keys) => select(keys), selection: () => SEL.slice(),
       showError(msg) { const m = /^element (\d+):/.exec(msg || ''); if (m) { const e = spec.elements[+m[1] - 1]; if (e) { select(['e:' + e.id]); } } },
       destroy() { document.removeEventListener('keydown', onKey); host.innerHTML = ''; },
-      _debug: { get Z() { return Z; }, get tool() { return tool; }, get drawing() { return drawing; }, get drag() { return drag; }, setTool, placeSymbol, undo, redo, align, copy, paste, del, commit, hist },
+      _debug: { loadLibrary, placeLibrary, get LIB() { return LIB; }, get Z() { return Z; }, get tool() { return tool; }, get drawing() { return drawing; }, get drag() { return drag; }, setTool, placeSymbol, undo, redo, align, copy, paste, del, commit, hist },
     };
   }
   window.ctrl32ScadaEditor = { create };
