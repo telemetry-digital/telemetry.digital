@@ -14,6 +14,12 @@ failover, and a continuous offsite backup.
 **Related**: ADR-0003 (sizing: "higher volumes = PostgreSQL replica, not another architecture"), ADR-0005 (record
 integrity), ADR-0008 S5, ADR-0012 (server agent), URS K-01…K-05 (backup/restore), new URS K-15…K-20.
 
+## Clarifications
+
+### Session 2026-09-25
+
+- Q: Promotion of the hot standby — manual one-click or automatic? → A: Manual one-click by an administrator (with reason); no automatic failover in this feature.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Copy the live database to another PC and disconnect it safely (Priority: P1)
@@ -77,9 +83,8 @@ restore it and verify catch-up; attempt a write on the replica and verify it is 
 
 The administrator chooses the mode "hot standby" for the second PC. It runs a complete ctrl32 server in standby: it
 receives all data like a continuous replica and is ready to take over. When the primary fails, the standby is
-promoted to primary [NEEDS CLARIFICATION: Promotion — manual one-click by an administrator (safe, no split-brain
-risk), or automatic after the primary has been unreachable for N seconds (needs a third "witness" to avoid two
-primaries)?]. After promotion, devices and users reach the new primary (same address through a shared name or
+promoted to primary manually, by an administrator with one click, a reason and a confirmation (no automatic promotion: it would
+need a third witness machine to avoid two primaries). After promotion, devices and users reach the new primary (same address through a shared name or
 virtual address configured by the administrator), and the former primary, when it returns, never accepts writes
 again until it is re-attached as a replica of the new primary.
 

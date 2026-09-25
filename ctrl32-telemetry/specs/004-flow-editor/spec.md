@@ -13,6 +13,12 @@ to Node-RED — licensed, better, higher quality?"
 publish out, generic webhook in), ADR-0013 (canvas editors, superseded in part by ADR-0015), constitution II
 (no second runtime) and III (no user scripts without a sandbox decision).
 
+## Clarifications
+
+### Session 2026-09-25
+
+- Q: Sandboxed script node (like the Node-RED function node) in addition to expressions? → A: No — expressions only.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Build an automation visually from nodes and wires (Priority: P1)
@@ -128,8 +134,7 @@ command-sending flow waits for approval by another user.
 - **FR-003**: The system MUST provide the node library of US3.
 - **FR-004**: Expressions MUST use a safe, side-effect-free expression language (arithmetic, comparisons, logic,
   math functions, string and time functions) evaluated with time and size limits.
-  [NEEDS CLARIFICATION: Should a sandboxed script node (JavaScript-like, like Node-RED's "function" node) be offered
-  in addition — more power, but a larger attack surface and harder validation — or only the expression language?]
+  No script node: the expression language and the node library are the only ways to compute (no user code).
 - **FR-005**: Every automated action MUST carry the flow's identity and version as its origin in the audit trail;
   commands MUST respect permissions of the flow's owner and the four-eyes policy.
 - **FR-006**: Flows MUST be versioned content (deploy = new version with reason; restore; export/import JSON), and

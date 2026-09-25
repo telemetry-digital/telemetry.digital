@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — open: FR-004 sandboxed script node
+- [x] No [NEEDS CLARIFICATION] markers remain (resolved 2026-09-25, see spec Clarifications)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)

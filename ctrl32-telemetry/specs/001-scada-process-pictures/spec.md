@@ -15,6 +15,12 @@ to choose: SCADA, widgets, or both."
 ADR-0015, proposed with this spec). Widget catalogue and widget settings are specified separately in
 `specs/002-dashboard-widgets`.
 
+## Clarifications
+
+### Session 2026-09-25
+
+- Q: Import of customer SVG graphics (logos, special machines) in this feature, or later? → A: In this feature, with server-side sanitising.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Operator watches the process on a live process picture (Priority: P1)
@@ -261,9 +267,8 @@ high-performance" (grey process, colour only for abnormal states) — and a back
 - **FR-022**: Users MUST be able to group objects, store a group in the organization's object library (versioned,
   with reason), place it on any picture and re-bind all its tags in one dialog.
 - **FR-023**: Pictures MUST support the colour schemes "classic" and "ISA-101"; symbol state colours follow the scheme.
-- **FR-024**: Users MUST be able to import their own vector graphics into the object library
-  [NEEDS CLARIFICATION: Import of customer SVG graphics (logos, special machines) — needed in this feature, or later?
-  Imported SVG must be sanitised (no script, no external references).]
+- **FR-024**: Users MUST be able to import their own vector graphics into the object library, now: imported SVG is sanitised on the server (no script, event attributes, foreign or external references,
+  embedded HTML), limited in size, stored as versioned organization content and usable like a built-in symbol.
 
 **Quality**
 
