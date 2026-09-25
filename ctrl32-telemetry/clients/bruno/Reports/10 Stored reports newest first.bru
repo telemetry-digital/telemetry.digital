@@ -1,0 +1,21 @@
+meta {
+  name: Stored reports newest first
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/v1/reports
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~limit: 
+}
+
+docs {
+  Stored reports, newest first
+  
+  Requires permission `data.export`.
+}

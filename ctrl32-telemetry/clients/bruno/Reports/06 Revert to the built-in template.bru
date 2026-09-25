@@ -1,0 +1,26 @@
+meta {
+  name: Revert to the built-in template
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/report-templates/:kind
+  body: none
+  auth: inherit
+}
+
+params:path {
+  kind: 
+}
+
+params:query {
+  ~locale: 
+  reason: 
+}
+
+docs {
+  Revert to the built-in template
+  
+  Requires permission `content.write`.
+}

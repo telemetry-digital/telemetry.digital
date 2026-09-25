@@ -9,3 +9,4 @@ config.toml
 .pio/
 node_modules/
 __pycache__/
+pio-*.log

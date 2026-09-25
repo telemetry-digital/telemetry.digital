@@ -1,0 +1,25 @@
+meta {
+  name: Render the effective template with sample data (PDF)
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/report-templates/:kind/preview
+  body: none
+  auth: inherit
+}
+
+params:path {
+  kind: 
+}
+
+params:query {
+  ~locale: 
+}
+
+docs {
+  Render the effective template with sample data (PDF)
+  
+  Requires permission `data.export`.
+}

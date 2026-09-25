@@ -1,0 +1,21 @@
+meta {
+  name: Report metadata
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/v1/reports/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  Report metadata
+  
+  Requires permission `data.export`.
+}

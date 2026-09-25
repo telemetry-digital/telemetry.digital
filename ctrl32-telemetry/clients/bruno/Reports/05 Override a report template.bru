@@ -1,0 +1,33 @@
+meta {
+  name: Override a report template
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{baseUrl}}/api/v1/report-templates/:kind
+  body: json
+  auth: inherit
+}
+
+params:path {
+  kind: 
+}
+
+body:json {
+  {
+    "body": "string",
+    "locale": "string",
+    "name": "string",
+    "reason": "string",
+    "spec": {}
+  }
+}
+
+docs {
+  Override a report template
+  
+  Either a block `spec` (compiled to Typst on the server) or a full Typst `body`.
+  
+  Requires permission `content.write`.
+}
