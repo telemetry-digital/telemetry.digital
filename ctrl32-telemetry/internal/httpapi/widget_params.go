@@ -24,6 +24,10 @@ var (
 // commonParams are appended to every widget definition: appearance (card, title, colours) and a click action.
 var commonParams = []ScreenParam{
 	{Name: "show_title", Label: "Show title", Kind: "bool", Default: true, Group: "appearance"},
+	{Name: "title_color", Label: "Title colour", Kind: "color", Group: "appearance"},
+	{Name: "title_align", Label: "Title alignment", Kind: "select", Options: []string{"left", "center", "right"}, Default: "left", Group: "appearance"},
+	{Name: "title_bold", Label: "Bold title", Kind: "bool", Default: true, Group: "appearance"},
+	{Name: "font", Label: "Font", Kind: "select", Options: []string{"default", "mono", "serif", "condensed"}, Default: "default", Group: "appearance"},
 	{Name: "title_icon", Label: "Title icon", Kind: "icon", Group: "appearance"},
 	{Name: "title_size", Label: "Title size px", Kind: "number", Group: "appearance", Min: fptr(8), Max: fptr(48)},
 	{Name: "value_size", Label: "Value size px", Kind: "number", Group: "appearance", Min: fptr(8), Max: fptr(120)},
@@ -53,6 +57,18 @@ var timeParams = []ScreenParam{
 	{Name: "series", Label: "Series", Kind: "series", Group: "series"},
 	{Name: "filters", Label: "Filters for viewers (shown on the widget)", Kind: "multi", Options: []string{"range", "agg", "interval", "series"}, Group: "time"},
 }
+
+// Settings added by kind of widget: per-series options for every widget bound to datastreams, value colour and label
+// switch for value-like widgets, zone colours where warning/action limits exist, a legend for share charts.
+var (
+	seriesParam  = ScreenParam{Name: "series", Label: "Series", Kind: "series", Group: "series"}
+	valueParams  = []ScreenParam{{Name: "value_color", Label: "Value colour", Kind: "color", Group: "appearance"}, {Name: "show_label", Label: "Show datastream name", Kind: "bool", Default: true, Group: "appearance"}}
+	zoneParams   = []ScreenParam{{Name: "warn_color", Label: "Warning colour", Kind: "color", Group: "appearance"}, {Name: "action_color", Label: "Action colour", Kind: "color", Group: "appearance"}}
+	legendParams = []ScreenParam{{Name: "legend_pos", Label: "Legend position", Kind: "select", Options: []string{"right", "bottom", "none"}, Default: "right", Group: "series"}}
+	windowParams = []ScreenParam{timeParams[0], timeParams[1], timeParams[2]}
+	shareWidgets = setOf("donut", "pie", "polar", "radar", "bars", "led_grid")
+	windowed     = setOf("agg_card")
+)
 
 // rangesParam is added to value-like widgets for conditional formatting.
 var rangesParam = ScreenParam{Name: "ranges", Label: "Conditional formatting", Kind: "ranges", Group: "appearance"}
@@ -212,7 +228,7 @@ func validateRichParam(d ScreenParam, v any) (any, error) {
 }
 
 var timeWidgets = setOf("chart", "bar_time", "state_timeline", "ts_table")
-var valueWidgets = setOf("value", "gauge", "bars", "table", "value_card", "agg_card", "progress", "level_card", "thermometer", "radial_gauge", "linear_gauge", "entity_table", "battery")
+var valueWidgets = setOf("value", "gauge", "bars", "table", "value_card", "agg_card", "progress", "level_card", "thermometer", "radial_gauge", "linear_gauge", "entity_table", "battery", "signal", "compass", "ts_table", "alarm_count")
 
 // withCommon completes the catalogue once at start-up: every type gets the common settings, time-based types the
 // time/series settings, value-like types conditional formatting. Parameters a type already defines win.
@@ -235,6 +251,21 @@ func withCommon(cat []WidgetDef) []WidgetDef {
 		}
 		if valueWidgets[cat[i].Type] {
 			add(rangesParam)
+			add(valueParams...)
+		}
+		for _, b := range cat[i].Binds {
+			if b == "datastreams" {
+				add(seriesParam)
+			}
+		}
+		if have["warn"] || have["action"] {
+			add(zoneParams...)
+		}
+		if shareWidgets[cat[i].Type] {
+			add(legendParams...)
+		}
+		if windowed[cat[i].Type] {
+			add(windowParams...)
 		}
 		add(commonParams...)
 	}

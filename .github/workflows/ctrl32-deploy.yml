@@ -1,0 +1,69 @@
+# Publish a ctrl32 telemetry release to the production host (telemetry.digital) with deploy/publish.sh:
+# binaries, SHA256SUMS, SBOM, govulncheck report and the installers land in /var/www/ctrl32 on the host; the running
+# server then offers the update on its Server page (one click; the agent migrates the database).
+#
+# One-time setup (repository Settings → Secrets and variables → Actions):
+#   DEPLOY_SSH_KEY      private key whose public half is in /root/.ssh/authorized_keys on the host
+#   DEPLOY_KNOWN_HOSTS  output of `ssh-keyscan -t ed25519 2.29.5.17` checked against the host's real key
+# Run: Actions → ctrl32-deploy → Run workflow → version (e.g. 0.38.0) and branch.
+name: ctrl32-deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, e.g. 0.38.0"
+        required: true
+      target:
+        description: "SSH target"
+        required: true
+        default: "root@2.29.5.17"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ctrl32-deploy
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: production
+    defaults:
+      run:
+        working-directory: ctrl32-telemetry
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ctrl32-telemetry/go.mod
+          cache-dependency-path: ctrl32-telemetry/go.sum
+      - name: Check the version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: '[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version must be X.Y.Z"; exit 1; }'
+      - name: Unit tests
+        run: go vet ./... && go test ./...
+      - name: Supply-chain tools
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
+      - name: SSH key
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          [[ -n "$KEY" && -n "$KNOWN" ]] || { echo "set the DEPLOY_SSH_KEY and DEPLOY_KNOWN_HOSTS secrets"; exit 1; }
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy && chmod 0600 ~/.ssh/deploy
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts && chmod 0644 ~/.ssh/known_hosts
+      - name: Publish
+        env:
+          VERSION: ${{ inputs.version }}
+          TARGET: ${{ inputs.target }}
+        run: deploy/publish.sh "$VERSION" "$TARGET" -i ~/.ssh/deploy -o StrictHostKeyChecking=yes -o BatchMode=yes
+      - name: Remove the key
+        if: always()
+        run: rm -f ~/.ssh/deploy

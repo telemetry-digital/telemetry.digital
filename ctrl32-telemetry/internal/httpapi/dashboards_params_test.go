@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -158,6 +159,28 @@ func TestShowcaseMoreValid(t *testing.T) {
 	for _, d := range widgetCatalog {
 		if !have[d.Type] && !skip[d.Type] {
 			t.Errorf("showcase lacks %s", d.Type)
+		}
+	}
+}
+
+// Every setting the catalogue offers is read by the browser code that renders widgets — no setting without effect
+// ("widgets should be fully configurable", spec 002 FR-001).
+func TestEveryParamIsRendered(t *testing.T) {
+	var js strings.Builder
+	for _, f := range []string{"static/widgets.js", "static/widgets-more.js"} {
+		b, err := static.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		js.Write(b)
+	}
+	src := js.String()
+	for _, d := range widgetCatalog {
+		for _, p := range d.Params {
+			re := regexp.MustCompile(`(\bp|params)\.` + p.Name + `\b|'` + p.Name + `'`)
+			if !re.MatchString(src) {
+				t.Errorf("%s: setting %s is not used by any renderer", d.Type, p.Name)
+			}
 		}
 	}
 }

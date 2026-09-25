@@ -207,7 +207,7 @@ const iconOpts = (v) => ['', ...Object.keys(window.ctrl32Icons || {})].map(n => 
 const toLocalDT = (s) => { if(!s) return ''; const d = new Date(s); if(isNaN(d)) return ''; const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 16); };
 const colorField = (attr, v) => `<span class="row" style="gap:4px;align-items:center;flex-wrap:nowrap"><input type="color" data-cpick value="${/^#[0-9a-f]{6}$/i.test(v || '') ? v : '#000000'}" style="width:34px;height:28px;padding:0;border:none;background:none"><input ${attr} value="${esc(v || '')}" placeholder="#rrggbb" maxlength="9" style="width:92px;font-family:var(--mono)"><button class="btn small ghost" type="button" data-cclear title="Clear">✕</button></span>`;
 function paramHTML(p, v){
-  const lab = esc(p.label);
+  const lab = esc(p.label) + (p.help ? ` <span class="muted" style="font-size:11px" title="${esc(p.help)}">ⓘ</span>` : '');
   switch(p.kind){
   case 'bool': return `<label class="inline"><input type="checkbox" data-p="${p.name}" ${v ? 'checked' : ''}><span>${lab}</span></label>`;
   case 'select': return `<label>${lab} <select data-p="${p.name}">${(p.options || []).map(o => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${o === '' ? '(default)' : esc(o)}</option>`).join('')}</select></label>`;
@@ -231,8 +231,8 @@ function seriesHTML(p, list){
     return `<fieldset class="ser" data-ser="${i}" style="border:1px solid var(--line);border-radius:var(--radius);padding:6px 8px;margin:4px 0"><legend class="notranslate" style="font-size:12px">${esc(ds.asset + ' / ' + ds.key)}</legend><div class="row" style="gap:6px;flex-wrap:wrap">
       <label style="flex:1;min-width:120px">Label <input data-s="label" maxlength="64" value="${esc(s.label || '')}"></label><label>Colour ${colorField('data-s="color"', s.color)}</label>
       <label style="width:70px">Unit <input data-s="unit" maxlength="16" value="${esc(s.unit || '')}"></label><label style="width:70px">Decimals <input data-s="decimals" type="number" min="0" max="6" value="${s.decimals ?? ''}"></label>
-      <label>Style <select data-s="style">${opt(['', 'line', 'area', 'step', 'bar', 'scatter'], s.style)}</select></label><label>Axis <select data-s="axis">${opt(['', 'left', 'right'], s.axis)}</select></label>
-      ${['points', 'fill', 'hidden'].map(k => `<label class="inline"><input type="checkbox" data-s="${k}" ${s[k] ? 'checked' : ''}><span>${{points: 'Points', fill: 'Fill', hidden: 'Hidden'}[k]}</span></label>`).join('')}</div></fieldset>`; }).join('');
+      ${w.type === 'chart' ? `<label>Style <select data-s="style">${opt(['', 'line', 'area', 'step', 'bar', 'scatter'], s.style)}</select></label><label>Axis <select data-s="axis">${opt(['', 'left', 'right'], s.axis)}</select></label>` : ''}
+      ${(w.type === 'chart' ? ['points', 'fill', 'hidden'] : ['hidden']).map(k => `<label class="inline"><input type="checkbox" data-s="${k}" ${s[k] ? 'checked' : ''}><span>${{points: 'Points', fill: 'Fill', hidden: 'Hidden'}[k]}</span></label>`).join('')}</div></fieldset>`; }).join('');
 }
 function rangesHTML(p, list){
   const ops = ['>', '>=', '<', '<=', '==', '!=', 'between'], tg = [['value', 'Value colour'], ['background', 'Background'], ['icon', 'Icon colour']];
@@ -249,7 +249,7 @@ function renderProps(target){
   if((d.binds || []).includes('datastreams')){ sec.data += pickHTML('datastreams', DS.map(x => ({id: x.id, label: `${x.asset} / ${x.key} [${x.unit}]`})), w.bindings.datastreams || [], 'Datastreams'); if(!(w.bindings.datastreams || []).length) sec.data += '<div style="color:#d97706;font-size:12px">No datastream selected yet — pick one above; the widget stays empty until then.</div>'; }
   if((d.binds || []).includes('devices')) sec.data += pickHTML('devices', DEVS.map(x => ({id: x.id, label: `${x.name || x.external_id} (${x.external_id})`})), w.bindings.devices || [], 'Devices (empty = all)');
   for(const p of d.params || []){ const v = w.params[p.name] ?? p.default ?? ''; sec[p.group || 'data'] = (sec[p.group || 'data'] || '') + paramHTML(p, v); }
-  html += Object.entries(sec).map(([k, s]) => `<div class="props" data-sec="${k}" ${k === PTAB ? '' : 'hidden'} style="display:flex;flex-direction:column;gap:8px">${s}</div>`).join('');
+  html += Object.entries(sec).map(([k, s]) => `<div class="props" data-sec="${k}" ${k === PTAB ? '' : 'hidden'} style="display:flex;flex-direction:column;gap:8px">${s}${k !== 'data' && s ? `<button class="btn small ghost" type="button" data-treset="${k}" style="align-self:flex-start">Reset this tab to defaults</button>` : ''}</div>`).join('');
   html += `<div class="row" style="margin-top:8px"><button class="btn small" type="button" id="pApply">Apply to widget</button><button class="btn small danger" type="button" id="pRemove">Remove widget</button></div>`;
   box.innerHTML = html;
   for(const t of box.querySelectorAll('[data-tab]')) t.onclick = () => { PTAB = t.dataset.tab; for(const x of box.querySelectorAll('[data-tab]')){ x.classList.toggle('active', x === t); x.setAttribute('aria-selected', x === t); } for(const s of box.querySelectorAll('[data-sec]')) s.hidden = s.dataset.sec !== PTAB; };
@@ -270,6 +270,7 @@ function renderProps(target){
   const reopen = () => { applyProps(); renderProps(target); };
   for(const b of box.querySelectorAll('[data-radd]')) b.onclick = () => { applyProps(); const k = b.dataset.radd; w.params[k] = (w.params[k] || []).concat([{op: '>', v: 0, target: 'value', color: '#dc2626'}]); dirty(); renderProps(target); if(EDITOR){ EDITOR.commit(); redraw(); } else drawEdit(); };
   for(const b of box.querySelectorAll('[data-rdel]')) b.onclick = () => { b.closest('[data-rng]').remove(); reopen(); };
+  for(const b of box.querySelectorAll('[data-treset]')) b.onclick = () => { for(const p of (d.params || []).filter(x => (x.group || 'data') === b.dataset.treset)){ if(p.default !== undefined && (!p.group || p.group === 'data')) w.params[p.name] = p.default; else delete w.params[p.name]; } dirty(); renderProps(target); if(EDITOR){ EDITOR.commit(); redraw(); } else drawEdit(); };
   box.querySelector('#pApply').onclick = applyProps;
   box.onchange = e => { if(e.target.matches('[data-p][data-p]') && e.target.tagName === 'SELECT' && e.target.closest('label') && e.target.closest('label').querySelector('.icon-prev')) e.target.closest('label').querySelector('.icon-prev').innerHTML = e.target.value ? ctrl32Widgets.icon(e.target.value, 20) : '';
     if(e.target.matches('[data-r="op"]')){ const v2 = e.target.closest('[data-rng]').querySelector('[data-r="v2"]'); v2.hidden = e.target.value !== 'between'; }

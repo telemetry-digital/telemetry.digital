@@ -363,3 +363,4 @@ dialog.dw-full::backdrop { background: rgba(15, 23, 42, .55); }
 .dw-chip.on { color: inherit; border-color: var(--muted); } .dw-chip.on i { opacity: 1; }
 .dw-filters label { flex-direction: row; font-size: 12px; }
 .dw-filters select { min-height: 0; padding: 1px 4px; width: auto; }
+.dw-nolabel .dw-lbl { display: none !important; }

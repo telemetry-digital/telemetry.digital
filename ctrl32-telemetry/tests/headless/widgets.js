@@ -52,6 +52,9 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
     widgets.push(
       {id:'styled', type:'value', geometry:{x:0,y:0,w:3,h:2}, bindings:{datastreams:[ds.temp]}, params:{title:'Styled', show_title:false, bg_color:'#0f172a', text_color:'#f8fafc', border_width:0, radius:14, value_size:40, sparkline:false}},
       {id:'cond', type:'value_card', geometry:{x:3,y:0,w:3,h:2}, bindings:{datastreams:[ds.temp]}, params:{title:'Conditional', ranges:[{op:'<',v:2,target:'background',color:'#2563eb'},{op:'between',v:2,v2:8,target:'background',color:'#16a34a'},{op:'>',v:8,target:'background',color:'#dc2626'}], click:'trend', sparkline:false, trend_arrow:false}},
+      {id:'bars2', type:'bars', geometry:{x:0,y:3,w:4,h:2}, bindings:{datastreams:[ds.temp, ds.rh]}, params:{title:'Bars', series:[{label:'Teplota', color:'#123456', decimals:0, unit:'K'},{hidden:true}], warn:100, title_color:'#aa0000', title_align:'center', font:'mono'}},
+      {id:'pie2', type:'pie', geometry:{x:4,y:3,w:4,h:3}, bindings:{datastreams:[ds.temp, ds.rh]}, params:{title:'Pie', legend_pos:'none', series:[{color:'#00ff00'},{color:'#0000ff'}]}},
+      {id:'gauge2', type:'radial_gauge', geometry:{x:8,y:3,w:4,h:3}, bindings:{datastreams:[ds.temp]}, params:{title:'Gauge', show_label:false, warn:20, action:40, warn_color:'#ffff00', action_color:'#ff00ff', value_color:'#010203'}},
       {id:'chart2', type:'chart', geometry:{x:6,y:0,w:6,h:3}, bindings:{datastreams:[ds.temp, ds.rh]}, params:{title:'Two axes', range:'1h', series:[{label:'Temperature A', color:'#ff00aa', unit:'°C'},{label:'Humidity B', color:'#00aa55', axis:'right', unit:'%'}], legend_values:['min','max','latest'], legend_pos:'bottom', filters:['range','agg','series']}});
     const d = await post('/api/v1/dashboards', {name:'Widget probe ' + suf, spec: {version:1, range:'1h', refresh_s:30, widgets}});
     return {slug: d.slug, tok, dev: dev.id, ds, types: cat.widgets.length, stored: d.spec.widgets.length};
@@ -69,6 +72,23 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   const bad = await ev(`[...document.querySelectorAll('#vGrid .dash-widget')].map((c) => { const b = c.querySelector('.dash-body'); const t = b.textContent; return [c.dataset.id, t]; }).filter(([id, t]) => /unknown widget|loading…|is not |undefined|NaN|Cannot read|Error/.test(t)).map(([id, t]) => id + ': ' + t.slice(0, 80))`);
   expect("every widget type renders", bad, (x) => Array.isArray(x) && x.length === 0);
   expect("cards on the page", await ev(`document.querySelectorAll('#vGrid .dash-widget').length`), fx.stored);
+  // Full configurability: series settings, zone colours, label switch, title and font on non-chart widgets.
+  const cfg = await ev(`(() => { const q = (id) => document.querySelector('#vGrid [data-id="' + id + '"]'); const b = q('bars2'), pie = q('pie2'), g = q('gauge2'); const t = b.querySelector('.dash-title');
+    return { barsRows: b.querySelectorAll('.dash-body > div').length, barsText: b.querySelector('.dash-body').textContent, barColour: [...b.querySelectorAll('.dash-body div[style*="background:#123456"]')].length,
+      titleColour: getComputedStyle(t).color, titleJustify: getComputedStyle(t).justifyContent, font: getComputedStyle(b).fontFamily,
+      pieFills: [...pie.querySelectorAll('path[fill]')].map(x => x.getAttribute('fill')), pieLegend: pie.querySelectorAll('.dash-body i').length,
+      gaugeBands: [...g.querySelectorAll('path[stroke]')].map(x => x.getAttribute('stroke')).filter(c => c.startsWith('#')), gaugeLabel: getComputedStyle(g.querySelector('.dw-lbl')).display, gaugeValue: [...g.querySelectorAll('text')].some(x => x.getAttribute('fill') === '#010203') }; })()`);
+  expect("bars: hidden series left out", cfg.barsRows, 1);
+  expect("bars: series label, unit and decimals", cfg.barsText, (x) => typeof x === "string" && x.includes("Teplota") && x.includes("7 K"));
+  expect("bars: series colour", cfg.barColour, 1);
+  expect("title colour", cfg.titleColour, "rgb(170, 0, 0)");
+  expect("title centred", cfg.titleJustify, "center");
+  expect("mono font", cfg.font, (f) => typeof f === "string" && /mono/i.test(f));
+  expect("pie: series colours", cfg.pieFills, (f) => Array.isArray(f) && f.includes("#00ff00") && f.includes("#0000ff"));
+  expect("pie: legend off", cfg.pieLegend, 0);
+  expect("gauge: zone colours", cfg.gaugeBands, (c) => Array.isArray(c) && c.includes("#ffff00") && c.includes("#ff00ff"));
+  expect("gauge: label hidden", cfg.gaugeLabel, "none");
+  expect("gauge: value colour", cfg.gaugeValue, true);
   // T008 — appearance.
   const st = await ev(`(() => { const c = document.querySelector('#vGrid [data-id="styled"]'); const cs = getComputedStyle(c); const v = c.querySelector('.dash-body [style*="--dw-value"], .dash-body div[style*="font-size"]'); return {bg: cs.backgroundColor, fg: cs.color, bw: cs.borderTopWidth, radius: cs.borderTopLeftRadius, head: c.querySelector('.dash-head').hidden, value: v ? getComputedStyle(v).fontSize : null}; })()`);
   expect("styled background", st.bg, "rgb(15, 23, 42)");
