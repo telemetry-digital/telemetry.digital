@@ -1,3 +1,4 @@
+// Vendored from npm qrcode-generator 1.4.4 (MIT); only change: the CommonJS guard at the end also checks `module`.
 //---------------------------------------------------------------------
 //
 // QR Code Generator for JavaScript
@@ -2289,7 +2290,7 @@ var qrcode = function() {
 (function (factory) {
   if (typeof define === 'function' && define.amd) {
       define([], factory);
-  } else if (typeof exports === 'object') {
+  } else if (typeof module === 'object' && typeof exports === 'object') { // ctrl32: guard added (a DOM id "exports" is not CommonJS)
       module.exports = factory();
   }
 }(function () {
