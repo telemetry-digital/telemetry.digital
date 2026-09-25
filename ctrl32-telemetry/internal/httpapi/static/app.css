@@ -263,3 +263,27 @@ main { padding-top: 24px; }
 .mimic-widget.selected { outline: 2px solid var(--primary); }
 @keyframes mimicflow { to { stroke-dashoffset: -32; } }
 .mimic-flow { animation: mimicflow 1.2s linear infinite; }
+
+/* SCADA process pictures (spec 001): drawing layer below the widgets, symbol animations, faceplates. */
+.sc-host { position: absolute; left: 0; top: 0; }
+.mimic > .sc-host { z-index: 0; } .mimic > .mimic-widget { z-index: 1; }
+.sc-layer { display: block; overflow: visible; }
+.sc-sym * { vector-effect: non-scaling-stroke; }
+.sc-click { cursor: pointer; } .sc-click:hover { filter: brightness(1.08) drop-shadow(0 0 3px rgba(37,99,235,.55)); }
+.sc-spin { transform-box: fill-box; transform-origin: 50% 50%; animation: sc-spin 1s linear infinite; }
+.sc-agit { transform-box: fill-box; transform-origin: 50% 50%; animation: sc-agit 1s ease-in-out infinite alternate; }
+.sc-flow { animation: sc-flow 1s linear infinite; }
+.sc-blink { animation: sc-blink 1s steps(2, jump-none) infinite; }
+.sc-flame { transform-box: fill-box; transform-origin: 50% 100%; animation: sc-flame .6s ease-in-out infinite alternate; }
+@keyframes sc-spin { to { transform: rotate(360deg); } }
+@keyframes sc-agit { from { transform: scaleX(1); } to { transform: scaleX(-1); } }
+@keyframes sc-flow { to { stroke-dashoffset: var(--sc-per, -20px); } }
+@keyframes sc-blink { 50% { opacity: .15; } }
+@keyframes sc-flame { from { transform: scaleY(.85); } to { transform: scaleY(1.1); } }
+@media (prefers-reduced-motion: reduce) { .sc-spin, .sc-agit, .sc-flow, .sc-flame { animation: none; } .sc-blink { animation-duration: 2s; } }
+dialog.sc-dlg { width: min(720px, calc(100vw - 32px)); }
+.sc-fp-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.sc-fp-val { margin: 4px 0 8px; } .sc-fp-big { font-size: 2em; font-weight: 700; }
+.sc-fp-range { gap: 4px; margin-bottom: 6px; }
+.sc-fp-chart { height: 240px; display: flex; flex-direction: column; }
+.sc-fp-ctl { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 8px; } .sc-fp-ctl h3 { margin: 0 0 6px; font-size: 13px; color: var(--muted); }

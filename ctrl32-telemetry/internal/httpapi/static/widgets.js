@@ -230,19 +230,20 @@
   const framed = (w) => MIMIC_TYPES.has(w.type) ? !!(w.params && w.params.frame) : !(w.params && w.params.frame === false);
   // Live updates (SSE): one stream per rendered dashboard; an event re-renders only the widgets bound to it, debounced.
   let ES = null, liveTimer = null;
-  function connectLive(container, spec, refreshOne) {
+  function connectLive(container, spec, refreshOne, layer) {
     if (ES) { ES.close(); ES = null; }
     const ds = new Set(), devs = new Set(); let allDevs = false, alarms = false;
+    const layerTags = layer ? layer.tags() : new Set(); layerTags.forEach((id) => ds.add(id)); let layerDue = false;
     for (const w of spec.widgets || []) { const b = w.bindings || {}; (b.datastreams || []).forEach((id) => ds.add(id)); if (Array.isArray(b.devices)) { if (!b.devices.length && (w.type === 'map' || w.type === 'devices')) allDevs = true; b.devices.forEach((id) => devs.add(id)); } if (w.type === 'alarms') alarms = true; }
     if (!ds.size && !devs.size && !allDevs && !alarms) return;
     const qs = 'datastreams=' + [...ds].join(',') + '&devices=' + (allDevs ? 'all' : [...devs].join(',')) + '&alarms=' + (alarms ? 1 : 0);
     const pending = new Set();
-    const flush = () => { liveTimer = null; const cards = [...container.querySelectorAll('.dash-widget')]; for (const i of pending) { if (cards[i]) refreshOne(cards[i]); } pending.clear(); };
-    const mark = (pred) => { (spec.widgets || []).forEach((w, i) => { if (pred(w)) pending.add(i); }); if (pending.size && !liveTimer) liveTimer = setTimeout(flush, 400); };
+    const flush = () => { liveTimer = null; const cards = [...container.querySelectorAll('.dash-widget')]; for (const i of pending) { if (cards[i]) refreshOne(cards[i]); } pending.clear(); if (layerDue && layer) { layerDue = false; layer.refresh(); } };
+    const mark = (pred) => { (spec.widgets || []).forEach((w, i) => { if (pred(w)) pending.add(i); }); if ((pending.size || layerDue) && !liveTimer) liveTimer = setTimeout(flush, 400); };
     const es = new EventSource(P('/api/v1/stream') + '?' + qs, { withCredentials: true }); ES = es;
     const state = (connected) => window.dispatchEvent(new CustomEvent('ctrl32:live', { detail: { connected } }));
     es.onopen = () => state(true); es.onerror = () => state(false);
-    es.addEventListener('observation', (e) => { const d = JSON.parse(e.data); mark((w) => ((w.bindings || {}).datastreams || []).includes(d.datastream_id)); });
+    es.addEventListener('observation', (e) => { const d = JSON.parse(e.data); if (layerTags.has(d.datastream_id)) layerDue = true; mark((w) => ((w.bindings || {}).datastreams || []).includes(d.datastream_id)); });
     es.addEventListener('device', (e) => { const d = JSON.parse(e.data); mark((w) => (w.type === 'map' || w.type === 'devices') && (!((w.bindings || {}).devices || []).length || w.bindings.devices.includes(d.device_id))); });
     es.addEventListener('alarm', () => mark((w) => w.type === 'alarms'));
     es.addEventListener('command', (e) => { const d = JSON.parse(e.data); const out = PENDING.get(d.command_id); if (!out) return; const det = d.detail || {}; const res = det.result && typeof det.result === 'object' ? det.result : {}; showCmd(out, d.status, { readback: res.readback, error: det.error }); if (d.status !== 'queued' && d.status !== 'sent' && d.status !== 'pending') PENDING.delete(d.command_id); });
@@ -258,8 +259,10 @@
     opts = opts || {}; const range = opts.range || spec.range || '24h'; const rowH = (spec.layout && spec.layout.row_height) || 96; const canvas = isCanvas(spec);
     if (canvas) {
       const W0 = spec.layout.width || 1600, H0 = spec.layout.height || 900;
-      container.innerHTML = `<div class="mimic-wrap"><div class="mimic" data-w="${W0}" data-h="${H0}" style="width:${W0}px;height:${H0}px">${(spec.widgets || []).map((w, i) => { const f = framed(w); return `<div class="dash-widget mimic-widget${f ? ' card' : ''}" data-i="${i}" data-id="${esc(w.id || '')}">${f || opts.header ? `<div class="dash-head${f ? '' : ' mimic-tools'}">${f ? `<b class="dash-title">${esc((w.params && w.params.title) || labelOf(w.type))}</b>` : ''}<span class="grow"></span>${opts.header ? opts.header(w, i) : ''}</div>` : ''}<div class="dash-body"><span class="muted">loading…</span></div></div>`; }).join('')}</div></div>`;
+      container.innerHTML = `<div class="mimic-wrap"><div class="mimic" data-w="${W0}" data-h="${H0}" style="width:${W0}px;height:${H0}px"><div class="sc-host"></div>${(spec.widgets || []).map((w, i) => { const f = framed(w); return `<div class="dash-widget mimic-widget${f ? ' card' : ''}" data-i="${i}" data-id="${esc(w.id || '')}">${f || opts.header ? `<div class="dash-head${f ? '' : ' mimic-tools'}">${f ? `<b class="dash-title">${esc((w.params && w.params.title) || labelOf(w.type))}</b>` : ''}<span class="grow"></span>${opts.header ? opts.header(w, i) : ''}</div>` : ''}<div class="dash-body"><span class="muted">loading…</span></div></div>`; }).join('')}</div></div>`;
       for (const card of container.querySelectorAll('.dash-widget')) placeCanvas(card, spec.widgets[+card.dataset.i].geometry || { x: 0, y: 0, w: 200, h: 200 });
+      // Drawing layer (spec 001): vector objects with dynamics below the widgets.
+      container._scada = (window.ctrl32Scada && ((spec.elements || []).length || (spec.layout && spec.layout.bg))) ? window.ctrl32Scada.mount(container.querySelector('.sc-host'), spec, { edit: !!opts.edit }) : null;
       fitMimic(container); if (!container._fit) { container._fit = () => fitMimic(container); window.addEventListener('resize', container._fit); }
     } else {
       container.innerHTML = `<div class="dash-grid" style="--row-h:${rowH}px">${(spec.widgets || []).map((w, i) => `<div class="card dash-widget" data-i="${i}" data-id="${esc(w.id || '')}"><div class="dash-head"><b class="dash-title">${esc((w.params && w.params.title) || labelOf(w.type))}</b><span class="grow"></span>${opts.header ? opts.header(w, i) : ''}</div><div class="dash-body"><span class="muted">loading…</span></div></div>`).join('')}</div>`;
@@ -272,10 +275,11 @@
       try { await (W[w.type] || (async (el) => { el.innerHTML = '<span class="muted">unknown widget</span>'; }))(body, w.params || {}, ctx); }
       catch (e) { body.innerHTML = `<span class="muted">${esc(e.message)}</span>`; }
     };
-    const refresh = async () => Promise.all([...container.querySelectorAll('.dash-widget')].map(refreshOne));
+    const layer = canvas ? container._scada : null;
+    const refresh = async () => Promise.all([...container.querySelectorAll('.dash-widget')].map(refreshOne).concat(layer ? [layer.refresh()] : []));
     await refresh();
-    if (opts.live !== false && window.EventSource) connectLive(container, spec, refreshOne);
+    if (opts.live !== false && window.EventSource) connectLive(container, spec, refreshOne, layer);
     return refresh;
   }
-  window.ctrl32Widgets = { render, renderChart, setPublic, series, datastreams, latest, devices, loadLeaflet, makeMap, mapConfig, RANGE_MS, labelOf, isCanvas, fitMimic, placeCanvas, MIMIC_TYPES, types: Object.keys(W) };
+  window.ctrl32Widgets = { isPublic: () => !!PUBLIC, apiPath: P, render, renderChart, setPublic, series, datastreams, latest, devices, loadLeaflet, makeMap, mapConfig, RANGE_MS, labelOf, isCanvas, fitMimic, placeCanvas, MIMIC_TYPES, types: Object.keys(W) };
 })();

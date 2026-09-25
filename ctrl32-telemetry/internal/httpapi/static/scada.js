@@ -65,7 +65,7 @@
   sym('agitator', 'Agitator', 'pumps', 60, 150, 'none', (c) => P(c, 'M28,2 H72 V16 H28 Z') + L(c, 'M50,16 V86', c.sw * 1.3) + `<g${spinCls(c, 'sc-agit')}>${P(c, 'M14,88 C30,80 70,80 86,88 C70,96 30,96 14,88 Z', c.line)}</g>`);
   sym('conveyor', 'Belt conveyor', 'pumps', 240, 60, 'none', (c) => P(c, 'M13,30 H87 A13,13 0 0 1 87,56 H13 A13,13 0 0 1 13,30 Z') + C(c, 13, 43, 9, DEF.body) + C(c, 87, 43, 9, DEF.body) + (c.spin ? `<line x1="13" x2="87" y1="30" y2="30" stroke="${tone(c.base, -0.5)}" stroke-width="3" stroke-dasharray="6 6" class="sc-flow" style="--sc-per:-12px;animation-duration:${(1 / (c.speed || 1)).toFixed(2)}s"/>` : '') + L(c, 'M20,57 L14,98 M80,57 L86,98'));
   sym('screw_conveyor', 'Screw conveyor', 'pumps', 240, 60, 'none', (c) => { let h = ''; for (let x = 16; x < 92; x += 8) h += `M${x},28 L${x + 6},60 `; return P(c, 'M8,26 H96 V62 H8 Z') + L(c, h, 0.9) + P(c, 'M0,34 H8 V54 H0 Z', DEF.body); });
-  sym('mixer_static', 'Static mixer', 'pumps', 200, 50, 'none', (c) => { let z = 'M8,50'; for (let x = 8; x <= 92; x += 7) z += ` L${x + 3.5},${(x / 7) % 2 ? 22 : 78}`; return P(c, 'M4,20 H96 V80 H4 Z') + L(c, z, 0.9); });
+  sym('mixer_static', 'Static mixer', 'pumps', 200, 50, 'none', (c) => { let z = 'M4,50'; for (let k = 0, x = 8; x <= 92; x += 7, k++) z += ` L${x},${k % 2 ? 24 : 76}`; return P(c, 'M4,20 H96 V80 H4 Z') + L(c, z, 0.9); });
 
   // Valves (the bow-tie body carries the state colour)
   const bow = (c, y) => P(c, `M8,${y - 18} L8,${y + 18} L50,${y} Z M92,${y - 18} L92,${y + 18} L50,${y} Z`);
@@ -146,7 +146,7 @@
     const out = {};
     for (const d of e.dyn || []) {
       const x = values[d.tag || e.tag]; const v = numVal(x);
-      if (v == null) { if (d.prop === 'visible') out.visible = false; continue; }
+      if (v == null) continue; // no value: no state, nothing hidden, texts show "—"
       switch (d.prop) {
         case 'fill': case 'stroke': case 'color': case 'state': case 'text': {
           const m = (d.map || []).find((m) => cmp(v, m.op, m.v));
@@ -178,7 +178,9 @@
     if (dv.visible === false && !env.edit) return `<g data-eid="${esc(e.id)}" display="none"></g>`;
     const b = bbox(e); const cx = b.x + b.w / 2, cy = b.y + b.h / 2; const uid = env.uid + esc(e.id) + '-';
     const x = values(env, e.tag); const d = e.tag ? env.ds[e.tag] : null;
-    const val = dv.text !== undefined ? dv.text : fmtVal(numVal(x) ?? (x && x.value_json != null ? x.value_json : null), e.decimals);
+    const badQ = !!(x && x.quality && x.quality !== 'ok');
+    let val = dv.text !== undefined ? dv.text : fmtVal(numVal(x) ?? (x && x.value_json != null ? x.value_json : null), e.decimals);
+    if (val != null && badQ) val += ' ?';
     const unit = e.unit ?? (d ? d.unit : '');
     const state = dv.state || null;
     const stateCol = state ? sch[state] : null;
@@ -221,36 +223,43 @@
         inner += `<text x="${r2(tx)}" text-anchor="${al}" font-size="${size}" font-weight="${st.bold ? 700 : 400}" ${st.italic ? 'font-style="italic"' : ''} fill="${color}">${lines.map((l, k) => `<tspan x="${r2(tx)}" y="${r2(ty0 + k * lh)}">${esc(l)}</tspan>`).join('')}</text>`;
         break;
       }
+      case 'image': {
+        const WG = window.ctrl32Widgets; const url = (WG && WG.apiPath ? WG.apiPath('/api/v1/hmi/objects/') : '/api/v1/hmi/objects/') + encodeURIComponent(e.src || '') + '/svg';
+        inner = `<image href="${esc(url)}" x="${r2(b.x)}" y="${r2(b.y)}" width="${r2(Math.max(1, b.w))}" height="${r2(Math.max(1, b.h))}" preserveAspectRatio="xMidYMid meet"/>`;
+        if (stroke) inner += `<rect x="${r2(b.x)}" y="${r2(b.y)}" width="${r2(b.w)}" height="${r2(b.h)}" fill="none" stroke="${stroke}" stroke-width="${sw ?? 1}"/>`;
+        break;
+      }
       case 'symbol': {
         const def = S[e.symbol];
         if (!def) { inner = `<rect x="${r2(b.x)}" y="${r2(b.y)}" width="${r2(b.w)}" height="${r2(b.h)}" fill="none" stroke="#dc2626" stroke-dasharray="4 3"/><text x="${r2(cx)}" y="${r2(cy)}" text-anchor="middle" font-size="11" fill="#dc2626">${esc(e.symbol)}</text>`; break; }
         const base = baseFill || DEF.body; let body = base;
         if (st.shade) { defs += shadeDef(uid + 'g', base, def.fit === 'none' && b.w > b.h * 1.4); body = `url(#${uid}g)`; }
         const c = { body, base, line: stroke || DEF.line, sw: sw ?? 1.5, state, level: dv.level ?? null, medium: col(st.medium, DEF.medium), spin: !!dv.spin, speed: dv.spin ? dv.spin.speed : 1, label: e.text || e.name || '', value: val, unit, uid };
-        inner = `<svg x="${r2(b.x)}" y="${r2(b.y)}" width="${r2(Math.max(1, b.w))}" height="${r2(Math.max(1, b.h))}" viewBox="0 0 100 100" preserveAspectRatio="${def.fit === 'none' ? 'none' : 'xMidYMid meet'}" overflow="visible" class="sc-sym">${def.draw(c)}</svg>`;
+        inner = `<svg x="${r2(b.x)}" y="${r2(b.y)}" width="${r2(Math.max(1, b.w))}" height="${r2(Math.max(1, b.h))}" viewBox="0 0 100 100" preserveAspectRatio="${def.fit === 'none' ? 'none' : 'xMidYMid meet'}" overflow="visible" class="sc-sym" style="width:${r2(Math.max(1, b.w))}px;height:${r2(Math.max(1, b.h))}px;max-width:none">${def.draw(c)}</svg>`;
         break;
       }
     }
     if (st.shadow) inner = `<g filter="drop-shadow(2px 3px 2px rgba(0,0,0,.35))">${inner}</g>`;
     const tf = []; if (dv.dx || dv.dy) tf.push(`translate(${r2(dv.dx || 0)} ${r2(dv.dy || 0)})`); const rot = n(e.r, 0) + (dv.angle || 0); if (rot) tf.push(`rotate(${r2(rot)} ${r2(cx)} ${r2(cy)})`);
     let cls = 'sc-el'; let style = '';
-    if (dv.spin && e.type !== 'symbol') { cls += ' sc-spin'; style = `animation-duration:${(1 / dv.spin.speed).toFixed(2)}s`; }
+    const spinInner = dv.spin && e.type !== 'symbol' ? ` class="sc-spin" style="animation-duration:${(1 / dv.spin.speed).toFixed(2)}s"` : '';
     if (dv.blink && !dv.blink.color) cls += ' sc-blink';
     if (!env.edit && clickable(e)) cls += ' sc-click';
     if (e.hidden && env.edit) style += ';opacity:.35';
     let frame = '';
     if (dv.blink && dv.blink.color) frame = `<rect x="${r2(b.x - 4)}" y="${r2(b.y - 4)}" width="${r2(b.w + 8)}" height="${r2(b.h + 8)}" rx="4" fill="none" stroke="${dv.blink.color}" stroke-width="3" class="sc-blink"/>`;
     const title = e.name || (d ? `${d.asset} / ${d.key}` : '');
-    const tip = title || val != null ? `<title>${esc(title)}${val != null ? ': ' + esc(val) + (unit ? ' ' + esc(unit) : '') : ''}</title>` : '';
-    return `<g data-eid="${esc(e.id)}" class="${cls}"${tf.length ? ` transform="${tf.join(' ')}"` : ''}${op !== 1 ? ` opacity="${r2(op)}"` : ''}${style ? ` style="${style}"` : ''}${e.hidden && !env.edit ? ' display="none"' : ''}>${defs ? `<defs>${defs}</defs>` : ''}${tip}<g${dv.spin && e.type !== 'symbol' ? '' : ''}>${inner}</g>${frame}</g>`;
+    const tip = title || val != null ? `<title>${esc(title)}${val != null ? ': ' + esc(val) + (unit ? ' ' + esc(unit) : '') : ''}${badQ ? ' (quality: ' + esc(x.quality) + ')' : ''}</title>` : '';
+    return `<g data-eid="${esc(e.id)}" class="${cls}"${tf.length ? ` transform="${tf.join(' ')}"` : ''}${op !== 1 ? ` opacity="${r2(op)}"` : ''}${style ? ` style="${style}"` : ''}${e.hidden && !env.edit ? ' display="none"' : ''}>${defs ? `<defs>${defs}</defs>` : ''}${tip}<g${spinInner}>${inner}</g>${frame}</g>`;
   }
   const values = (env, tag) => (tag ? env.values[tag] : null);
 
   // A standalone symbol preview (palette, catalogue).
+  let previewSeq = 0;
   function symbolSVG(id, o) {
     const def = S[id]; if (!def) return '';
     o = o || {}; const base = o.fill || SCHEMES.classic[o.state] || DEF.body;
-    const c = { body: base, base, line: DEF.line, sw: 1.5, state: o.state || null, level: o.level ?? null, medium: DEF.medium, spin: false, speed: 1, label: o.label || '', value: o.value ?? null, unit: o.unit || '', uid: 'pv' + id };
+    const c = { body: base, base, line: DEF.line, sw: 1.5, state: o.state || null, level: o.level ?? null, medium: DEF.medium, spin: false, speed: 1, label: o.label || '', value: o.value ?? null, unit: o.unit || '', uid: 'pv' + (++previewSeq) + '-' };
     return `<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" class="sc-sym" style="width:100%;height:100%;display:block">${def.draw(c)}</svg>`;
   }
 
@@ -261,7 +270,7 @@
   function mount(host, spec, opts) {
     opts = opts || {}; const W0 = (spec.layout && spec.layout.width) || 1600, H0 = (spec.layout && spec.layout.height) || 900;
     const uid = 's' + (++mountSeq) + '-';
-    host.innerHTML = `<svg class="sc-layer" xmlns="${NS}" width="${W0}" height="${H0}" viewBox="0 0 ${W0} ${H0}"><rect class="sc-bg" x="0" y="0" width="${W0}" height="${H0}" fill="${col(spec.layout && spec.layout.bg, 'none')}"/><g class="sc-root"></g></svg>`;
+    host.innerHTML = `<svg class="sc-layer" xmlns="${NS}" width="${W0}" height="${H0}" viewBox="0 0 ${W0} ${H0}" style="width:${W0}px;height:${H0}px;max-width:none"><rect class="sc-bg" x="0" y="0" width="${W0}" height="${H0}" fill="${col(spec.layout && spec.layout.bg, 'none')}"/><g class="sc-root"></g></svg>`;
     const root = host.querySelector('.sc-root'); let elements = spec.elements || []; let cache = []; let vals = {}; let dsMap = {};
     const env = () => ({ values: vals, ds: dsMap, scheme: spec.scheme || 'classic', uid, edit: !!opts.edit });
     function draw() {

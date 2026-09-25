@@ -28,7 +28,7 @@ var (
 	cmdKeyRe    = regexp.MustCompile(`^[A-Za-z0-9_.:/-]{1,64}$`)
 	cmdMethodRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
 
-	elementTypes = map[string]bool{"rect": true, "ellipse": true, "line": true, "polyline": true, "polygon": true, "pipe": true, "text": true, "symbol": true}
+	elementTypes = map[string]bool{"rect": true, "ellipse": true, "line": true, "polyline": true, "polygon": true, "pipe": true, "text": true, "symbol": true, "image": true}
 	pointTypes   = map[string]bool{"line": true, "polyline": true, "polygon": true, "pipe": true}
 	dynProps     = map[string]string{ // property → kind of the mapped value
 		"fill": "color", "stroke": "color", "color": "color", "state": "state", "text": "text",
@@ -155,6 +155,20 @@ func validateElements(raw []any, width, height int) ([]map[string]any, error) {
 				return nil, elemErr(i, "symbol must be a symbol id")
 			}
 			e["symbol"] = s
+		}
+		if typ == "image" {
+			src, _ := src["src"].(string)
+			if !dashSlugRe.MatchString(src) {
+				return nil, elemErr(i, "src must be the slug of a library object")
+			}
+			e["src"] = src
+		}
+		if g, ok := src["group"]; ok && g != nil && g != "" {
+			gs, _ := g.(string)
+			if !widgetIDRe.MatchString(gs) {
+				return nil, elemErr(i, "group must be letters, digits, _ and -")
+			}
+			e["group"] = gs
 		}
 		for _, k := range []string{"tag", "device"} {
 			if v, ok := src[k]; ok && v != nil && v != "" {

@@ -31,13 +31,14 @@ func TestElementsValid(t *testing.T) {
 		 "dyn":[{"prop":"level","lin":[0,100,0,1]},{"prop":"state","map":[{"op":">=","v":1,"to":"run"},{"op":"==","v":0,"to":"stop"}]}],
 		 "on":[{"act":"faceplate"},{"act":"screen","target":"boiler-house"}]},
 		{"type":"pipe","points":[[10,10],[200,10],[200,300]],"style":{"sw":14,"medium":"#0891b2"},"dyn":[{"prop":"flow","op":">","v":0.5}]},
-		{"type":"text","x":20,"y":20,"w":300,"h":30,"text":"<b>Mixer</b> {value}","style":{"font":22,"bold":true,"color":"#111827"}}
+		{"type":"text","x":20,"y":20,"w":300,"h":30,"text":"<b>Mixer</b> {value}","style":{"font":22,"bold":true,"color":"#111827"},"group":"g1"},
+		{"type":"image","src":"customer-logo","x":0,"y":0,"w":100,"h":40,"group":"g1"}
 	]`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	els := elementsOf(spec)
-	if len(els) != 3 || els[1]["id"] != "e2" || els[2]["text"] != "<b>Mixer</b> {value}" {
+	if len(els) != 4 || els[3]["src"] != "customer-logo" || els[2]["group"] != "g1" || els[1]["id"] != "e2" || els[2]["text"] != "<b>Mixer</b> {value}" {
 		t.Fatalf("canonical elements: %+v", els)
 	}
 	if _, ok := spec["elements"]; !ok {
@@ -62,6 +63,9 @@ func TestElementsRejected(t *testing.T) {
 		"command without key": `[{"type":"rect","on":[{"act":"command"}]}]`,
 		"duplicate id":        `[{"id":"a","type":"rect"},{"id":"a","type":"rect"}]`,
 		"far outside":         `[{"type":"rect","x":999999}]`,
+		"image without src":   `[{"type":"image"}]`,
+		"image src path":      `[{"type":"image","src":"../etc/passwd"}]`,
+		"bad group":           `[{"type":"rect","group":"a b"}]`,
 	}
 	for name, els := range cases {
 		if _, err := validateScreenSpec(mimicSpec(els)); err == nil {

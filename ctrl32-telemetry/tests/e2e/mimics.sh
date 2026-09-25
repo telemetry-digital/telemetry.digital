@@ -56,6 +56,28 @@ code=$(curl -s -o "$TMP/pj" -w '%{http_code}' "$BASE/api/v1/public/$TOKEN"); che
 check "public spec is the mimic" "$(jx "$TMP/pj" 'j.spec.kind + " " + j.spec.layout.type')" "mimic canvas"
 req DELETE "/api/v1/dashboards/$SLUG/share?reason=e2e" >/dev/null; check "public link withdrawn" "$(st)" 200
 
+echo "== drawing layer (spec 001)"
+EL="[{\"type\":\"symbol\",\"symbol\":\"tank_vertical\",\"x\":100,\"y\":100,\"w\":140,\"h\":260,\"tag\":\"$DS\",\"style\":{\"fill\":\"#CBD5E1\"},\"dyn\":[{\"prop\":\"level\",\"lin\":[0,100,0,1]}],\"on\":[{\"act\":\"faceplate\"}]},{\"type\":\"pipe\",\"points\":[[240,300],[400,300]],\"dyn\":[{\"prop\":\"flow\",\"tag\":\"$DS\",\"op\":\">\",\"v\":0.5}]},{\"type\":\"text\",\"x\":10,\"y\":10,\"w\":200,\"h\":30,\"text\":\"<script>x</script> {value}\"}]"
+req POST /api/v1/dashboards "{\"name\":\"Picture $SUF\",\"spec\":{\"kind\":\"mimic\",\"layout\":{\"type\":\"canvas\",\"width\":1200,\"height\":700,\"bg\":\"#DFE3E8\"},\"scheme\":\"isa101\",\"widgets\":[],\"elements\":$EL},\"reason\":\"e2e\"}" >/dev/null; check "picture with elements only" "$(st)" 201
+PSLUG=$(jget slug < "$TMP/b")
+check "canonical: ids, lower-case colours, scheme, bg" "$(jx "$TMP/b" 'j.spec.elements.map(e=>e.id).join(",") + " " + j.spec.elements[0].style.fill + " " + j.spec.scheme + " " + j.spec.layout.bg')" "e1,e2,e3 #cbd5e1 isa101 #dfe3e8"
+check "text kept literally (escaped at render)" "$(jx "$TMP/b" 'j.spec.elements[2].text')" "<script>x</script> {value}"
+for bad in \
+  "{\"type\":\"rect\",\"style\":{\"fill\":\"red;x:url(y)\"}}" \
+  "{\"type\":\"script\"}" \
+  "{\"type\":\"rect\",\"dyn\":[{\"prop\":\"level\",\"lin\":[1,1,0,1]}]}" \
+  "{\"type\":\"rect\",\"on\":[{\"act\":\"screen\",\"target\":\"../x\"}]}" \
+  "{\"type\":\"rect\",\"on\":[{\"act\":\"url\",\"target\":\"https://x\"}]}"; do
+  req POST /api/v1/dashboards "{\"name\":\"bad-$SUF\",\"spec\":{\"kind\":\"mimic\",\"widgets\":[],\"elements\":[$bad]},\"reason\":\"e2e\"}" >/dev/null; check "refused: ${bad:0:60}" "$(st)" 400
+done
+grep -q '"error":"element 1:' "$TMP/b" && ok "error names the element" || bad "error text: $(head -c 120 "$TMP/b")"
+req POST /api/v1/dashboards "{\"name\":\"bad-$SUF\",\"spec\":{\"kind\":\"dashboard\",\"widgets\":[$W],\"elements\":[{\"type\":\"rect\"}]},\"reason\":\"e2e\"}" >/dev/null; check "grid dashboards have no drawing layer" "$(st)" 400
+req POST "/api/v1/dashboards/$PSLUG/share" '{"reason":"e2e"}' >/dev/null; PURL=$(jget url < "$TMP/b"); PTOK=${PURL##*/}
+code=$(curl -s -o "$TMP/pj" -w '%{http_code}' "$BASE/api/v1/public/$PTOK"); check "public picture" "$code" 200
+check "public spec carries the elements" "$(jx "$TMP/pj" 'j.spec.elements.length')" 3
+code=$(curl -s -o "$TMP/pl" -w '%{http_code}' "$BASE/api/v1/public/$PTOK/datastreams/latest?ids=$DS"); check "public link reads the element tag" "$code" 200
+req DELETE "/api/v1/dashboards/$PSLUG?reason=e2e" >/dev/null; check "picture retired" "$(st)" 200
+
 echo "== a symbol on a grid dashboard still works"
 req POST /api/v1/dashboards "{\"name\":\"Grid symbols $SUF\",\"spec\":{\"widgets\":[{\"id\":\"t\",\"type\":\"tank\",\"geometry\":{\"x\":0,\"y\":0,\"w\":3,\"h\":3},\"bindings\":{\"datastreams\":[\"$DS\"]}}]},\"reason\":\"e2e\"}" >/dev/null; check "tank on a grid dashboard" "$(st)" 201
 GSLUG=$(jget slug < "$TMP/b")

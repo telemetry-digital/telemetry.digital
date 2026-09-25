@@ -15,7 +15,7 @@ description: "Tasks for SCADA process pictures and editor"
 ## Phase 1: Setup
 
 - [x] T001 Record ADR-0015 (canvas editors before 1.0) in docs/adr/0015-canvas-editors-before-1-0.md
-- [ ] T002 [P] Add sc-* styles and keyframes (sc-spin, sc-agit, sc-flow using `--sc-per`, sc-blink, sc-flame, sc-click cursor, faceplate dialog layout, `.sc-sym *{vector-effect:non-scaling-stroke}`) in internal/httpapi/static/app.css
+- [x] T002 [P] Add sc-* styles and keyframes (sc-spin, sc-agit, sc-flow using `--sc-per`, sc-blink, sc-flame, sc-click cursor, faceplate dialog layout, `.sc-sym *{vector-effect:non-scaling-stroke}`) in internal/httpapi/static/app.css
 
 ---
 
@@ -24,9 +24,9 @@ description: "Tasks for SCADA process pictures and editor"
 - [x] T003 Validate the drawing layer (types rect/ellipse/line/polyline/polygon/pipe/text/symbol, ≤ 1500 elements, ≤ 200 points, ≤ 8 dyn, ≤ 4 on, hex colours, closed style keys) in internal/httpapi/screen_elements.go with tests in screen_elements_test.go
 - [x] T004 Accept `layout.bg` (hex), `layout.grid` (1–100), `scheme` (classic|isa101) and "widgets or elements non-empty" in internal/httpapi/dashboards.go
 - [x] T005 Public links read tags of elements and dynamics in internal/httpapi/public_dashboard.go
-- [ ] T006 Extend the schema with element type `image` (`src` = library slug `^[a-z0-9][a-z0-9-]{0,62}$`) and field `group` (`^[A-Za-z0-9_-]{1,32}$`) plus tests in internal/httpapi/screen_elements.go and screen_elements_test.go
-- [ ] T007 Mount the drawing layer in canvas screens (SVG below widgets), add element tags to the live subscription, refresh the layer on observations (debounced 400 ms), export `isPublic()` in internal/httpapi/static/widgets.js
-- [ ] T008 Load scada.js before widgets.js in internal/httpapi/static/dashboards.html and internal/httpapi/static/public.html
+- [x] T006 Extend the schema with element type `image` (`src` = library slug `^[a-z0-9][a-z0-9-]{0,62}$`) and field `group` (`^[A-Za-z0-9_-]{1,32}$`) plus tests in internal/httpapi/screen_elements.go and screen_elements_test.go
+- [x] T007 Mount the drawing layer in canvas screens (SVG below widgets), add element tags to the live subscription, refresh the layer on observations (debounced 400 ms), export `isPublic()` in internal/httpapi/static/widgets.js
+- [x] T008 Load scada.js before widgets.js in internal/httpapi/static/dashboards.html and internal/httpapi/static/public.html
 
 **Checkpoint**: an element-only picture stored through the API renders in view mode.
 
@@ -37,10 +37,10 @@ description: "Tasks for SCADA process pictures and editor"
 **Goal**: operators see levels, states, flow, alarms and values update live.
 **Independent test**: store a picture via API, publish values, see changes without reload.
 
-- [ ] T009 [US1] Finish the runtime: renderer for all element types, symbol library ≥ 50 symbols in 8 categories, dynamics evaluation (all 14 kinds, first-match mappings, clamped linear ranges), keyed diff redraw in internal/httpapi/static/scada.js
-- [ ] T010 [US1] Show "—" and no state for tags without a value; quality marker in tooltip in internal/httpapi/static/scada.js
-- [ ] T011 [P] [US1] Headless probe that loads a stored picture, publishes values via the device API and asserts level height, fill colours, flow class and text content, failing on mismatch, in tests/headless/scada.js
-- [ ] T012 [P] [US1] Extend tests/e2e/mimics.sh: store a picture with elements, read it back canonical, reject 5 invalid pictures (bad colour, markup-free text kept literally, unknown type, empty lin range, foreign screen slug)
+- [x] T009 [US1] Finish the runtime: renderer for all element types, symbol library ≥ 50 symbols in 8 categories, dynamics evaluation (all 14 kinds, first-match mappings, clamped linear ranges), keyed diff redraw in internal/httpapi/static/scada.js
+- [x] T010 [US1] Show "—" and no state for tags without a value; quality marker in tooltip in internal/httpapi/static/scada.js
+- [x] T011 [P] [US1] Headless probe that loads a stored picture, publishes values via the device API and asserts level height, fill colours, flow class and text content, failing on mismatch, in tests/headless/scada.js
+- [x] T012 [P] [US1] Extend tests/e2e/mimics.sh: store a picture with elements, read it back canonical, reject 5 invalid pictures (bad colour, markup-free text kept literally, unknown type, empty lin range, foreign screen slug)
 
 **Checkpoint**: US1 demonstrable with an API-made picture.
 
