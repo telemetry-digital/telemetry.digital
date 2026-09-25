@@ -33,14 +33,17 @@
 <section id="list" hidden>
   <div class="page-head"><h1>Dashboards</h1><span class="grow"></span><button class="btn primary" id="newBtn" type="button" hidden>New dashboard</button></div>
   <div class="card">
-    <p class="muted">A dashboard is a screen of widgets placed on a 12-column grid: trends, latest values, gauges, state indicators, tables, alarms, devices and a map. Every save is a new version with a reason. The default dashboard opens on the home page.</p>
+    <p class="muted">A dashboard is a screen of widgets placed on a 12-column grid: trends, latest values, gauges, state indicators, tables, alarms, devices and a map. A process picture is a SCADA screen drawn in the editor — vessels, pumps, valves, pipes, instruments and texts that move with live values — optionally with widgets on top. Every save is a new version with a reason. The default screen opens on the home page.</p>
     <div class="table-wrap"><table id="dashes"><thead><tr><th>Name</th><th>Widgets</th><th>Version</th><th>Default</th><th>Created</th><th></th></tr></thead><tbody></tbody></table></div>
   </div>
   <dialog id="newDlg">
     <form id="newForm" class="form" method="dialog">
       <h2 style="margin-top:0">New dashboard</h2>
       <label>Name <input name="name" required maxlength="128" placeholder="Production hall 1"></label>
-      <label>Start from <select name="kind"><option value="overview">Overview (devices, alarms, latest values)</option><option value="showcase">Showcase (all widget types)</option><option value="mimic">Process picture (mimic) — showcase</option><option value="mimic-empty">Process picture (mimic) — empty canvas</option><option value="empty">Empty</option></select></label>
+      <label>Kind and start <select name="kind">
+        <optgroup label="Dashboard (widgets on a grid)"><option value="overview">Dashboard — overview (devices, alarms, latest values)</option><option value="showcase">Dashboard — showcase (all widget types)</option><option value="empty">Dashboard — empty</option></optgroup>
+        <optgroup label="Process picture (SCADA drawing)"><option value="picture">Process picture — empty drawing</option><option value="picture-widgets">Process picture with widgets — drawing and a trend</option><option value="plant">Process picture — mixing plant (demo)</option><option value="mimic">Process picture — widget symbols (legacy showcase)</option></optgroup>
+      </select></label>
       <label class="inline"><input type="checkbox" name="is_default"><span>Show on the home page (default)</span></label>
       <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
       <div class="err" id="newErr"></div>
@@ -124,8 +127,11 @@ async function loadList(){
 $('#newBtn').onclick = () => { const f = $('#newForm'); f.reset(); $('#newErr').textContent=''; $('#newDlg').showModal(); };
 $('#newForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#newErr').textContent='';
   let spec = {version: 1, kind: 'dashboard', layout: {type: 'grid', columns: 12, row_height: 96}, range: '24h', refresh_s: 30, widgets: []};
-  if(f.kind.value === 'mimic-empty') spec = {version: 1, kind: 'mimic', layout: {type: 'canvas', width: 1600, height: 900}, range: '24h', refresh_s: 30, widgets: [{id: 'title', type: 'text', geometry: {x: 20, y: 20, w: 600, h: 60}, bindings: {}, params: {title: 'Process picture', text: '', frame: true}}]};
-  try{ if(f.kind.value !== 'empty' && f.kind.value !== 'mimic-empty'){ const st = await api('GET', `/api/v1/dashboards/starter?kind=${encodeURIComponent(f.kind.value)}`); spec = st.spec; }
+  const canvasLayout = {type: 'canvas', width: 1600, height: 900, bg: '#dfe3e8', grid: 10};
+  const title = {id: 'title', type: 'text', x: 20, y: 16, w: 800, h: 40, text: f.name.value, style: {font: 24, bold: true, color: '#1f2937'}};
+  if(f.kind.value === 'picture') spec = {version: 1, kind: 'mimic', layout: canvasLayout, scheme: 'classic', range: '24h', refresh_s: 30, widgets: [], elements: [title]};
+  if(f.kind.value === 'picture-widgets') spec = {version: 1, kind: 'mimic', layout: canvasLayout, scheme: 'classic', range: '24h', refresh_s: 30, elements: [title], widgets: [{id: 'trend', type: 'chart', geometry: {x: 1100, y: 80, w: 460, h: 300}, bindings: {datastreams: []}, params: {title: 'Trend', frame: true}}]};
+  try{ if(!['empty', 'picture', 'picture-widgets'].includes(f.kind.value)){ const st = await api('GET', `/api/v1/dashboards/starter?kind=${encodeURIComponent(f.kind.value)}`); spec = st.spec; }
     const r = await api('POST','/api/v1/dashboards',{name: f.name.value, spec, is_default: f.is_default.checked, reason: f.reason.value}); location.href = `/dashboards/${r.slug}/edit`; }catch(x){ $('#newErr').textContent = x.message; } };
 
 // ---- view ----

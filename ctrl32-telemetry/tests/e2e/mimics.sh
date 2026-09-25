@@ -78,6 +78,9 @@ check "public spec carries the elements" "$(jx "$TMP/pj" 'j.spec.elements.length
 code=$(curl -s -o "$TMP/pl" -w '%{http_code}' "$BASE/api/v1/public/$PTOK/datastreams/latest?ids=$DS"); check "public link reads the element tag" "$code" 200
 req DELETE "/api/v1/dashboards/$PSLUG?reason=e2e" >/dev/null; check "picture retired" "$(st)" 200
 
+req GET "/api/v1/dashboards/starter?kind=plant" >/dev/null; check "mixing plant starter" "$(st)" 200
+check "plant is a picture with a drawing and widgets" "$(jx "$TMP/b" '(j.spec.kind === "mimic" && j.spec.elements.length >= 40 && j.spec.widgets.length === 2) + ""')" "true"
+
 echo "== a symbol on a grid dashboard still works"
 req POST /api/v1/dashboards "{\"name\":\"Grid symbols $SUF\",\"spec\":{\"widgets\":[{\"id\":\"t\",\"type\":\"tank\",\"geometry\":{\"x\":0,\"y\":0,\"w\":3,\"h\":3},\"bindings\":{\"datastreams\":[\"$DS\"]}}]},\"reason\":\"e2e\"}" >/dev/null; check "tank on a grid dashboard" "$(st)" 201
 GSLUG=$(jget slug < "$TMP/b")

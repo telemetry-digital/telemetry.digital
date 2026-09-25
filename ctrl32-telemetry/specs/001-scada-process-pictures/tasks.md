@@ -86,9 +86,9 @@ description: "Tasks for SCADA process pictures and editor"
 
 ## Phase 7: User Story 5 — SCADA, widgets, or both (P2)
 
-- [ ] T025 [US5] "New screen" dialog offers Dashboard / Process picture / Process picture with widgets / demo mixing plant in internal/httpapi/static/dashboards.html
-- [ ] T026 [US5] Demo mixing plant starter (≥ 40 elements, vessels, pumps, valves, pipes, heat exchanger, instruments, texts bound to the demo datastreams) in internal/httpapi/dashboard_starter.go
-- [ ] T027 [P] [US5] Headless: widget + drawing on one picture both update in tests/headless/scada.js
+- [x] T025 [US5] "New screen" dialog offers Dashboard / Process picture / Process picture with widgets / demo mixing plant in internal/httpapi/static/dashboards.html
+- [x] T026 [US5] Demo mixing plant starter (≥ 40 elements, vessels, pumps, valves, pipes, heat exchanger, instruments, texts bound to the demo datastreams) in internal/httpapi/dashboard_starter.go
+- [x] T027 [P] [US5] Headless: widget + drawing on one picture both update in tests/headless/scada.js
 
 ---
 

@@ -359,7 +359,7 @@ func newIAM(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*iam.S
 
 // admin bootstrap: create the organization (if none) and the first org_admin; prints a one-time password.
 // admin reset-password: set a new one-time password for a user.
-// admin seed-dashboard: create a starter dashboard (overview or showcase) for an organization without a browser session.
+// admin seed-dashboard: create a starter dashboard (overview, showcase, mimic or plant) for an organization without a browser session.
 // admin purge: the authorised, logged deletion of a site, device, dashboard or the stored reports (purge.go).
 func cmdAdmin(args []string) error {
 	if len(args) == 0 {
@@ -379,7 +379,7 @@ func cmdAdmin(args []string) error {
 	password := fs.String("password", "", "initial password (generated if empty; must be changed at first login)")
 	permanent := fs.Bool("permanent", false, "reset-password: do not force a password change at the next login")
 	allowWeak := fs.Bool("allow-weak", false, "reset-password: bypass the password policy (demo instances only; recorded in the audit trail)")
-	dashKind := fs.String("kind", "showcase", "seed-dashboard: overview or showcase")
+	dashKind := fs.String("kind", "showcase", "seed-dashboard: overview, showcase, mimic or plant")
 	dashName := fs.String("dashboard-name", "", "seed-dashboard: dashboard name (default: the starter's name)")
 	dashSlug := fs.String("slug", "", "seed-dashboard: slug (default: from the name)")
 	dashDefault := fs.Bool("default", false, "seed-dashboard: show it on the home page")
