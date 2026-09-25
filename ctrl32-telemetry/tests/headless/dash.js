@@ -34,7 +34,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   for (const [name, url] of list) {
     problems = [];
     await send("Page.navigate", { url }); await sleep(5000);
-    const widgets = await ev(`document.querySelectorAll('#vGrid .widget, #vGrid .mimic-widget, .grid .widget, .mimic-widget').length`);
+    const widgets = await ev(`document.querySelectorAll('.dash-widget').length`);
     const errs = await ev(`[...document.querySelectorAll('.widget .err, .widget .error, .widget-err')].map(e=>e.textContent.trim()).filter(Boolean).slice(0,5)`);
     const title = await ev(`document.title`);
     await send("Emulation.setDeviceMetricsOverride", { width: 1600, height: 1100, deviceScaleFactor: 1, mobile: false });

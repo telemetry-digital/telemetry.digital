@@ -49,7 +49,12 @@ Go 1.27, PostgreSQL 18 (`docker compose -f deploy/dev/docker-compose.yml up -d`,
 ```bash
 cp config.example.toml config.toml            # then set db.url / admin_url for the dev database
 go run ./cmd/ctrl32-telemetry migrate -config config.toml
-go run ./cmd/ctrl32-telemetry dev seed -config config.toml   # demo organization, admin/admin1234, a device token
+go run ./cmd/ctrl32-telemetry dev seed -config config.toml   # demo organization, site, datastreams, a device token
+go run ./cmd/ctrl32-telemetry admin bootstrap -config config.toml   # first org_admin "admin" with a one-time password
+go run ./cmd/ctrl32-telemetry admin reset-password -username admin -password admin1234 -permanent -allow-weak -config config.toml   # dev credentials the e2e suites use
+# e2e suites: USER=admin in the environment (the shell's $USER wins otherwise) and no forced MFA enrolment for the dev org:
+#   UPDATE core.organization SET settings = jsonb_set(coalesce(settings,'{}'), '{security}', coalesce(settings->'security','{}') || '{"mfa_optional":true}');
+# tests/e2e/iam.sh is the exception: run it first on a fresh database with the one-time password from `admin bootstrap`.
 go run ./cmd/ctrl32-telemetry serve -config config.toml      # http://127.0.0.1:8080
 go test ./...                                  # unit and integration tests (OpenAPI completeness, generated clients, agent)
 bash tests/e2e/assets.sh                       # 26 end-to-end suites against the running server, one at a time
