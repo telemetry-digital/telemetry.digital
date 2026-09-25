@@ -75,6 +75,21 @@ func (s *Server) resolveShare(ctx context.Context, token string) (*shareInfo, bo
 			si.HasAlarms = true
 		}
 	}
+	// Drawing elements of a process picture: their tags and the tags of their dynamics are readable too.
+	elems, _ := si.Spec["elements"].([]any)
+	for _, x := range elems {
+		e, _ := x.(map[string]any)
+		if t, ok := e["tag"].(string); ok && t != "" {
+			si.DS[t] = true
+		}
+		dyn, _ := e["dyn"].([]any)
+		for _, y := range dyn {
+			d, _ := y.(map[string]any)
+			if t, ok := d["tag"].(string); ok && t != "" {
+				si.DS[t] = true
+			}
+		}
+	}
 	return si, true
 }
 

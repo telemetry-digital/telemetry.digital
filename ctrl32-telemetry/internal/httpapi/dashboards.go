@@ -118,7 +118,10 @@ type screenSpec struct {
 		RowHeight int    `json:"row_height"`
 		Width     int    `json:"width"`
 		Height    int    `json:"height"`
+		Bg        string `json:"bg"`   // canvas background colour (process pictures)
+		Grid      int    `json:"grid"` // editor snap grid in pixels (process pictures)
 	} `json:"layout"`
+	Scheme   string `json:"scheme"` // state colours of process symbols: classic (WinCC-like) | isa101 (high-performance HMI)
 	Range    string `json:"range"`
 	RefreshS int    `json:"refresh_s"`
 	Widgets  []struct {
@@ -128,6 +131,7 @@ type screenSpec struct {
 		Bindings map[string][]string      `json:"bindings"`
 		Params   map[string]any           `json:"params"`
 	} `json:"widgets"`
+	Elements []any `json:"elements"` // drawing layer of process pictures (screen_elements.go)
 }
 
 // validateScreenSpec normalizes a screen (dashboard) spec and returns the canonical document.
@@ -198,8 +202,11 @@ func validateScreenSpec(raw json.RawMessage) (map[string]any, error) {
 	if sp.RefreshS < 5 || sp.RefreshS > 3600 {
 		return nil, errors.New("refresh_s must be 5..3600")
 	}
-	if len(sp.Widgets) == 0 {
-		return nil, errors.New("at least one widget is required")
+	if len(sp.Elements) > 0 && !canvas {
+		return nil, errors.New("drawing elements need the canvas layout (kind mimic)")
+	}
+	if len(sp.Widgets) == 0 && len(sp.Elements) == 0 {
+		return nil, errNoContent
 	}
 	if len(sp.Widgets) > 60 {
 		return nil, errors.New("at most 60 widgets")
@@ -264,10 +271,38 @@ func validateScreenSpec(raw json.RawMessage) (map[string]any, error) {
 		widgets = append(widgets, map[string]any{"id": id, "type": w.Type, "geometry": map[string]int{"x": g.X, "y": g.Y, "w": g.W, "h": g.H}, "bindings": binds, "params": params})
 	}
 	layout := map[string]any{"type": "grid", "columns": 12, "row_height": sp.Layout.RowHeight}
+	out := map[string]any{"version": 1, "kind": sp.Kind, "layout": layout, "range": sp.Range, "refresh_s": sp.RefreshS, "widgets": widgets}
 	if canvas {
-		layout = map[string]any{"type": "canvas", "width": sp.Layout.Width, "height": sp.Layout.Height}
+		lay := map[string]any{"type": "canvas", "width": sp.Layout.Width, "height": sp.Layout.Height}
+		if sp.Layout.Bg != "" {
+			if !colorRe.MatchString(sp.Layout.Bg) {
+				return nil, errors.New("layout.bg must be a colour like #e5e7eb")
+			}
+			lay["bg"] = strings.ToLower(sp.Layout.Bg)
+		}
+		if sp.Layout.Grid != 0 {
+			if sp.Layout.Grid < 1 || sp.Layout.Grid > 100 {
+				return nil, errors.New("layout.grid must be 1..100")
+			}
+			lay["grid"] = sp.Layout.Grid
+		}
+		out["layout"] = lay
+		switch sp.Scheme {
+		case "":
+		case "classic", "isa101":
+			out["scheme"] = sp.Scheme
+		default:
+			return nil, errors.New("scheme must be classic or isa101")
+		}
+		elems, err := validateElements(sp.Elements, sp.Layout.Width, sp.Layout.Height)
+		if err != nil {
+			return nil, err
+		}
+		if len(elems) > 0 {
+			out["elements"] = elems
+		}
 	}
-	return map[string]any{"version": 1, "kind": sp.Kind, "layout": layout, "range": sp.Range, "refresh_s": sp.RefreshS, "widgets": widgets}, nil
+	return out, nil
 }
 
 func validateParams(i int, def *WidgetDef, src map[string]any) (map[string]any, error) {
@@ -539,7 +574,7 @@ func (s *Server) saveDashboard(w http.ResponseWriter, r *http.Request, org, slug
 	if exists {
 		old = map[string]any{"id": prevID, "version": prevVersion}
 	}
-	s.audit(r, action, "dashboard", id, old, map[string]any{"slug": slug, "name": in.Name, "version": version, "widgets": len(spec["widgets"].([]map[string]any)), "is_default": def}, in.Reason)
+	s.audit(r, action, "dashboard", id, old, map[string]any{"slug": slug, "name": in.Name, "version": version, "widgets": len(spec["widgets"].([]map[string]any)), "elements": len(elementsOf(spec)), "is_default": def}, in.Reason)
 	code := 200
 	if create {
 		code = 201
