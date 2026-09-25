@@ -105,9 +105,9 @@ description: "Tasks for SCADA process pictures and editor"
 
 ## Phase 9: Polish & cross-cutting
 
-- [ ] T034 [P] Slovak and Czech translations for all new strings in internal/i18n/catalog/sk.json and cs.json (English keys)
-- [ ] T035 [P] Update URS J-03/J-04/J-05 and add J-20…J-27 in docs/urs/URS-v0.1.md; JOURNAL entry and version bump in JOURNAL.md and README.md
-- [ ] T036 Performance check: 1500-element picture renders < 3 s and editor drag stays responsive (headless timing) in tests/headless/scada.js
+- [x] T034 [P] Slovak and Czech translations for all new strings in internal/i18n/catalog/sk.json and cs.json (English keys)
+- [x] T035 [P] Update URS J-03/J-04/J-05 and add J-20…J-27 in docs/urs/URS-v0.1.md; JOURNAL entry and version bump in JOURNAL.md and README.md
+- [x] T036 Performance check: 1500-element picture renders < 3 s and editor drag stays responsive (headless timing) in tests/headless/scada.js
 - [ ] T037 Run `bash tests/run-all.sh` green, commit and push
 
 ## Dependencies

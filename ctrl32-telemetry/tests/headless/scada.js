@@ -55,7 +55,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
       ]};
     const d = await post('/api/v1/dashboards', {name:'SCADA probe ' + suf, spec});
     window.__fx = {tok, slug: d.slug, ds, dev: dev.id};
-    return {slug: d.slug, tok, dev: dev.id, elements: (d.spec.elements || []).length};
+    return {slug: d.slug, tok, dev: dev.id, ds, elements: (d.spec.elements || []).length};
   })()`);
   expect("fixtures", fx && fx.elements, 6);
   if (!fx || !fx.slug) { console.log("problems:", JSON.stringify(problems)); proc.kill(); process.exit(1); }
@@ -103,6 +103,28 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   expect("public picture renders the drawing", await ev(`document.querySelectorAll('.sc-root > [data-eid]').length`), 6);
   expect("public faceplate is read-only", await ev(`(() => { document.querySelector('[data-eid="pump"]').dispatchEvent(new MouseEvent('click', {bubbles:true})); const d = document.querySelector('dialog.sc-dlg'); return !!d && d.open && !d.querySelector('[data-v]') && d.textContent.includes('read-only'); })()`), true);
   await send("Page.navigate", { url: base + "/dashboards" }); await sleep(1500);
+
+  // Performance (SC-002/SC-003, T036): 1500 objects bound to tags render in under 3 s; the editor opens and a nudge of
+  // everything redraws in well under a second.
+  const big = await ev(`(async () => { const me = await (await fetch('/api/v1/auth/me',{credentials:'same-origin'})).json(); const h = {'Content-Type':'application/json','X-CSRF-Token': me.csrf_token};
+    const ds = ${JSON.stringify(fx.ds)}; const els = [];
+    for (let i = 0; i < 500; i++) { const x = 20 + (i % 25) * 150, y = 20 + Math.floor(i / 25) * 140;
+      els.push({type:'symbol', symbol: ['tank_vertical','pump_centrifugal','valve_ball','motor','heat_exchanger'][i % 5], x, y, w:60, h:80, tag: ds.level, dyn:[{prop:'level', lin:[0,100,0,1]}, {prop:'state', tag: ds.pump, map:[{op:'==',v:1,to:'run'}]}]});
+      els.push({type:'pipe', points:[[x + 60, y + 40], [x + 140, y + 40]], style:{sw:8}, dyn:[{prop:'flow', tag: ds.flow, op:'>', v:0.5}]});
+      els.push({type:'text', x, y: y + 84, w:100, h:20, text:'{value} {unit}', tag: ds.temp, style:{font:11}}); }
+    const r = await (await fetch('/api/v1/dashboards',{method:'POST',headers:h,credentials:'same-origin',body:JSON.stringify({name:'Perf probe ' + Math.floor(Math.random()*1e6), reason:'probe', spec:{kind:'mimic', layout:{type:'canvas', width:4000, height:3000}, widgets:[], elements: els}})})).json(); return r.slug; })()`);
+  let t0 = Date.now(); await send("Page.navigate", { url: base + "/dashboards/" + big });
+  let n = 0; while (Date.now() - t0 < 15000) { n = await ev(`document.querySelectorAll('#vGrid .sc-root > [data-eid]').length`).catch(() => 0); if (n === 1500) break; await sleep(100); }
+  const viewMs = Date.now() - t0;
+  expect("1500 objects rendered in under 3 s (" + viewMs + " ms)", n === 1500 && viewMs < 3000, true);
+  t0 = Date.now(); await send("Page.navigate", { url: base + "/dashboards/" + big + "/edit" });
+  while (Date.now() - t0 < 20000) { if (await ev(`!!(window.__scadaEditor && document.querySelectorAll('#scadaEd .sc-root > [data-eid]').length === 1500)`).catch(() => false)) break; await sleep(100); }
+  const editMs = Date.now() - t0;
+  expect("editor with 1500 objects ready in under 5 s (" + editMs + " ms)", editMs < 5000, true);
+  const nudge = await ev(`(() => { __scadaEditor.select(SPEC.elements.map(e => 'e:' + e.id)); const t = performance.now(); document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', bubbles: true})); return Math.round(performance.now() - t); })()`);
+  expect("moving all 1500 objects redraws in under 1 s (" + nudge + " ms)", nudge < 1000, true);
+  await ev(`(DIRTY = false, true)`);
+  await ev(`(async () => { const h = {'X-CSRF-Token': (await (await fetch('/api/v1/auth/me',{credentials:'same-origin'})).json()).csrf_token}; return (await fetch('/api/v1/dashboards/${big}?reason=probe',{method:'DELETE',headers:h,credentials:'same-origin'})).status; })()`);
 
   const del = await ev(`(async () => { const h = {'X-CSRF-Token': (await (await fetch('/api/v1/auth/me',{credentials:'same-origin'})).json()).csrf_token}; return (await fetch('/api/v1/dashboards/${fx.slug}?reason=probe',{method:'DELETE',headers:h,credentials:'same-origin'})).status; })()`);
   console.log("cleanup:", del);

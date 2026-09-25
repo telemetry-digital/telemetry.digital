@@ -167,7 +167,7 @@
       const info = SEL.length === 1 ? describe(SEL[0]) : SEL.length ? `${SEL.length} objects` : '';
       $('.se-info').textContent = info;
     }
-    function describe(k) { const [t, v] = keyOf(k); if (t === 'w') { const w = spec.widgets[+v]; return `widget ${w.type} ${w.geometry.w}×${w.geometry.h} at ${w.geometry.x},${w.geometry.y}`; } const e = el(v); if (!e) return ''; const b = SC().bbox(e); return `${e.name || e.id} · ${e.type === 'symbol' ? (SC().symbols[e.symbol] || {}).name || e.symbol : e.type} · ${Math.round(b.w)}×${Math.round(b.h)} at ${Math.round(b.x)},${Math.round(b.y)}${e.r ? ' · ' + e.r + '°' : ''}`; }
+    function describe(k) { const [t, v] = keyOf(k); if (t === 'w') { const w = spec.widgets[+v]; return `widget ${w.type} ${w.geometry.w}×${w.geometry.h} at ${w.geometry.x},${w.geometry.y}`; } const e = el(v); if (!e) return ''; const b = SC().bbox(e); const tr = (x) => (window.ctrl32 && ctrl32.t ? ctrl32.t(x) : x); return `${e.name || e.id} · ${e.type === 'symbol' ? tr((SC().symbols[e.symbol] || {}).name || e.symbol) : e.type} · ${Math.round(b.w)}×${Math.round(b.h)} at ${Math.round(b.x)},${Math.round(b.y)}${e.r ? ' · ' + e.r + '°' : ''}`; }
     function select(keys) { SEL = keys; drawOverlay(); renderProps(); renderLayers(); toolbarState(); }
 
     // ---- pointer interaction --------------------------------------------------------------------------------------
@@ -367,7 +367,7 @@
     host.tabIndex = -1;
     function onKey(ev) {
       if (!host.isConnected || host.closest('[hidden]')) return;
-      const t = ev.target; if (t && (t.closest('input,textarea,select,[contenteditable]') || t.closest('dialog'))) return;
+      const t = ev.target; if (t && t.closest && (t.closest('input,textarea,select,[contenteditable]') || t.closest('dialog'))) return;
       const k = ev.key, mod = ev.ctrlKey || ev.metaKey;
       const run = (f) => { ev.preventDefault(); f(); };
       if (mod && (k === 'z' || k === 'Z') && !ev.shiftKey) return run(undo);
