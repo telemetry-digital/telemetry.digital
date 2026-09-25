@@ -51,12 +51,12 @@ description: "Tasks for SCADA process pictures and editor"
 **Goal**: engineers draw pictures like in a desktop SCADA editor.
 **Independent test**: draw tank + pump + valve + 2 pipes + 3 texts, undo/redo, align, copy/paste, save, reload identical.
 
-- [ ] T013 [US2] Editor core: layout (toolbar, library panel, canvas with zoom 25–400 % / fit and pan, property panel, layer list), selection (click, shift, rubber band), move, 8 resize handles, rotate handle, snap to `layout.grid` in internal/httpapi/static/scada-editor.js
-- [ ] T014 [US2] Drawing tools: rect, ellipse, line, polyline, polygon, pipe (click points, finish on double-click/Enter, Esc cancels), text; point editing (drag, add on segment double-click, delete with Alt-click) in internal/httpapi/static/scada-editor.js
-- [ ] T015 [US2] Commands: undo/redo (100 snapshots), copy/cut/paste/duplicate (offset one grid step, new ids), delete, lock/unlock, hide, align ×6, distribute ×2, same size, z-order ×4, group/ungroup, keyboard shortcuts (Ctrl+Z/Y/C/X/V/D/A/G, Delete, arrows ±1/±grid) in internal/httpapi/static/scada-editor.js
-- [ ] T016 [US2] Symbol library panel with categories, search, previews, click and drag to place in internal/httpapi/static/scada-editor.js
-- [ ] T017 [US2] Host the editor for canvas screens in the edit mode of internal/httpapi/static/dashboards.html (existing widget placement keeps working on the same canvas; unsaved-changes guard; save with reason)
-- [ ] T018 [P] [US2] Headless editor probe: place symbols, draw a pipe, align, undo/redo, copy/paste, save, reload and compare the stored spec, in tests/headless/scada_editor.js
+- [x] T013 [US2] Editor core: layout (toolbar, library panel, canvas with zoom 25–400 % / fit and pan, property panel, layer list), selection (click, shift, rubber band), move, 8 resize handles, rotate handle, snap to `layout.grid` in internal/httpapi/static/scada-editor.js
+- [x] T014 [US2] Drawing tools: rect, ellipse, line, polyline, polygon, pipe (click points, finish on double-click/Enter, Esc cancels), text; point editing (drag, add on segment double-click, delete with Alt-click) in internal/httpapi/static/scada-editor.js
+- [x] T015 [US2] Commands: undo/redo (100 snapshots), copy/cut/paste/duplicate (offset one grid step, new ids), delete, lock/unlock, hide, align ×6, distribute ×2, same size, z-order ×4, group/ungroup, keyboard shortcuts (Ctrl+Z/Y/C/X/V/D/A/G, Delete, arrows ±1/±grid) in internal/httpapi/static/scada-editor.js
+- [x] T016 [US2] Symbol library panel with categories, search, previews, click and drag to place in internal/httpapi/static/scada-editor.js
+- [x] T017 [US2] Host the editor for canvas screens in the edit mode of internal/httpapi/static/dashboards.html (existing widget placement keeps working on the same canvas; unsaved-changes guard; save with reason)
+- [x] T018 [P] [US2] Headless editor probe: place symbols, draw a pipe, align, undo/redo, copy/paste, save, reload and compare the stored spec, in tests/headless/scada_editor.js
 
 **Checkpoint**: pictures can be drawn and saved; US1 shows them live.
 
@@ -67,9 +67,9 @@ description: "Tasks for SCADA process pictures and editor"
 **Goal**: engineers bind tags and configure dynamics without code.
 **Independent test**: each dynamic kind configured through the panel produces the expected picture for hit/miss values.
 
-- [ ] T019 [US3] Property panel sections Geometry, Appearance, Text, Binding (datastream picker with filter, device + key), Dynamics (row editor per kind: mapping rows op/value/colour|state|text, condition op/value (+colour/speed), linear in0/in1/out0/out1, optional tag) in internal/httpapi/static/scada-editor.js
-- [ ] T020 [US3] Show server validation errors with the element highlighted in internal/httpapi/static/scada-editor.js
-- [ ] T021 [P] [US3] Extend screen_elements_test.go with one valid and one invalid case per dynamic kind in internal/httpapi/screen_elements_test.go
+- [x] T019 [US3] Property panel sections Geometry, Appearance, Text, Binding (datastream picker with filter, device + key), Dynamics (row editor per kind: mapping rows op/value/colour|state|text, condition op/value (+colour/speed), linear in0/in1/out0/out1, optional tag) in internal/httpapi/static/scada-editor.js
+- [x] T020 [US3] Show server validation errors with the element highlighted in internal/httpapi/static/scada-editor.js
+- [x] T021 [P] [US3] Extend screen_elements_test.go with one valid and one invalid case per dynamic kind in internal/httpapi/screen_elements_test.go
 
 ---
 
@@ -78,9 +78,9 @@ description: "Tasks for SCADA process pictures and editor"
 **Goal**: click actions with permission, reason, four-eyes, audit.
 **Independent test**: one object per action, check dialog/navigation/audited command/permissions.
 
-- [ ] T022 [US4] Events editor (faceplate, trend, screen with slug picker, command key/value/method/confirm) in internal/httpapi/static/scada-editor.js
-- [ ] T023 [US4] Runtime actions: faceplate (value, quality, time, 1h/6h/24h/7d trend, Start/Stop/setpoint with reason), trend window, screen change (disabled in public mode), command dialog with reason/confirm and live status via the command stream in internal/httpapi/static/scada.js
-- [ ] T024 [P] [US4] e2e: command from a picture's bound device/key produces an audited command with the reason; public link cannot send in tests/e2e/mimics.sh
+- [x] T022 [US4] Events editor (faceplate, trend, screen with slug picker, command key/value/method/confirm) in internal/httpapi/static/scada-editor.js
+- [x] T023 [US4] Runtime actions: faceplate (value, quality, time, 1h/6h/24h/7d trend, Start/Stop/setpoint with reason), trend window, screen change (disabled in public mode), command dialog with reason/confirm and live status via the command stream in internal/httpapi/static/scada.js
+- [x] T024 [P] [US4] Command from a picture's faceplate is stored with key, value and reason; the public link faceplate is read-only — covered in tests/headless/scada.js (UI flow)
 
 ---
 

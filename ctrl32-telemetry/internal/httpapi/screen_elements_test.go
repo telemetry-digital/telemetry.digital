@@ -82,3 +82,50 @@ func TestElementsRejected(t *testing.T) {
 		t.Error("empty picture accepted")
 	}
 }
+
+// One valid and one invalid case per dynamic kind (spec 001, T021).
+func TestElementDynamicsPerKind(t *testing.T) {
+	valid := map[string]string{
+		"fill":    `{"prop":"fill","map":[{"op":">=","v":80,"to":"#dc2626"}]}`,
+		"stroke":  `{"prop":"stroke","map":[{"op":"<","v":0,"to":"#2563eb"}]}`,
+		"color":   `{"prop":"color","map":[{"op":"!=","v":0,"to":"#16a34a"}]}`,
+		"state":   `{"prop":"state","map":[{"op":"==","v":1,"to":"run"}]}`,
+		"text":    `{"prop":"text","map":[{"op":"==","v":2,"to":"Fault"}]}`,
+		"text0":   `{"prop":"text"}`,
+		"visible": `{"prop":"visible","op":">","v":0}`,
+		"blink":   `{"prop":"blink","op":">=","v":90,"color":"#dc2626"}`,
+		"flow":    `{"prop":"flow","op":">","v":0.5,"speed":2}`,
+		"rotate":  `{"prop":"rotate","op":"==","v":1,"speed":0.5}`,
+		"level":   `{"prop":"level","lin":[0,100,0,1]}`,
+		"opacity": `{"prop":"opacity","lin":[0,1,0.2,1]}`,
+		"angle":   `{"prop":"angle","lin":[0,100,-90,90]}`,
+		"move_x":  `{"prop":"move_x","lin":[0,100,0,300]}`,
+		"move_y":  `{"prop":"move_y","tag":"` + tagA + `","lin":[0,100,0,-200]}`,
+	}
+	invalid := map[string]string{
+		"fill":    `{"prop":"fill","map":[{"op":">=","v":80,"to":"red"}]}`,
+		"stroke":  `{"prop":"stroke"}`,
+		"color":   `{"prop":"color","map":[{"op":"~","v":0,"to":"#16a34a"}]}`,
+		"state":   `{"prop":"state","map":[{"op":"==","v":1,"to":"running"}]}`,
+		"text":    `{"prop":"text","map":[{"op":"==","v":2,"to":1}]}`,
+		"visible": `{"prop":"visible","v":0}`,
+		"blink":   `{"prop":"blink","op":">","v":1,"color":"url(#x)"}`,
+		"flow":    `{"prop":"flow","op":">","v":0,"speed":99}`,
+		"rotate":  `{"prop":"rotate","op":">","v":"a"}`,
+		"level":   `{"prop":"level","lin":[0,100,0]}`,
+		"opacity": `{"prop":"opacity"}`,
+		"angle":   `{"prop":"angle","lin":[1,1,0,90]}`,
+		"move_x":  `{"prop":"move_x","lin":["0",100,0,1]}`,
+		"move_y":  `{"prop":"move_y","tag":"nope","lin":[0,100,0,1]}`,
+	}
+	for name, d := range valid {
+		if _, err := validateScreenSpec(mimicSpec(`[{"type":"rect","dyn":[` + d + `]}]`)); err != nil {
+			t.Errorf("valid %s refused: %v", name, err)
+		}
+	}
+	for name, d := range invalid {
+		if _, err := validateScreenSpec(mimicSpec(`[{"type":"rect","dyn":[` + d + `]}]`)); err == nil {
+			t.Errorf("invalid %s accepted", name)
+		}
+	}
+}

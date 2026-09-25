@@ -287,3 +287,45 @@ dialog.sc-dlg { width: min(720px, calc(100vw - 32px)); }
 .sc-fp-range { gap: 4px; margin-bottom: 6px; }
 .sc-fp-chart { height: 240px; display: flex; flex-direction: column; }
 .sc-fp-ctl { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 8px; } .sc-fp-ctl h3 { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+/* SCADA editor */
+.se { display: flex; flex-direction: column; gap: 6px; outline: none; }
+.se-top { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); position: sticky; top: 40px; z-index: 6; }
+.se-btn, .se-tool { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--fg); cursor: pointer; padding: 0; }
+.se-btn:hover:not(:disabled), .se-tool:hover { background: var(--bg2); border-color: var(--line); }
+.se-btn:disabled { opacity: .35; cursor: default; }
+.se-btn.on, .se-tool.on { background: color-mix(in srgb, var(--primary) 14%, transparent); border-color: var(--primary); color: var(--primary); }
+.se-sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+.se-zoom { min-width: 48px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
+.se-main { display: grid; grid-template-columns: 210px minmax(0, 1fr) 320px; gap: 8px; align-items: start; }
+.se-lib, .se-side { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); padding: 8px; max-height: calc(100vh - 170px); overflow: auto; position: sticky; top: 90px; }
+.se-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 8px; }
+.se-tool { width: 100%; }
+.se-search { width: 100%; margin-bottom: 6px; }
+.se-lib details summary, .se-side details summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin: 6px 0 4px; }
+.se-symgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.se-sym { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px; border: 1px solid var(--line); border-radius: 6px; background: #e9edf1; color: #1f2937; cursor: grab; font-size: 9px; line-height: 1.1; }
+.se-sym svg { width: 40px !important; height: 40px !important; flex: none; }
+.se-sym span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.se-sym:hover, .se-sym.on { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+.se-view { overflow: auto; max-height: calc(100vh - 170px); min-height: 420px; border: 1px solid var(--line); border-radius: var(--radius); background: repeating-conic-gradient(color-mix(in srgb, var(--fg) 4%, var(--bg)) 0 25%, var(--bg) 0 50%) 0 0 / 16px 16px; padding: 12px; }
+.se-stage .mimic-wrap { border-radius: 0; box-shadow: 0 2px 10px rgba(0,0,0,.18); }
+.se-stage .mimic-widget.editing { cursor: move; }
+.se-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+.se-tabs button { flex: 1; border: 1px solid var(--line); background: var(--bg2); color: var(--fg); border-radius: 6px; padding: 5px; cursor: pointer; font-size: 13px; }
+.se-tabs button.on { border-color: var(--primary); color: var(--primary); }
+.se-side label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; margin: 4px 0; min-width: 0; }
+.se-side label.inline { flex-direction: row; align-items: center; gap: 6px; }
+.se-side .row { gap: 6px; flex-wrap: wrap; } .se-side .row > label { flex: 1 1 60px; }
+.se-side input, .se-side select, .se-side textarea { min-width: 0; font-size: 12px; }
+.se-geo label { flex: 1 1 calc(50% - 6px) !important; }
+.se-col { display: flex; gap: 4px; align-items: center; } .se-col input[type=color] { width: 34px; height: 28px; padding: 1px; flex: none; } .se-col input[type=color].se-unset { opacity: .35; } .se-col input:not([type=color]) { flex: 1; font-family: var(--mono); }
+.se-dyn { border: 1px solid var(--line); border-radius: 6px; padding: 6px; margin: 6px 0; background: var(--bg2); }
+.se-mrow { align-items: center; margin: 3px 0; flex-wrap: nowrap !important; } .se-mrow select { width: 56px; } .se-mrow input[type=color] { width: 34px; height: 26px; padding: 1px; }
+.se-lin label { flex: 1 1 45% !important; }
+.se-layerlist { display: flex; flex-direction: column; gap: 2px; }
+.se-lrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 4px; align-items: center; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+.se-lrow:hover { background: var(--bg2); } .se-lrow.on { background: color-mix(in srgb, var(--primary) 14%, transparent); }
+.se-lname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.se-lb { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 0; opacity: .35; } .se-lb.on { opacity: 1; color: var(--primary); } .se-lb svg { width: 14px; height: 14px; }
+.se-status { display: flex; gap: 14px; font-size: 12px; padding: 2px 6px; font-variant-numeric: tabular-nums; }
+@media (max-width: 1100px) { .se-main { grid-template-columns: 1fr; } .se-lib, .se-side { position: static; max-height: none; } }

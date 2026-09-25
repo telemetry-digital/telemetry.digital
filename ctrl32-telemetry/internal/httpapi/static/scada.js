@@ -270,7 +270,7 @@
   function mount(host, spec, opts) {
     opts = opts || {}; const W0 = (spec.layout && spec.layout.width) || 1600, H0 = (spec.layout && spec.layout.height) || 900;
     const uid = 's' + (++mountSeq) + '-';
-    host.innerHTML = `<svg class="sc-layer" xmlns="${NS}" width="${W0}" height="${H0}" viewBox="0 0 ${W0} ${H0}" style="width:${W0}px;height:${H0}px;max-width:none"><rect class="sc-bg" x="0" y="0" width="${W0}" height="${H0}" fill="${col(spec.layout && spec.layout.bg, 'none')}"/><g class="sc-root"></g></svg>`;
+    host.innerHTML = `<svg class="sc-layer notranslate" xmlns="${NS}" width="${W0}" height="${H0}" viewBox="0 0 ${W0} ${H0}" style="width:${W0}px;height:${H0}px;max-width:none"><rect class="sc-bg" x="0" y="0" width="${W0}" height="${H0}" fill="${col(spec.layout && spec.layout.bg, 'none')}"/><g class="sc-root"></g></svg>`;
     const root = host.querySelector('.sc-root'); let elements = spec.elements || []; let cache = []; let vals = {}; let dsMap = {};
     const env = () => ({ values: vals, ds: dsMap, scheme: spec.scheme || 'classic', uid, edit: !!opts.edit });
     function draw() {

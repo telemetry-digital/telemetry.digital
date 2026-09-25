@@ -47,15 +47,15 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
       widgets:[{id:'tr', type:'chart', geometry:{x:800,y:40,w:380,h:260}, bindings:{datastreams:[ds.temp]}, params:{title:'Temperature'}}],
       elements:[
         {id:'tank', type:'symbol', symbol:'tank_vertical', x:100, y:100, w:140, h:260, tag: ds.level, name:'T-101', dyn:[{prop:'level', lin:[0,100,0,1]}]},
-        {id:'pump', type:'symbol', symbol:'pump_centrifugal', x:400, y:300, w:90, h:84, tag: ds.pump, name:'P-101', dyn:[{prop:'state', map:[{op:'==',v:2,to:'fault'},{op:'==',v:1,to:'run'},{op:'==',v:0,to:'stop'}]}]},
+        {id:'pump', type:'symbol', symbol:'pump_centrifugal', x:400, y:300, w:90, h:84, tag: ds.pump, name:'P-101', device: dev.id, key:'pump', dyn:[{prop:'state', map:[{op:'==',v:2,to:'fault'},{op:'==',v:1,to:'run'},{op:'==',v:0,to:'stop'}]}]},
         {id:'pipe', type:'pipe', points:[[240,340],[400,340]], style:{sw:12, medium:'#0891b2'}, dyn:[{prop:'flow', tag: ds.flow, op:'>', v:0.5}]},
         {id:'txt', type:'text', x:100, y:380, w:140, h:28, text:'{value} {unit}', tag: ds.temp, decimals:1, style:{font:16, align:'middle', bg:'#ffffff'}},
         {id:'hot', type:'rect', x:600, y:100, w:80, h:40, tag: ds.temp, style:{fill:'#94a3b8'}, dyn:[{prop:'fill', map:[{op:'>=',v:80,to:'#dc2626'},{op:'<',v:80,to:'#16a34a'}]},{prop:'blink', op:'>=', v:80, color:'#dc2626'}]},
         {id:'nodata', type:'text', x:100, y:420, w:140, h:28, text:'{value}', tag:'00000000-0000-7000-8000-000000000000', style:{font:14}}
       ]};
     const d = await post('/api/v1/dashboards', {name:'SCADA probe ' + suf, spec});
-    window.__fx = {tok, slug: d.slug, ds};
-    return {slug: d.slug, tok, elements: (d.spec.elements || []).length};
+    window.__fx = {tok, slug: d.slug, ds, dev: dev.id};
+    return {slug: d.slug, tok, dev: dev.id, elements: (d.spec.elements || []).length};
   })()`);
   expect("fixtures", fx && fx.elements, 6);
   if (!fx || !fx.slug) { console.log("problems:", JSON.stringify(problems)); proc.kill(); process.exit(1); }
@@ -90,6 +90,19 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await sleep(1500);
   expect("faceplate value + trend", await ev(`(() => { const d = document.querySelector('dialog.sc-dlg'); return d.querySelector('.sc-fp-big').textContent + ' ' + !!d.querySelector('.sc-fp-chart svg, .sc-fp-chart .muted'); })()`), "2.0 true");
   const s2 = await send("Page.captureScreenshot", { format: "png" }); fs.writeFileSync(out + "/scada-faceplate.png", Buffer.from(s2.result.data, "base64"));
+  // Operation from the faceplate: a reason is required, the command is audited with it (US4, T024).
+  expect("start without reason is refused", await ev(`(() => { const d = document.querySelector('dialog.sc-dlg'); d.querySelector('[data-v="true"]').click(); return d.querySelector('.sc-out').textContent; })()`), "reason is required");
+  expect("start with a reason", await ev(`(() => { const d = document.querySelector('dialog.sc-dlg'); d.querySelector('.sc-reason').value = 'probe start P-101'; d.querySelector('[data-v="true"]').click(); return true; })()`), true);
+  await sleep(1500);
+  expect("command stored with key, value and reason", await ev(`fetch('/api/v1/devices/${fx.dev}/commands',{credentials:'same-origin'}).then(r=>r.json()).then(l => { const c = (l.items || l).find(c => c.reason === 'probe start P-101'); return c ? c.method + ' ' + JSON.stringify(c.args) : 'none'; })`), 'write {"key":"pump","value":true}');
+  expect("faceplate shows the command status", await ev(`document.querySelector('dialog.sc-dlg .sc-out').textContent.trim().length > 0`), true);
+  await ev(`document.querySelector('dialog.sc-dlg').close()`);
+  // Public link: values yes, operation no.
+  const ptok = await ev(`(async () => { const h = {'Content-Type':'application/json','X-CSRF-Token': (await (await fetch('/api/v1/auth/me',{credentials:'same-origin'})).json()).csrf_token}; const r = await (await fetch('/api/v1/dashboards/${fx.slug}/share',{method:'POST',headers:h,credentials:'same-origin',body:JSON.stringify({reason:'probe'})})).json(); return r.url.split('/').pop(); })()`);
+  await send("Page.navigate", { url: base + "/p/" + ptok }); await sleep(4000);
+  expect("public picture renders the drawing", await ev(`document.querySelectorAll('.sc-root > [data-eid]').length`), 6);
+  expect("public faceplate is read-only", await ev(`(() => { document.querySelector('[data-eid="pump"]').dispatchEvent(new MouseEvent('click', {bubbles:true})); const d = document.querySelector('dialog.sc-dlg'); return !!d && d.open && !d.querySelector('[data-v]') && d.textContent.includes('read-only'); })()`), true);
+  await send("Page.navigate", { url: base + "/dashboards" }); await sleep(1500);
 
   const del = await ev(`(async () => { const h = {'X-CSRF-Token': (await (await fetch('/api/v1/auth/me',{credentials:'same-origin'})).json()).csrf_token}; return (await fetch('/api/v1/dashboards/${fx.slug}?reason=probe',{method:'DELETE',headers:h,credentials:'same-origin'})).status; })()`);
   console.log("cleanup:", del);

@@ -108,6 +108,7 @@
 <script src="/app.js"></script>
 <script src="/scada.js"></script>
 <script src="/widgets.js"></script>
+<script src="/scada-editor.js"></script>
 <script>
 const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api, WG = ctrl32Widgets;
 const parts = location.pathname.split('/').filter(Boolean); // dashboards | dashboards/slug | dashboards/slug/edit
@@ -167,6 +168,9 @@ const THUMBS = {
 let DIRTY = false;
 function dirty(){ DIRTY = true; const b = $('#eSave'); if(b && !b.querySelector('.dot')){ const s = document.createElement('span'); s.className = 'dot'; s.title = 'unsaved changes'; s.textContent = ' •'; b.appendChild(s); } }
 window.addEventListener('beforeunload', e => { if(DIRTY){ e.preventDefault(); e.returnValue = ''; } });
+// Process pictures (canvas) are edited by the SCADA editor; grid dashboards by the widget grid below.
+let EDITOR = null;
+function redraw(){ return EDITOR ? EDITOR.reload() : drawEdit(); }
 async function drawEdit(){
   refreshFn = await WG.render($('#eGrid'), SPEC, {range: SPEC.range, header: (w, i) => `<button class="btn small ghost" type="button" data-del="${i}" title="Remove">✕</button>`});
   const cards = [...document.querySelectorAll('#eGrid .dash-widget')];
@@ -187,8 +191,8 @@ async function drawEdit(){
 }
 function select(i){ SEL = i; document.querySelectorAll('#eGrid .dash-widget').forEach((c, k) => c.classList.toggle('selected', k === i)); renderProps(); }
 function pickHTML(name, options, chosen, label){ return `<div class="pick"><label>${esc(label)} <input data-filter="${name}" placeholder="filter…"></label><select multiple data-pick="${name}">${options.map(o => `<option value="${o.id}" ${chosen.includes(o.id) ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select><span class="muted" style="font-size:11px">${chosen.length} selected · Ctrl/Cmd+click for several</span></div>`; }
-function renderProps(){
-  const box = $('#eProps'); if(SEL < 0 || !SPEC.widgets[SEL]){ box.innerHTML = '<span class="muted">Select a widget, or add one.</span>'; return; }
+function renderProps(target){
+  const box = target || $('#eProps'); if(SEL < 0 || !SPEC.widgets[SEL]){ box.innerHTML = '<span class="muted">Select a widget, or add one.</span>'; return; }
   const w = SPEC.widgets[SEL], d = defOf(w.type); w.params = w.params || {}; w.bindings = w.bindings || {};
   let html = `<div class="row" style="align-items:center"><b>${esc(d.label)}</b><span class="grow"></span><span class="muted" style="font-size:12px">${w.geometry.w}×${w.geometry.h} at ${w.geometry.x},${w.geometry.y}</span></div><div class="muted" style="font-size:12px;margin-bottom:8px">${esc(d.help)}</div>`;
   if(canvas()) html += `<div class="row">${['x', 'y', 'w', 'h'].map(k => `<label style="max-width:70px">${k} <input type="number" data-g="${k}" value="${w.geometry[k]}" min="0" step="10"></label>`).join('')}</div>`;
@@ -207,15 +211,17 @@ function renderProps(){
   const applyProps = () => { for(const sel of box.querySelectorAll('[data-pick]')) w.bindings[sel.dataset.pick] = [...sel.selectedOptions].map(o => o.value);
     for(const el of box.querySelectorAll('[data-g]')){ const v = parseInt(el.value, 10); if(!isNaN(v)) w.geometry[el.dataset.g] = Math.max(el.dataset.g === 'w' || el.dataset.g === 'h' ? 20 : 0, v); }
     for(const el of box.querySelectorAll('[data-p]')){ const p = (d.params || []).find(x => x.name === el.dataset.p); if(!p) continue; if(p.kind === 'bool') w.params[p.name] = el.checked; else if(p.kind === 'number') w.params[p.name] = el.value === '' ? null : parseFloat(el.value); else if(p.kind === 'list') w.params[p.name] = el.value.split(',').map(s => s.trim()).filter(Boolean); else w.params[p.name] = el.value; }
-    dirty(); drawEdit(); };
-  $('#pApply').onclick = applyProps; box.onchange = e => { if(e.target.matches('[data-pick],[data-p],[data-g]')) applyProps(); };
-  $('#pRemove').onclick = () => { SPEC.widgets.splice(SEL, 1); SEL = -1; dirty(); drawEdit(); renderProps(); };
+    dirty(); if(EDITOR){ EDITOR.commit(); redraw(); } else drawEdit(); };
+  box.querySelector('#pApply').onclick = applyProps; box.onchange = e => { if(e.target.matches('[data-pick],[data-p],[data-g]')) applyProps(); };
+  box.querySelector('#pRemove').onclick = () => { SPEC.widgets.splice(SEL, 1); SEL = -1; dirty(); if(EDITOR){ EDITOR.commit(); EDITOR.select([]); redraw(); } else { drawEdit(); renderProps(); } };
 }
 function addWidget(type){ const d = defOf(type); const params = {}; for(const p of d.params || []) if(p.default !== undefined) params[p.name] = p.default; params.title = d.label;
   const maxY = SPEC.widgets.reduce((m, w) => Math.max(m, w.geometry.y + w.geometry.h), 0);
   const n = SPEC.widgets.length; const geometry = canvas() ? {x: 40 + (n % 6) * 60, y: 40 + (n % 6) * 40, w: d.default_size[0] * 100, h: d.default_size[1] * 100} : {x: 0, y: maxY, w: d.default_size[0], h: d.default_size[1]};
   SPEC.widgets.push({id: uid(), type, geometry, bindings: Object.fromEntries((d.binds || []).map(b => [b, []])), params});
-  SEL = SPEC.widgets.length - 1; $('#addDlg').close(); dirty(); drawEdit().then(() => select(SEL)); }
+  SEL = SPEC.widgets.length - 1; $('#addDlg').close(); dirty();
+  if(EDITOR){ const i = SEL; EDITOR.commit(); EDITOR.reload().then(() => EDITOR.select(['w:' + i])); return; }
+  drawEdit().then(() => select(SEL)); }
 // Public link (read-only, no sign-in): shown in the settings dialog; every change needs a reason.
 async function loadShare(){ const box = $('#shareBox'); box.className = 'muted'; box.textContent = '…';
   try{ renderShare(await api('GET', `/api/v1/dashboards/${encodeURIComponent(SLUG)}/share`)); }catch(x){ box.textContent = x.message; } }
@@ -237,13 +243,22 @@ async function loadEdit(){
   $('#eAdd').onclick = () => $('#addDlg').showModal();
   $('#setForm').range.innerHTML = CAT.ranges.map(r => `<option>${r}</option>`).join('');
   $('#eSettings').onclick = () => { const f = $('#setForm'); f.name.value = DASH.name; f.range.value = SPEC.range; f.refresh_s.value = SPEC.refresh_s; f.row_height.value = SPEC.layout.row_height || 96; f.width.value = SPEC.layout.width || 1600; f.height.value = SPEC.layout.height || 900; $('#setRowH').hidden = canvas(); $('#setW').hidden = !canvas(); $('#setH').hidden = !canvas(); f.is_default.checked = !!DASH.is_default; $('#setDlg').showModal(); loadShare(); };
-  $('#setForm').onsubmit = e => { e.preventDefault(); const f = e.target; DASH.name = f.name.value; SPEC.range = f.range.value; SPEC.refresh_s = parseInt(f.refresh_s.value, 10) || 30; if(canvas()){ SPEC.layout.width = parseInt(f.width.value, 10) || 1600; SPEC.layout.height = parseInt(f.height.value, 10) || 900; } SPEC.layout.row_height = parseInt(f.row_height.value, 10) || 96; DASH.is_default = f.is_default.checked; $('#eTitle').textContent = 'Edit: ' + DASH.name; $('#setDlg').close(); dirty(); drawEdit(); };
+  $('#setForm').onsubmit = e => { e.preventDefault(); const f = e.target; DASH.name = f.name.value; SPEC.range = f.range.value; SPEC.refresh_s = parseInt(f.refresh_s.value, 10) || 30; if(canvas()){ SPEC.layout.width = parseInt(f.width.value, 10) || 1600; SPEC.layout.height = parseInt(f.height.value, 10) || 900; } SPEC.layout.row_height = parseInt(f.row_height.value, 10) || 96; DASH.is_default = f.is_default.checked; $('#eTitle').textContent = 'Edit: ' + DASH.name; $('#setDlg').close(); dirty(); if(EDITOR) EDITOR.commit(); redraw(); };
   $('#eSave').onclick = () => { $('#saveErr').textContent=''; $('#saveForm').reset(); $('#saveDlg').showModal(); };
   $('#saveForm').onsubmit = async e => { e.preventDefault(); $('#saveErr').textContent='';
-    try{ await api('PUT', `/api/v1/dashboards/${encodeURIComponent(SLUG)}`, {name: DASH.name, spec: SPEC, is_default: DASH.is_default, reason: e.target.reason.value}); ctrl32.toast('dashboard saved','ok'); DIRTY = false; location.href = `/dashboards/${SLUG}`; }catch(x){ $('#saveErr').textContent = x.message; } };
+    try{ await api('PUT', `/api/v1/dashboards/${encodeURIComponent(SLUG)}`, {name: DASH.name, spec: SPEC, is_default: DASH.is_default, reason: e.target.reason.value}); ctrl32.toast('dashboard saved','ok'); DIRTY = false; location.href = `/dashboards/${SLUG}`; }catch(x){ $('#saveErr').textContent = x.message; if(EDITOR) EDITOR.showError(x.message); } };
   const del = document.createElement('button'); del.className = 'btn danger'; del.type = 'button'; del.textContent = 'Retire'; $('#eCancel').before(del);
   del.onclick = () => { $('#delErr').textContent=''; $('#delForm').reset(); $('#delDlg').showModal(); };
   $('#delForm').onsubmit = async e => { e.preventDefault(); try{ await api('DELETE', `/api/v1/dashboards/${encodeURIComponent(SLUG)}?reason=${encodeURIComponent(e.target.reason.value)}`); location.href = '/dashboards'; }catch(x){ $('#delErr').textContent = x.message; } };
+  if(canvas()){
+    // SCADA editor: toolbar, symbol library, canvas with overlay, properties/layers; widgets stay on the same canvas.
+    document.querySelector('#edit .dash-editor').hidden = true; $('#eHintGrid').hidden = true; $('#eHintCanvas').hidden = true;
+    const hostEl = document.createElement('div'); hostEl.id = 'scadaEd'; document.querySelector('#edit .dash-editor').after(hostEl);
+    const screens = await api('GET', '/api/v1/dashboards').catch(() => []);
+    EDITOR = ctrl32ScadaEditor.create({host: hostEl, spec: SPEC, datastreams: DS, devices: DEVS, screens: screens.filter(x => x.slug !== SLUG).map(x => ({slug: x.slug, name: x.name})),
+      onDirty: dirty, widgetProps: (i, box) => { SEL = i; renderProps(box); }});
+    window.__scadaEditor = EDITOR; await EDITOR.ready; return;
+  }
   await drawEdit();
 }
 
