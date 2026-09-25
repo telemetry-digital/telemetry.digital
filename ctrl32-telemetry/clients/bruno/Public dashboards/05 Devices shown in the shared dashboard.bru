@@ -1,0 +1,19 @@
+meta {
+  name: Devices shown in the shared dashboard
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public/:token/devices
+  body: none
+  auth: inherit
+}
+
+params:path {
+  token: 
+}
+
+docs {
+  Devices shown in the shared dashboard
+}

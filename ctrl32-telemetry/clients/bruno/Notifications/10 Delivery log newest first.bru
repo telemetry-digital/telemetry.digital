@@ -1,0 +1,21 @@
+meta {
+  name: Delivery log newest first
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/v1/notifications
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~limit: 
+}
+
+docs {
+  Delivery log, newest first
+  
+  Requires permission `config.write`.
+}

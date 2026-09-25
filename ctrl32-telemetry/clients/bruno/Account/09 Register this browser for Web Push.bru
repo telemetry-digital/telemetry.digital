@@ -1,0 +1,31 @@
+meta {
+  name: Register this browser for Web Push
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v1/push/subscriptions
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "endpoint": "string",
+    "expirationTime": null,
+    "keys": {
+      "auth": "string",
+      "p256dh": "string"
+    },
+    "user_agent": "string"
+  }
+}
+
+docs {
+  Register this browser for Web Push
+  
+  The JSON of the browser's `PushSubscription` (`endpoint`, `keys.p256dh`, `keys.auth`). Registering the same endpoint again refreshes the keys (200). Not allowed with an API token.
+  
+  Requires a signed-in user or an API token (any permission).
+}

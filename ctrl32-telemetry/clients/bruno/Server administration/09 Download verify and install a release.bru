@@ -1,0 +1,26 @@
+meta {
+  name: Download verify and install a release
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v1/server/update
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "reason": "string",
+    "version": "string"
+  }
+}
+
+docs {
+  Download, verify and install a release
+  
+  The agent fetches the binary and SHA256SUMS from the update URL, verifies, installs and restarts.
+  
+  Requires permission `system.admin`.
+}

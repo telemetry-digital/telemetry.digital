@@ -1,0 +1,21 @@
+meta {
+  name: Heartbeat (device)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/d/status
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {}
+}
+
+docs {
+  Heartbeat (device)
+  
+  `{"online":true,"bat":3.61,"rssi":-71,"up_s":86400,"free":120000,"fw":"1.4.2","buf":12}`; `lat`/`lon` update the reported position.
+}

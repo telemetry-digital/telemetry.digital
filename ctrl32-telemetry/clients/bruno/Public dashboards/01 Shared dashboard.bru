@@ -1,0 +1,19 @@
+meta {
+  name: Shared dashboard
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public/:token
+  body: none
+  auth: inherit
+}
+
+params:path {
+  token: 
+}
+
+docs {
+  Shared dashboard
+}

@@ -1,0 +1,21 @@
+meta {
+  name: Report firmware update progress (device)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/d/fota/status
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {}
+}
+
+docs {
+  Report firmware update progress (device)
+  
+  `{"fw_id":"…","st":"downloading|verifying|applying|updated|failed|rolled_back","pct":42,"ver":"1.5.0","err":"…"}`.
+}

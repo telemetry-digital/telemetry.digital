@@ -1,0 +1,25 @@
+meta {
+  name: Revoke a channel
+  type: http
+  seq: 8
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/notification-channels/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Revoke a channel
+  
+  Requires permission `config.write`.
+}

@@ -1,0 +1,25 @@
+meta {
+  name: Withdraw the public link
+  type: http
+  seq: 10
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/dashboards/:slug/share
+  body: none
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Withdraw the public link
+  
+  Requires permission `content.write`.
+}

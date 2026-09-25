@@ -1,0 +1,34 @@
+meta {
+  name: Update an incident fields a note the status
+  type: http
+  seq: 10
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/incidents/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "capa": "string",
+    "cause": "string",
+    "impact": "string",
+    "note": "string",
+    "reason": "string",
+    "status": "string"
+  }
+}
+
+docs {
+  Update an incident: fields, a note, the status
+  
+  Transitions: open → investigating, resolved or closed; investigating → open, resolved or closed; resolved → investigating or closed; closed → investigating (reopen). Resolving needs a cause, closing a cause and a CAPA. Every change becomes an incident event and an audit trail entry.
+  
+  Requires permission `alarm.ack`.
+}

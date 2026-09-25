@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>API reference</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  .docs { display: grid; grid-template-columns: 1fr; gap: 20px; align-items: start; }
+  @media (min-width: 1000px) { .docs { grid-template-columns: 230px minmax(0, 1fr); } .docs-nav { position: sticky; top: 12px; } }
+  .docs-nav a { display: block; padding: 4px 8px; border-radius: var(--radius); color: var(--fg); text-decoration: none; font-size: 14px; }
+  .docs-nav a:hover { background: var(--line); }
+  .docs-nav .n { color: var(--muted); font-size: 12px; margin-left: 4px; }
+  .intro h3 { margin: 14px 0 6px; font-size: 1em; }
+  .intro p, .intro li { font-size: 14px; }
+  section.tag { margin-top: 20px; }
+  section.tag > h2 { margin-bottom: 4px; }
+  section.tag > p.muted { margin-top: 0; font-size: 14px; }
+  details.op { border: 1px solid var(--line); border-radius: var(--radius); margin: 6px 0; background: var(--card); }
+  details.op > summary { list-style: none; cursor: pointer; display: flex; gap: 10px; align-items: center; padding: 8px 10px; flex-wrap: wrap; }
+  details.op > summary::-webkit-details-marker { display: none; }
+  details.op[open] > summary { border-bottom: 1px solid var(--line); }
+  .m { display: inline-block; min-width: 58px; text-align: center; font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 2px 6px; border-radius: 4px; color: #fff; font-family: var(--mono); }
+  .m.get { background: #2e7d32; } .m.post { background: #1565c0; } .m.put, .m.patch { background: #ef6c00; } .m.delete { background: #c62828; }
+  .path { font-family: var(--mono); font-size: 13px; }
+  .sum { color: var(--muted); font-size: 14px; }
+  .perm { margin-left: auto; font-size: 11px; }
+  .op-body { padding: 10px 12px 12px; font-size: 14px; }
+  .op-body h4 { margin: 12px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .op-body table { font-size: 13px; }
+  .op-body pre { background: color-mix(in srgb, var(--fg) 5%, transparent); padding: 8px 10px; border-radius: var(--radius); overflow: auto; font-size: 12px; margin: 4px 0; }
+  .op-body .desc p { margin: 4px 0; }
+  .req { color: var(--bad); font-size: 11px; }
+  .schema { margin-top: 10px; }
+  .schema h3 { margin: 12px 0 4px; font-size: 14px; }
+  .schema h3 code { font-family: var(--mono); }
+  .hidden { display: none !important; }
+  #q { max-width: 260px; }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<div class="page-head"><h1>API reference</h1><span class="muted" id="ver"></span><span class="grow"></span><input id="q" placeholder="Filter operations" aria-label="Filter operations"><a class="btn" href="/api/v1/openapi.json" download="openapi.json">Download OpenAPI (JSON)</a></div>
+<div class="docs">
+  <nav class="docs-nav" id="nav" aria-label="Sections"></nav>
+  <div id="body"><p class="muted">Loading…</p></div>
+</div>
+</main>
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc;
+let SPEC = null;
+function inline(t){ return esc(t).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/\*([^*]+)\*/g, '<i>$1</i>'); }
+function md(text){ if(!text) return ''; const out = []; let list = null;
+  for(const raw of text.split('\n')){ const l = raw.trim();
+    if(l.startsWith('- ')){ if(!list){ list = []; } list.push(`<li>${inline(l.slice(2))}</li>`); continue; }
+    if(list){ out.push(`<ul>${list.join('')}</ul>`); list = null; }
+    if(!l) continue;
+    if(l.startsWith('## ')) out.push(`<h3>${inline(l.slice(3))}</h3>`); else out.push(`<p>${inline(l)}</p>`); }
+  if(list) out.push(`<ul>${list.join('')}</ul>`); return out.join(''); }
+function resolve(s){ if(s && s.$ref){ const n = s.$ref.split('/').pop(); return {name: n, schema: SPEC.components.schemas[n] || {}}; } return {name: '', schema: s || {}}; }
+function typeOf(s){ const {name, schema} = resolve(s); if(name) return `<a href="#schema-${name}">${esc(name)}</a>`; let t = schema.type; if(Array.isArray(t)) t = t.filter(x => x !== 'null').join('|') + ' (nullable)';
+  if(t === 'array') return 'array of ' + typeOf(schema.items || {}); if(schema.enum) return 'enum: ' + schema.enum.map(e => `<code>${esc(String(e))}</code>`).join(' '); if(schema.format) return `${t} (${esc(schema.format)})`; return t ? esc(t) : 'any'; }
+function example(s, depth){ depth = depth || 0; const {schema} = resolve(s); if(depth > 6) return null;
+  let t = schema.type; if(Array.isArray(t)) t = t.find(x => x !== 'null');
+  if(schema.enum) return schema.enum[0];
+  if(t === 'object' || schema.properties){ const o = {}; for(const [k, v] of Object.entries(schema.properties || {})) o[k] = example(v, depth + 1); if(!schema.properties && schema.additionalProperties && typeof schema.additionalProperties === 'object') o['…'] = example(schema.additionalProperties, depth + 1); return o; }
+  if(t === 'array') return [example(schema.items || {}, depth + 1)];
+  if(t === 'string'){ if(schema.format === 'uuid') return '018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00'; if(schema.format === 'date-time') return '2026-09-24T12:00:00Z'; if(schema.format === 'binary') return '<binary>'; return 'string'; }
+  if(t === 'number') return 21.5; if(t === 'integer') return 1; if(t === 'boolean') return true; return null; }
+function propsTable(s){ const {schema} = resolve(s); if(!schema.properties){ if(schema.additionalProperties && typeof schema.additionalProperties === 'object') return `<p class="muted">map of ${typeOf(schema.additionalProperties)}</p>`; return ''; }
+  const req = new Set(schema.required || []);
+  return `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Type</th><th>Description</th></tr></thead><tbody>${Object.entries(schema.properties).map(([k, v]) => { const {schema: vs} = resolve(v); return `<tr><td><code>${esc(k)}</code>${req.has(k) ? ' <span class="req">required</span>' : ''}</td><td>${typeOf(v)}</td><td style="white-space:normal">${inline(vs.description || '')}</td></tr>`; }).join('')}</tbody></table></div>`; }
+function bodySection(rb){ if(!rb) return ''; const [ct, c] = Object.entries(rb.content)[0]; const s = c.schema; const isJSON = ct === 'application/json';
+  return `<h4>Request body <span class="muted" style="text-transform:none">${esc(ct)}</span></h4>${propsTable(s)}${isJSON ? `<pre>${esc(JSON.stringify(example(s), null, 2))}</pre>` : ''}`; }
+function responses(rs){ return `<h4>Responses</h4>` + Object.entries(rs).map(([code, r]) => { const ct = r.content ? Object.entries(r.content)[0] : null; const ok = code.startsWith('2');
+    let detail = ''; if(ok && ct && ct[0] === 'application/json'){ detail = propsTable(ct[1].schema) + `<pre>${esc(JSON.stringify(example(ct[1].schema), null, 2))}</pre>`; } else if(ct) detail = `<span class="muted">${esc(ct[0])}</span>`;
+    return `<div><b>${esc(code)}</b> <span class="muted">${esc(r.description || '')}</span>${ok ? detail : ''}</div>`; }).join(''); }
+function params(ps){ if(!ps || !ps.length) return ''; return `<h4>Parameters</h4><div class="table-wrap"><table><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Description</th></tr></thead><tbody>${ps.map(p => `<tr><td><code>${esc(p.name)}</code>${p.required ? ' <span class="req">required</span>' : ''}</td><td>${esc(p.in)}</td><td>${esc(p.schema.type || '')}</td><td style="white-space:normal">${inline(p.description || '')}</td></tr>`).join('')}</tbody></table></div>`; }
+function opHTML(method, path, o){ const sec = o.security; const perm = o['x-permission'] ? `<span class="badge perm">${esc(o['x-permission'])}</span>` : (Array.isArray(sec) && sec.length === 0 ? '<span class="badge ok perm">public</span>' : (sec && sec[0] && sec[0].deviceToken ? '<span class="badge perm">device token</span>' : (sec && sec[0] && sec[0].connectorSecret ? '<span class="badge perm">connector secret</span>' : '<span class="badge perm">signed in</span>')));
+  return `<details class="op" id="op-${esc(o.operationId)}" data-text="${esc((method + ' ' + path + ' ' + o.summary).toLowerCase())}"><summary><span class="m ${method}">${method.toUpperCase()}</span><span class="path">${esc(path)}</span><span class="sum">${esc(o.summary)}</span>${perm}</summary>
+    <div class="op-body"><div class="desc">${md(o.description || '')}</div>${params(o.parameters)}${bodySection(o.requestBody)}${responses(o.responses)}</div></details>`; }
+function render(){ const order = ['get', 'post', 'put', 'patch', 'delete']; const byTag = {};
+  for(const [path, item] of Object.entries(SPEC.paths)) for(const m of order) if(item[m]) (byTag[item[m].tags[0]] = byTag[item[m].tags[0]] || []).push([m, path, item[m]]);
+  for(const list of Object.values(byTag)) list.sort((a, b) => a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : order.indexOf(a[0]) - order.indexOf(b[0]));
+  const tags = SPEC.tags.filter(t => byTag[t.name]);
+  $('#ver').textContent = 'v' + SPEC.info.version;
+  $('#nav').innerHTML = `<a href="#intro">Overview</a>` + tags.map(t => `<a href="#tag-${esc(t.name.replace(/[^a-z0-9]+/gi, '-'))}">${esc(t.name)}<span class="n">${byTag[t.name].length}</span></a>`).join('') + `<a href="#schemas">Schemas</a>`;
+  $('#body').innerHTML = `<div class="card intro" id="intro">${md(SPEC.info.description)}</div>` + tags.map(t => `<section class="tag" id="tag-${esc(t.name.replace(/[^a-z0-9]+/gi, '-'))}"><h2>${esc(t.name)}</h2><p class="muted">${inline(t.description || '')}</p>${byTag[t.name].map(([m, p, o]) => opHTML(m, p, o)).join('')}</section>`).join('')
+    + `<section class="tag schema" id="schemas"><h2>Schemas</h2>${Object.entries(SPEC.components.schemas).sort((a, b) => a[0] < b[0] ? -1 : 1).map(([n, s]) => `<h3 id="schema-${esc(n)}"><code>${esc(n)}</code></h3>${propsTable(s)}`).join('')}</section>`;
+  openHash();
+  $('#q').oninput = () => { const q = $('#q').value.trim().toLowerCase(); for(const d of document.querySelectorAll('details.op')) d.classList.toggle('hidden', !!q && !d.dataset.text.includes(q)); for(const s of document.querySelectorAll('section.tag:not(.schema)')) s.classList.toggle('hidden', !!q && ![...s.querySelectorAll('details.op')].some(d => !d.classList.contains('hidden'))); };
+}
+function openHash(){ if(!location.hash) return; let el = null; try{ el = document.querySelector(location.hash); }catch(_){ return; } if(el){ if(el.tagName === 'DETAILS') el.open = true; el.scrollIntoView(); } }
+window.addEventListener('hashchange', openHash);
+ctrl32.ready().then(async () => { try{ SPEC = await (await fetch('/api/v1/openapi.json', {credentials: 'same-origin'})).json(); render(); }catch(x){ $('#body').innerHTML = `<p class="err">${esc(x.message)}</p>`; } });
+</script>
+</body>
+</html>

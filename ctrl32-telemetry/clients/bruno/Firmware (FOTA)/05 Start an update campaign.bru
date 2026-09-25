@@ -1,0 +1,30 @@
+meta {
+  name: Start an update campaign
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/fota/campaigns
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "device_ids": [
+      "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00"
+    ],
+    "firmware_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "name": "string",
+    "reason": "string"
+  }
+}
+
+docs {
+  Start an update campaign
+  
+  Publishes the update offer to the selected devices; progress arrives on `d/{id}/fota/status`.
+  
+  Requires permission `fota.manage`.
+}

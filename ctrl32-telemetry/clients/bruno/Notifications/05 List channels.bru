@@ -1,0 +1,17 @@
+meta {
+  name: List channels
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/notification-channels
+  body: none
+  auth: inherit
+}
+
+docs {
+  List channels
+  
+  Requires permission `config.write`.
+}

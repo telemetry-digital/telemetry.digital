@@ -1,0 +1,26 @@
+meta {
+  name: Create a site
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/sites
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "address": "string",
+    "name": "string",
+    "reason": "string",
+    "tz": "string"
+  }
+}
+
+docs {
+  Create a site
+  
+  Requires permission `config.write`.
+}

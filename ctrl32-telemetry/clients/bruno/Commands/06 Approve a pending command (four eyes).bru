@@ -1,0 +1,30 @@
+meta {
+  name: Approve a pending command (four eyes)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/devices/:id/commands/:cid/approve
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+  cid: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Approve a pending command (four eyes)
+  
+  Must be a different user than the issuer; the command is then executed.
+  
+  Requires permission `device.command`.
+}

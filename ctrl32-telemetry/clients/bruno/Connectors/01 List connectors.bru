@@ -1,0 +1,17 @@
+meta {
+  name: List connectors
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/connectors
+  body: none
+  auth: inherit
+}
+
+docs {
+  List connectors
+  
+  Requires permission `config.write`.
+}

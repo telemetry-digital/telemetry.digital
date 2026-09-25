@@ -1,0 +1,26 @@
+meta {
+  name: Export the access log
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/export/access-log
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~from: 
+  ~to: 
+  ~format: 
+  ~limit: 
+}
+
+docs {
+  Export the access log
+  
+  Sign-ins, failures, token use, session events.
+  
+  Requires permission `audit.read`.
+}

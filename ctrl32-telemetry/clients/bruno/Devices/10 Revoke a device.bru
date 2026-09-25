@@ -1,0 +1,29 @@
+meta {
+  name: Revoke a device
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/v1/devices/:id/revoke
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Revoke a device
+  
+  Disconnects it and rejects its credentials; data stays.
+  
+  Requires permission `device.manage`.
+}

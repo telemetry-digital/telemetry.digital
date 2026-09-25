@@ -1,0 +1,28 @@
+meta {
+  name: Reject a pending command
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/devices/:id/commands/:cid/reject
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+  cid: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Reject a pending command
+  
+  Requires permission `device.command`.
+}

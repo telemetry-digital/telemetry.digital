@@ -1,0 +1,33 @@
+meta {
+  name: Rename a device or set its location
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/devices/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "clear_location": true,
+    "location": {
+      "lat": 21.5,
+      "lon": 21.5
+    },
+    "name": "string",
+    "reason": "string"
+  }
+}
+
+docs {
+  Rename a device or set its location
+  
+  Requires permission `device.manage`.
+}

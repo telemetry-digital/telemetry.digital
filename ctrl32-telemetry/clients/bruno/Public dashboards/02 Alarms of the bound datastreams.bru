@@ -1,0 +1,19 @@
+meta {
+  name: Alarms of the bound datastreams
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public/:token/alarms
+  body: none
+  auth: inherit
+}
+
+params:path {
+  token: 
+}
+
+docs {
+  Alarms of the bound datastreams
+}

@@ -1,0 +1,35 @@
+meta {
+  name: Update a user
+  type: http
+  seq: 9
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/users/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "disabled": true,
+    "email": "string",
+    "full_name": "string",
+    "reason": "string",
+    "roles": [
+      "string"
+    ]
+  }
+}
+
+docs {
+  Update a user
+  
+  Roles, disabled flag, name, e-mail. Every role change is a row in the role history.
+  
+  Requires permission `user.admin`.
+}

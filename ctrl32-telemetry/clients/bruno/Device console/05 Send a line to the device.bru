@@ -1,0 +1,28 @@
+meta {
+  name: Send a line to the device
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/devices/:id/console/:sid/in
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+  sid: 
+}
+
+body:json {
+  {
+    "line": "string"
+  }
+}
+
+docs {
+  Send a line to the device
+  
+  Requires permission `device.console`.
+}

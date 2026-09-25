@@ -1,0 +1,17 @@
+meta {
+  name: Permission catalog
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/permissions
+  body: none
+  auth: inherit
+}
+
+docs {
+  Permission catalog
+  
+  Requires a signed-in user or an API token (any permission).
+}

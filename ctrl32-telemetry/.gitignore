@@ -1,0 +1,39 @@
+# build outputs
+/bin/
+/dist/
+/build/
+*.exe
+*.test
+*.out
+
+# Go
+/vendor/
+coverage.*
+
+# frontend
+node_modules/
+web/dist/
+
+# local config and secrets — never commit
+*.env
+*.local.*
+/config/local*.toml
+/secrets/
+
+# editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# local dev config and outputs
+/config.toml
+/seed.out
+/server.log
+/bootstrap.out
+reports/
+
+# runtime data of the local dev instance (OPC UA client identity, uploaded firmware, e2e logs)
+/opcua/
+/firmware/
+/e2e-*.log

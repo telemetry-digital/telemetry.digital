@@ -1,0 +1,30 @@
+meta {
+  name: Create a datastream
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/datastreams
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "accuracy": 21.5,
+    "asset_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "expected_interval": "string",
+    "key": "string",
+    "kind": "gauge",
+    "quantity": "string",
+    "reason": "string",
+    "unit": "string"
+  }
+}
+
+docs {
+  Create a datastream
+  
+  Requires permission `config.write`.
+}

@@ -1,0 +1,24 @@
+meta {
+  name: Export an organization as a ZIP archive
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/export/organization
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~from: 
+  ~to: 
+}
+
+docs {
+  Export an organization as a ZIP archive
+  
+  CSV files of every table of the organization for a period, with a manifest and SHA-256 checksums.
+  
+  Requires permission `system.admin`.
+}

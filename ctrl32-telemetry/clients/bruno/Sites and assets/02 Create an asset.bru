@@ -1,0 +1,28 @@
+meta {
+  name: Create an asset
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/assets
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "attributes": {},
+    "name": "string",
+    "parent_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "reason": "string",
+    "site_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "type": "string"
+  }
+}
+
+docs {
+  Create an asset
+  
+  Requires permission `config.write`.
+}

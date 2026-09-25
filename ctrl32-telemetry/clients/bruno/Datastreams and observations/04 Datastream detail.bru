@@ -1,0 +1,23 @@
+meta {
+  name: Datastream detail
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/datastreams/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  Datastream detail
+  
+  Datastream, asset, site, source device, last observation and current alarm rules.
+  
+  Requires permission `data.read`.
+}

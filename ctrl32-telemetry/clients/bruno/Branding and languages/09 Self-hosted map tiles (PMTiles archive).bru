@@ -1,0 +1,17 @@
+meta {
+  name: Self-hosted map tiles (PMTiles archive)
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/tiles
+  body: none
+  auth: inherit
+}
+
+docs {
+  Self-hosted map tiles (PMTiles archive)
+  
+  Status of the server's local map: a raster PMTiles v3 archive named by `[map] pmtiles` in config.toml. When it is configured and the organization has no tile URL of its own, the branding map points at `/tiles/{z}/{x}/{y}.<ext>` on this server (public, cacheable; 404 outside the archive), so map widgets work without the Internet. Create an archive with `pmtiles convert map.mbtiles map.pmtiles` (go-pmtiles) or try `go run ./tools/pmtilesgen`.
+}

@@ -1,0 +1,6 @@
+{
+  "version": "1",
+  "name": "ctrl32 telemetry API",
+  "type": "collection",
+  "ignore": ["node_modules", ".git"]
+}

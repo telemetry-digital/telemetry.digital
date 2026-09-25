@@ -1,0 +1,10 @@
+# Keep LF everywhere (shell scripts, SQL and configs are deployed to Linux verbatim).
+* text=auto eol=lf
+*.sh text eol=lf
+*.sql text eol=lf
+*.toml text eol=lf
+*.go text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.png binary
+*.woff2 binary

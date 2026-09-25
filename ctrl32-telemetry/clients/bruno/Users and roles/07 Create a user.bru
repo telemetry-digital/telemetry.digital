@@ -1,0 +1,31 @@
+meta {
+  name: Create a user
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/users
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "email": "string",
+    "full_name": "string",
+    "reason": "string",
+    "roles": [
+      "string"
+    ],
+    "username": "string"
+  }
+}
+
+docs {
+  Create a user
+  
+  Returns a one-time initial password that must be changed at first sign-in.
+  
+  Requires permission `user.admin`.
+}

@@ -1,0 +1,17 @@
+meta {
+  name: Widget catalog and time ranges
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/dashboards/catalog
+  body: none
+  auth: inherit
+}
+
+docs {
+  Widget catalog and time ranges
+  
+  Requires permission `data.read`.
+}

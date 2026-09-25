@@ -1,0 +1,27 @@
+meta {
+  name: Reject a change request
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/change-requests/:id/reject
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Reject a change request
+  
+  Requires a signed-in user or an API token (any permission).
+}

@@ -1,0 +1,35 @@
+meta {
+  name: Create a dashboard
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/dashboards
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "is_default": true,
+    "name": "string",
+    "reason": "string",
+    "slug": "string",
+    "spec": {
+      "format": "string",
+      "layout": {},
+      "widgets": [
+        {}
+      ]
+    }
+  }
+}
+
+docs {
+  Create a dashboard
+  
+  `spec` is screen format v1 (`GET /api/v1/dashboards/catalog` lists the widget types; `GET /api/v1/dashboards/starter` returns a ready-made spec).
+  
+  Requires permission `content.write`.
+}

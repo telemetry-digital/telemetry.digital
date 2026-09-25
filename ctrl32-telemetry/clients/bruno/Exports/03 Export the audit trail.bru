@@ -1,0 +1,26 @@
+meta {
+  name: Export the audit trail
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/export/audit
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~from: 
+  ~to: 
+  ~format: 
+  ~limit: 
+}
+
+docs {
+  Export the audit trail
+  
+  Hash-chained rows: seq, hash, prev_hash, actor, action, entity, old/new values, reason, request id.
+  
+  Requires permission `audit.read`.
+}

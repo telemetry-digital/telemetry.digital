@@ -1,0 +1,23 @@
+meta {
+  name: Device detail
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/devices/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  Device detail
+  
+  Device, its datastream assignments (current and past) and credentials (no secrets).
+  
+  Requires permission `data.read`.
+}

@@ -1,0 +1,26 @@
+# Regulačný research — zdrojové dokumenty a overovací záznam
+
+Sedem dokumentov v tomto priečinku vzniklo v samostatnom rešeršnom behu (21. 9. 2026) a boli sem prekopírované 23. 9. 2026 bez úprav. Súbor `00-SYNTEZA-…` je hlavný dokument v slovenčine; `01`–`06` sú jeho anglické zdrojové podklady.
+
+Dokumenty obsahujú vlastné značky spoľahlivosti (✅ / ⚠️ / ❌). Nižšie je zoznam položiek, ktoré boli **dodatočne overené** priamo v primárnom zdroji, a teda ich značka ⚠️ v pôvodných dokumentoch už neplatí.
+
+## Overovací záznam
+
+| Dátum | Položka | Zdroj | Výsledok |
+|---|---|---|---|
+| 23. 9. 2026 | Vyhláška 129/2012 Z. z., § 30 ods. 8 a § 31 ods. 3, konsolidované znenie účinné od 1. 7. 2026 | `static.slov-lex.sk/static/SK/ZZ/2012/129/20260701.html` (oficiálne konsolidované znenie Slov-Lex) | ✅ **Overené doslovne.** § 30 ods. 8: *„… Teplota sa meria pomocou kalibrovaného meradla, ktoré umožňuje meranie a automatickú evidenciu teploty najmenej v dvojhodinových intervaloch. Denné záznamy o teplote sa uchovávajú 12 mesiacov."* § 31 ods. 3 nesie identické dve vety. Slov-Lex uvádza 419/2025 Z. z. vo „Vzťahy predpisu". |
+| 23. 9. 2026 | Prechodné ustanovenie k termínu 1. 7. 2026 | Slov-Lex (vyššie) + `zakonypreludi.sk/zz/2025-419` | ✅ **Žiadne prechodné ustanovenie neexistuje.** Čl. II vyhlášky 419/2025: účinnosť 1. 1. 2026 okrem bodov 32, 33, 39, 40, 47, 50, 52, 53 a 55–59, ktoré nadobúdajú účinnosť 1. 7. 2026. Povinnosť teda platí pre všetky lekárne bez výnimky od 1. 7. 2026. |
+| 23. 9. 2026 | Rozsah opakovania požiadavky v prílohe 1 vyhlášky 129/2012 | `zakonypreludi.sk/zz/2025-419` | ✅ Fráza „kalibrovaného meradla … automatickú evidenciu teploty" sa opakuje v prílohe 1 v častiach G.1(a), G.2(a), G.3(a), G.4(f), G.4(j), G.5(e), G.7(a), G.8(a–b), G.9(d–e) — t. j. pre jednotlivé typy miestností/oddelení. Potvrdzuje záver „jedno meracie miesto na miestnosť, nie na prevádzku". |
+
+| 23. 9. 2026 | Vyhláška 128/2012 Z. z. — novelizácia | `zakonypreludi.sk/zz/2012-128` a `…/2018-147` | ⚠️→✅ **Korekcia syntézy: 128/2012 BOLA novelizovaná vyhláškou 147/2018 Z. z.** (aktuálne znenie účinné od 31. 1. 2022). Novela menila § 1, § 4, § 5, § 7, § 12 (definícia SVDP + pracovné postupy) a § 13 (zabezpečenie oddelených priestorov); **§ 15 (teplota, vlhkosť) ani § 18 (dokumentácia) nemenila.** Záver o vágnom „pravidelne" pre distribútorov platí. § 15 ods. 1 doslovne: *„… Lieky sa uchovávajú za podmienok určených výrobcom lieku, aby sa zabránilo akémukoľvek poškodeniu teplom alebo vlhkom. Teplota a vlhkosť sa pravidelne zaznamenávajú, kontrolujú a vyhodnocujú."* |
+| 23. 9. 2026 | Zákon 362/2011 Z. z. § 18 ods. 1 — písmená | `static.slov-lex.sk/static/SK/ZZ/2011/362/20260101.html` | ⚠️ čiastočne: povinnosti sú v písm. **a)** (dodržiavať SVDP), **c)** (uchovávať lieky v súlade s podmienkami uchovávania v registrácii, body k teplote), **d)** (viesť evidenciu, body 1–7), **v)** (uchovávať dokumentáciu päť rokov). Plné doslovné znenie písm. c) a v) sa cez nástroj nepodarilo získať (stránka skrátená) — dočítať ručne v Slov-Lexe. |
+| 23. 9. 2026 | Zákon 157/2018 Z. z. o metrológii, § 17 (povinne kalibrované meradlo) | `zakonypreludi.sk/zz/2018-157` | ✅ **Overené doslovne, celý § 17.** Ods. 1: používateľ je povinný a) používať povinne kalibrované meradlo, ak sa meranie uskutočňuje podľa osobitných predpisov; c) predkladať ho na kalibráciu **v intervale určenom používateľom**, ak osobitný predpis neurčí inak; **d) viesť evidenciu každého povinne kalibrovaného meradla** (identifikácia, miesto používania, interval, každý dátum kalibrácie); e) uchovávať doklad o kalibrácii. Ods. 3: *„Kalibráciu povinne kalibrovaného meradla vykonáva ústav, alebo akreditované kalibračné laboratórium okrem kalibrácie podľa odseku 4 alebo odseku 5."* Ods. 6: výnimka len so schválením úradu. § 2: povinne kalibrované meradlo = „meradlo alebo určený výrobok určený na povinnú kalibráciu". **Dôsledok:** neakreditovaný „kalibračný list" pre lekáreň nestačí; register kalibrácií v produkte je priamo evidencia podľa písm. d). Predpoklad, že poznámka 7a vo vyhláške 129/2012 odkazuje práve na § 17 zákona 157/2018, uvádza hardvérový research zo zakonypreludi — viď ďalší riadok. |
+
+| 23. 9. 2026 | Poznámka pod čiarou 7a vo vyhláške 129/2012 (pri „kalibrovaného meradla") | `zakonypreludi.sk/zz/2012-129` | ✅ Znie: *„§ 17 zákona č. 157/2018 Z. z. o metrológii a o zmene a doplnení niektorých zákonov v znení zákona č. 58/2022 Z. z."* Reťazec 129/2012 → § 17 zákona 157/2018 je teda potvrdený; teplomer v lekárni je **povinne kalibrované meradlo** so všetkými povinnosťami § 17 (evidencia, doklad, akreditované laboratórium). |
+
+## Čo ostáva neoverené (priorita 1 podľa syntézy)
+
+- Zákon 362/2011 Z. z. § 18 ods. 1 písm. c) a v) — plné doslovné znenie.
+- PIC/S PI 041-1 §9.6 a §9.7 — prepis tabuliek Item/Expectation z PDF.
+- Počet lekární a veľkodistribútorov v SR (veľkosť trhu): ŠÚKL nemá verejný zoznam lekární na stránke „Zoznam lekární"; GDP certifikáty sú v EudraGMDP (`eudragmdp.ema.europa.eu`) — spočítať tam. Vyhľadávací rozpočet relácie bol vyčerpaný.
+- Či ŠÚKL akceptuje český (ČIA) akreditovaný certifikát podľa § 17 ods. 3 (EA-MLA argument) a či laboratóriá kalibrujú snímač spolu s rádiovou jednotkou (DIS-15 §3.2).

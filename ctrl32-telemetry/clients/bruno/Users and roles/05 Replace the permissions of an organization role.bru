@@ -1,0 +1,32 @@
+meta {
+  name: Replace the permissions of an organization role
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{baseUrl}}/api/v1/roles/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "permissions": [
+      "string"
+    ],
+    "reason": "string"
+  }
+}
+
+docs {
+  Replace the permissions of an organization role
+  
+  Built-in roles cannot be changed.
+  
+  Requires permission `user.admin`.
+}

@@ -1,0 +1,21 @@
+meta {
+  name: Public share of a dashboard
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/dashboards/:slug/share
+  body: none
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+docs {
+  Public share of a dashboard
+  
+  Requires permission `content.write`.
+}

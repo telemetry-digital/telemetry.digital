@@ -1,0 +1,19 @@
+meta {
+  name: This servers OPC UA client certificate (PEM)
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/connectors/opcua/certificate
+  body: none
+  auth: inherit
+}
+
+docs {
+  This server's OPC UA client certificate (PEM)
+  
+  Trust it on the OPC UA server for signed/encrypted sessions.
+  
+  Requires permission `config.write`.
+}

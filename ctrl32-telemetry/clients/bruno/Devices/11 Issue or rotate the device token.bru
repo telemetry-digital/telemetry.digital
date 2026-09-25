@@ -1,0 +1,29 @@
+meta {
+  name: Issue or rotate the device token
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/v1/devices/:id/token
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Issue or rotate the device token
+  
+  The previous token stops working at once; the new one is returned once.
+  
+  Requires permission `device.manage`.
+}

@@ -1,0 +1,25 @@
+meta {
+  name: Live events (Server-Sent Events)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/stream
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~datastreams: 
+  ~devices: 
+  ~alarms: 
+}
+
+docs {
+  Live events (Server-Sent Events)
+  
+  Long-lived `text/event-stream`. Events: `hello`, `observation` {datastream_id, key, value, measured_at}, `device` {device_id, connected}, `alarm` {alarm_id, datastream_id, state, severity, value}, `command` {device_id, command_id, method, status, detail}; `ping` every 25 s with the count of dropped events. Filters: `datastreams` (comma-separated ids), `devices` (`all` or ids), `alarms=1`.
+  
+  Requires permission `data.read`.
+}

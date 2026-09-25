@@ -1,0 +1,30 @@
+meta {
+  name: Upload a firmware image
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/firmware
+  body: multipartForm
+  auth: inherit
+}
+
+body:multipart-form {
+  file: @file()
+  hw: 
+  min_version: 
+  name: 
+  notes: 
+  reason: 
+  signature: 
+  version: 
+}
+
+docs {
+  Upload a firmware image
+  
+  multipart/form-data. The SHA-256 is computed on the server; an Ed25519 signature may be attached for devices that verify it.
+  
+  Requires permission `fota.manage`.
+}

@@ -1,0 +1,30 @@
+meta {
+  name: Assign a datastream to the device
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/devices/:id/datastreams
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "datastream_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "reason": "string"
+  }
+}
+
+docs {
+  Assign a datastream to the device
+  
+  The device's value with the datastream's key is stored into it; a previous assignment of the datastream is closed. With the policy `four_eyes_assignments` the call answers 202 with a pending change request instead.
+  
+  Requires permission `device.manage`.
+}

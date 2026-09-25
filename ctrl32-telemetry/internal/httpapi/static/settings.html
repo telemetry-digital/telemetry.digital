@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings — ctrl32 telemetry</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  .preview { height: 40px; }
+  textarea#src { min-height: 480px; }
+  details pre { max-height: 320px; overflow: auto; font-size: 12px; }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<nav class="subnav">
+  <a href="/settings/branding" data-section="branding">Branding and theme</a>
+  <a href="/settings/templates" data-section="templates">Report templates</a>
+  <a href="/settings/reports" data-section="reports">Stored reports</a>
+  <a href="/settings/connectors" data-section="connectors">Connectors</a>
+  <a href="/settings/languages" data-section="languages">Languages</a>
+  <a href="/settings/translations" data-section="translations">Translations</a>
+  <a href="/settings/export" data-section="export">Organization export</a>
+</nav>
+
+<section data-section="languages">
+  <div class="page-head"><h1>Languages</h1></div>
+  <div class="card">
+  <p class="muted">English is the base language. Enable the languages your users may choose; every user picks their own language in the menu. Built-in translations ship with the product, missing strings fall back to English until you add them under Translations.</p>
+  <form id="langForm" class="form">
+    <div class="perm-grid" id="langList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px 12px"></div>
+    <label>Default language <select name="default"></select></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="langErr"></div>
+    <div><button class="btn primary" type="submit">Save</button></div>
+  </form>
+  </div>
+</section>
+
+<section data-section="translations">
+  <div class="page-head"><h1>Translations</h1><label style="flex-direction:row;align-items:center;gap:8px;margin-left:12px">Language <select id="trLocale"></select></label><label class="inline" style="margin-left:12px"><input type="checkbox" id="trOnlyMissing"> Show only untranslated</label><input id="trFilter" placeholder="filter…" style="margin-left:12px;max-width:220px"><span class="grow"></span><button class="btn primary" id="trSave" type="button">Save translations</button></div>
+  <div class="card">
+  <div class="row"><label style="flex:1">Reason (audit trail) <input id="trReason" maxlength="200"></label><span class="muted" id="trStats"></span></div>
+  <div class="err" id="trErr"></div>
+  <div class="table-wrap" style="margin-top:8px"><table id="trTable"><thead><tr><th style="width:40%">English</th><th style="width:25%">Built-in</th><th>Your translation</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</section>
+
+<section data-section="branding">
+  <div class="page-head"><h1>Branding and theme</h1></div>
+  <div class="card">
+  <p class="muted">Logo, colours and font apply to every page and to PDF reports. The product footer (ctrl32 · telemetry, GitHub, license) is fixed and cannot be changed.</p>
+  <form id="brand" class="form">
+    <div class="row"><img id="logoPreview" class="preview" alt="current logo"> <span class="muted" id="logoState"></span></div>
+    <label>Custom logo (PNG, SVG, JPEG, WebP, GIF; max 256 KiB) <input type="file" name="logo" accept="image/png,image/svg+xml,image/jpeg,image/webp,image/gif"></label>
+    <label class="inline"><input type="checkbox" name="clear_logo"> Remove the custom logo (use the built-in one)</label>
+    <div class="row">
+      <label>Primary colour <input type="color" name="primary" class="swatch" value="#e30613"></label>
+      <label>Font family <input name="font" placeholder="system default" maxlength="64"></label>
+    </div>
+    <div class="row">
+      <label>Default mode <select name="mode"><option value="auto">Follow system</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+      <label>Corner radius <select name="radius"><option value="none">None</option><option value="small" selected>Small</option><option value="medium">Medium</option><option value="large">Large</option></select></label>
+      <label>Font size <select name="font_scale"><option value="small">Small</option><option value="normal" selected>Normal</option><option value="large">Large</option></select></label>
+    </div>
+    <h3 style="margin:8px 0 0">Map tiles</h3>
+    <div class="muted">Raster XYZ tiles for map widgets and device positions. Empty = built-in OpenStreetMap tiles, which their policy allows for light use only; for regular use enter your own tile server or a provider with a key (MapTiler, Stadia, Thunderforest…).</div>
+    <div class="muted">A self-hosted map archive (PMTiles, set in config.toml under [map]) is used when the URL is empty, so maps work without the Internet.</div>
+    <div class="muted" id="mapLocal" hidden><span>Self-hosted map archive is active</span>: <b id="mapLocalName"></b>, zoom <span id="mapLocalZoom"></span>. <span>It is used while the tile URL is empty.</span></div>
+    <div class="err" id="mapLocalErr" hidden><span>Self-hosted map archive could not be opened</span>: <span id="mapLocalErrText"></span></div>
+    <label>Tile URL template <input name="map_tile_url" placeholder="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maxlength="512"></label>
+    <div class="row"><label>Attribution <input name="map_attribution" placeholder="© OpenStreetMap contributors" maxlength="300"></label><label>Max zoom <input name="map_max_zoom" type="number" min="1" max="22" value="19"></label></div>
+    <div class="row"><label>Centre latitude <input name="map_center_lat" type="number" step="any" value="48.7"></label><label>Centre longitude <input name="map_center_lon" type="number" step="any" value="19.5"></label><label>Zoom <input name="map_zoom" type="number" min="1" max="22" value="7"></label></div>
+    <label>Reason for the change (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="brandErr"></div>
+    <div class="row"><button class="btn primary" type="submit">Save branding</button><span class="muted">Users can still switch light/dark for themselves in the menu.</span></div>
+  </form>
+  </div>
+</section>
+
+<section data-section="templates">
+  <div class="page-head"><h1>Report templates</h1></div>
+  <div class="card">
+  <p class="muted">Build the template from blocks (title, summary, chart, table, daily statistics, text, signatures…) or edit the Typst source directly. Every save is a new version with a reason; the previous version stays in history. Data arrives as <code>data.json</code>; the shared <code>layout.typ</code> helpers are always available.</p>
+  <div class="row">
+    <label>Kind <select id="kind"></select></label>
+    <label>Locale <input id="locale" value="en" size="4" maxlength="8"></label>
+    <span id="tplState" class="muted"></span>
+  </div>
+  <div class="row" style="margin:8px 0 4px">
+    <span class="muted">Mode</span>
+    <label class="inline"><input type="radio" name="tplMode" value="blocks" checked> Blocks (designer)</label>
+    <label class="inline"><input type="radio" name="tplMode" value="source"> Source (Typst)</label>
+    <span class="grow"></span>
+    <button class="btn" id="loadDefaultSpec" type="button" title="Start from the built-in blocks of this kind">Start from built-in blocks</button>
+  </div>
+  <div id="designer">
+    <div class="card" style="margin-bottom:12px">
+      <div class="row">
+        <label>Paper <select id="pgPaper"><option value="a4">A4</option><option value="a3">A3</option><option value="a5">A5</option><option value="us-letter">US Letter</option><option value="us-legal">US Legal</option></select></label>
+        <label class="inline"><input type="checkbox" id="pgLandscape"><span>Landscape</span></label>
+        <label>Font <input id="pgFont" value="Libertinus Serif" maxlength="64"></label>
+        <label>Font size (pt) <input id="pgSize" type="number" min="6" max="16" step="0.5" value="9.5" style="max-width:90px"></label>
+      </div>
+    </div>
+    <div id="blocks"></div>
+    <div class="row" style="margin-top:8px"><label>Add block <select id="addBlockSel"></select></label><button class="btn" id="addBlockBtn" type="button">Add</button><span class="muted">Blocks render top to bottom. Tokens: {{title}}, {{org}}, {{period.from}}, {{period.to}}, {{scope.asset}}, {{scope.datastream}}, {{scope.unit}}, {{summary.count}} …</span></div>
+    <details style="margin-top:8px"><summary class="muted">Generated source</summary><pre id="genSrc" style="font-size:12px;white-space:pre-wrap"></pre></details>
+  </div>
+  <textarea id="src" spellcheck="false"></textarea>
+  <label>Reason for the new version <input id="tplReason" maxlength="200"></label>
+  <div class="err" id="tplErr"></div>
+  <div class="actions">
+    <button class="btn" id="previewBtn" type="button">Preview PDF</button>
+    <button class="btn primary" id="saveBtn" type="button">Save as new version</button>
+    <button class="btn" id="revertBtn" type="button">Revert to built-in</button>
+  </div>
+  <details><summary>Data contract (sample data.json)</summary><pre id="contract"></pre></details>
+  <details><summary>layout.typ helpers</summary><pre id="layout"></pre></details>
+  </div>
+</section>
+
+<section data-section="reports">
+  <div class="page-head"><h1>Stored reports</h1></div>
+  <div class="card">
+  <p class="muted">Every generated PDF is a record: data hash, file hash and the audit chain head at generation time. Downloads verify the file against its recorded hash.</p>
+  <div class="table-wrap"><table id="reports"><thead><tr><th>Generated</th><th>Kind</th><th>By</th><th>Template</th><th>Size</th><th>File hash</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+</section>
+
+<section data-section="connectors">
+  <div class="page-head"><h1>Connectors</h1><span class="grow"></span><button class="btn primary" id="newConnBtn" type="button">New connector</button></div>
+  <div class="card">
+  <p class="muted">Inbound integrations. ChirpStack (LoRaWAN): add an HTTP integration in ChirpStack with the event endpoint URL and the header shown after creation; ChirpStack runs the device-profile codec and the decoded object is mapped to datastream keys. OPC UA: this server is the client — it polls an OPC UA server and feeds a virtual device; for Sign/SignAndEncrypt trust the <a href="/api/v1/connectors/opcua/certificate">client certificate</a> on the OPC UA server.</p>
+  <p class="muted">Modbus TCP: this server polls holding and input registers, coils and discrete inputs of one unit and feeds a virtual device; registers marked rw can be written with the command write {key, value}, which is checked against the limits, read back and recorded in the audit trail.</p>
+  <div class="table-wrap"><table id="connectors"><thead><tr><th>Name</th><th>Kind</th><th>Messages</th><th>Last seen</th><th>State</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <div class="card"><div class="row" style="align-items:center"><h2 style="margin:0">Register profiles</h2><span class="grow"></span><button class="btn" id="newProfBtn" type="button">New profile</button></div>
+    <p class="muted">Profiles are versioned register maps shared by Modbus connectors of the same device type: change a profile by saving a new version, then apply it to the connectors that use the profile. Connectors keep the version they were given until you apply the new one; every step is in the audit trail.</p>
+    <div class="table-wrap"><table id="profTable"><thead><tr><th>Profile</th><th>Registers</th><th>Connectors</th><th>Since</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+</section>
+<dialog id="profDlg">
+  <form id="profForm" class="form" method="dialog">
+    <h2 style="margin-top:0" id="profTitle">New register profile</h2>
+    <div class="row"><label>Name <input name="name" required maxlength="64" placeholder="Danfoss ERC 213"></label><label>Byte order <select name="byte_order"><option value="big">big</option><option value="big_swap">big_swap</option><option value="little">little</option><option value="little_swap">little_swap</option></select></label></div>
+    <label>Description <input name="description" maxlength="200"></label>
+    <label>Registers — one per line: <code>key | table | address | type | scale | offset | rw | min | max</code> <textarea name="registers" rows="8" placeholder="temp | holding | 0 | int16 | 0.1&#10;setpoint | holding | 1 | int16 | 0.1 | 0 | rw | 10 | 40" style="font-family:var(--mono);font-size:12px" required></textarea></label>
+    <label id="profLogLabel" hidden>Changelog (what changed in this version) <input name="changelog" maxlength="500"></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="profErr"></div>
+    <div class="actions"><button class="btn primary" type="submit" id="profSubmit">Create profile</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form>
+</dialog>
+<dialog id="connDlg">
+  <form id="newConn" class="form" method="dialog">
+    <h2 style="margin-top:0" id="connTitle">New connector</h2>
+    <div class="row"><label>Name <input name="name" required maxlength="64" placeholder="chirpstack-main"></label><label>Kind <select name="kind"><option value="chirpstack_http">ChirpStack HTTP integration</option><option value="opcua">OPC UA client (polling)</option><option value="modbus_tcp">Modbus TCP client (polling)</option></select></label></div>
+    <div id="csFields"><label class="inline"><input type="checkbox" name="auto" checked> Auto-create devices by DevEUI</label></div>
+    <div id="opcFields" hidden class="form">
+      <label>Endpoint <input name="endpoint" placeholder="opc.tcp://192.168.1.50:4840"></label>
+      <div class="row"><label>Security policy <select name="security_policy"><option>None</option><option>Basic256Sha256</option><option>Basic256</option><option>Basic128Rsa15</option><option>Aes128_Sha256_RsaOaep</option><option>Aes256_Sha256_RsaPss</option></select></label><label>Security mode <select name="security_mode"><option>None</option><option>Sign</option><option>SignAndEncrypt</option></select></label></div>
+      <div class="row"><label>Authentication <select name="auth"><option value="anonymous">anonymous</option><option value="username">username and password</option></select></label><label>Username <input name="username" autocomplete="off"></label><label>Password <input name="password" type="password" autocomplete="new-password" placeholder="blank keeps the stored one"></label></div>
+      <div class="row"><label>Polling interval (s) <input name="interval_s" type="number" min="1" max="3600" value="10"></label><label>Virtual device id <input name="device_external_id" placeholder="opcua-<name>"></label></div>
+      <label>Nodes — one per line: <code>node id | key | scale | offset | rw | min | max</code> <textarea name="nodes" rows="6" placeholder="ns=3;s=&quot;DB1&quot;.&quot;Temp&quot; | t_c&#10;ns=2;i=1001 | p_bar | 0.001 | 0" style="font-family:var(--mono);font-size:12px"></textarea></label>
+      <div class="row"><button class="btn" type="button" id="connTest">Test connection</button></div>
+      <pre id="connTestOut" style="font-size:12px;white-space:pre-wrap;margin:0"></pre>
+    </div>
+    <div id="mbFields" hidden class="form">
+      <div class="row"><label>Host <input name="host" placeholder="192.168.1.60"></label><label>Port <input name="port" type="number" min="1" max="65535" value="502"></label><label>Unit id <input name="unit_id" type="number" min="0" max="255" value="1"></label></div>
+      <div class="row"><label>Polling interval (s) <input name="mb_interval_s" type="number" min="1" max="3600" value="10"></label><label>Timeout (ms) <input name="timeout_ms" type="number" min="100" max="30000" value="2000"></label><label>Framing <select name="framing"><option value="tcp">Modbus TCP</option><option value="rtuovertcp">RTU over TCP (gateway)</option></select></label><label>Byte order <select name="byte_order"><option value="big">big (ABCD)</option><option value="big_swap">big, words swapped (CDAB)</option><option value="little">little (DCBA)</option><option value="little_swap">little, words swapped (BADC)</option></select></label><label>Virtual device id <input name="mb_device_external_id" placeholder="modbus-<name>"></label></div>
+      <label>Register profile <select name="profile"><option value="">(registers below)</option></select></label>
+      <label>Registers — one per line: <code>key | table | address | type | scale | offset | rw | min | max</code> <textarea name="registers" rows="7" placeholder="temp | holding | 0 | int16 | 0.1&#10;setpoint | holding | 1 | int16 | 0.1 | 0 | rw | 10 | 40&#10;flow | holding | 2 | float32&#10;pump | coil | 0 | bool | | | rw" style="font-family:var(--mono);font-size:12px"></textarea></label>
+      <div class="muted" style="font-size:12px">table: holding, input, coil, discrete · type: int16, uint16, int32, uint32, float32, int64, uint64, float64, bool · addresses are 0-based · rw marks a writable register (holding or coil), min/max limit the written value</div>
+      <div class="row"><button class="btn" type="button" id="mbTest">Test connection</button></div>
+      <pre id="mbTestOut" style="font-size:12px;white-space:pre-wrap;margin:0"></pre>
+    </div>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="connErr"></div>
+    <div id="connResult" hidden><div class="muted">Configure ChirpStack → Applications → Integrations → HTTP:</div><div class="secret" id="connUrl"></div><div class="muted" style="margin-top:6px">Header (shown once):</div><div class="secret" id="connHeader"></div></div>
+    <div id="opcResult" hidden class="muted"></div>
+    <div class="actions"><button class="btn primary" type="submit" id="connSubmit">Create connector</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form>
+</dialog>
+
+<section data-section="notifications">
+  <div class="page-head"><h1>Notifications</h1><span class="grow"></span><button class="btn" id="newPolBtn" type="button">New escalation policy</button><button class="btn primary" id="newChanBtn" type="button">New channel</button></div>
+  <div class="card"><h2>Channels</h2>
+    <p class="muted">Where alarms are delivered: e-mail recipients, an HTTP webhook signed with HMAC-SHA256, a generic HTTP SMS gateway, a voice call through an HTTP provider, or Web Push to the browsers of named users (each user enables it under My account → Notifications). Alarm rules without an escalation policy use the server's global e-mail recipients.</p>
+    <div class="table-wrap"><table id="chanTable"><thead><tr><th>Name</th><th>Kind</th><th>Target</th><th>State</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <div class="card"><h2>Escalation policies</h2>
+    <p class="muted">Steps in minutes after the alarm: step 0 at once, later steps only while the alarm is still active and unacknowledged; clearing sends a notice to the step-0 channels. Assign a policy to an alarm rule on the datastream.</p>
+    <div class="table-wrap"><table id="polTable"><thead><tr><th>Name</th><th>Steps</th><th>Rules</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <div class="card"><h2>Delivery log</h2>
+    <div class="table-wrap"><table id="notifTable"><thead><tr><th>Due</th><th>Event</th><th>Channel</th><th>Step</th><th>State</th><th>Detail</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</section>
+<dialog id="chanDlg">
+  <form id="chanForm" class="form" method="dialog">
+    <h2 style="margin-top:0" id="chanTitle">New channel</h2>
+    <div class="row"><label>Name <input name="name" required maxlength="64" placeholder="shift e-mail"></label><label>Kind <select name="kind"><option value="email">E-mail</option><option value="webhook">Webhook (HTTP POST, HMAC)</option><option value="sms_http">SMS gateway (HTTP)</option><option value="voice_http">Voice call (HTTP provider)</option><option value="web_push">Web Push (browser notifications)</option></select></label></div>
+    <label data-k="web_push">Users — one per line, or all for everyone <textarea name="users" rows="3" placeholder="all"></textarea></label>
+    <label data-k="email sms_http voice_http">Recipients — one per line <textarea name="recipients" rows="3" placeholder="alice@example.com&#10;bob@example.com"></textarea></label>
+    <label data-k="webhook sms_http voice_http">URL <input name="url" placeholder="https://hooks.example.com/ctrl32 or https://sms.example.com/send?to={to}&text={text}"></label>
+    <label data-k="webhook">Secret (HMAC-SHA256 of the body, header X-Ctrl32-Signature) <input name="secret" type="password" autocomplete="new-password" placeholder="blank keeps the stored one"></label>
+    <div class="row" data-k="sms_http voice_http"><label>Method <select name="method"><option>GET</option><option>POST</option></select></label><label>POST body template <input name="body" placeholder='{"to":"{to}","text":"{text}"}'></label></div>
+    <label data-k="webhook sms_http voice_http">Headers — one per line <code>Name: value</code> <textarea name="headers" rows="2" placeholder="Authorization: Bearer …"></textarea></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="chanErr"></div>
+    <div class="actions"><button class="btn primary" type="submit" id="chanSubmit">Create channel</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form>
+</dialog>
+<dialog id="polDlg">
+  <form id="polForm" class="form" method="dialog">
+    <h2 style="margin-top:0" id="polTitle">New escalation policy</h2>
+    <label>Name <input name="name" required maxlength="64" placeholder="cold chain"></label>
+    <label>Steps — one per line: <code>minutes | channel name</code> <textarea name="steps" rows="4" placeholder="0 | shift e-mail&#10;15 | on-call SMS&#10;60 | maintenance webhook" style="font-family:var(--mono);font-size:12px"></textarea></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="polErr"></div>
+    <div class="actions"><button class="btn primary" type="submit" id="polSubmit">Create policy</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form>
+</dialog>
+<section data-section="approvals">
+  <div class="page-head"><h1>Approvals</h1></div>
+  <div class="card"><h2>Pending changes</h2>
+    <p class="muted">Changes held by the four-eyes policies. The person who asked for a change cannot approve it; approving replays the original request under your name and both names go to the audit trail. Requests expire after 7 days.</p>
+    <div class="table-wrap"><table id="crTable"><thead><tr><th>Change</th><th>Kind</th><th>Requested by</th><th>Requested</th><th>Expires</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <div class="card"><h2>History</h2>
+    <div class="table-wrap"><table id="crHist"><thead><tr><th>Change</th><th>Requested by</th><th>Decided</th><th>Decision</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</section>
+<section data-section="policy">
+  <div class="page-head"><h1>Security policy</h1></div>
+  <div class="card">
+    <form id="policyForm" class="form">
+      <p class="muted">Rules of this organization for commands and control.</p>
+      <label class="inline"><input type="checkbox" name="four_eyes_commands"><span>Four eyes for commands</span></label>
+      <div class="muted" style="font-size:12px">When on, every command (setpoint, switch, button, connector write) waits until a different user with the device.command permission approves it. The approval is recorded in the audit trail.</div>
+      <label class="inline"><input type="checkbox" name="four_eyes_limits"><span>Four eyes for alarm limits</span></label>
+      <div class="muted" style="font-size:12px">New alarm rule versions and rule disabling become change requests that a different user with config.write approves under Settings → Approvals.</div>
+      <label class="inline"><input type="checkbox" name="four_eyes_assignments"><span>Four eyes for datastream assignments</span></label>
+      <div class="muted" style="font-size:12px">Assigning or removing a datastream on a device becomes a change request that a different user with device.manage approves.</div>
+      <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+      <div class="err" id="policyErr"></div>
+      <div class="actions"><button class="btn primary" type="submit">Save policy</button></div>
+    </form>
+  </div>
+</section>
+<section data-section="export">
+  <div class="page-head"><h1>Organization export</h1></div>
+  <div class="card">
+  <p class="muted">One ZIP with the whole configuration (JSON), all records of the period (CSV) and a manifest with SHA-256 of every file and the audit chain head. Requires <code>system.admin</code>.</p>
+  <form id="orgExport" class="row">
+    <label>From <input name="from" type="date"></label><label>To <input name="to" type="date"></label>
+    <button class="btn primary" type="submit">Download export</button>
+  </form>
+  <div class="err" id="exportErr"></div>
+  </div>
+</section>
+</main>
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
+const TITLES = {policy: 'Security policy', approvals: 'Approvals', notifications: 'Notifications', branding: 'Branding and theme', templates: 'Report templates', reports: 'Stored reports', connectors: 'Connectors', languages: 'Languages', translations: 'Translations', export: 'Organization export'};
+// ---- languages
+let LANGS = null;
+async function loadLangs(){
+  LANGS = await api('GET','/api/v1/i18n/languages');
+  $('#langList').innerHTML = LANGS.supported.map(l => `<label class="inline"><input type="checkbox" name="lang" value="${l.code}" ${LANGS.enabled.includes(l.code) ? 'checked' : ''} ${l.code === 'en' ? 'checked disabled' : ''}><span>${esc(l.name)} <span class="muted">${l.code}${l.code === 'en' ? ' · base' : (l.builtin ? ' · ' + l.builtin + ' built-in' : ' · fallback to English')}</span></span></label>`).join('');
+  const sel = $('#langForm').default; sel.innerHTML = LANGS.supported.map(l => `<option value="${l.code}" ${l.code === LANGS.default ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
+}
+$('#langForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#langErr').textContent='';
+  const enabled = [...f.querySelectorAll('input[name=lang]:checked')].map(i => i.value);
+  try{ await api('PUT','/api/v1/i18n/languages',{enabled, default: f.default.value, reason: f.reason.value}); f.reason.value=''; ctrl32.toast('languages saved','ok'); loadLangs(); }catch(x){ $('#langErr').textContent = x.message; } };
+// ---- translations
+let TR = [], trChanged = {};
+async function loadTrLocales(){
+  LANGS = await api('GET','/api/v1/i18n/languages');
+  const names = Object.fromEntries(LANGS.supported.map(l => [l.code, l.name]));
+  const codes = LANGS.enabled.filter(c => c !== 'en');
+  $('#trLocale').innerHTML = codes.map(c => `<option value="${c}">${esc(names[c] || c)}</option>`).join('') || '<option value="">enable a language first</option>';
+  $('#trLocale').onchange = loadTr; $('#trOnlyMissing').onchange = renderTr; $('#trFilter').oninput = renderTr;
+  if(codes.length) loadTr();
+}
+async function loadTr(){ const loc = $('#trLocale').value; if(!loc) return; trChanged = {}; const r = await api('GET',`/api/v1/i18n/${loc}/edit`); TR = r.entries; renderTr(); }
+function renderTr(){
+  const only = $('#trOnlyMissing').checked, q = $('#trFilter').value.toLowerCase();
+  const rows = TR.filter(e => (!only || !(e.builtin || e.override)) && (!q || e.key.toLowerCase().includes(q) || (e.builtin||'').toLowerCase().includes(q) || (e.override||'').toLowerCase().includes(q)));
+  const missing = TR.filter(e => !(e.builtin || e.override)).length;
+  $('#trStats').textContent = `${TR.length} strings · ${missing} untranslated · ${TR.filter(e => e.override).length} organization overrides`;
+  $('#trTable tbody').innerHTML = rows.map((e, i) => `<tr><td style="white-space:normal">${esc(e.key)}</td><td style="white-space:normal" class="muted">${esc(e.builtin || '')}</td><td><input data-key="${esc(e.key)}" value="${esc(trChanged[e.key] ?? e.override ?? '')}" placeholder="${esc(e.builtin || '')}" style="width:100%"></td></tr>`).join('') || '<tr><td colspan="3" class="muted">nothing to show</td></tr>';
+  for(const inp of document.querySelectorAll('#trTable input[data-key]')) inp.oninput = () => { trChanged[inp.dataset.key] = inp.value; };
+}
+$('#trSave').onclick = async () => { $('#trErr').textContent=''; const loc = $('#trLocale').value; const entries = {}; let n = 0;
+  for(const [k, v] of Object.entries(trChanged)){ const e = TR.find(x => x.key === k); if((e.override || '') !== v){ entries[k] = v; n++; } }
+  if(!n){ ctrl32.toast('no changes','bad'); return; } if(!$('#trReason').value.trim()){ $('#trErr').textContent = 'reason is required'; return; }
+  try{ const r = await api('PUT',`/api/v1/i18n/${loc}`,{entries, reason: $('#trReason').value}); ctrl32.toast(`saved ${r.set}, removed ${r.removed}`,'ok'); $('#trReason').value=''; loadTr(); }catch(x){ $('#trErr').textContent = x.message; } };
+function live(){ const f=$('#brand'); const r=document.documentElement; r.style.setProperty('--primary', f.primary.value); r.style.setProperty('--font', f.font.value ? `"${f.font.value.replace(/["\\]/g,'')}", system-ui, sans-serif` : 'system-ui, sans-serif'); r.style.setProperty('--radius', {none:'0',small:'3px',medium:'6px',large:'10px'}[f.radius.value]); r.style.setProperty('--fs', {small:'14px',normal:'15px',large:'17px'}[f.font_scale.value]); }
+function fileToB64(file){ return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result.split(',')[1]); fr.onerror=rej; fr.readAsDataURL(file); }); }
+async function loadTiles(){ try{ const t = await api('GET','/api/v1/tiles'); $('#mapLocal').hidden = !(t.configured && t.ok); $('#mapLocalErr').hidden = !(t.configured && !t.ok); if(t.ok){ $('#mapLocalName').textContent = t.name || t.tile_type; $('#mapLocalZoom').textContent = `${t.min_zoom}–${t.max_zoom}`; } else if(t.configured){ $('#mapLocalErrText').textContent = t.error || ''; } }catch(e){} }
+function loadBrand(){ const b = ctrl32.brand, f=$('#brand'); f.primary.value=b.theme.primary; f.font.value=b.theme.font||''; f.mode.value=b.theme.mode; f.radius.value=b.theme.radius; f.font_scale.value=b.theme.font_scale; $('#logoPreview').src=b.logo_url; $('#logoState').textContent = b.logo_custom ? 'custom logo' : 'built-in logo (telemetry.digital)'; const m = b.map || {}; f.map_tile_url.value = (m.builtin || m.local) ? '' : (m.tile_url || ''); f.map_attribution.value = (m.builtin || m.local) ? '' : (m.attribution || ''); f.map_max_zoom.value = m.max_zoom || 19; f.map_center_lat.value = m.center_lat || 48.7; f.map_center_lon.value = m.center_lon || 19.5; f.map_zoom.value = m.zoom || 7; loadTiles(); }
+$('#brand').addEventListener('input', live);
+$('#brand').onsubmit = async e => { e.preventDefault(); const f=e.target; $('#brandErr').textContent='';
+  const body = { theme: { primary: f.primary.value, font: f.font.value, mode: f.mode.value, radius: f.radius.value, font_scale: f.font_scale.value }, reason: f.reason.value, clear_logo: f.clear_logo.checked, map: { tile_url: f.map_tile_url.value.trim(), attribution: f.map_attribution.value.trim(), max_zoom: parseInt(f.map_max_zoom.value, 10) || 19, center_lat: parseFloat(f.map_center_lat.value) || 0, center_lon: parseFloat(f.map_center_lon.value) || 0, zoom: parseInt(f.map_zoom.value, 10) || 7 } };
+  if(f.logo.files[0]){ const file=f.logo.files[0]; if(file.size>256*1024){ $('#brandErr').textContent='logo is larger than 256 KiB'; return; } body.logo = { mime: file.type, data: await fileToB64(file) }; }
+  try{ await api('PUT','/api/v1/branding',body); await ctrl32.loadBranding(); loadBrand(); f.logo.value=''; f.clear_logo.checked=false; f.reason.value=''; ctrl32.toast('branding saved','ok'); }catch(x){ $('#brandErr').textContent=x.message; } };
+// ---- block designer
+let CATALOG = [], SPEC = null, TPL = null;
+function tplMode(){ return document.querySelector('input[name=tplMode]:checked').value; }
+function setMode(m){ document.querySelector(`input[name=tplMode][value=${m}]`).checked = true; $('#designer').hidden = m !== 'blocks'; $('#src').hidden = m !== 'source'; $('#src').readOnly = false; }
+function defOf(type){ return CATALOG.find(b => b.type === type); }
+function paramInput(bi, p, v){
+  const id = `b${bi}_${p.name}`;
+  if(p.kind === 'bool') return `<label class="inline"><input type="checkbox" data-b="${bi}" data-p="${p.name}" ${v ? 'checked' : ''}><span>${esc(p.label)}</span></label>`;
+  if(p.kind === 'select') return `<label>${esc(p.label)} <select data-b="${bi}" data-p="${p.name}">${p.options.map(o => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
+  if(p.kind === 'number') return `<label>${esc(p.label)} <input type="number" step="any" data-b="${bi}" data-p="${p.name}" value="${esc(String(v ?? ''))}" style="max-width:120px"></label>`;
+  if(p.kind === 'multiline') return `<label>${esc(p.label)} <textarea rows="3" data-b="${bi}" data-p="${p.name}" style="font-family:var(--font)">${esc(v || '')}</textarea></label>`;
+  if(p.kind === 'list') return `<label>${esc(p.label)} <input data-b="${bi}" data-p="${p.name}" value="${esc((v || []).join(', '))}" placeholder="comma separated"></label>`;
+  return `<label>${esc(p.label)} <input data-b="${bi}" data-p="${p.name}" value="${esc(v ?? '')}"></label>`;
+}
+function renderBlocks(){
+  if(!SPEC) return;
+  $('#pgPaper').value = SPEC.page.paper || 'a4'; $('#pgLandscape').checked = !!SPEC.page.landscape; $('#pgFont').value = SPEC.page.font || 'Libertinus Serif'; $('#pgSize').value = SPEC.page.font_size || 9.5;
+  $('#blocks').innerHTML = SPEC.blocks.map((b, i) => { const d = defOf(b.type) || {label: b.type, help: '', params: []};
+    return `<div class="card" style="margin-bottom:8px"><div class="row" style="align-items:center"><b>${i + 1}. ${esc(d.label)}</b><span class="muted" style="font-size:12px">${esc(d.help || '')}</span><span class="grow"></span>
+      <button class="btn small" type="button" data-up="${i}" title="Move up" ${i === 0 ? 'disabled' : ''}>↑</button><button class="btn small" type="button" data-down="${i}" title="Move down" ${i === SPEC.blocks.length - 1 ? 'disabled' : ''}>↓</button><button class="btn small danger" type="button" data-del="${i}">Remove</button></div>
+      ${(d.params||[]).length ? `<div class="form" style="margin-top:6px">${(d.params||[]).map(p => paramInput(i, p, b.params ? b.params[p.name] : undefined)).join('')}</div>` : ''}</div>`; }).join('') || '<div class="muted">no blocks — add one below</div>';
+  for(const b of document.querySelectorAll('#blocks [data-up]')) b.onclick = () => { const i = +b.dataset.up; [SPEC.blocks[i - 1], SPEC.blocks[i]] = [SPEC.blocks[i], SPEC.blocks[i - 1]]; renderBlocks(); };
+  for(const b of document.querySelectorAll('#blocks [data-down]')) b.onclick = () => { const i = +b.dataset.down; [SPEC.blocks[i + 1], SPEC.blocks[i]] = [SPEC.blocks[i], SPEC.blocks[i + 1]]; renderBlocks(); };
+  for(const b of document.querySelectorAll('#blocks [data-del]')) b.onclick = () => { SPEC.blocks.splice(+b.dataset.del, 1); renderBlocks(); };
+  for(const el of document.querySelectorAll('#blocks [data-b]')) el.oninput = () => { const b = SPEC.blocks[+el.dataset.b]; const p = (defOf(b.type).params||[]).find(x => x.name === el.dataset.p); b.params = b.params || {};
+    b.params[p.name] = p.kind === 'bool' ? el.checked : (p.kind === 'number' ? parseFloat(el.value) : (p.kind === 'list' ? el.value.split(',').map(s => s.trim()).filter(Boolean) : el.value)); };
+}
+function readPage(){ if(!SPEC) return; SPEC.page = {paper: $('#pgPaper').value, landscape: $('#pgLandscape').checked, font: $('#pgFont').value.trim() || 'Libertinus Serif', font_size: parseFloat($('#pgSize').value) || 9.5}; }
+for(const id of ['pgPaper','pgLandscape','pgFont','pgSize']) $('#' + id).oninput = readPage;
+async function compileSpec(){ readPage(); const r = await api('POST','/api/v1/report-templates/compile',{spec: SPEC}); $('#genSrc').textContent = r.body; return r.body; }
+$('#addBlockBtn').onclick = () => { const d = defOf($('#addBlockSel').value); if(!d) return; const params = {}; for(const p of (d.params||[])) params[p.name] = p.default; SPEC.blocks.push({type: d.type, params}); renderBlocks(); };
+$('#loadDefaultSpec').onclick = async () => { const r = await api('GET',`/api/v1/report-templates/${$('#kind').value}/default-spec`); SPEC = r.spec; CATALOG = r.blocks; renderBlocks(); setMode('blocks'); ctrl32.toast('built-in blocks loaded','ok'); };
+for(const r of document.querySelectorAll('input[name=tplMode]')) r.onchange = async () => { if(tplMode() === 'source'){ if(SPEC){ try{ $('#src').value = await compileSpec(); }catch(x){} } setMode('source'); } else { if(!SPEC){ $('#loadDefaultSpec').click(); return; } setMode('blocks'); } };
+async function loadTemplate(){ const kind=$('#kind').value, locale=$('#locale').value||'en'; $('#tplErr').textContent='';
+  try{ const r = await api('GET',`/api/v1/report-templates/${kind}?locale=${encodeURIComponent(locale)}`); TPL = r.template; CATALOG = r.blocks || []; $('#src').value = r.template.body; $('#layout').textContent = r.layout;
+    $('#tplState').textContent = (r.template.builtin ? 'built-in (no organization override)' : `organization version ${r.template.version} · ${r.template.checksum.slice(0,12)}…`) + (r.template.spec ? ' · blocks' : ' · hand-written source');
+    $('#addBlockSel').innerHTML = CATALOG.map(b => `<option value="${b.type}">${esc(b.label)}</option>`).join('');
+    SPEC = r.template.spec ? JSON.parse(JSON.stringify(r.template.spec)) : null;
+    if(SPEC){ renderBlocks(); setMode('blocks'); try{ await compileSpec(); }catch(x){} } else { setMode('source'); }
+    const c = await api('GET',`/api/v1/report-templates/${kind}/contract?locale=${encodeURIComponent(locale)}`); $('#contract').textContent = JSON.stringify(c,null,2);
+  }catch(x){ $('#tplErr').textContent=x.message; } }
+async function loadKinds(){ const r = await api('GET','/api/v1/report-templates'); const kinds = new Set([...r.builtin_kinds, ...r.overrides.map(o=>o.kind)]); $('#kind').innerHTML = [...kinds].map(k=>`<option>${esc(k)}</option>`).join(''); $('#kind').onchange = loadTemplate; $('#locale').onchange = loadTemplate; loadTemplate(); }
+$('#previewBtn').onclick = async () => { $('#tplErr').textContent=''; try{ const body = tplMode() === 'blocks' ? await compileSpec() : $('#src').value; const blob = await api('POST','/api/v1/report-templates/preview',{kind:$('#kind').value,locale:$('#locale').value,body}); window.open(URL.createObjectURL(blob),'_blank'); }catch(x){ $('#tplErr').textContent=x.message; } };
+$('#saveBtn').onclick = async () => { $('#tplErr').textContent=''; if(!$('#tplReason').value.trim()){ $('#tplErr').textContent='reason is required'; return; }
+  try{ const payload = {locale:$('#locale').value, reason:$('#tplReason').value}; if(tplMode() === 'blocks'){ readPage(); payload.spec = SPEC; } else { payload.body = $('#src').value; }
+    await api('PUT',`/api/v1/report-templates/${$('#kind').value}`, payload); $('#tplReason').value=''; ctrl32.toast('new version saved','ok'); loadTemplate(); }catch(x){ $('#tplErr').textContent=x.message; } };
+$('#revertBtn').onclick = async () => { $('#tplErr').textContent=''; try{ await api('DELETE',`/api/v1/report-templates/${$('#kind').value}?locale=${encodeURIComponent($('#locale').value)}&reason=${encodeURIComponent($('#tplReason').value||'revert')}`); ctrl32.toast('reverted to built-in','ok'); loadTemplate(); }catch(x){ $('#tplErr').textContent=x.message; } };
+async function reports(){ try{ const rs = await api('GET','/api/v1/reports?limit=100');
+  $('#reports tbody').innerHTML = rs.map(r=>`<tr><td>${fmt(r.generated_at)}</td><td>${esc(r.kind)}</td><td>${esc(r.generated_by)}</td><td>${r.template_id?('v'+r.template_ver):'built-in'}</td><td>${(r.bytes/1024).toFixed(0)} KiB</td><td><code>${esc(r.file_hash.slice(0,16))}…</code></td><td><a href="/api/v1/reports/${r.id}/file">download</a></td></tr>`).join('') || '<tr><td colspan="7" class="muted">none yet</td></tr>';
+}catch(x){ $('#reports tbody').innerHTML=`<tr><td colspan="7" class="muted">${esc(x.message)}</td></tr>`; } }
+function connStatus(c){ const s = c.status;
+  if(c.revoked_at) return '<span class="badge bad">revoked</span>';
+  if(c.kind === 'chirpstack_http') return '<span class="badge ok">active</span>';
+  if(!s) return '<span class="badge">starting</span>';
+  const b = s.state === 'connected' ? 'ok' : (s.state === 'error' ? 'bad' : ''); const vals = s.last_values ? Object.entries(s.last_values).map(([k, v]) => k + ' = ' + v).join('\n') : '';
+  return `<span class="badge ${b}" title="${esc(vals)}">${esc(s.state)}</span>${s.last_error ? `<div class="muted" style="font-size:12px">${esc(s.last_error)}</div>` : ''}${s.last_poll ? `<div class="muted" style="font-size:12px">${fmt(s.last_poll)} · ${s.polls} polls${s.bad_nodes && s.bad_nodes.length ? ' · ' + s.bad_nodes.length + ' not readable' : ''}</div>` : ''}`; }
+let CONNS = [];
+async function connectors(){
+  if(!ctrl32.can('config.write')){ $('#connectors tbody').innerHTML = '<tr><td colspan="6" class="muted">your role has no config.write permission</td></tr>'; $('#newConnBtn').hidden = true; return; }
+  try{ [CONNS, PROFS] = await Promise.all([api('GET','/api/v1/connectors'), api('GET','/api/v1/register-profiles')]);
+    const profTag = c => { const s = c.settings || {}; if(c.kind !== 'modbus_tcp' || !s.profile_id) return ''; const cur = PROFS.find(p => p.id === s.profile_id); const newer = !cur && PROFS.find(p => p.name === s.profile_name && !p.retired_at); return `<br><span class="badge">${esc(s.profile_name || 'profile')} v${s.profile_version || '?'}</span>${newer ? ` <span class="badge warn">v${newer.version} available</span>` : ''}`; };
+    $('#connectors tbody').innerHTML = CONNS.map(c => `<tr><td><b>${esc(c.name)}</b><br><code style="font-size:11px">${esc(c.kind === 'opcua' ? ((c.settings && c.settings.endpoint) || '') : (c.kind === 'modbus_tcp' ? (c.settings ? c.settings.host + ':' + c.settings.port + ' unit ' + c.settings.unit_id : '') : c.url))}</code>${profTag(c)}</td><td>${esc(c.kind === 'opcua' ? 'OPC UA client' : (c.kind === 'modbus_tcp' ? 'Modbus TCP client' : 'ChirpStack HTTP'))}</td><td>${c.messages}</td><td>${fmt(c.last_seen_at)}</td><td>${connStatus(c)}</td><td style="white-space:nowrap">${c.revoked_at ? '' : (c.kind !== 'chirpstack_http' ? `<button class="btn small" type="button" data-edit="${c.id}">Edit</button> ` : '') + `<button class="btn small danger" type="button" data-revoke="${c.id}">Revoke</button>`}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">no connectors yet</td></tr>';
+    for(const b of document.querySelectorAll('[data-revoke]')) b.onclick = async () => { const reason = ctrl32.ask('Reason for revoking this connector:'); if(!reason) return; try{ await api('DELETE',`/api/v1/connectors/${b.dataset.revoke}?reason=${encodeURIComponent(reason)}`); connectors(); }catch(x){ ctrl32.toast(x.message,'bad'); } };
+    for(const b of document.querySelectorAll('[data-edit]')) b.onclick = () => openConn(CONNS.find(c => c.id === b.dataset.edit));
+    profiles();
+  }catch(x){ $('#connectors tbody').innerHTML = `<tr><td colspan="6" class="muted">${esc(x.message)}</td></tr>`; } }
+let PROFS = [];
+function profiles(){
+  $('#profTable tbody').innerHTML = PROFS.map(p => `<tr><td><b>${esc(p.name)}</b> <span class="muted">v${p.version}</span>${p.description ? `<div class="muted" style="font-size:12px">${esc(p.description)}</div>` : ''}</td><td>${p.registers} <span class="muted">(${p.writable} rw)</span></td><td>${p.connectors}${p.outdated ? ` <span class="badge warn">${p.outdated} on an older version</span>` : ''}</td><td>${fmt(p.valid_from)}</td><td style="white-space:nowrap">${p.retired_at ? '<span class="badge bad">retired</span>' : `<button class="btn small" type="button" data-prof-edit="${p.id}">New version</button> ${p.outdated ? `<button class="btn small primary" type="button" data-prof-apply="${p.id}">Apply to connectors</button> ` : ''}<button class="btn small danger" type="button" data-prof-retire="${p.id}">Retire</button>`}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">no profiles yet</td></tr>';
+  const sel = $('#newConn').profile; sel.innerHTML = '<option value="">(registers below)</option>' + PROFS.filter(p => !p.retired_at).map(p => `<option value="${p.id}">${esc(p.name)} v${p.version}</option>`).join('');
+  for(const b of document.querySelectorAll('[data-prof-edit]')) b.onclick = () => openProf(PROFS.find(p => p.id === b.dataset.profEdit));
+  for(const b of document.querySelectorAll('[data-prof-apply]')) b.onclick = async () => { const reason = ctrl32.ask('Reason for applying this version to the connectors:'); if(!reason) return; try{ const r = await api('POST',`/api/v1/register-profiles/${b.dataset.profApply}/apply`,{reason}); ctrl32.toast(`applied to ${r.applied} connector(s)`,'ok'); connectors(); }catch(x){ ctrl32.toast(x.message,'bad'); } };
+  for(const b of document.querySelectorAll('[data-prof-retire]')) b.onclick = async () => { const reason = ctrl32.ask('Reason for retiring this profile:'); if(!reason) return; try{ await api('DELETE',`/api/v1/register-profiles/${b.dataset.profRetire}?reason=${encodeURIComponent(reason)}`); connectors(); }catch(x){ ctrl32.toast(x.message,'bad'); } };
+}
+function openProf(p){ const f = $('#profForm'); f.reset(); f.dataset.id = p ? p.id : ''; $('#profErr').textContent = ''; $('#profTitle').textContent = p ? 'New version of ' + p.name : 'New register profile'; $('#profSubmit').textContent = p ? 'Save as new version' : 'Create profile'; $('#profLogLabel').hidden = !p; f.name.readOnly = !!p;
+  if(p){ f.name.value = p.name; f.description.value = p.description || ''; f.byte_order.value = (p.spec && p.spec.byte_order) || 'big'; f.registers.value = regsText(p.spec && p.spec.registers); } $('#profDlg').showModal(); }
+$('#newProfBtn').onclick = () => openProf(null);
+$('#profForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#profErr').textContent = '';
+  try{ const spec = {byte_order: f.byte_order.value, registers: parseRegs(f.registers.value)};
+    if(f.dataset.id) await api('PUT',`/api/v1/register-profiles/${f.dataset.id}`,{description: f.description.value, spec, changelog: f.changelog.value, reason: f.reason.value});
+    else await api('POST','/api/v1/register-profiles',{name: f.name.value, description: f.description.value, spec, reason: f.reason.value});
+    $('#profDlg').close(); ctrl32.toast('profile saved','ok'); connectors(); }catch(x){ $('#profErr').textContent = x.message; } };
+$('#newConn').profile.onchange = () => { const f = $('#newConn'); const p = PROFS.find(x => x.id === f.profile.value); f.registers.readOnly = !!p; if(p){ f.registers.value = regsText(p.spec.registers); if(p.spec.byte_order) f.byte_order.value = p.spec.byte_order; } };
+function nodesText(nodes){ return (nodes || []).map(n => [n.node_id, n.key, n.scale ?? '', n.offset ?? '', n.writable ? 'rw' : '', n.min ?? '', n.max ?? ''].join(' | ').replace(/( \| )+$/, '')).join('\n'); }
+function parseNodes(text){ return text.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const p = l.split('|').map(x => x.trim()); const n = {node_id: p[0], key: p[1] || ''}; if(p[2]) n.scale = parseFloat(p[2]); if(p[3]) n.offset = parseFloat(p[3]); if((p[4] || '').toLowerCase() === 'rw') n.writable = true; if(p[5]) n.min = parseFloat(p[5]); if(p[6]) n.max = parseFloat(p[6]); return n; }); }
+function opcSettings(f){ return {endpoint: f.endpoint.value.trim(), security_policy: f.security_policy.value, security_mode: f.security_mode.value, auth: f.auth.value, username: f.username.value, password: f.password.value, interval_s: parseInt(f.interval_s.value, 10) || 10, device_external_id: f.device_external_id.value.trim(), nodes: parseNodes(f.nodes.value)}; }
+function toggleKind(){ const f = $('#newConn'); const k = f.kind.value; $('#csFields').hidden = k !== 'chirpstack_http'; $('#opcFields').hidden = k !== 'opcua'; $('#mbFields').hidden = k !== 'modbus_tcp'; }
+function regsText(regs){ return (regs || []).map(r => [r.key, r.table, r.address, r.type, r.scale ?? '', r.offset ?? '', r.writable ? 'rw' : '', r.min ?? '', r.max ?? ''].join(' | ').replace(/( \| )+$/, '')).join('\n'); }
+function parseRegs(text){ return text.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const p = l.split('|').map(x => x.trim()); const r = {key: p[0], table: p[1] || 'holding', address: parseInt(p[2], 10)}; if(p[3]) r.type = p[3]; if(p[4]) r.scale = parseFloat(p[4]); if(p[5]) r.offset = parseFloat(p[5]); if((p[6] || '').toLowerCase() === 'rw') r.writable = true; if(p[7]) r.min = parseFloat(p[7]); if(p[8]) r.max = parseFloat(p[8]); return r; }); }
+function mbSettings(f){ const s = {host: f.host.value.trim(), port: parseInt(f.port.value, 10) || 502, unit_id: parseInt(f.unit_id.value, 10), interval_s: parseInt(f.mb_interval_s.value, 10) || 10, timeout_ms: parseInt(f.timeout_ms.value, 10) || 2000, byte_order: f.byte_order.value, framing: f.framing.value, device_external_id: f.mb_device_external_id.value.trim(), registers: parseRegs(f.registers.value)}; if(f.profile.value) s.profile_id = f.profile.value; return s; }
+function openConn(c){ const f = $('#newConn'); f.reset(); f.registers.readOnly = false; f.dataset.id = c ? c.id : ''; $('#connResult').hidden = true; $('#opcResult').hidden = true; $('#connSubmit').hidden = false; $('#connErr').textContent=''; $('#connTestOut').textContent='';
+  f.kind.disabled = !!c; f.name.readOnly = !!c; $('#connTitle').textContent = c ? 'Edit connector' : 'New connector'; $('#connSubmit').textContent = c ? 'Save changes' : 'Create connector';
+  if(c){ f.kind.value = c.kind; f.name.value = c.name; const s = c.settings || {}; if(c.kind === 'modbus_tcp'){ f.host.value = s.host || ''; f.port.value = s.port || 502; f.unit_id.value = s.unit_id ?? 1; f.mb_interval_s.value = s.interval_s || 10; f.timeout_ms.value = s.timeout_ms || 2000; f.byte_order.value = s.byte_order || 'big'; f.framing.value = s.framing || 'tcp'; f.mb_device_external_id.value = s.device_external_id || ''; f.profile.value = s.profile_id || ''; f.registers.readOnly = !!s.profile_id; f.registers.value = regsText(s.registers); } else { f.endpoint.value = s.endpoint || ''; f.security_policy.value = s.security_policy || 'None'; f.security_mode.value = s.security_mode || 'None'; f.auth.value = s.auth || 'anonymous'; f.username.value = s.username || ''; f.password.value = ''; f.interval_s.value = s.interval_s || 10; f.device_external_id.value = s.device_external_id || ''; f.nodes.value = nodesText(s.nodes); } }
+  toggleKind(); $('#connDlg').showModal(); }
+$('#newConnBtn').onclick = () => openConn(null);
+$('#newConn').kind.onchange = toggleKind;
+$('#connTest').onclick = async () => { const f = $('#newConn'); $('#connErr').textContent=''; $('#connTestOut').textContent = 'connecting…';
+  try{ const r = await api('POST','/api/v1/connectors/test',{settings: opcSettings(f), id: f.dataset.id || undefined}); $('#connTestOut').textContent = 'OK (' + r.security + ')\n' + Object.entries(r.values).map(([k, v]) => k + ' = ' + v).join('\n') + (r.bad_nodes && r.bad_nodes.length ? '\nnot readable: ' + r.bad_nodes.join('; ') : ''); }
+  catch(x){ $('#connTestOut').textContent = 'failed: ' + x.message; } };
+$('#mbTest').onclick = async () => { const f = $('#newConn'); $('#connErr').textContent=''; $('#mbTestOut').textContent = 'connecting…';
+  try{ const r = await api('POST','/api/v1/connectors/test',{kind: 'modbus_tcp', settings: mbSettings(f)}); $('#mbTestOut').textContent = 'OK (' + r.addr + ':' + r.port + ' unit ' + r.unit_id + ')\n' + Object.entries(r.values).map(([k, v]) => k + ' = ' + v).join('\n') + (r.bad_nodes && r.bad_nodes.length ? '\nnot readable: ' + r.bad_nodes.join('; ') : ''); }
+  catch(x){ $('#mbTestOut').textContent = 'failed: ' + x.message; } };
+$('#newConn').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#connErr').textContent='';
+  try{ if(f.kind.value === 'modbus_tcp'){ const body = {settings: mbSettings(f), reason: f.reason.value};
+      if(f.dataset.id){ await api('PUT',`/api/v1/connectors/${f.dataset.id}`, body); $('#connDlg').close(); ctrl32.toast('connector updated','ok'); }
+      else { const r = await api('POST','/api/v1/connectors',{kind: 'modbus_tcp', name: f.name.value, ...body}); $('#opcResult').textContent = 'Connector created. Its values arrive under the virtual device "' + (r.settings.device_external_id || ('modbus-' + r.name)) + '" — assign its keys to datastreams under Devices; writable registers accept the command write {key, value}.'; $('#opcResult').hidden = false; $('#connSubmit').hidden = true; }
+      connectors(); return; }
+    if(f.kind.value === 'opcua'){ const body = {settings: opcSettings(f), reason: f.reason.value};
+      if(f.dataset.id){ await api('PUT',`/api/v1/connectors/${f.dataset.id}`, body); $('#connDlg').close(); ctrl32.toast('connector updated','ok'); }
+      else { const r = await api('POST','/api/v1/connectors',{kind: 'opcua', name: f.name.value, ...body}); $('#opcResult').textContent = 'Connector created. Its values arrive under the virtual device "' + (r.settings.device_external_id || ('opcua-' + r.name)) + '" — assign its keys to datastreams under Devices.'; $('#opcResult').hidden = false; $('#connSubmit').hidden = true; }
+      connectors(); return; }
+    const r = await api('POST','/api/v1/connectors',{kind: f.kind.value, name: f.name.value, auto_create_devices: f.auto.checked, reason: f.reason.value}); $('#connUrl').textContent = r.url + '?event=up'; $('#connHeader').textContent = 'Authorization: Bearer ' + r.secret; $('#connResult').hidden = false; $('#connSubmit').hidden = true; connectors(); }
+  catch(x){ $('#connErr').textContent = x.message; } };
+$('#orgExport').onsubmit = e => { e.preventDefault(); const f = e.target; if(!ctrl32.can('system.admin')){ $('#exportErr').textContent = 'system.admin permission required'; return; }
+  const q = []; if(f.from.value) q.push('from=' + encodeURIComponent(new Date(f.from.value).toISOString())); if(f.to.value) q.push('to=' + encodeURIComponent(new Date(f.to.value + 'T23:59:59').toISOString()));
+  window.open('/api/v1/export/organization' + (q.length ? '?' + q.join('&') : ''), '_blank'); };
+let CHANS = [], POLS = [];
+function chanTarget(c){ const s = c.settings || {}; if(c.kind === 'web_push') return 'users: ' + (s.users || []).join(', '); return c.kind === 'email' ? (s.recipients || []).join(', ') : (s.url || '') + (c.kind === 'sms_http' || c.kind === 'voice_http' ? ' → ' + (s.recipients || []).join(', ') : ''); }
+async function loadNotifLog(){ try{ const ns = await api('GET','/api/v1/notifications?limit=50'); $('#notifTable tbody').innerHTML = ns.map(n => `<tr><td>${fmt(n.due_at)}</td><td>${esc(n.event)}</td><td>${esc(n.channel || '')} <span class="muted">${esc(n.kind || '')}</span></td><td>${n.step}</td><td><span class="badge ${({sent:'ok',failed:'bad',scheduled:'warn'})[n.status] || ''}">${esc(n.status)}</span></td><td class="muted" style="font-size:12px">${esc(n.error || n.subject || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">nothing yet</td></tr>'; }catch(x){ $('#notifTable tbody').innerHTML = `<tr><td colspan="6" class="muted">${esc(x.message)}</td></tr>`; } }
+async function notifications(){
+  try{ [CHANS, POLS] = await Promise.all([api('GET','/api/v1/notification-channels'), api('GET','/api/v1/escalation-policies')]);
+    $('#chanTable tbody').innerHTML = CHANS.map(c => `<tr><td><b>${esc(c.name)}</b></td><td>${esc(c.kind)}</td><td><code style="font-size:11px">${esc(chanTarget(c)).slice(0, 120)}</code></td><td>${c.revoked_at ? '<span class="badge bad">revoked</span>' : (c.enabled ? '<span class="badge ok">enabled</span>' : '<span class="badge">disabled</span>')}</td><td style="white-space:nowrap">${c.revoked_at ? '' : `<button class="btn small" type="button" data-test="${c.id}">Test</button> <button class="btn small" type="button" data-edit-chan="${c.id}">Edit</button> <button class="btn small danger" type="button" data-del-chan="${c.id}">Revoke</button>`}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">no channels yet</td></tr>';
+    $('#polTable tbody').innerHTML = POLS.map(p => `<tr><td><b>${esc(p.name)}</b> <span class="muted">v${p.version}</span></td><td>${p.steps.map(s => `${Math.round(s.after_s / 60)} min → ${esc(s.channel_name || '?')}`).join('<br>')}</td><td>${p.rules}</td><td style="white-space:nowrap">${p.revoked_at ? '<span class="badge bad">revoked</span>' : `<button class="btn small" type="button" data-edit-pol="${p.id}">Edit</button> <button class="btn small danger" type="button" data-del-pol="${p.id}">Revoke</button>`}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">no policies yet</td></tr>';
+    for(const b of document.querySelectorAll('[data-test]')) b.onclick = async () => { b.disabled = true; try{ const r = await api('POST',`/api/v1/notification-channels/${b.dataset.test}/test`,{}); ctrl32.toast('test sent to ' + r.channel,'ok'); }catch(x){ ctrl32.toast(x.message,'bad'); } b.disabled = false; loadNotifLog(); };
+    for(const b of document.querySelectorAll('[data-edit-chan]')) b.onclick = () => openChan(CHANS.find(c => c.id === b.dataset.editChan));
+    for(const b of document.querySelectorAll('[data-del-chan]')) b.onclick = async () => { const reason = ctrl32.ask('Reason for revoking this channel:'); if(!reason) return; try{ await api('DELETE',`/api/v1/notification-channels/${b.dataset.delChan}?reason=${encodeURIComponent(reason)}`); notifications(); }catch(x){ ctrl32.toast(x.message,'bad'); } };
+    for(const b of document.querySelectorAll('[data-edit-pol]')) b.onclick = () => openPol(POLS.find(p => p.id === b.dataset.editPol));
+    for(const b of document.querySelectorAll('[data-del-pol]')) b.onclick = async () => { const reason = ctrl32.ask('Reason for revoking this policy:'); if(!reason) return; try{ await api('DELETE',`/api/v1/escalation-policies/${b.dataset.delPol}?reason=${encodeURIComponent(reason)}`); notifications(); }catch(x){ ctrl32.toast(x.message,'bad'); } };
+    loadNotifLog();
+  }catch(x){ $('#chanTable tbody').innerHTML = `<tr><td colspan="5" class="muted">${esc(x.message)}</td></tr>`; } }
+function toggleChanKind(){ const f = $('#chanForm'); const k = f.kind.value; for(const el of f.querySelectorAll('[data-k]')) el.hidden = !el.dataset.k.split(' ').includes(k); }
+function parseHeaders(t){ const h = {}; t.split('\n').map(l => l.trim()).filter(Boolean).forEach(l => { const i = l.indexOf(':'); if(i > 0) h[l.slice(0, i).trim()] = l.slice(i + 1).trim(); }); return h; }
+function chanSettings(f){ const k = f.kind.value; const s = {}; if(k === 'web_push'){ s.users = f.users.value.split('\n').map(x => x.trim()).filter(Boolean); return s; } if(k !== 'webhook') s.recipients = f.recipients.value.split('\n').map(x => x.trim()).filter(Boolean); if(k !== 'email'){ s.url = f.url.value.trim(); s.headers = parseHeaders(f.headers.value); } if(k === 'webhook') s.secret = f.secret.value; if(k === 'sms_http' || k === 'voice_http'){ s.method = f.method.value; s.body = f.body.value; } return s; }
+function openChan(c){ const f = $('#chanForm'); f.reset(); f.dataset.id = c ? c.id : ''; $('#chanErr').textContent = ''; f.kind.disabled = !!c; $('#chanTitle').textContent = c ? 'Edit channel' : 'New channel'; $('#chanSubmit').textContent = c ? 'Save changes' : 'Create channel';
+  if(c){ const s = c.settings || {}; f.kind.value = c.kind; f.name.value = c.name; f.recipients.value = (s.recipients || []).join('\n'); f.url.value = s.url || ''; f.method.value = s.method || 'GET'; f.body.value = s.body || ''; f.headers.value = Object.entries(s.headers || {}).map(([k, v]) => k + ': ' + v).join('\n'); f.users.value = (s.users || []).join('\n'); }
+  toggleChanKind(); $('#chanDlg').showModal(); }
+$('#newChanBtn').onclick = () => openChan(null);
+$('#chanForm').kind.onchange = toggleChanKind;
+$('#chanForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#chanErr').textContent = '';
+  try{ if(f.dataset.id) await api('PUT',`/api/v1/notification-channels/${f.dataset.id}`,{name: f.name.value, settings: chanSettings(f), reason: f.reason.value});
+    else await api('POST','/api/v1/notification-channels',{name: f.name.value, kind: f.kind.value, settings: chanSettings(f), reason: f.reason.value});
+    $('#chanDlg').close(); ctrl32.toast('channel saved','ok'); notifications(); }catch(x){ $('#chanErr').textContent = x.message; } };
+function stepsText(p){ return (p.steps || []).map(s => Math.round(s.after_s / 60) + ' | ' + (s.channel_name || '')).join('\n'); }
+function parseSteps(t){ return t.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const p = l.split('|').map(x => x.trim()); const ch = CHANS.find(c => !c.revoked_at && c.name === p[1]); return {after_s: Math.round(parseFloat(p[0] || '0') * 60), channel_id: ch ? ch.id : (p[1] || '')}; }); }
+function openPol(p){ const f = $('#polForm'); f.reset(); f.dataset.id = p ? p.id : ''; $('#polErr').textContent = ''; $('#polTitle').textContent = p ? 'Edit escalation policy' : 'New escalation policy'; $('#polSubmit').textContent = p ? 'Save as new version' : 'Create policy';
+  if(p){ f.name.value = p.name; f.steps.value = stepsText(p); } $('#polDlg').showModal(); }
+$('#newPolBtn').onclick = () => openPol(null);
+$('#polForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#polErr').textContent = '';
+  try{ const body = {name: f.name.value, steps: parseSteps(f.steps.value), reason: f.reason.value};
+    if(f.dataset.id) await api('PUT',`/api/v1/escalation-policies/${f.dataset.id}`, body); else await api('POST','/api/v1/escalation-policies', body);
+    $('#polDlg').close(); ctrl32.toast('policy saved','ok'); notifications(); }catch(x){ $('#polErr').textContent = x.message; } };
+async function loadPolicy(){ try{ const p = await api('GET','/api/v1/settings/policy'); const f = $('#policyForm'); f.four_eyes_commands.checked = !!p.four_eyes_commands; f.four_eyes_limits.checked = !!p.four_eyes_limits; f.four_eyes_assignments.checked = !!p.four_eyes_assignments; }catch(x){ $('#policyErr').textContent = x.message; } }
+$('#policyForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#policyErr').textContent=''; try{ await api('PUT','/api/v1/settings/policy',{four_eyes_commands: f.four_eyes_commands.checked, four_eyes_limits: f.four_eyes_limits.checked, four_eyes_assignments: f.four_eyes_assignments.checked, reason: f.reason.value}); ctrl32.toast('policy saved','ok'); f.reason.value=''; }catch(x){ $('#policyErr').textContent = x.message; } };
+function crRow(c){ return `<td style="white-space:normal"><b>${esc(c.summary)}</b><div class="muted" style="font-size:12px">${esc(c.reason)}</div></td>`; }
+async function approvals(){
+  try{ const all = await api('GET','/api/v1/change-requests?status=all'); const pend = all.filter(c => c.status === 'pending'), hist = all.filter(c => c.status !== 'pending');
+    $('#crTable tbody').innerHTML = pend.map(c => `<tr>${crRow(c)}<td>${esc(c.kind)}</td><td>${esc(c.requested_by)}</td><td>${fmt(c.requested_at)}</td><td>${fmt(c.expires_at)}</td><td style="white-space:nowrap">${c.can_approve ? `<button class="btn small primary" type="button" data-cr-approve="${c.id}">Approve</button> <button class="btn small" type="button" data-cr-reject="${c.id}">Reject</button>` : '<span class="muted">' + (c.requested_by === (ctrl32.me || {}).username ? 'your own request' : 'needs another approver') + '</span>'}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">no pending changes</td></tr>';
+    $('#crHist tbody').innerHTML = hist.map(c => `<tr>${crRow(c)}<td>${esc(c.requested_by)} <span class="muted">${fmt(c.requested_at)}</span></td><td>${esc(c.decided_by || '')} <span class="muted">${c.decided_at ? fmt(c.decided_at) : ''}</span></td><td><span class="badge ${({approved:'ok',failed:'bad',rejected:'bad',expired:'warn'})[c.status] || ''}">${esc(c.status)}</span> <span class="muted" style="font-size:12px">${esc(c.decision_reason || '')}</span></td></tr>`).join('') || '<tr><td colspan="4" class="muted">nothing yet</td></tr>';
+    const withReason = async (q, fn) => { const reason = prompt(q); if(!reason) return; try{ const r = await fn(reason); if(r && r.status === 'failed') ctrl32.toast('approved, but the change failed: ' + JSON.stringify(r.result).slice(0, 120), 'bad'); else ctrl32.toast('done','ok'); approvals(); }catch(x){ ctrl32.toast(x.message,'bad'); } };
+    for(const b of document.querySelectorAll('[data-cr-approve]')) b.onclick = () => withReason('Reason for approving this change:', reason => api('POST',`/api/v1/change-requests/${b.dataset.crApprove}/approve`,{reason}));
+    for(const b of document.querySelectorAll('[data-cr-reject]')) b.onclick = () => withReason('Reason for rejecting this change:', reason => api('POST',`/api/v1/change-requests/${b.dataset.crReject}/reject`,{reason}));
+  }catch(x){ $('#crTable tbody').innerHTML = `<tr><td colspan="6" class="muted">${esc(x.message)}</td></tr>`; } }
+ctrl32.ready({requireAuth: true, requirePerm: 'content.write'}).then(() => {
+  const sec = ctrl32.section('branding', Object.keys(TITLES)); document.title = TITLES[sec] + ' — Settings';
+  ({branding: loadBrand, templates: loadKinds, reports, connectors, languages: loadLangs, translations: loadTrLocales, export: () => {}, policy: loadPolicy, approvals, notifications})[sec]();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+meta {
+  name: Send telemetry (device)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/d/telemetry
+  body: json
+  auth: inherit
+}
+
+body:json {
+  null
+}
+
+docs {
+  Send telemetry (device)
+  
+  One sample or an array. Accepted shapes: ctrl32 `{"ts":1700000000,"v":{"temp":4.2}}`, ThingsBoard `{"ts":1700000000000,"values":{…}}`, or a flat object `{"temp":4.2}` (every non-reserved key is a value). `ts` in seconds or milliseconds, `bf: 1` for backfill, `seq` for deduplication. Keys are normalised (lower case, `-`/`.`/space → `_`) and must match a datastream assigned to the device; unknown keys are reported and stored as a raw message. Up to 64 KiB, 2000 samples.
+}

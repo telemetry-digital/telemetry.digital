@@ -1,0 +1,62 @@
+meta {
+  name: Update connector settings (OPC UA Modbus)
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{baseUrl}}/api/v1/connectors/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string",
+    "settings": {
+      "auth": "string",
+      "byte_order": "big",
+      "device_external_id": "string",
+      "endpoint": "string",
+      "framing": "tcp",
+      "host": "string",
+      "interval_s": 1,
+      "nodes": [
+        {}
+      ],
+      "password": "string",
+      "port": 1,
+      "profile_id": "string",
+      "profile_name": "string",
+      "profile_version": 1,
+      "registers": [
+        {
+          "address": 1,
+          "key": "string",
+          "max": 21.5,
+          "min": 21.5,
+          "offset": 21.5,
+          "scale": 21.5,
+          "table": "holding",
+          "type": "bool",
+          "writable": true
+        }
+      ],
+      "security_mode": "string",
+      "security_policy": "string",
+      "timeout_ms": 1,
+      "unit_id": 1,
+      "username": "string"
+    }
+  }
+}
+
+docs {
+  Update connector settings (OPC UA, Modbus)
+  
+  Requires permission `config.write`.
+}

@@ -1,0 +1,23 @@
+meta {
+  name: Latest values (bound datastreams only)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public/:token/datastreams/latest
+  body: none
+  auth: inherit
+}
+
+params:path {
+  token: 
+}
+
+params:query {
+  ids: 
+}
+
+docs {
+  Latest values (bound datastreams only)
+}

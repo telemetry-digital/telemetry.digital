@@ -1,0 +1,22 @@
+# Development database for ctrl32 telemetry (phase 0). Not for production.
+# Usage:  docker compose -f deploy/dev/docker-compose.yml up -d
+#         docker exec -i ctrl32-pg-dev psql -U ctrl32 -d ctrl32 < db/migrations/0001_core.sql
+services:
+  postgres:
+    image: postgres:18
+    container_name: ctrl32-pg-dev
+    environment:
+      POSTGRES_USER: ctrl32
+      POSTGRES_PASSWORD: ctrl32-dev-only
+      POSTGRES_DB: ctrl32
+    ports:
+      - "5433:5432"
+    volumes:
+      - ctrl32-pg-dev:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ctrl32 -d ctrl32"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+volumes:
+  ctrl32-pg-dev:

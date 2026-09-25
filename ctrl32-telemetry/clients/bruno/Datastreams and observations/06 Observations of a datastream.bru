@@ -1,0 +1,28 @@
+meta {
+  name: Observations of a datastream
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/observations
+  body: none
+  auth: inherit
+}
+
+params:query {
+  datastream_id: 
+  ~from: 
+  ~to: 
+  ~bucket: 
+  ~limit: 
+  ~cursor: 
+}
+
+docs {
+  Observations of a datastream
+  
+  Raw rows ordered by time, or aggregated per bucket (`bucket` = seconds: avg/min/max/count per bucket, at most 20000 buckets). Raw pages are bounded by `limit` (default 1000, max 10000) and 366 days per request; when more rows exist the response carries the header `X-Next-Cursor` (and a `Link: <…>; rel="next"`), pass it as `cursor` to continue.
+  
+  Requires permission `data.read`.
+}

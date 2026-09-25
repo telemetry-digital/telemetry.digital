@@ -1,0 +1,48 @@
+meta {
+  name: Set branding theme and map tiles
+  type: http
+  seq: 2
+}
+
+put {
+  url: {{baseUrl}}/api/v1/branding
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "clear_logo": true,
+    "logo": {
+      "data": "string",
+      "mime": "string"
+    },
+    "map": {
+      "attribution": "string",
+      "builtin": true,
+      "center_lat": 21.5,
+      "center_lon": 21.5,
+      "local": true,
+      "max_zoom": 1,
+      "source": "string",
+      "tile_url": "string",
+      "zoom": 1
+    },
+    "reason": "string",
+    "theme": {
+      "font": "string",
+      "font_scale": "small",
+      "mode": "auto",
+      "primary": "string",
+      "radius": "none"
+    }
+  }
+}
+
+docs {
+  Set branding, theme and map tiles
+  
+  Logo as base64 (PNG/SVG/JPEG, max 256 KiB).
+  
+  Requires permission `content.write`.
+}

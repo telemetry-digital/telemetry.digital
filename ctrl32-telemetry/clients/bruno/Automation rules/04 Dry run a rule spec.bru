@@ -1,0 +1,81 @@
+meta {
+  name: Dry run a rule spec
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/rules/test
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "rule_id": "string",
+    "spec": {
+      "actions": [
+        {
+          "args": {},
+          "channel_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "datastream_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "device_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "escalation_policy_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "expr": "string",
+          "key": "string",
+          "method": "string",
+          "secret": "string",
+          "severity": "warning",
+          "subject": "string",
+          "text": "string",
+          "type": "notify",
+          "url": "string",
+          "value": null
+        }
+      ],
+      "clear_actions": [
+        {
+          "args": {},
+          "channel_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "datastream_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "device_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "escalation_policy_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "expr": "string",
+          "key": "string",
+          "method": "string",
+          "secret": "string",
+          "severity": "warning",
+          "subject": "string",
+          "text": "string",
+          "type": "notify",
+          "url": "string",
+          "value": null
+        }
+      ],
+      "conditions": [
+        {
+          "input": "string",
+          "op": "\u003e",
+          "value": null
+        }
+      ],
+      "cooldown_s": 1,
+      "for_s": 1,
+      "inputs": [
+        {
+          "datastream_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "name": "string"
+        }
+      ],
+      "match": "all"
+    }
+  }
+}
+
+docs {
+  Dry run a rule spec
+  
+  Evaluates the condition against the current values; no action runs.
+  
+  Requires permission `config.write`.
+}

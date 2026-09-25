@@ -1,0 +1,33 @@
+meta {
+  name: Create an escalation policy
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/escalation-policies
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "string",
+    "reason": "string",
+    "steps": [
+      {
+        "after_s": 1,
+        "channel_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+        "channel_name": "string"
+      }
+    ]
+  }
+}
+
+docs {
+  Create an escalation policy
+  
+  Step 0 (after_s = 0) is delivered at once; later steps only while the alarm is still active and unacknowledged.
+  
+  Requires permission `config.write`.
+}

@@ -1,0 +1,61 @@
+meta {
+  name: Test connector settings without saving
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/connectors/test
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "id": "string",
+    "kind": "opcua",
+    "settings": {
+      "auth": "string",
+      "byte_order": "big",
+      "device_external_id": "string",
+      "endpoint": "string",
+      "framing": "tcp",
+      "host": "string",
+      "interval_s": 1,
+      "nodes": [
+        {}
+      ],
+      "password": "string",
+      "port": 1,
+      "profile_id": "string",
+      "profile_name": "string",
+      "profile_version": 1,
+      "registers": [
+        {
+          "address": 1,
+          "key": "string",
+          "max": 21.5,
+          "min": 21.5,
+          "offset": 21.5,
+          "scale": 21.5,
+          "table": "holding",
+          "type": "bool",
+          "writable": true
+        }
+      ],
+      "security_mode": "string",
+      "security_policy": "string",
+      "timeout_ms": 1,
+      "unit_id": 1,
+      "username": "string"
+    }
+  }
+}
+
+docs {
+  Test connector settings without saving
+  
+  Connects once and reads the configured nodes/registers.
+  
+  Requires permission `config.write`.
+}

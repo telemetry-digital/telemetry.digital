@@ -1,0 +1,25 @@
+meta {
+  name: Confirm TOTP enrolment
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/totp/confirm
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "code": "string"
+  }
+}
+
+docs {
+  Confirm TOTP enrolment
+  
+  Returns the one-time recovery codes; store them safely.
+  
+  Requires a signed-in user or an API token (any permission).
+}

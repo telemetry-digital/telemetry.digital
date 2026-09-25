@@ -1,0 +1,21 @@
+meta {
+  name: Incident with its history
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/incidents/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  Incident with its history
+  
+  Requires a signed-in user or an API token (any permission).
+}

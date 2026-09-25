@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Assets — ctrl32 telemetry</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  dialog.wide { width: min(860px, calc(100vw - 32px)); }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<nav class="subnav">
+  <a href="/assets/sites" data-section="sites">Sites</a>
+  <a href="/assets" data-section="assets">Assets</a>
+  <a href="/assets/rules" data-section="rules">Alarm rules</a>
+  <a href="/assets/automation" data-section="automation">Automation</a>
+</nav>
+
+<section data-section="sites">
+  <div class="page-head"><h1>Sites</h1><span class="grow"></span><button class="btn primary" id="newSiteBtn" type="button" hidden>New site</button></div>
+  <div class="card">
+    <div class="table-wrap"><table id="siteTable"><thead><tr><th>Name</th><th>Time zone</th><th>Address</th><th>Assets</th><th>Created</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+</section>
+
+<section data-section="assets">
+  <div class="page-head"><h1>Assets</h1><label style="flex-direction:row;align-items:center;gap:8px;margin-left:12px">Site <select id="siteSel"></select></label><span class="muted" id="siteInfo"></span><span class="grow"></span><button class="btn primary" id="newAssetBtn" type="button" hidden>New asset</button></div>
+  <div id="assets" class="grid"></div>
+</section>
+
+<section data-section="rules">
+  <div class="page-head"><h1>Alarm rules</h1><span class="grow"></span><button class="btn primary" id="newRuleBtn" type="button" hidden>New rule</button></div>
+  <div class="card">
+    <div class="table-wrap"><table id="rules"><thead><tr><th>Asset</th><th>Datastream</th><th>Type</th><th>Warning</th><th>Action</th><th>Delay</th><th>Hysteresis</th><th>Version</th><th>Since</th></tr></thead><tbody></tbody></table></div>
+    <p class="muted" style="margin-bottom:0">Current versions only. Click a rule to open its datastream (new version, disable).</p>
+  </div>
+</section>
+
+<section data-section="automation">
+  <div class="page-head"><h1>Automation</h1><span class="grow"></span><button class="btn primary" id="newAutoBtn" type="button" hidden>New automation rule</button></div>
+  <div class="card"><h2>Rules</h2>
+    <p class="muted">Condition → action over any datastreams: when all (or any) of the conditions hold — optionally for a hold time — the rule fires its actions: notify a channel, call a webhook, send a device command, raise an alarm or write a derived datastream. When the condition ends, the exit actions run and alarms raised by the rule are cleared. Rules that send commands need a second person's approval when the four-eyes policy is on.</p>
+    <div class="table-wrap"><table id="autoTable"><thead><tr><th>Rule</th><th>State</th><th>Condition</th><th>Actions</th><th>Last run</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <div class="card"><h2>Run log</h2>
+    <div class="table-wrap"><table id="runTable"><thead><tr><th>Time</th><th>Rule</th><th>Event</th><th>Inputs</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</section>
+
+<dialog id="siteDlg">
+  <form id="siteForm" class="form" method="dialog">
+    <h2 style="margin-top:0" id="siteDlgTitle">New site</h2>
+    <label>Name <input name="name" required maxlength="128"></label>
+    <label>Time zone <input name="tz" value="Europe/Bratislava" maxlength="64"></label>
+    <label>Address <input name="address" maxlength="200"></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="siteErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" data-close>Cancel</button></div>
+  </form>
+</dialog>
+<dialog id="assetDlg">
+  <form id="assetForm" class="form" method="dialog">
+    <h2 style="margin-top:0">New asset</h2>
+    <label>Type <input name="type" required maxlength="32" placeholder="fridge, room, meter, machine…" list="types"></label>
+    <datalist id="types"><option value="fridge"><option value="freezer"><option value="room"><option value="meter"><option value="machine"><option value="building"><option value="vehicle"></datalist>
+    <label>Name <input name="name" required maxlength="128"></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="assetErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Create</button><button class="btn" type="button" data-close>Cancel</button></div>
+  </form>
+</dialog>
+<dialog id="dsNewDlg">
+  <form id="dsForm" class="form" method="dialog">
+    <h2 style="margin-top:0">New datastream</h2>
+    <p class="muted" id="dsAssetName"></p>
+    <div class="row">
+      <label>Key (what the device publishes) <input name="key" required pattern="[a-z][a-z0-9_]{0,31}" maxlength="32" placeholder="temp"></label>
+      <label>Kind <select name="kind"><option value="gauge">gauge</option><option value="counter">counter</option><option value="state">state</option><option value="event">event</option></select></label>
+    </div>
+    <div class="row">
+      <label>Quantity <input name="quantity" required maxlength="64" placeholder="temperature" list="quantities"></label>
+      <datalist id="quantities"><option value="temperature"><option value="humidity"><option value="energy_active_import"><option value="power_active"><option value="pressure"><option value="state"><option value="co2"></datalist>
+      <label>Unit <input name="unit" maxlength="16" placeholder="°C"></label>
+    </div>
+    <div class="row">
+      <label>Expected interval (gap detection) <input name="expected_interval" placeholder="5 minutes" maxlength="32"></label>
+      <label>Required accuracy <input name="accuracy" type="number" step="any" placeholder="0.5"></label>
+    </div>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="dsErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Create</button><button class="btn" type="button" data-close>Cancel</button></div>
+  </form>
+</dialog>
+<dialog id="ruleDlg">
+  <form id="ruleNew" class="form" method="dialog">
+    <h2 style="margin-top:0">New alarm rule</h2>
+    <label>Datastream <select name="datastream_id" required></select></label>
+    <div class="row"><label>Type <select name="type"><option value="high">high (value above limits)</option><option value="low">low (value below limits)</option><option value="comm_loss">comm_loss</option><option value="sensor_fault">sensor_fault</option><option value="low_battery">low_battery</option><option value="power_loss">power_loss</option><option value="door_open">door_open</option></select></label><label>Warning limit <input name="warning" type="number" step="any"></label><label>Action limit <input name="action" type="number" step="any"></label></div>
+    <div class="row"><label>Delay (s) <input name="delay" type="number" min="0" value="0"></label><label>Hysteresis <input name="hysteresis" type="number" step="any" min="0" value="0"></label><label>Escalation policy <select name="policy"><option value="">(none: global e-mail)</option>${POLS.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label></div>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="ruleNewErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" data-close>Cancel</button></div>
+    <p class="muted" style="margin:0">A rule of the same type on the same datastream is superseded by the new version.</p>
+  </form>
+</dialog>
+<dialog id="autoDlg" class="wide">
+  <form id="autoForm" class="form" method="dialog">
+    <h2 style="margin-top:0" id="autoTitle">New automation rule</h2>
+    <label id="autoTplLabel">Start from a template <select id="autoTpl"><option value="">(empty rule)</option><option value="high">High value → notify a channel</option><option value="stale">No data for 10 minutes → notify</option><option value="door">Door open for 5 minutes → alarm</option><option value="diff">Difference of two sensors → derived datastream</option><option value="follow">Setpoint follows a measured value → device command</option></select></label>
+    <div class="row"><label>Name <input name="name" required maxlength="64" placeholder="cold room overheating"></label><label>Description <input name="description" maxlength="200"></label></div>
+    <h3 style="margin:8px 0 0">Inputs</h3>
+    <p class="muted" style="margin:0">Name the datastreams the rule reads; conditions and expressions use these names, for example t_in - t_out.</p>
+    <div id="autoInputs"></div>
+    <div><button class="btn small" type="button" id="autoAddInput">+ input</button></div>
+    <h3 style="margin:8px 0 0">Condition</h3>
+    <div class="row"><label>Fire when <select name="match"><option value="all">all conditions hold</option><option value="any">any condition holds</option></select></label><label>Hold time (s) <input name="for_s" type="number" min="0" max="604800" value="0" style="max-width:120px"></label><label>Cooldown (s) <input name="cooldown_s" type="number" min="0" max="604800" value="0" style="max-width:120px"></label></div>
+    <div id="autoConds"></div>
+    <div><button class="btn small" type="button" id="autoAddCond">+ condition</button> <span class="muted" style="font-size:12px">no conditions = always true (derived datastreams)</span></div>
+    <h3 style="margin:8px 0 0">Actions on enter</h3>
+    <div id="autoActs"></div>
+    <div><button class="btn small" type="button" id="autoAddAct">+ action</button></div>
+    <h3 style="margin:8px 0 0">Actions on exit</h3>
+    <div id="autoClear"></div>
+    <div><button class="btn small" type="button" id="autoAddClear">+ action</button> <span class="muted" style="font-size:12px">alarms raised on enter are cleared automatically</span></div>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="autoErr"></div>
+    <pre id="autoTestOut" class="muted" style="white-space:pre-wrap;font-size:12px;margin:0" hidden></pre>
+    <div class="actions"><button class="btn primary" type="submit" id="autoSubmit">Create rule</button><button class="btn" type="button" id="autoTestBtn">Test now</button><button class="btn" type="button" data-close>Cancel</button></div>
+  </form>
+</dialog>
+<dialog id="dsDlg" class="wide"></dialog>
+
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
+let SITES = [], ASSETS = [], DS = [], siteId = null;
+const canCfg = () => ctrl32.can('config.write');
+for(const b of document.querySelectorAll('[data-close]')) b.onclick = () => b.closest('dialog').close();
+// ---- sites
+async function loadSitesTable(){
+  SITES = await api('GET','/api/v1/sites');
+  $('#siteTable tbody').innerHTML = SITES.map(s => `<tr><td><b>${esc(s.name)}</b></td><td>${esc(s.tz)}</td><td>${esc(s.address || '')}</td><td><a href="/assets?site=${s.id}">${s.assets} asset${s.assets === 1 ? '' : 's'}</a></td><td>${fmt(s.created_at)}</td><td>${canCfg() ? `<button class="btn small" type="button" data-edit="${s.id}">Edit</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">no sites yet — create the first one</td></tr>';
+  for(const b of document.querySelectorAll('[data-edit]')) b.onclick = () => openSiteDlg(SITES.find(x => x.id === b.dataset.edit));
+}
+function openSiteDlg(site){ const f = $('#siteForm'); f.reset(); f.dataset.id = site ? site.id : ''; $('#siteDlgTitle').textContent = site ? 'Edit site' : 'New site'; if(site){ f.name.value = site.name; f.tz.value = site.tz; f.address.value = site.address || ''; } $('#siteErr').textContent=''; $('#siteDlg').showModal(); }
+$('#newSiteBtn').onclick = () => openSiteDlg(null);
+$('#siteForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#siteErr').textContent=''; const body = {name: f.name.value, tz: f.tz.value, address: f.address.value, reason: f.reason.value};
+  try{ if(f.dataset.id) await api('PATCH',`/api/v1/sites/${f.dataset.id}`, body); else await api('POST','/api/v1/sites', body); $('#siteDlg').close(); ctrl32.toast(f.dataset.id ? 'site updated' : 'site created','ok'); loadSitesTable(); }catch(x){ $('#siteErr').textContent = x.message; } };
+// ---- assets
+async function loadSiteSelect(){
+  SITES = await api('GET','/api/v1/sites');
+  const wanted = new URLSearchParams(location.search).get('site');
+  siteId = SITES.find(s => s.id === wanted) ? wanted : (SITES[0] && SITES[0].id);
+  $('#siteSel').innerHTML = SITES.map(s => `<option value="${s.id}" ${s.id === siteId ? 'selected' : ''}>${esc(s.name)}</option>`).join('') || '<option value="">no sites yet</option>';
+  $('#siteSel').onchange = () => { siteId = $('#siteSel').value; history.replaceState(null, '', '/assets?site=' + siteId); loadAssets(); };
+  loadAssets();
+}
+async function loadAssets(){
+  $('#newAssetBtn').hidden = !canCfg() || !siteId;
+  if(!siteId){ $('#assets').innerHTML = '<p class="muted">Create a site first (Assets → Sites).</p>'; return; }
+  const site = SITES.find(s => s.id === siteId); $('#siteInfo').textContent = site ? `${site.tz}${site.address ? ' · ' + site.address : ''}` : '';
+  [ASSETS, DS] = await Promise.all([api('GET',`/api/v1/assets?site_id=${siteId}`), api('GET','/api/v1/datastreams')]);
+  $('#assets').innerHTML = ASSETS.map(a => { const ds = DS.filter(d => d.asset_id === a.id); return `<div class="card"><div class="row"><b>${esc(a.name)}</b><span class="badge">${esc(a.type)}</span><span class="grow"></span>${canCfg() ? `<button class="btn small" type="button" data-newds="${a.id}" data-name="${esc(a.name)}">+ datastream</button>` : ''}</div>
+    <div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>Key</th><th>Quantity</th><th>Kind</th><th>Interval</th></tr></thead><tbody>${ds.map(d => `<tr class="clickable" data-ds="${d.id}"><td><code>${esc(d.key)}</code></td><td>${esc(d.quantity)} [${esc(d.unit)}]</td><td>${esc(d.kind)}</td><td>${esc(d.expected_interval || '—')}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">no datastreams</td></tr>'}</tbody></table></div></div>`; }).join('') || '<p class="muted">No assets in this site yet.</p>';
+  for(const b of document.querySelectorAll('[data-newds]')) b.onclick = () => { const f = $('#dsForm'); f.reset(); f.dataset.asset = b.dataset.newds; $('#dsAssetName').textContent = 'Asset: ' + b.dataset.name; $('#dsErr').textContent=''; $('#dsNewDlg').showModal(); };
+  for(const tr of document.querySelectorAll('[data-ds]')) tr.onclick = () => openDS(tr.dataset.ds);
+}
+$('#newAssetBtn').onclick = () => { $('#assetForm').reset(); $('#assetErr').textContent=''; $('#assetDlg').showModal(); };
+$('#assetForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#assetErr').textContent=''; try{ await api('POST','/api/v1/assets',{site_id: siteId, type: f.type.value, name: f.name.value, reason: f.reason.value}); $('#assetDlg').close(); ctrl32.toast('asset created','ok'); loadAssets(); }catch(x){ $('#assetErr').textContent = x.message; } };
+$('#dsForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#dsErr').textContent=''; const body = {asset_id: f.dataset.asset, key: f.key.value, kind: f.kind.value, quantity: f.quantity.value, unit: f.unit.value, expected_interval: f.expected_interval.value, reason: f.reason.value}; if(f.accuracy.value !== '') body.accuracy = parseFloat(f.accuracy.value);
+  try{ await api('POST','/api/v1/datastreams', body); $('#dsNewDlg').close(); ctrl32.toast('datastream created','ok'); loadAssets(); }catch(x){ $('#dsErr').textContent = x.message; } };
+// ---- rules
+async function loadRules(){
+  $('#newRuleBtn').hidden = !canCfg();
+  try{ const [rs, ds] = await Promise.all([api('GET','/api/v1/alarm-rules'), api('GET','/api/v1/datastreams')]); DS = ds;
+    $('#rules tbody').innerHTML = rs.map(r => `<tr class="clickable" data-ds="${r.datastream_id}"><td>${esc(r.asset)}</td><td><code>${esc(r.key)}</code></td><td>${esc(r.type)}</td><td>${r.warning ?? '—'}</td><td>${r.action ?? '—'}</td><td>${r.delay_seconds} s</td><td>${r.hysteresis}</td><td title="${esc(r.reason)}">v${r.version}</td><td>${fmt(r.valid_from)}</td></tr>`).join('') || '<tr><td colspan="9" class="muted">no alarm rules yet</td></tr>';
+    for(const tr of document.querySelectorAll('#rules tr.clickable')) tr.onclick = () => openDS(tr.dataset.ds);
+    $('#ruleNew').datastream_id.innerHTML = DS.map(d => `<option value="${d.id}">${esc(d.asset)} / ${esc(d.key)} [${esc(d.unit)}]</option>`).join('');
+  }catch(x){ $('#rules tbody').innerHTML = `<tr><td colspan="9" class="muted">${esc(x.message)}</td></tr>`; }
+}
+$('#newRuleBtn').onclick = () => { const f = $('#ruleNew'); f.reason.value=''; $('#ruleNewErr').textContent=''; $('#ruleDlg').showModal(); };
+$('#ruleNew').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#ruleNewErr').textContent=''; const body = {datastream_id: f.datastream_id.value, type: f.type.value, delay_seconds: parseFloat(f.delay.value || '0'), hysteresis: parseFloat(f.hysteresis.value || '0'), reason: f.reason.value}; if(f.warning.value !== '') body.warning = parseFloat(f.warning.value); if(f.action.value !== '') body.action = parseFloat(f.action.value); if(f.policy && f.policy.value) body.escalation_policy_id = f.policy.value;
+  try{ const r = await api('POST','/api/v1/alarm-rules', body); $('#ruleDlg').close(); ctrl32.toast(r.status === 'pending' ? 'change request recorded — waiting for approval by a second person' : `rule version ${r.version} active`, r.status === 'pending' ? 'bad' : 'ok'); loadRules(); }catch(x){ $('#ruleNewErr').textContent = x.message; } };
+// ---- datastream detail
+let POLS = [];
+async function openDS(id){
+  if(ctrl32.can('config.write')){ try{ POLS = (await api('GET','/api/v1/escalation-policies')).filter(p => !p.revoked_at); }catch(_){ POLS = []; } }
+  const dlg = $('#dsDlg'); dlg.innerHTML = '<p class="muted">Loading…</p>'; dlg.showModal();
+  let d; try{ d = await api('GET',`/api/v1/datastreams/${id}`); }catch(x){ dlg.innerHTML = `<p class="err">${esc(x.message)}</p>`; return; }
+  const ds = d.datastream, cfg = canCfg();
+  dlg.innerHTML = `<div class="row"><h2 style="margin:0">${esc(d.asset.name)} / <code>${esc(ds.key)}</code></h2><span class="badge">${esc(ds.kind)}</span><span class="grow"></span><button class="btn ghost icon" id="dsClose" type="button" aria-label="Close">${ctrl32.ICON.close}</button></div>
+    <div class="two" style="margin-top:12px"><div>
+      <div class="kv"><b>Site</b><span>${esc(d.site.name)}</span><b>Quantity</b><span>${esc(ds.quantity)} [${esc(ds.unit)}]</span><b>Expected interval</b><span>${esc(ds.expected_interval || '— (no gap detection)')}</span><b>Accuracy</b><span>${ds.accuracy ?? '—'}</span><b>Source device</b><span>${d.device ? `<a href="/devices/${d.device.id}">${esc(d.device.external_id)}</a> <span class="muted">since ${fmt(d.device.since)}</span>` : '<span class="muted">none — assign one on the device page</span>'}</span><b>Last value</b><span>${d.last_observation ? `${d.last_observation.value ?? '—'} ${esc(ds.unit)} <span class="muted">${fmt(d.last_observation.measured_at)} · ${esc(d.last_observation.quality)}</span>` : '<span class="muted">no data yet</span>'}</span><b>Rules</b><span>${(d.rules || []).length ? d.rules.map(r => `<a href="/assets/automation">${esc(r.name)}</a> <span class="muted">${r.role === 'derive' ? 'derives this datastream' : 'reads it'}${r.status !== 'active' || !r.enabled ? ' · ' + (r.enabled ? esc(r.status) : 'disabled') : ''}</span>`).join('<br>') : '<span class="muted">none</span>'}</span><b>Id</b><code>${esc(ds.id)}</code></div>
+      ${cfg ? `<form id="dsEdit" class="form" style="margin-top:12px"><h3 style="margin:0">Edit</h3><div class="row"><label>Unit <input name="unit" value="${esc(ds.unit)}" maxlength="16"></label><label>Expected interval <input name="expected_interval" value="${esc(ds.expected_interval)}" maxlength="32" placeholder="5 minutes"></label></div><label>Reason <input name="reason" required maxlength="200"></label><div class="err" id="dsEditErr"></div><div><button class="btn small primary" type="submit">Save</button></div></form>` : ''}
+    </div><div>
+      <h3 style="margin-top:0">Alarm rules (current versions)</h3>
+      <div class="table-wrap"><table><thead><tr><th>Type</th><th>Warning</th><th>Action</th><th>Delay</th><th>Hyst.</th><th>v</th><th></th></tr></thead><tbody>${d.alarm_rules.map(r => `<tr><td>${esc(r.type)}</td><td>${r.warning ?? '—'}</td><td>${r.action ?? '—'}</td><td>${r.delay_seconds} s</td><td>${r.hysteresis}</td><td title="${esc(r.reason)}">${r.version}</td><td>${cfg ? `<button class="btn small" type="button" data-close-rule="${r.id}">Disable</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">no rules</td></tr>'}</tbody></table></div>
+      ${cfg ? `<form id="ruleForm" class="form" style="margin-top:12px"><h3 style="margin:0">New rule version</h3><div class="row"><label>Type <select name="type"><option value="high">high (value above limits)</option><option value="low">low (value below limits)</option><option value="comm_loss">comm_loss</option><option value="sensor_fault">sensor_fault</option><option value="low_battery">low_battery</option><option value="power_loss">power_loss</option><option value="door_open">door_open</option></select></label><label>Warning limit <input name="warning" type="number" step="any"></label><label>Action limit <input name="action" type="number" step="any"></label></div><div class="row"><label>Delay (s) <input name="delay" type="number" min="0" value="0"></label><label>Hysteresis <input name="hysteresis" type="number" step="any" min="0" value="0"></label></div><label>Reason <input name="reason" required maxlength="200"></label><div class="err" id="ruleErr"></div><div><button class="btn small primary" type="submit">Save as new version</button></div></form>` : ''}
+    </div></div>`;
+  $('#dsClose').onclick = () => { dlg.close(); if($('[data-section="rules"]').classList.contains('active')) loadRules(); else loadAssets(); };
+  if(cfg){
+    $('#dsEdit').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#dsEditErr').textContent=''; try{ await api('PATCH',`/api/v1/datastreams/${id}`,{unit: f.unit.value, expected_interval: f.expected_interval.value, reason: f.reason.value}); ctrl32.toast('saved','ok'); openDS(id); }catch(x){ $('#dsEditErr').textContent = x.message; } };
+    $('#ruleForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#ruleErr').textContent=''; const body = {datastream_id: id, type: f.type.value, delay_seconds: parseFloat(f.delay.value || '0'), hysteresis: parseFloat(f.hysteresis.value || '0'), reason: f.reason.value}; if(f.warning.value !== '') body.warning = parseFloat(f.warning.value); if(f.action.value !== '') body.action = parseFloat(f.action.value);
+      try{ const r = await api('POST','/api/v1/alarm-rules', body); ctrl32.toast(r.status === 'pending' ? 'change request recorded — waiting for approval by a second person' : `rule version ${r.version} active`, r.status === 'pending' ? 'bad' : 'ok'); openDS(id); }catch(x){ $('#ruleErr').textContent = x.message; } };
+    for(const b of document.querySelectorAll('[data-close-rule]')) b.onclick = async () => { const reason = ctrl32.ask('Reason for disabling this rule:'); if(!reason) return; try{ const r = await api('DELETE',`/api/v1/alarm-rules/${b.dataset.closeRule}?reason=${encodeURIComponent(reason)}`); if(r.status === 'pending') ctrl32.toast('change request recorded — waiting for approval by a second person','bad'); openDS(id); }catch(x){ ctrl32.toast(x.message,'bad'); } };
+  }
+}
+// ---- automation rules (URS C-09)
+let RULES = [], DEVS = [], CHANS = [], APOLS = [], ED = null;
+const OPS = ['>', '>=', '<', '<=', '==', '!=', 'stale'];
+const ACT_TYPES = [['notify', 'Notify a channel'], ['webhook', 'Call a webhook'], ['command', 'Send a device command'], ['alarm', 'Raise an alarm'], ['derive', 'Write a derived datastream']];
+function dsLabel(id){ const d = DS.find(x => x.id === id); return d ? `${d.asset} / ${d.key}` : (id || '?'); }
+function condText(spec){ const cs = spec.conditions || []; if(!cs.length) return 'always'; return cs.map(c => c.op === 'stale' ? `${c.input} stale > ${c.value} s` : `${c.input} ${c.op} ${c.value}`).join(spec.match === 'any' ? ' or ' : ' and '); }
+function actText(list){ return (list || []).map(a => ({notify: 'notify ' + ((CHANS.find(c => c.id === a.channel_id) || {}).name || '?'), webhook: 'webhook', command: 'command ' + (a.key || a.method || '') + (a.value !== undefined ? ' = ' + a.value : ''), alarm: (a.severity || 'warning') + ' alarm', derive: 'derive ' + dsLabel(a.datastream_id)})[a.type] || a.type).join(', '); }
+function ruleStatus(r){ if(r.revoked_at) return '<span class="badge bad">revoked</span>'; if(r.status === 'pending') return '<span class="badge warn">pending approval</span>'; if(r.status === 'rejected') return '<span class="badge bad">rejected</span>'; if(!r.enabled) return '<span class="badge">disabled</span>'; const st = r.state || {}; return st.active ? '<span class="badge bad">condition true</span>' : (st.pending ? '<span class="badge warn">holding</span>' : '<span class="badge ok">watching</span>'); }
+async function loadRuns(){ try{ const rs = await api('GET','/api/v1/rule-runs?limit=50');
+  $('#runTable tbody').innerHTML = rs.map(r => `<tr><td>${fmt(r.fired_at)}</td><td><b>${esc(r.rule)}</b> <span class="muted">v${r.version}</span></td><td><span class="badge ${r.event === 'enter' ? 'bad' : 'ok'}">${esc(r.event)}</span></td><td><code style="font-size:11px">${esc(Object.entries(r.inputs || {}).map(([k, v]) => k + ' = ' + v).join(', '))}</code></td><td style="white-space:normal">${(r.actions || []).map(a => `<span class="badge ${a.status === 'done' ? 'ok' : 'bad'}" title="${esc(a.detail || '')}">${esc(a.type)}</span>`).join(' ')}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">nothing yet</td></tr>'; }catch(x){ $('#runTable tbody').innerHTML = `<tr><td colspan="5" class="muted">${esc(x.message)}</td></tr>`; } }
+async function loadAutomation(){
+  $('#newAutoBtn').hidden = !canCfg();
+  try{ [RULES, DS, DEVS, CHANS, APOLS] = await Promise.all([api('GET','/api/v1/rules'), api('GET','/api/v1/datastreams'), api('GET','/api/v1/devices'), api('GET','/api/v1/notification-channels'), api('GET','/api/v1/escalation-policies')]);
+    DEVS = DEVS.filter(d => !d.revoked_at); CHANS = CHANS.filter(c => !c.revoked_at); APOLS = APOLS.filter(p => !p.revoked_at);
+    const cfg = canCfg(), cmd = ctrl32.can('device.command');
+    $('#autoTable tbody').innerHTML = RULES.map(r => `<tr><td><b>${esc(r.name)}</b> <span class="muted">v${r.version}</span>${r.description ? `<div class="muted" style="font-size:12px">${esc(r.description)}</div>` : ''}</td><td>${ruleStatus(r)}</td><td style="white-space:normal">${esc(condText(r.spec))}${r.spec.for_s ? ` <span class="muted">for ${r.spec.for_s} s</span>` : ''}</td><td style="white-space:normal">${esc(actText(r.spec.actions))}${(r.spec.clear_actions || []).length ? `<div class="muted" style="font-size:12px">exit: ${esc(actText(r.spec.clear_actions))}</div>` : ''}</td><td>${r.last_run ? fmt(r.last_run) + ' <span class="muted">' + esc(r.last_event || '') + '</span>' : '—'}</td><td style="white-space:nowrap">${r.revoked_at || !cfg ? '' : `<button class="btn small" type="button" data-edit-rule="${r.id}">Edit</button> ${r.status === 'pending' && cmd ? `<button class="btn small primary" type="button" data-approve-rule="${r.id}">Approve</button> <button class="btn small" type="button" data-reject-rule="${r.id}">Reject</button> ` : ''}<button class="btn small" type="button" data-toggle-rule="${r.id}">${r.enabled ? 'Disable' : 'Enable'}</button> <button class="btn small danger" type="button" data-del-rule="${r.id}">Revoke</button>`}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">no automation rules yet</td></tr>';
+    const withReason = async (q, fn) => { const reason = prompt(q); if(!reason) return; try{ await fn(reason); loadAutomation(); }catch(x){ ctrl32.toast(x.message,'bad'); } };
+    for(const b of document.querySelectorAll('[data-edit-rule]')) b.onclick = () => openAuto(RULES.find(r => r.id === b.dataset.editRule));
+    for(const b of document.querySelectorAll('[data-approve-rule]')) b.onclick = () => withReason('Reason for approving this rule:', reason => api('POST',`/api/v1/rules/${b.dataset.approveRule}/approve`,{reason}));
+    for(const b of document.querySelectorAll('[data-reject-rule]')) b.onclick = () => withReason('Reason for rejecting this rule:', reason => api('POST',`/api/v1/rules/${b.dataset.rejectRule}/reject`,{reason}));
+    for(const b of document.querySelectorAll('[data-toggle-rule]')) b.onclick = () => { const r = RULES.find(x => x.id === b.dataset.toggleRule); withReason(r.enabled ? 'Reason for disabling this rule:' : 'Reason for enabling this rule:', reason => api('PUT',`/api/v1/rules/${r.id}`,{enabled: !r.enabled, reason})); };
+    for(const b of document.querySelectorAll('[data-del-rule]')) b.onclick = () => withReason('Reason for revoking this rule:', reason => api('DELETE',`/api/v1/rules/${b.dataset.delRule}?reason=${encodeURIComponent(reason)}`));
+    loadRuns();
+  }catch(x){ $('#autoTable tbody').innerHTML = `<tr><td colspan="6" class="muted">${esc(x.message)}</td></tr>`; }
+}
+function actFromSpec(a){ return {type: a.type, channel_id: a.channel_id || '', subject: a.subject || '', text: a.text || '', url: a.url || '', secret: a.secret || '', device_id: a.device_id || '', key: a.key || '', value: a.value === undefined ? '' : (typeof a.value === 'string' ? a.value : JSON.stringify(a.value)), severity: a.severity || 'warning', escalation_policy_id: a.escalation_policy_id || '', datastream_id: a.datastream_id || '', expr: a.expr || ''}; }
+function valueOut(v){ v = String(v).trim(); if(v === 'true') return true; if(v === 'false') return false; if(v !== '' && !isNaN(Number(v))) return Number(v); return v; }
+function actToSpec(a){ const o = {type: a.type};
+  if(a.type === 'notify'){ o.channel_id = a.channel_id; if(a.subject) o.subject = a.subject; if(a.text) o.text = a.text; }
+  if(a.type === 'webhook'){ o.url = a.url.trim(); if(a.secret) o.secret = a.secret; }
+  if(a.type === 'command'){ o.device_id = a.device_id; o.key = a.key.trim(); o.value = valueOut(a.value); }
+  if(a.type === 'alarm'){ o.severity = a.severity; if(a.escalation_policy_id) o.escalation_policy_id = a.escalation_policy_id; }
+  if(a.type === 'derive'){ o.datastream_id = a.datastream_id; o.expr = a.expr.trim(); }
+  return o; }
+function edSpec(){ const f = $('#autoForm'); return {inputs: ED.inputs.map(i => ({name: i.name.trim(), datastream_id: i.datastream_id})), match: f.match.value, conditions: ED.conditions.map(c => ({input: c.input, op: c.op, value: valueOut(c.value)})), for_s: parseInt(f.for_s.value, 10) || 0, cooldown_s: parseInt(f.cooldown_s.value, 10) || 0, actions: ED.actions.map(actToSpec), clear_actions: ED.clear_actions.map(actToSpec)}; }
+function sel(list, i, f, opts, v, ph){ return `<select data-l="${list}" data-i="${i}" data-f="${f}">${ph ? `<option value="">${esc(ph)}</option>` : ''}${opts.map(o => `<option value="${esc(o[0])}" ${o[0] === v ? 'selected' : ''}>${esc(o[1])}</option>`).join('')}</select>`; }
+function inp(list, i, f, v, ph, extra){ return `<input data-l="${list}" data-i="${i}" data-f="${f}" value="${esc(v || '')}" placeholder="${esc(ph || '')}" ${extra || ''}>`; }
+const rmBtn = (list, i) => `<button class="btn small danger" type="button" data-rm="${list}" data-i="${i}" title="Remove" aria-label="Remove">×</button>`;
+function actRow(list, a, i){ const t = a.type; let fields = '';
+  if(t === 'notify') fields = `<label>Channel ${sel(list, i, 'channel_id', CHANS.map(c => [c.id, c.name + ' (' + c.kind + ')']), a.channel_id, 'choose…')}</label><label>Subject ${inp(list, i, 'subject', a.subject, '[ctrl32] rule {rule}: {event}', 'maxlength="200"')}</label><label>Text ${inp(list, i, 'text', a.text, 'placeholders: {rule} {event} {inputs} {name of input}', 'maxlength="4000"')}</label>`;
+  if(t === 'webhook') fields = `<label>URL ${inp(list, i, 'url', a.url, 'https://hooks.example.com/ctrl32', 'maxlength="1024"')}</label><label>Secret (HMAC-SHA256) ${inp(list, i, 'secret', a.secret, 'optional', 'type="password" autocomplete="new-password" maxlength="256"')}</label>`;
+  if(t === 'command') fields = `<label>Device ${sel(list, i, 'device_id', DEVS.map(d => [d.id, d.name + ' (' + d.external_id + ', ' + d.transport + ')']), a.device_id, 'choose…')}</label><label>Key (writable register / node) ${inp(list, i, 'key', a.key, 'setpoint', 'maxlength="32" style="max-width:160px"')}</label><label>Value or expression ${inp(list, i, 'value', a.value, '20  |  true  |  t_out + 2', 'maxlength="512"')}</label>`;
+  if(t === 'alarm') fields = `<label>Severity ${sel(list, i, 'severity', [['warning', 'warning'], ['action', 'action'], ['critical', 'critical']], a.severity)}</label><label>Escalation policy ${sel(list, i, 'escalation_policy_id', APOLS.map(p => [p.id, p.name]), a.escalation_policy_id, '(none: global e-mail)')}</label>`;
+  if(t === 'derive') fields = `<label>Derived datastream ${sel(list, i, 'datastream_id', DS.map(d => [d.id, `${d.asset} / ${d.key} [${d.unit}]`]), a.datastream_id, 'choose…')}</label><label>Expression ${inp(list, i, 'expr', a.expr, 't_in - t_out', 'maxlength="512"')}</label>`;
+  return `<div class="row" style="align-items:flex-end;flex-wrap:wrap"><label>Action ${sel(list, i, 'type', ACT_TYPES, t)}</label>${fields}${rmBtn(list, i)}</div>`; }
+function renderEd(){
+  const names = ED.inputs.map(x => [x.name, x.name]);
+  const dsOpts = DS.map(d => [d.id, `${d.asset} / ${d.key} [${d.unit}]`]);
+  $('#autoInputs').innerHTML = ED.inputs.map((x, i) => `<div class="row" style="align-items:flex-end"><label>Name ${inp('inputs', i, 'name', x.name, 't_in', 'pattern="[a-z][a-z0-9_]{0,31}" maxlength="32" style="max-width:140px"')}</label><label>Datastream ${sel('inputs', i, 'datastream_id', dsOpts, x.datastream_id, 'choose…')}</label>${rmBtn('inputs', i)}</div>`).join('') || '<p class="muted" style="margin:0">no inputs yet</p>';
+  $('#autoConds').innerHTML = ED.conditions.map((c, i) => `<div class="row" style="align-items:flex-end"><label>Input ${sel('conditions', i, 'input', names, c.input, 'choose…')}</label><label>Operator ${sel('conditions', i, 'op', OPS.map(o => [o, o === 'stale' ? 'stale (no data for … s)' : o]), c.op)}</label><label>Value ${inp('conditions', i, 'value', c.value, c.op === 'stale' ? 'seconds' : '30  or  t_out + 2', 'maxlength="512"')}</label>${rmBtn('conditions', i)}</div>`).join('') || '<p class="muted" style="margin:0">no conditions — the rule is always true</p>';
+  $('#autoActs').innerHTML = ED.actions.map((a, i) => actRow('actions', a, i)).join('') || '<p class="muted" style="margin:0">no actions on enter</p>';
+  $('#autoClear').innerHTML = ED.clear_actions.map((a, i) => actRow('clear_actions', a, i)).join('') || '<p class="muted" style="margin:0">no actions on exit</p>';
+  for(const b of document.querySelectorAll('#autoForm [data-rm]')) b.onclick = () => { ED[b.dataset.rm].splice(+b.dataset.i, 1); renderEd(); };
+}
+function syncEd(el){ if(!el.dataset || !el.dataset.l) return false; const row = ED[el.dataset.l][+el.dataset.i]; if(!row) return false; row[el.dataset.f] = el.value; return el.dataset.f === 'type' || el.dataset.f === 'op' || el.dataset.f === 'name' || el.dataset.f === 'datastream_id'; }
+$('#autoForm').addEventListener('input', e => { syncEd(e.target); });
+$('#autoForm').addEventListener('change', e => { if(syncEd(e.target)) renderEd(); });
+$('#autoAddInput').onclick = () => { const d = DS.find(x => !ED.inputs.some(i => i.datastream_id === x.id)) || DS[0]; ED.inputs.push({name: d ? d.key : '', datastream_id: d ? d.id : ''}); renderEd(); };
+$('#autoAddCond').onclick = () => { ED.conditions.push({input: ED.inputs[0] ? ED.inputs[0].name : '', op: '>', value: ''}); renderEd(); };
+$('#autoAddAct').onclick = () => { ED.actions.push(actFromSpec({type: 'notify'})); renderEd(); };
+$('#autoAddClear').onclick = () => { ED.clear_actions.push(actFromSpec({type: 'notify'})); renderEd(); };
+function openAuto(r){ const f = $('#autoForm'); f.reset(); f.dataset.id = r ? r.id : ''; $('#autoTplLabel').hidden = !!r; $('#autoTpl').value = ''; $('#autoErr').textContent = ''; $('#autoTestOut').hidden = true; $('#autoTitle').textContent = r ? 'Edit automation rule' : 'New automation rule'; $('#autoSubmit').textContent = r ? 'Save as new version' : 'Create rule';
+  const s = r ? r.spec : {}; ED = {inputs: (s.inputs || []).map(x => ({...x})), conditions: (s.conditions || []).map(c => ({input: c.input, op: c.op, value: c.value === undefined ? '' : String(c.value)})), actions: (s.actions || []).map(actFromSpec), clear_actions: (s.clear_actions || []).map(actFromSpec)};
+  if(r){ f.name.value = r.name; f.description.value = r.description || ''; f.match.value = s.match || 'all'; f.for_s.value = s.for_s || 0; f.cooldown_s.value = s.cooldown_s || 0; }
+  renderEd(); $('#autoDlg').showModal(); }
+const TEMPLATES = {
+  high: {name: 'high value', inputs: [{name: 'value', datastream_id: ''}], conditions: [{input: 'value', op: '>=', value: '30'}], actions: [{type: 'notify', channel_id: ''}], clear_actions: [{type: 'notify', channel_id: ''}]},
+  stale: {name: 'sensor silent', inputs: [{name: 'value', datastream_id: ''}], conditions: [{input: 'value', op: 'stale', value: '600'}], actions: [{type: 'notify', channel_id: ''}], clear_actions: []},
+  door: {name: 'door open too long', inputs: [{name: 'door', datastream_id: ''}], conditions: [{input: 'door', op: '==', value: '1'}], for_s: 300, actions: [{type: 'alarm', severity: 'warning'}], clear_actions: []},
+  diff: {name: 'temperature difference', inputs: [{name: 't_in', datastream_id: ''}, {name: 't_out', datastream_id: ''}], conditions: [], actions: [{type: 'derive', datastream_id: '', expr: 't_in - t_out'}], clear_actions: []},
+  follow: {name: 'setpoint follows', inputs: [{name: 't_out', datastream_id: ''}], conditions: [{input: 't_out', op: '!=', value: '-999'}], cooldown_s: 300, actions: [{type: 'command', device_id: '', key: 'setpoint', value: 'clamp(t_out + 2, 15, 25)'}], clear_actions: []},
+};
+$('#autoTpl').onchange = () => { const t = TEMPLATES[$('#autoTpl').value]; if(!t) return; const f = $('#autoForm'); if(!f.name.value) f.name.value = t.name; f.match.value = 'all'; f.for_s.value = t.for_s || 0; f.cooldown_s.value = t.cooldown_s || 0;
+  ED = {inputs: t.inputs.map(x => ({...x})), conditions: t.conditions.map(c => ({...c})), actions: t.actions.map(actFromSpec), clear_actions: t.clear_actions.map(actFromSpec)}; renderEd(); };
+$('#newAutoBtn').onclick = () => openAuto(null);
+$('#autoTestBtn').onclick = async () => { const out = $('#autoTestOut'); out.hidden = false; out.textContent = 'evaluating…'; $('#autoErr').textContent = '';
+  try{ const r = await api('POST','/api/v1/rules/test',{spec: edSpec(), rule_id: $('#autoForm').dataset.id || undefined});
+    out.textContent = `condition now: ${r.condition ? 'TRUE — the rule would fire' : 'false'}\n` + Object.entries(r.inputs || {}).map(([k, v]) => `${k} = ${v} (${Math.round(r.ages_s[k])} s old)`).join('\n') + ((r.missing || []).length ? `\nno data yet: ${r.missing.join(', ')}` : '') + ((r.errors || []).length ? `\nerrors: ${r.errors.join('; ')}` : ''); }
+  catch(x){ out.hidden = true; $('#autoErr').textContent = x.message; } };
+$('#autoForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#autoErr').textContent = '';
+  try{ const body = {name: f.name.value, description: f.description.value, spec: edSpec(), reason: f.reason.value}; let r;
+    if(f.dataset.id) r = await api('PUT',`/api/v1/rules/${f.dataset.id}`, body); else r = await api('POST','/api/v1/rules', body);
+    $('#autoDlg').close(); ctrl32.toast(r.status === 'pending' ? 'rule saved — waiting for approval by a second person' : `rule version ${r.version} active`, r.status === 'pending' ? 'bad' : 'ok'); loadAutomation(); }
+  catch(x){ $('#autoErr').textContent = x.message; } };
+ctrl32.ready({requireAuth: true}).then(() => {
+  const sec = ctrl32.section('assets', ['sites', 'assets', 'rules', 'automation']);
+  document.title = {sites: 'Sites', assets: 'Assets', rules: 'Alarm rules', automation: 'Automation'}[sec] + ' — ctrl32 telemetry';
+  if(sec === 'sites'){ $('#newSiteBtn').hidden = !canCfg(); loadSitesTable().catch(x => ctrl32.toast(x.message,'bad')); }
+  else if(sec === 'rules') loadRules();
+  else if(sec === 'automation') loadAutomation();
+  else loadSiteSelect().catch(x => ctrl32.toast(x.message,'bad'));
+});
+</script>
+</body>
+</html>

@@ -1,17 +1,4 @@
-# Normalizuj konce riadkov v úložisku na LF.
-# Pro distribúcia prišla s CRLF, upstream z GitHubu s LF – bez tejto normalizácie
-# by diff medzi vetvou `vendor-upstream` a `main` označil každý riadok ako zmenený.
-* text=auto
-
-# Binárne súbory, ktoré nechceme normalizovať ani diffovať
-*.legacy HMIp binary
-*.woff binary
-*.woff2 binary
-*.ttf binary
-*.eot binary
-*.ico binary
+* text=auto eol=lf
 *.png binary
-*.jpg binary
-*.gif binary
-*.pdf binary
-*.zip binary
+*.pmtiles binary
+*.bin binary

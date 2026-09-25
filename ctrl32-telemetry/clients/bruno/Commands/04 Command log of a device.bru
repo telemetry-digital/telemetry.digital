@@ -1,0 +1,27 @@
+meta {
+  name: Command log of a device
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/devices/:id/commands
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~limit: 
+}
+
+docs {
+  Command log of a device
+  
+  Newest first (default 50, max 500). Commands past their deadline are marked expired.
+  
+  Requires permission `data.read`.
+}

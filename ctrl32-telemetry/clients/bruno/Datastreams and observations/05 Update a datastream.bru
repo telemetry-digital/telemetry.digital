@@ -1,0 +1,31 @@
+meta {
+  name: Update a datastream
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/datastreams/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "accuracy": 21.5,
+    "expected_interval": "string",
+    "quantity": "string",
+    "reason": "string",
+    "unit": "string"
+  }
+}
+
+docs {
+  Update a datastream
+  
+  Requires permission `config.write`.
+}

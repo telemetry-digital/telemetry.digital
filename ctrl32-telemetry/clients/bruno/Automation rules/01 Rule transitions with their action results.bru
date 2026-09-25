@@ -1,0 +1,22 @@
+meta {
+  name: Rule transitions with their action results
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/rule-runs
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~rule_id: 
+  ~limit: 
+}
+
+docs {
+  Rule transitions with their action results
+  
+  Requires permission `config.write`.
+}

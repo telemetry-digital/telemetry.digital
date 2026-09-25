@@ -1,0 +1,7 @@
+ci/.pio/
+.pio/
+build/
+*.o
+*.exe
+ci/gen/
+ci/espidf/build-*.log

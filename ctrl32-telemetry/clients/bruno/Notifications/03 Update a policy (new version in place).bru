@@ -1,0 +1,35 @@
+meta {
+  name: Update a policy (new version in place)
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{baseUrl}}/api/v1/escalation-policies/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "name": "string",
+    "reason": "string",
+    "steps": [
+      {
+        "after_s": 1,
+        "channel_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+        "channel_name": "string"
+      }
+    ]
+  }
+}
+
+docs {
+  Update a policy (new version in place)
+  
+  Requires permission `config.write`.
+}

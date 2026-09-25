@@ -1,0 +1,19 @@
+meta {
+  name: Datastreams bound in the shared dashboard
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public/:token/datastreams
+  body: none
+  auth: inherit
+}
+
+params:path {
+  token: 
+}
+
+docs {
+  Datastreams bound in the shared dashboard
+}

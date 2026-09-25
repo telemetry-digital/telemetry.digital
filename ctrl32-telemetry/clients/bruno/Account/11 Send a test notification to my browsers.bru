@@ -1,0 +1,21 @@
+meta {
+  name: Send a test notification to my browsers
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/v1/push/test
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {}
+}
+
+docs {
+  Send a test notification to my browsers
+  
+  Requires a signed-in user or an API token (any permission).
+}

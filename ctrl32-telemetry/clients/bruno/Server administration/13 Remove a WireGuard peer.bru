@@ -1,0 +1,27 @@
+meta {
+  name: Remove a WireGuard peer
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/api/v1/server/wireguard/peers/:id/remove
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Remove a WireGuard peer
+  
+  Requires permission `system.admin`.
+}

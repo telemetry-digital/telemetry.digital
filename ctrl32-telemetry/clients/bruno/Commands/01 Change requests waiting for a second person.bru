@@ -1,0 +1,23 @@
+meta {
+  name: Change requests waiting for a second person
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/change-requests
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~status: 
+}
+
+docs {
+  Change requests waiting for a second person
+  
+  Alarm rule and assignment changes held by the four-eyes policies (`status=pending`, default) or the full history (`status=all`). Requires config.write or device.manage.
+  
+  Requires a signed-in user or an API token (any permission).
+}

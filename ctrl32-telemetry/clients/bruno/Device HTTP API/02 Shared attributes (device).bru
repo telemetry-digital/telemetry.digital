@@ -1,0 +1,17 @@
+meta {
+  name: Shared attributes (device)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/d/attributes/shared
+  body: none
+  auth: inherit
+}
+
+docs {
+  Shared attributes (device)
+  
+  The configuration the server holds for the device (the retained `attributes/shared` document over MQTT).
+}

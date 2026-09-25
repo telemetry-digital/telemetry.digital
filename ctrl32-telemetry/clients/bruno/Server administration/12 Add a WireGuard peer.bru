@@ -1,0 +1,26 @@
+meta {
+  name: Add a WireGuard peer
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/v1/server/wireguard/peers
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "string",
+    "reason": "string"
+  }
+}
+
+docs {
+  Add a WireGuard peer
+  
+  Returns the peer's client configuration (private key shown once).
+  
+  Requires permission `system.admin`.
+}

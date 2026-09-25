@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Public dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/app.css">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+  <div class="page-head"><h1 id="pTitle">Public dashboard</h1><span class="badge ok" id="liveBadge" hidden title="Values update as they arrive">live</span><span class="grow"></span><label style="flex-direction:row;align-items:center;gap:6px">Range <select id="pRange"></select></label><button class="btn" id="pRefresh" type="button">Refresh</button></div>
+  <p class="muted" id="pErr" hidden>This link is no longer valid.</p>
+  <div id="pGrid"></div>
+</main>
+<script src="/app.js"></script>
+<script src="/widgets.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const token = decodeURIComponent(location.pathname.split('/')[2] || '');
+ctrl32.ready({}).then(async () => {
+  let fn = null, timer = null;
+  try {
+    ctrl32Widgets.setPublic(token);
+    const d = await ctrl32.api('GET', `/api/v1/public/${encodeURIComponent(token)}`);
+    $('#pTitle').textContent = d.name; document.title = d.name;
+    $('#pRange').innerHTML = ['1h','6h','24h','7d','30d','90d'].map(r => `<option ${r === d.spec.range ? 'selected' : ''}>${r}</option>`).join('');
+    const run = async () => { fn = await ctrl32Widgets.render($('#pGrid'), d.spec, {range: $('#pRange').value}); };
+    $('#pRange').onchange = run; $('#pRefresh').onclick = () => fn && fn();
+    await run();
+    timer = setInterval(() => fn && fn(), Math.max(5, d.spec.refresh_s || 30) * 1000);
+  } catch (x) {
+    $('#pErr').hidden = false; $('#pRange').closest('label').hidden = true; $('#pRefresh').hidden = true;
+    if (timer) clearInterval(timer);
+  }
+});
+</script>
+</body>
+</html>

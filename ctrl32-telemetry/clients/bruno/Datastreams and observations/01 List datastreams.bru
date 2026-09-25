@@ -1,0 +1,17 @@
+meta {
+  name: List datastreams
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/datastreams
+  body: none
+  auth: inherit
+}
+
+docs {
+  List datastreams
+  
+  Requires permission `data.read`.
+}

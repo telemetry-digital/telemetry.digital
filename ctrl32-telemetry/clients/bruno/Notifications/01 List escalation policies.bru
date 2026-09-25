@@ -1,0 +1,17 @@
+meta {
+  name: List escalation policies
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/escalation-policies
+  body: none
+  auth: inherit
+}
+
+docs {
+  List escalation policies
+  
+  Requires permission `config.write`.
+}

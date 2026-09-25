@@ -1,0 +1,19 @@
+meta {
+  name: Roles of the organization
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/v1/roles
+  body: none
+  auth: inherit
+}
+
+docs {
+  Roles of the organization
+  
+  Built-in roles (immutable) and organization roles with their permission sets and member counts.
+  
+  Requires a signed-in user or an API token (any permission).
+}

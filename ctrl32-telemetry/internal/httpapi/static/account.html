@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>My account — ctrl32 telemetry</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  .perm-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .scope-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 12px; }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<nav class="subnav">
+  <a href="/account" data-section="profile">Profile</a>
+  <a href="/account/security" data-section="security">Password and MFA</a>
+  <a href="/account/tokens" data-section="tokens">API tokens</a>
+  <a href="/account/push" data-section="push">Notifications</a>
+</nav>
+
+<section data-section="profile">
+  <div class="page-head"><h1>Profile</h1></div>
+  <div class="card">
+  <p><b id="username"></b> <span class="muted" id="fullname"></span></p>
+  <div class="muted" style="font-size:13px">Roles</div><div class="perm-list" id="roles" style="margin-bottom:12px"></div>
+  <div class="muted" style="font-size:13px">Effective permissions</div><div class="perm-list" id="perms"></div>
+  </div>
+</section>
+
+<section data-section="security">
+  <div class="page-head"><h1>Password and MFA</h1></div>
+  <div class="two">
+  <div class="card">
+  <h2>Change password</h2>
+  <form id="pw" class="form">
+    <label>Current password <input name="current" type="password" autocomplete="current-password" required></label>
+    <label>New password <input name="new" type="password" autocomplete="new-password" required minlength="12"></label>
+    <div class="muted">At least 12 characters and three character classes. Other sessions are signed out.</div>
+    <div class="err" id="pwErr"></div>
+    <div><button class="btn primary" type="submit">Change password</button></div>
+  </form>
+  </div>
+  <div class="card">
+  <h2>Two-factor authentication</h2>
+  <div id="mfaState"></div>
+  <div id="mfaSetup" hidden class="form" style="margin-top:8px">
+    <div class="badge warn" style="margin-bottom:6px">not active yet — confirmation required</div><div class="muted">Step 1: scan the QR code with your authenticator app (or enter the secret manually). Step 2: type the 6-digit code from the app and press Confirm. Two-factor authentication is NOT active until the code is confirmed.</div>
+    <img id="otpqr" alt="QR code for the authenticator app" style="display:block;width:200px;height:200px;background:#fff;padding:6px;border-radius:var(--radius)">
+    <details><summary class="muted">Secret for manual entry</summary><div class="secret" id="otpsecret"></div></details>
+    <form id="mfaConfirm" class="row"><input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" required><button class="btn primary" type="submit">Confirm</button></form>
+    <div class="err" id="mfaErr"></div>
+    <div id="recovery" hidden><div class="muted">Recovery codes (shown once, store them safely):</div><pre class="secret" id="recoveryCodes"></pre></div>
+  </div>
+  <div style="margin-top:8px"><button class="btn" id="mfaBtn" type="button">Set up authenticator</button></div>
+  </div>
+  </div>
+</section>
+
+<section data-section="tokens">
+  <div class="page-head"><h1>API tokens</h1><span class="grow"></span><button class="btn primary" id="newTokBtn" type="button">New token</button></div>
+  <div class="card">
+  <p class="muted">Tokens carry a subset of your permissions and are sent as <code>Authorization: Bearer c32_…</code>. The token is shown once.</p>
+  <div class="table-wrap"><table id="tokens"><thead><tr><th>Name</th><th>Scopes</th><th>Created</th><th>Last used</th><th>Expires</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+</section>
+<section data-section="push">
+  <div class="page-head"><h1>Notifications</h1><span class="grow"></span><button class="btn primary" id="pushOn" type="button" hidden>Enable in this browser</button></div>
+  <div class="card">
+    <p class="muted">Alarms and rule notifications can reach this browser as system notifications, even when the app is closed (on phones: install the app from the browser menu first). Administrators pick who is notified with a Web Push channel under Settings → Notifications.</p>
+    <p id="pushState"></p>
+    <div class="table-wrap"><table id="pushTable"><thead><tr><th>Browser</th><th>Registered</th><th>Last notification</th><th>State</th><th></th></tr></thead><tbody></tbody></table></div>
+    <div class="row" style="margin-top:10px"><button class="btn" id="pushTest" type="button" hidden>Send a test notification</button><button class="btn" id="pushOff" type="button" hidden>Disable in this browser</button></div>
+    <div class="err" id="pushErr"></div>
+  </div>
+</section>
+<dialog id="tokDlg">
+  <form id="newToken" class="form" method="dialog">
+    <h2 style="margin-top:0">New API token</h2>
+    <label>Name <input name="name" required maxlength="64" placeholder="e.g. grafana-reader"></label>
+    <div><div class="muted" style="font-size:13px;margin-bottom:4px">Scopes (limited to your permissions)</div><div class="scope-grid" id="scopes"></div></div>
+    <label>Expires in <select name="days"><option value="30">30 days</option><option value="90">90 days</option><option value="365" selected>1 year</option><option value="0">never</option></select></label>
+    <div class="err" id="tokErr"></div>
+    <div id="tokResult" hidden><div class="muted">Your new token (copy it now):</div><div class="secret" id="tokValue"></div></div>
+    <div class="actions"><button class="btn primary" type="submit" id="tokSubmit">Create token</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form>
+</dialog>
+</main>
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
+const TITLES = {profile: 'Profile', security: 'Password and MFA', tokens: 'API tokens', push: 'Notifications'};
+async function loadTokens(){
+  if(!ctrl32.can('token.manage')){ $('#tokens tbody').innerHTML = '<tr><td colspan="6" class="muted">your role has no token.manage permission</td></tr>'; $('#newTokBtn').hidden = true; return; }
+  const ts = await api('GET','/api/v1/tokens');
+  $('#tokens tbody').innerHTML = ts.map(t => `<tr><td>${esc(t.name)}</td><td style="white-space:normal">${(t.scopes||[]).map(s=>`<span class="badge">${esc(s)}</span>`).join(' ')}</td><td>${fmt(t.created_at)}</td><td>${fmt(t.last_used_at)}</td><td>${t.expires_at ? fmt(t.expires_at) : 'never'}</td><td>${t.revoked_at ? '<span class="badge bad">revoked</span>' : `<button class="btn small danger" data-id="${t.id}" type="button">Revoke</button>`}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">no tokens yet</td></tr>';
+  for(const b of document.querySelectorAll('#tokens button[data-id]')) b.onclick = async () => { try{ await api('DELETE', `/api/v1/tokens/${b.dataset.id}`); ctrl32.toast('token revoked','ok'); loadTokens(); }catch(x){ ctrl32.toast(x.message,'bad'); } };
+}
+$('#newTokBtn').onclick = () => { const f = $('#newToken'); f.reset(); $('#tokResult').hidden = true; $('#tokSubmit').hidden = false; $('#tokErr').textContent=''; $('#tokDlg').showModal(); };
+$('#newToken').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#tokErr').textContent='';
+  const scopes = [...f.querySelectorAll('input[name=scope]:checked')].map(i => i.value); const days = parseInt(f.days.value, 10);
+  const body = {name: f.name.value, scopes}; if(days > 0) body.expires_at = new Date(Date.now() + days*86400e3).toISOString();
+  try{ const r = await api('POST','/api/v1/tokens', body); $('#tokValue').textContent = r.token; $('#tokResult').hidden = false; $('#tokSubmit').hidden = true; loadTokens(); }catch(x){ $('#tokErr').textContent = x.message; } };
+$('#pw').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#pwErr').textContent=''; try{ await api('POST','/api/v1/auth/password',{current: f.current.value, new: f.new.value}); f.reset(); ctrl32.toast('password changed','ok'); }catch(x){ $('#pwErr').textContent = x.message; } };
+function mfaState(me){ $('#mfaState').innerHTML = me.mfa_enabled ? '<span class="badge ok">enabled</span> <span class="muted">An administrator can reset it if you lose the authenticator.</span>' : (me.mfa_required ? '<span class="badge warn">required by policy, not set up</span>' : '<span class="badge">not set up</span>'); $('#mfaBtn').hidden = me.mfa_enabled; }
+$('#mfaBtn').onclick = async () => { try{ const s = await api('POST','/api/v1/auth/totp/setup',{}); $('#otpqr').src = s.qr; $('#otpsecret').textContent = s.secret; $('#mfaSetup').hidden = false; $('#mfaBtn').hidden = true; }catch(x){ ctrl32.toast(x.message,'bad'); } };
+$('#mfaConfirm').onsubmit = async e => { e.preventDefault(); $('#mfaErr').textContent=''; try{ const r = await api('POST','/api/v1/auth/totp/confirm',{code: e.target.code.value}); $('#recoveryCodes').textContent = r.recovery_codes.join('\n'); $('#recovery').hidden = false; e.target.hidden = true; const me = await ctrl32.loadMe(); mfaState(me); ctrl32.toast('authenticator enabled','ok'); }catch(x){ $('#mfaErr').textContent = x.message; } };
+// ---- web push (URS C-06)
+function b64ToU8(b64){ const pad = '='.repeat((4 - b64.length % 4) % 4); const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...raw].map(c => c.charCodeAt(0))); }
+async function pushReg(){ if(!('serviceWorker' in navigator) || !('PushManager' in window)) return null; return navigator.serviceWorker.ready; }
+async function loadPush(){
+  $('#pushErr').textContent = '';
+  const reg = await pushReg(); const supported = !!reg && window.isSecureContext;
+  let current = null; if(supported){ try{ current = await reg.pushManager.getSubscription(); }catch(_){ current = null; } }
+  const subs = await api('GET','/api/v1/push/subscriptions');
+  const mine = current && subs.find(s => s.endpoint === current.endpoint);
+  $('#pushState').innerHTML = !supported ? '<span class="badge bad">not supported in this browser (or not HTTPS)</span>' : (Notification.permission === 'denied' ? '<span class="badge bad">blocked in the browser settings</span>' : (mine ? '<span class="badge ok">enabled in this browser</span>' : '<span class="badge">not enabled in this browser</span>'));
+  $('#pushOn').hidden = !supported || !!mine || Notification.permission === 'denied'; $('#pushOff').hidden = !mine; $('#pushTest').hidden = !subs.some(s => !s.revoked_at);
+  $('#pushTable tbody').innerHTML = subs.map(s => `<tr><td style="white-space:normal">${esc(s.user_agent || '')}${current && s.endpoint === current.endpoint ? ' <span class="badge primary">this browser</span>' : ''}</td><td>${fmt(s.created_at)}</td><td>${s.last_used_at ? fmt(s.last_used_at) : '—'}</td><td>${s.revoked_at ? '<span class="badge bad">removed</span>' : (s.failed_at ? '<span class="badge warn">delivery failed</span>' : '<span class="badge ok">active</span>')}</td><td>${s.revoked_at ? '' : `<button class="btn small danger" type="button" data-unsub="${s.id}">Remove</button>`}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">no browser registered yet</td></tr>';
+  for(const b of document.querySelectorAll('[data-unsub]')) b.onclick = async () => { try{ await api('DELETE',`/api/v1/push/subscriptions/${b.dataset.unsub}`); if(current && mine && mine.id === b.dataset.unsub) await current.unsubscribe(); loadPush(); }catch(x){ ctrl32.toast(x.message,'bad'); } };
+}
+$('#pushOn').onclick = async () => { $('#pushErr').textContent = '';
+  try{ const perm = await Notification.requestPermission(); if(perm !== 'granted'){ $('#pushErr').textContent = 'notifications were not allowed'; return; }
+    const reg = await pushReg(); const key = await api('GET','/api/v1/push/key');
+    const sub = await reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: b64ToU8(key.public_key)});
+    const j = sub.toJSON(); await api('POST','/api/v1/push/subscriptions',{endpoint: j.endpoint, keys: j.keys, user_agent: navigator.userAgent.slice(0, 200)});
+    ctrl32.toast('notifications enabled','ok'); loadPush(); }
+  catch(x){ $('#pushErr').textContent = x.message; } };
+$('#pushOff').onclick = async () => { try{ const reg = await pushReg(); const cur = reg && await reg.pushManager.getSubscription(); const subs = await api('GET','/api/v1/push/subscriptions'); const mine = cur && subs.find(s => s.endpoint === cur.endpoint); if(mine) await api('DELETE',`/api/v1/push/subscriptions/${mine.id}`); if(cur) await cur.unsubscribe(); loadPush(); }catch(x){ $('#pushErr').textContent = x.message; } };
+$('#pushTest').onclick = async () => { try{ const r = await api('POST','/api/v1/push/test',{}); ctrl32.toast(`test sent to ${r.sent} browser(s)` + (r.failed ? `, ${r.failed} failed` : ''), r.sent ? 'ok' : 'bad'); loadPush(); }catch(x){ ctrl32.toast(x.message,'bad'); } };
+ctrl32.ready({requireAuth: true}).then(({me}) => {
+  const sec = ctrl32.section('profile', Object.keys(TITLES)); document.title = TITLES[sec] + ' — My account';
+  $('#username').textContent = me.username; $('#fullname').textContent = me.full_name || '';
+  $('#roles').innerHTML = (me.roles||[]).map(r => `<span class="badge">${esc(r)}</span>`).join('') || '<span class="muted">none</span>';
+  const perms = [...(me.permissions||[])].sort();
+  $('#perms').innerHTML = perms.map(p => `<span class="badge primary">${esc(p)}</span>`).join('') || '<span class="muted">none</span>';
+  $('#scopes').innerHTML = perms.map(p => `<label class="inline"><input type="checkbox" name="scope" value="${esc(p)}"><span>${esc(p)}</span></label>`).join('');
+  mfaState(me); if(sec === 'tokens') loadTokens().catch(x => ctrl32.toast(x.message,'bad')); if(sec === 'push') loadPush().catch(x => { $('#pushErr').textContent = x.message; });
+});
+</script>
+</body>
+</html>

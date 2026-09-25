@@ -1,0 +1,36 @@
+meta {
+  name: Save a new version of a dashboard
+  type: http
+  seq: 6
+}
+
+put {
+  url: {{baseUrl}}/api/v1/dashboards/:slug
+  body: json
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+body:json {
+  {
+    "is_default": true,
+    "name": "string",
+    "reason": "string",
+    "spec": {
+      "format": "string",
+      "layout": {},
+      "widgets": [
+        {}
+      ]
+    }
+  }
+}
+
+docs {
+  Save a new version of a dashboard
+  
+  Requires permission `content.write`.
+}

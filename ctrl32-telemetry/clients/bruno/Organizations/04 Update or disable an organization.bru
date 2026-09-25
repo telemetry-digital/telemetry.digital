@@ -1,0 +1,31 @@
+meta {
+  name: Update or disable an organization
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/organizations/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "disabled": true,
+    "locale": "string",
+    "name": "string",
+    "reason": "string",
+    "tz": "string"
+  }
+}
+
+docs {
+  Update or disable an organization
+  
+  Requires permission `system.admin`.
+}

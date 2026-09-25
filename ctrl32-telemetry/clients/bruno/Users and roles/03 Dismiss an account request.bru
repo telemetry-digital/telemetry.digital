@@ -1,0 +1,27 @@
+meta {
+  name: Dismiss an account request
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/account-requests/:id/dismiss
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Dismiss an account request
+  
+  Requires permission `user.admin`.
+}

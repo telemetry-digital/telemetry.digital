@@ -1,0 +1,258 @@
+# URS — Používateľské požiadavky ctrl32 telemetry, v0.1
+
+**Dátum:** 23. 9. 2026, priebežne dopĺňané (naposledy 25. 9. 2026) · **Stav:** platný · **Účel:** jediný zdroj požiadaviek s ID; každá požiadavka bude mať aspoň jeden test s tagom `URS-<ID>`, z ktorých sa generuje RTM. Pri implementácii u zákazníka slúži ako šablóna jeho URS (zákazník ju prevezme, upraví a schváli vo vlastnom mene).
+
+**Priorita:** M = musí byť (1.0), S = mala by byť (2.0), C = mohla by byť (3+). **Zdroj:** pôvodný zdroj požiadavky · verzia, v ktorej je splnená · spôsob overenia (e2e = automatizovaná sada v `tests/e2e`, ručne = overené pri nasadení). Stĺpec GxP sa overením nemení. **GxP:** áno, ak požiadavka podporuje regulačnú povinnosť (zdroj v `02-navrh-systemu.md` kap. 1, P-xx). **Fáza** podľa roadmapy.
+
+## A. Zber, konektory a integrácie
+
+| ID | Požiadavka | Prio | GxP | Fáza | Zdroj |
+|---|---|---|---|---|---|
+| A-01 | Systém poskytuje rámec konektorov: konektor má typ, verziovanú konfiguráciu, stav, vlastný log a mapovanie na profily zariadení. | M | áno | 1 | P-07 |
+| A-02 | MQTT broker beží v procese servera, podporuje MQTT 3.1.1 a 5 cez TLS, WebSocket, retained správy. | M | — | 1 | ADR-0006 |
+| A-03 | Každé zariadenie sa autentifikuje vlastným tokenom alebo klientskym certifikátom; anonymný prístup nie je možný. | M | áno | 1 | P-12 |
+| A-04 | Zariadenie smie publikovať a odoberať len vlastné témy (ACL); wildcard subscribe je zariadeniam zakázaný. | M | áno | 1 | ADR-0007 |
+| A-05 | Server dedupikuje opakované správy podľa `(device, seq)` a ukladá duplicitu s príznakom, nie výmazom. | M | áno | 1 | P-07 |
+| A-06 | Server vynucuje limity veľkosti správ a rýchlosti publikovania per zariadenie; prekročenie sa loguje. | M | — | 1 | ADR-0007 |
+| A-07 | HTTPS ingest prijíma telemetriu, atribúty, stav, ack a FOTA stav s Bearer tokenom zariadenia. | M | — | 1 | protokol 3.8 · 0.36.0: `POST /api/v1/d/telemetry|attributes|status`, `GET …/attributes/shared`, `GET …/cmd` (long poll), `POST …/cmd/{id}/ack`, `POST …/fota/status`, Bearer token zariadenia · e2e `foreign_devices.sh` |
+| A-08 | LoRaWAN konektor prijíma uplinky z gatewaya so vstavaným NS (MQTT/HTTP), z ChirpStack (MQTT) a z The Things Stack (webhook); uchová surový uplink a metadáta (RSSI, SNR, fcnt). | M | áno | 1 | P-07 |
+| A-09 | Dekodéry LoRaWAN a profilov zariadení sú verziované s hashom; každá observácia nesie verziu dekodéra. | M | áno | 1 | P-19 |
+| A-10 | OPC UA klient: subscriptions aj polling, bezpečnostné politiky, overenie certifikátu servera, prehliadanie adresného priestoru v UI, mapovanie uzlov na datastreamy, uloženie `SourceTimestamp` a `StatusCode`. | S | áno | 2 | kap. 9.3 |
+| A-11 | Modbus TCP/RTU klient s register mapami ako verziovanými profilmi a plánovačom pollingu. 0.20.0: Modbus TCP, register mapa v nastaveniach konektora (holding/input/coil/discrete, typy, škála, offset, rw, min/max), simulátor `tools/modbussim`; 0.22.0: zoskupené čítanie a RTU cez TCP bránu; 0.29.0: verziované profily registrov (`core.register_profile`, nová verzia = nový riadok, konektory s `profile_id`, riadené nasadenie verzie na konektory, vyradenie). | S | — | 1 | kap. 9.3 · 0.29.0 · e2e |
+| A-12 | Zápis do OPC UA/Modbus je možný len cez príkaz s oprávnením, dôvodom a auditom (riadenie). Modbus (0.20.0) aj OPC UA (0.21.0): príkaz `write {key, value}` s limitmi, spätným čítaním a ack; z dashboardov cez widgety Setpoint/Prepínač/Tlačidlo. | S | áno | 1 | ADR-0008 · 0.21.0 · e2e |
+| A-13 | MQTT most: odber tém z cudzieho brokera s TLS a mapovaním tém na zariadenia/datastreamy. | S | — | 2 | kap. 9.3 |
+| A-14 | Výstupné webhooky pre udalosti (meranie, alarm, stav, príkaz) s HMAC podpisom, opakovaním a logom doručení. | S | — | 2 | kap. 9.3 |
+| A-15 | MQTT publish von: zrkadlenie vybraných datastreamov na cudzí broker. | S | — | 2 | kap. 9.3 |
+| A-16 | Generický webhook dnu s mapovaním JSON polí na datastreamy, autentifikovaný tokenom alebo HMAC. | S | — | 2 | kap. 9.3 |
+| A-17 | Import CSV s kontrolou integrity (počty, rozsahy, duplicity) a protokolom importu. | M | áno | 1 | Annex 11 cl. 4.8 |
+| A-18 | Konektory pre M-Bus/wM-Bus, BACnet, SNMP, S7, Sigfox. | C | — | 3 | kap. 9.3 |
+| A-19 | OPC UA server vystavujúci datastreamy ako uzly (výstup pre SCADA). | C | — | 3 | ADR-0008 |
+
+## B. Dátový model a integrita
+
+| ID | Požiadavka | Prio | GxP | Fáza | Zdroj |
+|---|---|---|---|---|---|
+| B-01 | Hierarchia Organization → Customer → Site → Asset → Datastream; Device a Sensor priradené s platnosťou od–do (auditované). | M | áno | 1 | ADR-0004 |
+| B-02 | Datastream má `kind` (gauge/counter/state/event), jednotku, očakávaný interval, požadovanú presnosť, limity, retenčnú politiku. | M | áno | 1 | ADR-0004 |
+| B-03 | Merania, surové správy, audit trail, alarmový log, prístupový log, konzolový log, podpisy, reporty a FOTA stavy sú append-only; DB rola aplikácie nemá UPDATE/DELETE/TRUNCATE a triggery to blokujú. | M | áno | 1 | P-11, P-19 |
+| B-04 | Každé meranie nesie `measured_at` (zdroj) a `received_at` (databáza), `time_source`, `quality`, verziu dekodéra a kalibrácie, odkaz na surovú správu. | M | áno | 1 | P-15, P-18 |
+| B-05 | Chýbajúce dáta voči očakávanému intervalu sa zaznamenajú ako medzera (`gap`), viditeľná v UI a reportoch; backfill medzeru uzavrie, nezmaže. | M | áno | 1 | P-07 |
+| B-06 | Server kontroluje NTP synchronizáciu pri štarte a periodicky; stav je viditeľný a nesynchronizovaný čas generuje varovanie. | M | áno | 1 | P-18 · 0.34.0 (SNTP `[time] ntp_server`, stránka Server, /healthz, /metrics) · e2e `ops.sh` |
+| B-07 | Všetky časy sa ukladajú v UTC (`timestamptz`) a zobrazujú s explicitným pásmom organizácie/prevádzky (jednoznačné pri zmene letného času). | M | áno | 1 | P-18 |
+| B-08 | Rozdiel času zariadenia a servera nad toleranciou označí meranie `clock_suspect` a vytvorí udalosť pre správcu. | M | áno | 1 | P-18 |
+| B-09 | Rekalibrácia snímača vytvára novú verziu koeficientov platnú od dátumu; spätný prepočet vzniká len na výslovnú žiadosť ako nová `series_version`, pôvodná ostáva. | M | áno | 1 | P-19 |
+| B-10 | Počítadlá (`counter`) sa prepočítavajú na spotrebu za interval s ošetrením pretočenia a výmeny meradla; postup je verziovaný a reprodukovateľný. | S | — | 2 | kap. 4 |
+| B-11 | Retenčná politika je per trieda záznamu a asset, s právnym základom; automatický výmaz neexistuje; výmaz je autorizovaná, logovaná operácia po uplynutí retencie. | M | áno | 1 (výmaz 2) | P-16 · 0.36.1: výmaz len ako `admin purge` (dry run, -yes, jedna transakcia, audit `data.purge` s počtami a dôvodom; aplikačná rola mazať nesmie) · e2e `purge.sh` |
+| B-12 | Register kalibračných certifikátov per snímač (laboratórium, akreditácia, číslo, body, neistota, dátum, platnosť, miesto používania, súbor s hashom) s upozorneniami pred exspiráciou. | M | áno | 1 | P-06 |
+| B-13 | Systém varuje, ak neistota snímača z certifikátu nevyhovuje požadovanej presnosti datastreamu. | S | áno | 2 | P-20 |
+| B-14 | Merania sa partíciujú po mesiacoch; jeden server zvláda 10 000 datastreamov s intervalom 1 min bez straty dát. | M | — | 1 | R6 |
+
+## C. Alarmy, pravidlá, príkazy
+
+| ID | Požiadavka | Prio | GxP | Fáza | Zdroj |
+|---|---|---|---|---|---|
+| C-01 | Alarmové pravidlá per datastream/asset: vysoká/nízka hodnota (výstraha + akcia), rýchlosť zmeny, porucha snímača, strata komunikácie, slabá batéria, výpadok napájania, stav, exspirujúca kalibrácia; s oneskorením a hysterézou; každý parameter verziovaný s dôvodom. | M | áno | 1 | P-04, P-17 |
+| C-02 | Alarm zistený na doplnených (backfill) dátach je označený ako retrospektívny a zobrazený samostatne. | M | áno | 1 | P-15 |
+| C-03 | Potvrdenie alarmu vyžaduje prihlásenie a dôvod; nie je možné potvrdiť z neautentifikovaného odkazu. | M | áno | 1 | P-17 |
+| C-04 | Potlačenie alarmu je časovo ohraničené, logované s dôvodom a po vypršaní sa alarm ozve znova. | M | áno | 1 | P-17 |
+| C-05 | Eskalačný rebríček: kroky s časom, príjemcom a kanálom; každý krok v alarmovom logu s časom odoslania a doručenia. | M | áno | 1 | P-17 |
+| C-06 | Notifikačné kanály: SMTP, SMS brána (HTTP poskytovateľ), Web Push, hlas (HTTP poskytovateľ), webhook; poskytovateľ je konfigurovateľný. 0.23.0: kanály e-mail, webhook (HMAC-SHA256) a HTTP SMS brána per organizácia, eskalačné politiky s krokmi, záznam doručení. 0.26.0: Web Push (VAPID, predplatné prehliadačov per používateľ, `web_push` kanál pre mená alebo `all`, automatické zrušenie po 404/410) a `voice_http` (HTTP poskytovateľ hovoru). | M | — | 1 | kap. 6 · 0.26.0 · e2e |
+| C-07 | Nedoručený alarm (zlyhanie všetkých kanálov kroku) vytvorí incident a vlastný alarm správcovi. | M | áno | 1 | P-13 · 0.35.0: nedoručený krok eskalácie → incident `alarm_undelivered` + e-mail a Web Push správcom · e2e `incidents.sh` |
+| C-08 | Príkazy do zariadení (RPC) s ID, expiráciou a povinným ack; stavy queued/sent/acked/failed/expired; každý príkaz v audit traile s identitou. | M | áno | 1 (základ), 2 | kap. 6 |
+| C-09 | Pravidlá „podmienka → akcia" nad datastreamami (prah, kombinácia, časové okno) s akciami alarm/notifikácia/webhook/príkaz/odvodený datastream; verziované, auditované. Hotové 0.24.0: pomenované vstupy, all/any porovnania s číslom alebo výrazom, `stale`, doba zotrvania a cooldown, akcie pri splnení/ukončení (notify, webhook, command, alarm, derive), verzia in place + audit, záznam spustení, štyri oči pre pravidlá s príkazmi, suchý beh. | S | — | 2 | kap. 6 · 0.24.0 · e2e |
+| C-10 | Alarmový log je samostatná append-only tabuľka s obrazovkou na filtrovanie a triedenie a vlastným reportom. | M | áno | 1 | P-17 |
+| C-11 | Dvere: udalosť z kontaktu sa zobrazuje v grafe; návrat do pásma do 30 min umožní anotáciu „očakávaná udalosť" bez zmeny dát. | S | áno | 2 | research mapovanie |
+
+## D. FOTA
+
+| ID | Požiadavka | Prio | GxP | Fáza | Zdroj |
+|---|---|---|---|---|---|
+| D-01 | Register firmvéru je append-only: binár, verzia, hardvérové ID, min. kompatibilná verzia, SHA-256, podpis Ed25519, ID kľúča, autor, čas. | S | áno | 2 | kap. 9.5 |
+| D-02 | Firmvér sa podpisuje kľúčom autora mimo servera; server podpis len ukladá; nepodpísaný firmvér možno nahrať len s príznakom „vývojový". | S | áno | 2 | ADR-0007 |
+| D-03 | Zariadenie (knižnica) overí podpis vstavaným verejným kľúčom a SHA-256 pred aplikáciou; produkčný režim odmietne nepodpísaný firmvér. | S | áno | 2 | ADR-0007 |
+| D-04 | Kampane: cieľ (zariadenia/skupina/profil), plán, postupné nasadenie (kanárik → percento → všetci), automatické zastavenie pri prekročení miery zlyhaní. | S | — | 2 | kap. 9.5 |
+| D-05 | Stav per zariadenie: queued/downloading/verifying/applying/rebooting/updated/failed(dôvod)/rolled_back; append-only. | S | áno | 2 | kap. 9.5 |
+| D-06 | Prenos cez HTTPS s `Range` a tokenom zariadenia alebo cez MQTT bloky; rýchlostné limity per kampaň. | S | — | 2 | protokol 3.6 |
+| D-07 | Rollback: nová verzia sa musí do `confirm_s` ohlásiť, inak sa vráti predchádzajúca (ESP-IDF app rollback; STM32 referenčný bootloader). | S | — | 2 | kap. 9.5 |
+| D-08 | Nahrávanie firmvéru a spúšťanie kampaní je samostatné oprávnenie; každá kampaň a zmena v audit traile. | S | áno | 2 | ADR-0007 |
+| D-09 | Rotácia podpisových kľúčov cez shared atribút s prechodným obdobím (dva kľúče vo firmvéri). | C | — | 2 | kap. 9.5 |
+
+## E. Vzdialená konzola zariadenia
+
+| ID | Požiadavka | Prio | GxP | Fáza | Zdroj |
+|---|---|---|---|---|---|
+| E-01 | Konzola je textový kanál do firmvéru zariadenia (`console/in`, `console/out`); systém neposkytuje shell na server ani na OS zariadenia. | M | áno | 1 | kap. 9.6 |
+| E-02 | Konzola je predvolene vypnutá; zapína sa per zariadenie shared atribútom pri otvorení relácie a vypína pri zatvorení/timeoute. | M | áno | 1 | ADR-0007 |
+| E-03 | Otvorenie relácie vyžaduje samostatné oprávnenie a MFA re-autentifikáciu; relácia má časový limit a jedného aktívneho operátora. | M | áno | 1 | ADR-0007 |
+| E-04 | Každý vstupný riadok a každý výstup sa ukladá do append-only `console_log` s identitou operátora a časom. | M | áno | 1 | P-11 |
+| E-05 | Rate limit vstupu, maximálna dĺžka riadku, filtrovanie kontrolných znakov vo výstupe. | M | — | 1 | ADR-0007 |
+| E-06 | Profil zariadenia môže definovať zoznam povolených príkazov; organizácia môže konzolu globálne zakázať s dôvodom. | S | áno | 2 | kap. 9.6 |
+| E-07 | Knižnica poskytuje registráciu príkazových handlerov, `help`, históriu a rezervované príkazy (`ping`, `reboot`, `get_attrs`, `set_interval`, `fota_check`). | M | — | 1 | protokol 3.4 |
+| E-08 | Logy firmvéru sa streamujú len počas otvorenej relácie a podľa nastavenej úrovne. | M | — | 1 | protokol 3.5 |
+| E-09 | Konektor OPC UA (klient, polling): endpoint, bezpečnostná politika a mód (None … Basic256Sha256, Sign/SignAndEncrypt s klientskym certifikátom servera), anonymne alebo meno+heslo, mapovanie uzlov → kľúče datastreamov (scale/offset), interval 1–3600 s; hodnoty idú cez virtuálne zariadenie (transport `opcua`) štandardnou cestou telemetrie; stav (pripojené/chyba, posledné hodnoty, nečitateľné uzly) v UI; „Test connection“ pred uložením; heslo zatiaľ v `settings` (šifrovanie kľúčom servera pred 1.0). | M | — | 1 | 0.13.0 · e2e `opcua.sh` so simulátorom `tools/opcuasim` |
+
+## F. Prehliadač správ
+
+| ID | Požiadavka | Prio | GxP | Fáza | Zdroj |
+|---|---|---|---|---|---|
+| F-01 | Každá správa dnu aj von sa uloží ako surová správa s časom, smerom, transportom, témou/URL/uzlom, payloadom, metadátami a výsledkom dekódovania (observácie alebo chyba). | M | áno | 1 | P-19 · 0.36.0: aj HTTP správy zariadení sa ukladajú ako surové (`connector = http`) · e2e `foreign_devices.sh` |
+| F-02 | Živý stream správ cez WebSocket s filtrami (zariadenie, konektor, smer, len chyby), pauzou a vyhľadávaním v histórii. | M | — | 1 | kap. 9.4 |
+| F-03 | Opätovné dekódovanie vybraných surových správ po zmene dekodéra vytvára novú `series_version`; akcia je v audit traile. | M | áno | 1 | P-19 |
+| F-04 | Simulovaná správa „ako zariadenie" je označená a nemieša sa s reálnymi dátami; v GxP profile je zakázateľná. | S | áno | 2 | kap. 9.4 |
+| F-05 | Prístup k prehliadaču správ je samostatné oprávnenie a je logovaný. | M | áno | 1 | ADR-0007 |
+| F-06 | Export vybraných správ do JSON/CSV. | M | — | 1 | kap. 9.4 |
+
+## G. REST API
+
+| ID | Požiadavka | Prio | GxP | Fáza | Zdroj |
+|---|---|---|---|---|---|
+| G-01 | API je popísané OpenAPI 3.1, verziované (`/api/v1`); UI používa výhradne toto API. Hotové 0.25.0: `GET /api/v1/openapi.json` generovaný z tabuľky operácií (164 operácií, 47 schém, oprávnenia, bezpečnostné schémy), test vyžaduje popis každej registrovanej cesty, referenčná stránka `/api/docs`. | M | — | 1 | kap. 9.7 · 0.25.0 · e2e |
+| G-02 | API tokeny s rozsahom (čítanie/zápis per oblasť, per zákazník) a expiráciou; každé mutujúce volanie v audit traile s identitou tokenu a vlastníka. | M | áno | 1 | P-11 |
+| G-03 | Telemetria: čítanie surové aj agregované (min/max/avg/last/count za okná), stránkovanie kurzorom, limity rozsahu. Hotové 0.27.0: `bucket` (s) s avg/min/max/count, kurzor `X-Next-Cursor`/`Link` nad `(measured_at, id)`, limit 366 dní surových riadkov a 20 000 bucketov na požiadavku. | M | — | 1 | kap. 9.7 · 0.27.0 · e2e |
+| G-04 | Zápisy sú idempotentné (idempotenčný kľúč); rate limit per token; CORS len explicitne; chyby bez interných detailov. | M | — | 1 | ADR-0007 |
+| G-05 | Autorizácia každého endpointu je testovaná proti IDOR (prístup k cudzej organizácii/zákazníkovi). | M | áno | 1 | threat model |
+| G-06 | Provisioning API pre ctrl32 editor: vytvorenie zariadenia, claim kód/token, stav, zoznam. | M | — | 1 | ADR-0006 |
+| G-07 | Živé dáta cez WebSocket alebo MQTT-over-WebSocket s rovnakými oprávneniami. Fáza 1 (0.19.0): Server-Sent Events `GET /api/v1/stream` (session/API token, `data.read`, filter datastreamy/zariadenia/alarmy) a verejná verzia pre zdieľané dashboardy; MQTT-over-WebSocket ostáva pre HMI viewer. | M | — | 1 | kap. 9.7 · 0.19.0 · e2e |
+| G-08 | Generovaný TypeScript klient; kolekcia Postman/Bruno v repe. Hotové 0.27.0: `tools/apigen` generuje `clients/typescript/ctrl32-api.ts` a kolekciu Bruno `clients/bruno/` z OpenAPI; test vyžaduje aktuálne súbory. | S | — | 1 | kap. 9.7 · 0.27.0 · e2e |
+| G-09 | API-first: každá funkcia systému (vrátane správy obsahu, šablón, brandingu, exportov a PDF) je dostupná cez REST API s tokenom; UI nemá žiadnu funkciu navyše. | M | áno | 1 | ADR-0010 |
+| G-10 | Obsahový rámec: šablóny reportov, dashboardy, HMI obrazovky, texty a branding sú verziované obsahové položky (`kind`, `version`, `locale`, `checksum`, `valid_to`, `reason`) s vlastným oprávnením `content.write`; nová verzia je nový záznam, staré verzie ostávajú. | M | áno | 1 | ADR-0010 |
+
+## H. Identita, prístup, bezpečnosť
+
+| ID | Požiadavka | Prio | GxP | Fáza | Zdroj |
+|---|---|---|---|---|---|
+| H-01 | Osobné jedinečné účty; žiadne zdieľané ani predvolené účty/heslá; prvý správca vzniká v sprievodcovi. | M | áno | 1 | P-12 |
+| H-02 | Heslá Argon2id (m = 19 MiB, t = 2, p = 1) s pepperom mimo DB; zložitosť vynútená; zmena pri prvom prihlásení. | M | áno | 1 | ADR-0007 |
+| H-03 | TOTP povinné pre správcov a QA; v profile `internet` pre všetkých; WebAuthn ako druhý faktor voliteľne. | M | áno | 1 | P-12 |
+| H-04 | Zamknutie účtu po N neúspešných pokusoch; dočasné blokovanie IP; rate limiting prihlásenia. | M | áno | 1 | ADR-0007 |
+| H-05 | Timeout nečinnosti nastaviteľný len správcom; absolútny limit relácie; rotácia ID relácie pri prihlásení a zmene oprávnení. | M | áno | 1 | draft 11.8 |
+| H-06 | Roly: Čitateľ, Operátor, QA recenzent, Správca prevádzky, Správca zákazníka, Správca organizácie; vlastné roly z oprávnení; história rolí append-only. | M | áno | 1 | P-12 |
+| H-07 | Oddelenie povinností: administratívna rola nemá QA práva v tej istej prevádzke (predvolené; vypnutie s dôvodom). | M | áno | 1 | draft 11.10 |
+| H-08 | Štyri oči (potvrdenie druhou osobou) pre zmeny limitov, kalibračných koeficientov a priradení — voliteľné per organizácia. 0.22.0: príkazy (`four_eyes_commands`, stav `pending`). 0.28.0: limity (`four_eyes_limits`: alarmové pravidlá) a priradenia (`four_eyes_assignments`) ako žiadosti o zmenu (`core.change_request`), schválenie iným používateľom prehrá pôvodné volanie a audituje obe mená; kalibračné koeficienty čakajú na kalibračnú funkciu (druh `calibration` pripravený). | S | áno | 2 | P-08 · 0.28.0 · e2e |
+| H-09 | TLS povinné v profile `internet` pre HTTP aj MQTT; HSTS, CSP, X-Frame-Options, Referrer-Policy; cookies HttpOnly/Secure/SameSite=Strict; CSRF ochrana. | M | áno | 1 | ADR-0007 |
+| H-10 | Tajomstvá (SMTP/SMS kľúče, TOTP seedy, tokeny zariadení, credentials konektorov) šifrované v DB (AES-GCM, kľúč mimo DB); tokeny hashované. | M | áno | 1 | ADR-0007 |
+| H-11 | Služba beží pod vlastným OS účtom; DB rola aplikácie bez DDL a bez UPDATE/DELETE na záznamoch. | M | áno | 1 | ADR-0007 |
+| H-12 | Validácia vstupov schémou na API aj ingeste; limity veľkosti požiadaviek. | M | — | 1 | ADR-0007 |
+| H-13 | E-podpis: re-autentifikácia (heslo + TOTP) pri podpise, význam podpisu, manifestácia (meno, používateľské meno, rola, čas s pásmom), hash verzie záznamu; zmena záznamu podpis zneplatní. | S | áno | 2 | P-14 |
+| H-14 | Vzdialený prístup dodávateľa/implementátora len na vyžiadanie, časovo obmedzený a logovaný. | S | áno | 2 | kap. 7 |
+| H-15 | Revokácia zariadenia okamžite odpojí a zablokuje jeho token/certifikát; rotácia tokenov cez príkaz. | M | áno | 1 | protokol 3.7 |
+| H-16 | Každý release má SBOM (CycloneDX), výsledok `govulncheck` a podpis artefaktu; frontend build je vendorovaný s pinovanými verziami. | M | áno | 1 | ADR-0007 · 0.34.0 čiastočne: `publish.sh` = govulncheck (nález blokuje release) + CycloneDX SBOM v `dl/`; podpis artefaktu čaká na certifikát |
+| H-17 | Zverejnená bezpečnostná politika (`SECURITY.md`, `security.txt`) a model hrozieb v repe. | M | — | 1 | ADR-0007 · 0.34.0 (`SECURITY.md`, `/.well-known/security.txt`, `docs/threat-model.md`) · e2e `ops.sh` |
+| H-18 | Externý penetračný test pred 1.0 a 2.0 so zverejneným súhrnom. | M | — | 1 | ADR-0007 |
+| H-19 | OIDC prihlásenie (fáza 2), LDAP/AD (fáza 3). | S/C | — | 2/3 | kap. 7 |
+
+## I. Audit trail a logy
+
+| ID | Požiadavka | Prio | GxP | Fáza | Zdroj |
+|---|---|---|---|---|---|
+| I-01 | Každá manuálna zmena (konfigurácia, limity, priradenia, používatelia, potvrdenia, anotácie, reporty, príkazy, kampane) zapíše audit riadok: kto, čo (stará → nová hodnota), kedy (s pásmom), prečo (`reason NOT NULL` pri GMP-relevantných zmenách). | M | áno | 1 | P-11 |
+| I-02 | Audit trail má gapless `seq`, `prev_hash`, `hash`; denný podpísaný kontrolný bod; príkaz `audit verify`; porušenie reťazca vytvorí alarm správcovi. | M | áno | 1 | ADR-0005 · 0.35.0: porušený reťazec pri štarte alebo `audit verify` otvára inštančný incident a upozorní správcov (denný podpísaný kontrolný bod ostáva otvorený) |
+| I-03 | Audit trail sa nedá vypnúť žiadnou konfiguráciou. | M | áno | 1 | P-11 |
+| I-04 | Audit trail je v UI filtrovateľný a triediteľný (typ udalosti, používateľ, entita, obdobie); export CSV/JSON s menami namiesto ID. | M | áno | 1 | draft 12.4, 12.9 |
+| I-05 | Workflow prehľadu audit trailu: recenzent zaznamená obdobie, výsledok a podpis (append-only). | S | áno | 2 | draft 12.5–12.6 |
+| I-06 | Prístupový log: každé prihlásenie, odhlásenie, zlyhanie, IP, UA, čas; append-only. | M | áno | 1 | P-12 |
+| I-07 | Systémový log: štruktúrovaný JSON, úrovne, korelačné ID, bez hesiel/tokenov/PII, rotácia a retencia nastaviteľné, export syslog/OTLP/súbor. | M | — | 1 | ADR-0007 · 0.34.0 (JSON log so `security` atribútom, súbor, syslog RFC 5424 `[log] syslog`; OTLP nie) |
+| I-08 | Bezpečnostné udalosti (zlyhané prihlásenia, blokovania, zmeny oprávnení a konfigurácie, štart/stop služby, zlyhania záloh, porušenie reťazca) sú v GxP logoch aj v systémovom logu s príznakom `security=true` a voliteľnou notifikáciou správcovi. | M | áno | 1 | ADR-0007 |
+| I-09 | Incidentný log: typ, dopad, príčina, CAPA; „alarm nedoručený" a „porušenie reťazca" vznikajú automaticky. | M | áno | 1 | P-13 · 0.35.0: `core.incident` (druh, závažnosť, dopad, príčina, CAPA, workflow), `core.incident_event`, stránka Incidenty, API · e2e `incidents.sh` |
+
+## J. Dashboardy, HMI, reporty, exporty
+
+| ID | Požiadavka | Prio | GxP | Fáza | Zdroj |
+|---|---|---|---|---|---|
+| J-01 | Pevné dashboardy: prehľad prevádzky, trend datastreamu (100k+ bodov plynulo), alarmy, stav zariadení, mapa medzier. | M | — | 1 | kap. 8 |
+| J-02 | Dashboard builder: mriežka widgetov (trend, hodnota, gauge, tabuľka, stav, mapa) nad datastreamami, s oprávneniami a verziami. Fáza 1 (0.16.0): formát obrazoviek v1 (ADR-0008), 12-stĺpcová mriežka s presúvaním a zmenou veľkosti, katalóg 12 widgetov (trend line/area/step/bar/scatter, stĺpce, donut, heatmap, hodnota, gauge, stav, tabuľka, alarmy, zariadenia, mapa, text), verzie s dôvodom, predvolený dashboard na domovskej stránke; štartovacie šablóny Overview a Showcase (všetky widgety) v dialógu aj cez CLI `admin seed-dashboard` (0.17.0); verejný odkaz `/p/<token>` len na čítanie s dátami naviazanými widgetmi, QR, audit (0.18.0). | S | — | 1 | kap. 8 · 0.16.0 · e2e |
+| J-03 | JSON formát HMI obrazoviek v1 (strom widgetov, geometria, väzby na datastreamy, akcie) je zdokumentovaný a verziovaný; obrazovky sú dáta v DB s auditom. Hotové: screen format v1 (0.16.0 dashboardy s mriežkou, 0.31.0 druh `mimic` s plátnom v pixeloch), verzie s dôvodom v `core.dashboard`, popis v OpenAPI (DashboardSpec). | S | — | 1 (formát), 2 (viewer) | ADR-0008 · 0.31.0 · e2e |
+| J-04 | HMI viewer: SVG rendering, Web Components widgety (ISA-101), živé hodnoty cez MQTT-over-WS, zápis hodnôt = príkaz s oprávnením a auditom. 0.21.0: zápis z obrazovky = ovládacie widgety (setpoint, prepínač, tlačidlo) ako príkaz s dôvodom, limitmi a auditom. 0.31.0: SVG procesné symboly ISA-101 (nádrž, čerpadlo, ventil, potrubie, prístroj) na plátne, živé hodnoty cez SSE (rozhodnutie 0.19.0 namiesto MQTT-over-WS), verejné zdieľanie; Web Components až s Lit UI. | S | áno | 2 | ADR-0008 · 0.31.0 · e2e |
+| J-05 | HMI editor nad formátom v1 s enginom s čistou licenciou. Hotové 0.31.0: editor plátna v prehliadači bez knižníc (ťahanie s 10 px mriežkou, zmena veľkosti, vlastnosti, väzby, nastavenia plátna, ukážka zo startera). | C | — | 3 | ADR-0008 · 0.31.0 · e2e |
+| J-06 | Periodický report assetu (PDF/A cez Typst): min/max/priemer, počet záznamov, potvrdenie intervalu, graf, medzery, alarmy, sign-off polia, kotva audit trailu, hash, „koniec reportu". | M | áno | 1 | P-01, P-03, P-10 · 0.34.0: PDF/A-2b cez Typst `--pdf-standard a-2b` (fallback na PDF s varovaním) · e2e `reports.sh` |
+| J-07 | Reporty: odchýlka s MKT, alarmový log, audit trail, stav kalibrácií, dátový balík periodického prehľadu, mesačná spotreba. | S | áno | 2 | kap. 8 |
+| J-08 | Reporty sa generujú deterministicky (rovnaký vstup → rovnaký hash) a archivujú ako záznam. | M | áno | 1 | P-10 · 0.34.0: `--creation-timestamp` z `generated_at` → rovnaké dáta, šablóna a assety = rovnaký hash |
+| J-09 | Exporty CSV/JSON pre merania, audit trail, alarmový log, konfiguráciu, certifikáty; plný export organizácie jedným kliknutím. | M | áno | 1 | P-21 |
+| J-10 | UI je primárne v angličtine; ďalšie jazyky cez i18n (SK a CZ ako prvé preklady); regulačné šablóny reportov per locale; formáty dátumu, čísel a pásma per organizácia. | M | — | 1 | ADR-0009 |
+| J-11 | Každý export (merania, alarmy, audit trail, prístupový log, správy) je dostupný aj ako PDF (`format=pdf`) z verziovanej šablóny organizácie; PDF je záznam (`core.report`) s hashom dát aj súboru, kotvou audit trailu a overením hashu pri stiahnutí. | M | áno | 1 | ADR-0010 |
+| J-12 | Editor šablón reportov: zdrojový kód šablóny (Typst) s náhľadom PDF nad vzorovými dátami, ukladanie ako nová verzia s dôvodom, návrat na vstavanú šablónu; šablóna sa pred prijatím skompiluje. Blokový (vizuálny) dizajnér vo fáze 2. | M | áno | 1 (zdroj), 2 (bloky) | ADR-0010 |
+| J-13 | Dátový kontrakt šablóny (`data.json`: hlavička, obdobie, rozsah, stĺpce, riadky, súhrn, graf, kotva auditu) je zdokumentovaný a dostupný cez API (`/contract`); zmena kontraktu je verziovaná. | M | — | 1 | ADR-0010 |
+| J-14 | Responzívne UI: mobil a tablet sú podporované s pevnou šírkou obsahu (žiadne horizontálne pretekanie stránky; tabuľky rolujú vo vlastnom kontajneri), dotykové ovládanie, bezpečné okraje displeja. | M | — | 1 | ADR-0011 |
+| J-15 | UI je inštalovateľná PWA (manifest, ikony, service worker pre statický shell); dáta a záznamy sa nikdy nekešujú v prehliadači. | M | — | 1 | ADR-0011 |
+| J-16 | Svetlá a tmavá téma (podľa systému, s prepínačom používateľa); organizácia si nastaví vlastné logo, hlavnú farbu, písmo, zaoblenie a veľkosť písma (branding), ktoré platia v UI aj v PDF reportoch; nastavenie je auditované. | M | — | 1 | ADR-0011 |
+| J-17 | Bez prihlásenia sa zobrazí jednoduchá úvodná stránka (landing) s logom, popisom a prihlásením; žiadne dáta. | M | — | 1 | ADR-0011 |
+| J-18 | Blokový dizajnér šablón reportov (ADR-0010 fáza 2): šablóna = strana (formát, orientácia, písmo, veľkosť) + zoradené bloky s parametrami (nadpis, súhrn, graf, text s tokenmi `{{…}}`, tabuľka dát so stĺpcami, denná štatistika min/max/priemer, podpisy, medzera, zalomenie strany, koniec); spec sa uloží spolu s vygenerovaným Typst zdrojom ako nová verzia (`core.report_template.spec`), zdroj je vždy viditeľný a dá sa prepnúť do ručnej úpravy (tá spec zahodí); vstavané šablóny majú predvolené bloky; `POST /api/v1/report-templates/compile` a náhľad PDF pred uložením. | M | — | 1 | 0.14.0 · e2e `reports.sh` (blok „block designer“) |
+| J-19 | Poloha zariadenia: pevná (zadaná správcom, výber na mape) alebo hlásená zariadením (`lat`/`lon` v telemetrii alebo stave); pevná má prednosť; mapové widgety zobrazujú zariadenia so stavom; dlaždice máp sú konfigurovateľné v organizácii (vlastný tile server, poskytovateľ s kľúčom, OSM len na ľahké použitie), Leaflet 1.9.4 (BSD-2) vendorovaný; 0.33.0: self-hosted mapa — server podáva dlaždice z lokálneho PMTiles archívu (`[map] pmtiles`, `/tiles/{z}/{x}/{y}.png`, bez internetu), vlastná URL organizácie má prednosť; oprava: uložené nastavenia mapy organizácie sa od 0.16.0 nenačítavali. | S | — | 1 | 0.33.0 · e2e |
+
+## K. Zálohy, inštalácia, prevádzka
+
+| ID | Požiadavka | Prio | GxP | Fáza | Zdroj |
+|---|---|---|---|---|---|
+| K-01 | Zálohovací modul: plán (GFS), cieľ mimo servera (SMB/NFS/S3/SFTP), šifrovanie, kontrola integrity. | M | áno | 1 | P-09 |
+| K-02 | Automatizovaný test obnovy do dočasnej DB podľa plánu (predvolene mesačne) s protokolom; výsledok viditeľný v UI. | M | áno | 1 | P-09 |
+| K-03 | Zlyhanie zálohy alebo testu obnovy vytvára alarm správcovi a bezpečnostnú udalosť. | M | áno | 1 | I-08 |
+| K-04 | Zálohy obsahujú aj konfiguráciu a verziu aplikácie (obnova = konzistentný stav). | M | áno | 1 | draft 16.5 |
+| K-05 | Obnova zo zálohy je zdokumentovaný postup s kontrolou hash-reťazca po obnove. | M | áno | 1 | ADR-0005 |
+| K-06 | Retenčné odpojenie partícií (nie výmaz) je možné len po archivácii s checksumom a je auditované. | S | áno | 2 | draft 17.2 |
+| K-07 | Inštalátor pre Windows Server (podpísaný certifikátom ctrl32): pribalený PostgreSQL 18 alebo existujúci, Typst, služba, sprievodca prvým spustením (správca, TLS, NTP, SMTP, zálohy, profil). 0.32.0: agent ako služba `ctrl32-telemetry-agent` (zálohy cez pg_dump.exe, aktualizácie výmenou exe, reštarty cez SCM), `install.ps1` ho registruje; podpis binárky čaká na certifikát. | M | — | 1 | 0.15.0: `deploy/install.ps1` (PostgreSQL 18 z EDB binárok, Typst, služba, firewall, bootstrap; podpis cez signtool keď je certifikát) — reálny beh na čistom Windows Server ešte čaká |
+| K-08 | Linux balíky (`.deb`/`.rpm`/tarball, systemd) a Docker compose s rovnakým sprievodcom. | M | — | 1 | kap. 11 |
+| K-09 | Profil `internet`: ACME alebo certifikát, MFA pre všetkých, limity, prísne hlavičky; bez TLS sa služba nespustí. | M | áno | 1 | ADR-0003 |
+| K-10 | Aktualizácia: overenie podpisu balíka, záloha pred migráciou, migrácia s kontrolou integrity (hodnota aj význam), zápis `config_change`; žiadna automatická aktualizácia; rollback postup. | M | áno | 1 | Annex 11 cl. 4.8, 10 |
+| K-11 | UI upozorňuje na zastaranú verziu a nedodržané odporúčania hardeningu (lokálna kontrola voči podpísanému zoznamu, bez odosielania dát). | S | — | 2 | ADR-0003 |
+| K-12 | Health endpoint, metriky (úplnosť dát v %, latencia alarmov, fronty, zálohy, drift), stavová stránka správcu. | M | — | 1 | kap. 7a · 0.34.0: `/healthz` (db, ntp), `/metrics` Prometheus (úplnosť dát 24 h, latencia alarmov, fronty, NTP, audit reťazec), stránka Server · e2e `ops.sh` |
+| K-13 | Konfiguračná baseline: každá zmena systémovej konfigurácie v `config_change` (podklad pre IQ). | M | áno | 1 | P-22 |
+| K-15 | Obrazovka servera (`system.admin`): parametre procesu a konfigurácie roztriedené (služba, hostiteľ, sieť, databáza, úložiská, komponenty) bez tajomstiev; stav systemd jednotiek a kontajnerov; reštart služby, proxy, agenta a WireGuardu s dôvodom v audite. | M | — | 1 | ADR-0012 · 0.10.0 · e2e `server.sh` |
+| K-16 | Doména a TLS z UI: doména, ďalšie domény, e-mail pre ACME, výzva HTTP/TLS-ALPN alebo Cloudflare DNS-01 (token uložený len na disku root 0600); agent overí konfiguráciu (`caddy validate`) pred aplikovaním; zobrazenie certifikátu (vydavateľ, expirácia). | M | — | 1 | ADR-0012 · 0.10.0 · ručne na demo |
+| K-17 | WireGuard server z UI: zapnutie, port, adresa, endpoint; zariadenia ako peeri s vlastným kľúčovým párom a adresou, konfigurácia zobrazená raz (text + QR), stav (handshake, prenos); broker počúva aj na VPN adrese (`mqtt.vpn_listen`), súkromný kľúč peera server neukladá. | M | — | 1 | ADR-0012 · 0.10.0 · ručne na demo |
+| K-18 | Aktualizácia z UI: kontrola dostupnej verzie (`/dl/VERSION`), inštalácia so SHA-256 overením, migrácia a reštart; privilegované operácie vykonáva len agent s uzavretým zoznamom operácií (ADR-0012). | M | áno | 1 | ADR-0012 · 0.10.0 · e2e + ručne |
+| K-14 | Zálohy z UI (`system.admin`): balík = `pg_dump` (custom formát) + konfigurácia s tajomstvami + stav proxy a VPN + RESTORE.txt; voliteľné šifrovanie heslom (openssl AES-256-CBC, PBKDF2); ručne (na pozadí, UI sleduje stav) aj denne v agente s retenciou; zoznam, stiahnutie a mazanie s dôvodom v audite. Obnova podľa návodu v balíku (CLI). | M | áno | 1 | 0.12.0 · e2e `server.sh` (živý server) |
+
+## L. Klientske knižnice
+
+| ID | Požiadavka | Prio | GxP | Fáza | Zdroj |
+|---|---|---|---|---|---|
+| L-01 | Spoločné C99 jadro bez dynamickej alokácie (alebo s konfigurovateľným alokátorom) s platformovými rozhraniami net/time/storage/log. | M | — | 1 | ADR-0006 |
+| L-02 | Porty: Arduino (1.0), ESP-IDF (1.0), STM32 FreeRTOS+LwIP (2.0), STM32 modem cez AT (2.0), integrácia ctrl32 (2.0). | M/S | — | 1/2 | ADR-0006 |
+| L-03 | Funkcie jadra: telemetria s dávkami, offline buffer s backfillom (`bf`), shared atribúty, heartbeat, príkazy s ack, konzola, FOTA klient, provisioning claim kódom. | M | áno | 1 (FOTA 2) | protokol |
+| L-04 | Knižnica overuje certifikát servera (CA alebo odtlačok); TLS je predvolené. | M | áno | 1 | threat model |
+| L-05 | Token je uložený v perzistentnej pamäti platformy; dokumentácia odporúča flash encryption (ESP32) a ochranu čítania (STM32 RDP). | M | — | 1 | threat model |
+| L-06 | Rotácia tokenu cez príkaz s ack; revokovaný token vedie k zastaveniu odosielania a viditeľnému stavu na zariadení. | S | — | 2 | protokol 3.7 |
+| L-07 | FOTA klient overuje SHA-256 a Ed25519 podpis pred aplikáciou; referenčný bootloader pre STM32 s dvoma slotmi a rollbackom. | S | áno | 2 | ADR-0007 |
+| L-08 | Testy protokolu bežia v CI proti serveru pre každý port (emulované zariadenie). | M | — | 1 | ADR-0006 |
+| L-09 | Príkladové projekty per port: teplota, impulzný vstup, Modbus RTU brána, digitálne stavy, príkaz na výstup, FOTA demo. | M | — | 1/2 | kap. 9.2 |
+
+## M. Dokumentácia a validačná pripravenosť
+
+| ID | Požiadavka | Prio | GxP | Fáza | Zdroj |
+|---|---|---|---|---|---|
+| M-01 | URS (tento dokument) je zdrojom RTM; testy nesú tagy `URS-<ID>`; RTM sa generuje pri každom release. | M | áno | 1 | kap. 12 |
+| M-02 | Release pack: release notes, klasifikácia zmien (GxP áno/nie, dotknuté URS), výsledky testov, odporúčaný regresný rozsah, migračné kroky + kontrola integrity, SBOM, CVE vyhlásenie, hash a podpis. | M | áno | 1 | kap. 12 |
+| M-03 | IQ/OQ šablóny s ID testov; automatizované testy prikladajú výstupy a snímky; kombinované IOQ. | S | áno | 2 | kap. 12 |
+| M-04 | Matice zhody: vyhláška 129/2012 § 30 ods. 8 / § 31 ods. 3; Annex 11 (2011); EU GDP 3.2.1/3.3; draft Annex 11 kap. 8/11/12/16/17 — vždy v podpornom registri. | M | áno | 1 | kap. 12 |
+| M-05 | Verejný QMS-light vývojára: SDLC, code review (automatizované brány + externá revízia), release/change, incident/CAPA, bezpečnostná politika. | M | áno | 1 | P-21 |
+| M-06 | Sprievodca hardeningom a dokument „Zodpovednosť nasadzovateľa". | M | — | 1 | ADR-0003 |
+| M-07 | Šablóny pre implementátorov: zmluva o kvalite (draft 7.5 i–ix), SLA/KPI, supplier dossier, kalibračný postup, URS zákazníka. | S | áno | 2 | kap. 12 |
+| M-08 | Regulačné vety v UI, reportoch a dokumentácii sa preberajú len z overovacieho záznamu. | M | áno | 1 | README researchu |
+
+## N. Nefunkčné
+
+| ID | Požiadavka | Prio | GxP | Fáza | Zdroj |
+|---|---|---|---|---|---|
+| N-01 | Jeden statický binár pre Windows Server (x64) a Linux (x64, arm64); PostgreSQL jediná externá závislosť. | M | — | 1 | ADR-0001 |
+| N-02 | Reprodukovateľný build; hash artefaktu v release packu. | M | áno | 1 | ADR-0007 |
+| N-03 | Výkon: 10 000 datastreamov × 1/min na 2 vCPU / 4 GB bez straty; latencia alarmu od prijatia správy < 2 s; trend 100k bodov < 1 s v UI. | M | — | 1 | R6 |
+| N-04 | Štart služby a obnova spojení bez manuálneho zásahu po výpadku napájania/siete. | M | áno | 1 | P-15 |
+| N-05 | Dostupnosť UI aj API v moderných prehliadačoch (posledné 2 verzie Chrome/Edge/Firefox/Safari); bez pluginov. | M | — | 1 | — |
+| N-06 | Všetko, čo produkt obsahuje alebo produkuje (kód, identifikátory, API, chybové kódy, logy, dokumentácia, release notes), je v angličtine; iné jazyky len ako preklady UI. | M | — | 1 | ADR-0009 |
+| N-07 | Žiadny kód špecifický pre zákazníka; všetko zákaznícke je konfigurácia. | M | áno | 1 | P-22 |
+| N-08 | Každý komponent tretej strany (server, frontend, knižnice zariadení, pribalené binárky, fonty, ikony) má permisívnu open-source licenciu triedy MIT (MIT, BSD, ISC, zlib, Apache-2.0, PostgreSQL); copyleft, BSL/SSPL a proprietárne sú vylúčené; výnimka len cez ADR; kontrola licencií v CI je brána releasu a licencie sú v SBOM. | M | áno | 1 | ADR-0009 |
+| N-09 | Ikony výhradne Tabler Icons, vlajky Tabler flags (MIT), vendorované s pinovanou verziou. | M | — | 1 | ADR-0009 |
+| N-10 | Generovanie PDF cez Typst (Apache-2.0) ako pribalená, pinovaná binárka; šablóny bežia v izolovanom pracovnom adresári bez prístupu k systému súborov a bez balíkov zo siete; limit riadkov v PDF, plné dáta v CSV/JSONL. | M | áno | 1 | ADR-0010 |
+| N-11 | Pevná pätička produktu na každej stránke: „ctrl32 · telemetry", ikona GitHub s odkazom na repozitár (nové okno) a odkaz na licenciu; pätička je súčasťou binárky, nie je konfigurovateľná a jej zachovanie je podmienkou licencie. | M | — | 1 | ADR-0002, ADR-0011 |
+| N-12 | Licencia: Apache-2.0 s dodatočnými podmienkami (zákaz predaja softvéru a jeho hostovania za odplatu, zachovanie pätičky); text licencie je v binárke a dostupný na `/license`. | M | — | 1 | ADR-0002 |
+| N-13 | Jazyky: angličtina je základ; správca organizácie zapína ďalšie jazyky (sk, cs, uk, de, pl, hu, es, fr, it, ro, fi, sv, no, da, et, nl, bg, el), používateľ si volí vlastný; zabudované preklady sa dajú v organizácii prepísať a doplniť s auditom; chýbajúci reťazec padá na angličtinu. | M | — | 1 | 0.8.0 |
+
+## O. Organizácie (tenanti)
+
+| ID | Požiadavka | P | Overenie | Fáza | Pozn. |
+|---|---|---|---|---|---|
+| O-01 | Jeden server hostuje viac organizácií (tenantov); každý používateľ, rola, zariadenie, lokalita, šablóna, preklad a report patrí práve jednej organizácii a žiadny dopyt nepretína túto hranicu (scope je `org_id` principálu). | M | — | 1 | 0.9.0 · e2e `organizations.sh` |
+| O-02 | Organizácie spravuje systémový administrátor (`system.admin`): zoznam s počtami používateľov a zariadení, vytvorenie s prvým administrátorom (rola `org_admin`, jednorazové heslo, povinná zmena a nastavenie autentifikátora), úprava názvu, časovej zóny a jazyka. | M | áno | 1 | 0.9.0 · e2e |
+| O-03 | Zakázanie organizácie: prihlásenie je odmietnuté, relácie jej používateľov sú ukončené, zariadenia sú odmietnuté pri ďalšom pripojení; dáta zostávajú a organizáciu možno znova povoliť. Vlastnú organizáciu zakázať nemožno. | M | áno | 1 | 0.9.0 · e2e |
+| O-04 | Používateľské meno a e-mail sú jedinečné na celom serveri (prihlásenie neuvádza organizáciu). | M | — | 1 | 0.9.0 · migrácia 0010 |
+| O-05 | Systémový administrátor môže administrátorovi inej organizácie vygenerovať nové jednorazové heslo (audit, ukončenie relácií). | S | — | 1 | 0.9.0 · e2e |

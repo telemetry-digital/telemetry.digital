@@ -1,0 +1,29 @@
+meta {
+  name: Read console output
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/devices/:id/console/:sid
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+  sid: 
+}
+
+params:query {
+  ~after: 
+  ~limit: 
+}
+
+docs {
+  Read console output
+  
+  Lines after a sequence number (poll with `after`).
+  
+  Requires permission `device.console`.
+}

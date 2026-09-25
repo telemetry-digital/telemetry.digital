@@ -1,0 +1,17 @@
+meta {
+  name: Verify the audit hash chain
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/audit/verify
+  body: none
+  auth: inherit
+}
+
+docs {
+  Verify the audit hash chain
+  
+  Requires permission `data.read`.
+}

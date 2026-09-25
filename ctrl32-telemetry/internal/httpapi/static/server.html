@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Server</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  .kv { display: grid; grid-template-columns: minmax(140px, 220px) 1fr; gap: 4px 16px; font-size: 14px; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; word-break: break-word; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .qr { display: block; width: 260px; height: 260px; background: #fff; padding: 8px; border-radius: var(--radius); }
+  pre.conf { font-size: 12px; white-space: pre-wrap; word-break: break-all; margin: 0; }
+  .agent-off { border-left: 3px solid var(--warn, #e0a800); }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<nav class="subnav">
+  <a href="/server" data-section="overview">Overview</a>
+  <a href="/server/domain" data-section="domain">Domain and TLS</a>
+  <a href="/server/wireguard" data-section="wireguard">WireGuard</a>
+  <a href="/server/backups" data-section="backups">Backups</a>
+  <a href="/server/updates" data-section="updates">Updates</a>
+</nav>
+
+<section data-section="overview">
+  <div class="page-head"><h1>Server</h1><span class="grow"></span><button class="btn" id="refreshBtn" type="button">Refresh</button><button class="btn danger" id="restartAppBtn" type="button">Restart service</button></div>
+  <div class="card agent-off" id="agentNote" hidden></div>
+  <div class="grid">
+    <div class="card"><h2>Service</h2><dl class="kv" id="kvService"></dl></div>
+    <div class="card"><h2>Host</h2><dl class="kv" id="kvHost"></dl></div>
+    <div class="card"><h2>Network</h2><dl class="kv" id="kvNet"></dl></div>
+    <div class="card"><h2>Database</h2><dl class="kv" id="kvDb"></dl></div>
+    <div class="card"><h2>Storage and files</h2><dl class="kv" id="kvFiles"></dl></div>
+    <div class="card"><h2>Components</h2><dl class="kv" id="kvVersions"></dl></div>
+  </div>
+  <div class="card" style="margin-top:16px"><h2>Services and containers</h2>
+    <div class="table-wrap"><table id="units"><thead><tr><th>Unit</th><th>State</th><th>At boot</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+</section>
+
+<section data-section="domain">
+  <div class="page-head"><h1>Domain and TLS</h1><span class="grow"></span><button class="btn" id="restartCaddyBtn" type="button">Restart proxy</button></div>
+  <div class="card agent-off" id="agentNoteDomain" hidden></div>
+  <div class="grid">
+    <div class="card">
+      <h2>Certificate</h2>
+      <dl class="kv" id="kvCert"></dl>
+      <details style="margin-top:8px"><summary class="muted">Current Caddyfile</summary><pre class="conf" id="caddyfile"></pre></details>
+    </div>
+    <div class="card">
+      <h2>Configuration</h2>
+      <p class="muted">Point the DNS record of the domain at this server first. Certificates come from Let's Encrypt automatically. Behind the Cloudflare proxy (orange cloud) use the DNS challenge with an API token that may edit the zone's DNS.</p>
+      <form id="caddyForm" class="form">
+        <label>Domain <input name="domain" required pattern="[a-z0-9.-]+" placeholder="telemetry.example.com"></label>
+        <label>Additional domains (comma separated) <input name="extra_domains" placeholder="alias.example.com"></label>
+        <label>E-mail for certificate notices (optional) <input name="email" type="email"></label>
+        <label>Certificate challenge <select name="dns_provider"><option value="">HTTP / TLS-ALPN (ports 80 and 443 reachable)</option><option value="cloudflare">Cloudflare DNS (works behind the Cloudflare proxy)</option></select></label>
+        <label id="cfTokenRow" hidden>Cloudflare API token <input name="cloudflare_token" type="password" autocomplete="off" placeholder="leave empty to keep the stored token"></label>
+        <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+        <div class="err" id="caddyErr"></div>
+        <div class="muted" id="caddyMsg"></div>
+        <div><button class="btn primary" type="submit" id="caddySubmit">Apply</button></div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section data-section="wireguard">
+  <div class="page-head"><h1>WireGuard</h1><span class="grow"></span><button class="btn primary" id="addPeerBtn" type="button">Add device</button></div>
+  <div class="card agent-off" id="agentNoteWg" hidden></div>
+  <div class="grid">
+    <div class="card">
+      <h2>Server</h2>
+      <p class="muted">Devices and gateways that cannot use TLS connect through a WireGuard tunnel and reach the broker on the VPN address without exposing MQTT publicly. Each device gets its own key pair and address.</p>
+      <dl class="kv" id="kvWg"></dl>
+    </div>
+    <div class="card">
+      <h2>Configuration</h2>
+      <form id="wgForm" class="form">
+        <label class="inline"><input type="checkbox" name="enabled"><span>Enabled</span></label>
+        <div class="two">
+          <label>Listen port (UDP) <input name="listen_port" type="number" min="1" max="65535" value="51820"></label>
+          <label>Server address <input name="address" value="10.66.0.1/24" placeholder="10.66.0.1/24"></label>
+        </div>
+        <label>Endpoint for devices (host:port) <input name="endpoint" placeholder="telemetry.example.com:51820"></label>
+        <label>DNS for devices (optional) <input name="dns" placeholder="10.66.0.1"></label>
+        <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+        <div class="err" id="wgErr"></div>
+        <div><button class="btn primary" type="submit" id="wgSubmit">Apply</button></div>
+      </form>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px"><h2>Devices (peers)</h2>
+    <div class="table-wrap"><table id="peers"><thead><tr><th>Name</th><th>VPN address</th><th>Status</th><th>Last handshake</th><th>Endpoint</th><th>Traffic</th><th>Created</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <dialog id="peerDlg">
+    <form id="peerForm" class="form" method="dialog">
+      <h2 style="margin-top:0">Add device to the VPN</h2>
+      <label>Name <input name="name" required maxlength="63" placeholder="gateway-hall-2"></label>
+      <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+      <div class="err" id="peerErr"></div>
+      <div id="peerResult" hidden>
+        <div class="muted">Configuration for the device (shown once — the private key is not stored on the server). Scan the QR code with the WireGuard app or copy the text.</div>
+        <img id="peerQr" class="qr" alt="WireGuard configuration QR code">
+        <pre class="conf secret" id="peerConf"></pre>
+        <div class="muted" id="peerHint"></div>
+      </div>
+      <div class="actions"><button class="btn primary" type="submit" id="peerSubmit">Create</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+    </form>
+  </dialog>
+</section>
+
+<section data-section="backups">
+  <div class="page-head"><h1>Backups</h1><span class="grow"></span><button class="btn primary" id="backupNowBtn" type="button">Back up now</button></div>
+  <div class="card agent-off" id="agentNoteBk" hidden></div>
+  <div class="grid">
+    <div class="card">
+      <h2>State</h2>
+      <dl class="kv" id="kvBk"></dl>
+      <p class="muted">A backup bundles the database dump (pg_dump), the configuration with its secrets, and the proxy and VPN state. Store it encrypted and away from this server. Restore instructions are inside the bundle (RESTORE.txt).</p>
+    </div>
+    <div class="card">
+      <h2>Daily schedule</h2>
+      <form id="bkForm" class="form">
+        <label class="inline"><input type="checkbox" name="enabled"><span>Enabled</span></label>
+        <div class="two">
+          <label>Time (server time) <input name="time" type="time" value="02:30" required></label>
+          <label>Keep last <input name="keep" type="number" min="1" max="365" value="14"></label>
+        </div>
+        <label>Passphrase for encryption (optional) <input name="passphrase" type="password" autocomplete="new-password" placeholder="leave empty to keep the stored one"></label>
+        <label class="inline"><input type="checkbox" name="clear_passphrase"><span>Remove the stored passphrase (scheduled backups unencrypted)</span></label>
+        <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+        <div class="err" id="bkErr"></div>
+        <div><button class="btn primary" type="submit">Save schedule</button></div>
+      </form>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px"><h2>Stored backups</h2>
+    <div class="table-wrap"><table id="bkFiles"><thead><tr><th>File</th><th>Size</th><th>Created</th><th>Encrypted</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <dialog id="bkDlg">
+    <form id="bkNow" class="form" method="dialog">
+      <h2 style="margin-top:0">Back up now</h2>
+      <label>Passphrase (optional, encrypts the bundle) <input name="passphrase" type="password" autocomplete="new-password"></label>
+      <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+      <div class="err" id="bkNowErr"></div>
+      <div class="actions"><button class="btn primary" type="submit">Start backup</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+    </form>
+  </dialog>
+</section>
+
+<section data-section="updates">
+  <div class="page-head"><h1>Updates</h1></div>
+  <div class="card agent-off" id="agentNoteUpd" hidden></div>
+  <div class="card">
+    <dl class="kv" id="kvUpd"></dl>
+    <form id="updForm" class="form" style="margin-top:12px">
+      <label>Version to install <input name="version" required placeholder="0.10.0"></label>
+      <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+      <div class="muted">The agent downloads the release from the distribution point, verifies its SHA-256 checksum, runs the schema migrations and restarts the service. Make a database backup first for major upgrades.</div>
+      <div class="err" id="updErr"></div>
+      <div class="muted" id="updMsg"></div>
+      <div><button class="btn primary" type="submit" id="updSubmit">Install update</button></div>
+    </form>
+  </div>
+</section>
+
+<dialog id="reasonDlg">
+  <form id="reasonForm" class="form" method="dialog">
+    <h2 style="margin-top:0" id="reasonTitle"></h2>
+    <div class="muted" id="reasonHint"></div>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="reasonErr"></div>
+    <div class="actions"><button class="btn danger" type="submit" id="reasonSubmit">Confirm</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button></div>
+  </form>
+</dialog>
+</main>
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
+const TITLES = {overview: 'Server', domain: 'Domain and TLS', wireguard: 'WireGuard', backups: 'Backups', updates: 'Updates'};
+let INFO = null;
+function kv(el, rows){ el.innerHTML = rows.filter(r => r).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v == null || v === '' ? '<span class="muted">—</span>' : v}</dd>`).join(''); }
+function dur(s){ if(!s && s !== 0) return ''; const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60); return (d ? d + ' d ' : '') + (h ? h + ' h ' : '') + m + ' min'; }
+function bytes(n){ if(!n) return '0 B'; const u = ['B','KB','MB','GB','TB']; let i = 0; while(n >= 1024 && i < u.length-1){ n /= 1024; i++; } return n.toFixed(i ? 1 : 0) + ' ' + u[i]; }
+function badge(state){ const ok = state === 'active' || state === 'enabled'; const bad = state === 'failed'; return `<span class="badge ${ok ? 'ok' : (bad ? 'bad' : '')}">${esc(state)}</span>`; }
+function agentNote(){
+  const a = INFO.agent; let msg = '';
+  if(!a.configured) msg = '<b>Server agent not configured.</b> Host operations (restart, backups, updates; on Linux also domain and WireGuard) are available where the server agent <code>ctrl32-telemetry-agent</code> runs (systemd unit or Windows service); this instance shows read-only information.';
+  else if(!a.connected) msg = '<b>Server agent not reachable:</b> ' + esc(a.error || 'unknown error') + '. Check <code>systemctl status ctrl32-telemetry-agent</code>.';
+  for(const id of ['agentNote','agentNoteDomain','agentNoteWg','agentNoteBk','agentNoteUpd']){ const el = $('#' + id); el.hidden = !msg; el.innerHTML = msg; }
+  return !!msg;
+}
+function timeRow(t){ if(!t || !t.enabled) return '<span class="muted">not configured (no NTP server)</span>'; const os = t.os_sync === 'no' ? ' · <span class="badge warn">the operating system reports the clock as not synchronized</span>' : ''; if(t.ok) return `<span class="badge ok">ok</span> ${Math.round(t.offset_ms)} ms · ${esc(t.server)} · ${fmt(t.checked_at)}${os}`; if(!t.checked_at || t.checked_at.startsWith('0001')) return `<span class="muted">…</span> ${esc(t.server)}`; return `<span class="badge warn">unreachable</span> ${esc(t.error || '')} · ${esc(t.server)} · ${fmt(t.checked_at)}${os}`; }
+function renderOverview(){
+  const c = INFO.config, st = INFO.agent.status, h = st && st.host;
+  if(st && st.agent && st.agent.os === 'windows'){ for(const sec of ['domain', 'wireguard']){ const a = document.querySelector(`.subnav a[data-section="${sec}"]`); if(a) a.hidden = true; } }
+  kv($('#kvService'), [['Version', esc(INFO.version)], ['Profile', esc(c.profile)], ['Process started', fmt(INFO.started_at)], ['PID', INFO.pid], ['Go', esc(INFO.go)], ['Goroutines', INFO.goroutines], ['Connected devices (MQTT)', INFO.broker.connected_clients], ['Time sync', timeRow(INFO.time)]]);
+  kv($('#kvHost'), h ? [['Hostname', esc(h.hostname)], ['System', esc(h.os) + ' · ' + esc(h.kernel) + ' · ' + esc(h.arch)], ['Uptime', dur(h.uptime_seconds)], ['Load', (h.load||[]).map(x => x.toFixed(2)).join(' / ')], ['CPUs', h.cpus], ['Memory', `${h.mem_avail_mb} MB free of ${h.mem_total_mb} MB`], ...(h.disks||[]).map(d => ['Disk ' + d.path, `${d.free_gb.toFixed(1)} GB free of ${d.total_gb.toFixed(1)} GB`]), ['Time zone', esc(h.timezone || '')], ['Server time', fmt(h.time)]] : [['Host', '<span class="muted">needs the server agent</span>'], ['OS / arch', esc(INFO.os + ' / ' + INFO.arch)]]);
+  kv($('#kvNet'), [['Public URL', `<a href="${esc(c.base_url)}" target="_blank" rel="noopener">${esc(c.base_url)}</a>`], ['HTTP listen', esc(c.http_listen) + (c.http_tls ? ' (TLS)' : '')], ['Public read-only access', c.public_read ? '<span class="badge warn">enabled (demo)</span>' : 'off'], ['MQTT', esc(c.mqtt_listen)], ['MQTT over TLS', esc(c.mqtt_tls_listen)], ['MQTT over WebSocket', esc(c.mqtt_ws_listen)], ['MQTT inside VPN', esc(c.mqtt_vpn_listen)], ['SMTP', c.smtp_host ? esc(c.smtp_host + ':' + c.smtp_port) : '<span class="muted">not configured (no e-mail)</span>'], ['Agent socket', esc(c.agent_socket)]]);
+  const d = INFO.database;
+  kv($('#kvDb'), [['Server', esc(c.db)], ['PostgreSQL', esc(d.server_version || '')], ['Size', (d.size_mb||0).toFixed(1) + ' MB'], ['Organizations', d.organizations], ['Users', d.users], ['Devices', d.devices], ['Sites', d.sites], ['Stored reports', d.reports], ['Pending commands', d.pending_commands]]);
+  kv($('#kvFiles'), [['Reports', esc(c.report_storage)], ['Firmware', esc(c.fota_storage) + ` (max ${c.fota_max_mb} MB)`], ['Typst', esc(c.typst_path || 'typst on PATH')], ['Log file', esc(c.log_file) + ` (${esc(c.log_level)})`], ['Gap check', esc(c.gap_check)], ['Metrics (Prometheus)', '<a href="/metrics" target="_blank" rel="noopener">/metrics</a>'], ['Security contact (security.txt)', '<a href="/.well-known/security.txt" target="_blank" rel="noopener">/.well-known/security.txt</a>']]);
+  kv($('#kvVersions'), st ? Object.entries(st.versions || {}).map(([k, v]) => [k, esc(v)]) : [['Components', '<span class="muted">needs the server agent</span>']]);
+  const rows = [];
+  if(st){ for(const s of st.services) rows.push(`<tr><td>${esc(s.label)} <span class="muted">${esc(s.unit)}</span></td><td>${badge(s.active)}</td><td>${badge(s.enabled)}</td><td>${s.unit === 'ctrl32-telemetry-agent' ? '<button class="btn small" data-restart="agent" type="button">Restart</button>' : (s.unit.startsWith('wg-quick') ? '<button class="btn small" data-restart="wireguard" type="button">Restart</button>' : '')}</td></tr>`);
+    for(const c of st.containers) rows.push(`<tr><td>${esc(c.name)} <span class="muted">${esc(c.image)}</span></td><td colspan="2">${esc(c.status)}</td><td>${c.name.endsWith('caddy') ? '<button class="btn small" data-restart="caddy" type="button">Restart</button>' : ''}</td></tr>`); }
+  $('#units tbody').innerHTML = rows.join('') || '<tr><td colspan="4" class="muted">needs the server agent</td></tr>';
+  for(const b of document.querySelectorAll('[data-restart]')) b.onclick = () => askReason('Restart ' + b.dataset.restart, 'The unit is restarted; connections drop for a moment.', async reason => { await api('POST','/api/v1/server/restart',{unit: b.dataset.restart, reason}); ctrl32.toast('restart requested','ok'); setTimeout(load, 4000); });
+}
+function renderDomain(){
+  const st = INFO.agent.status, c = st && st.caddy;
+  if(!c){ kv($('#kvCert'), [['Certificate', '<span class="muted">needs the server agent</span>']]); return; }
+  const days = c.cert_expires ? Math.round((new Date(c.cert_expires) - Date.now())/86400e3) : null;
+  kv($('#kvCert'), [['Domain', esc(c.domain)], ['Additional', (c.extra_domains||[]).map(esc).join(', ')], ['Managed from UI', c.managed ? 'yes' : 'no (installer default)'], ['Challenge', c.dns_provider ? 'Cloudflare DNS' + (c.has_dns_token ? ' (token stored)' : '') : 'HTTP / TLS-ALPN'], ['Certificate for', c.cert_subject ? esc(c.cert_subject) + ((c.cert_domains||[]).length > 1 ? ' + ' + (c.cert_domains.length - 1) : '') : '<span class="muted">not issued yet</span>'], ['Issuer', esc(c.cert_issuer || '')], ['Expires', c.cert_expires ? fmt(c.cert_expires) + (days != null ? ` <span class="badge ${days < 10 ? 'bad' : 'ok'}">${days} days</span>` : '') : ''], ['MQTT TLS', 'port 8883 uses the same certificate (synced every 10 minutes)']]);
+  $('#caddyfile').textContent = c.caddyfile || '';
+  const f = $('#caddyForm'); if(!f.dataset.filled){ f.domain.value = c.domain || ''; f.extra_domains.value = (c.extra_domains||[]).join(', '); f.email.value = c.email || ''; f.dns_provider.value = c.dns_provider || ''; f.dataset.filled = '1'; $('#cfTokenRow').hidden = f.dns_provider.value !== 'cloudflare'; }
+}
+function renderWg(){
+  const st = INFO.agent.status, wg = st && st.wireguard;
+  if(!wg){ kv($('#kvWg'), [['WireGuard', '<span class="muted">needs the server agent</span>']]); $('#peers tbody').innerHTML = '<tr><td colspan="8" class="muted">needs the server agent</td></tr>'; return; }
+  kv($('#kvWg'), [['Installed', wg.installed ? 'yes' : '<span class="badge warn">wireguard-tools missing (installed on enable)</span>'], ['State', wg.enabled ? (wg.running ? '<span class="badge ok">running</span>' : '<span class="badge bad">enabled but not running</span>') : '<span class="badge">disabled</span>'], ['Listen port', wg.listen_port ? wg.listen_port + '/udp' : ''], ['Server address', esc(wg.address)], ['Endpoint for devices', esc(wg.endpoint)], ['Server public key', wg.public_key ? `<code>${esc(wg.public_key)}</code>` : ''], ['MQTT inside VPN', wg.mqtt ? `<code>mqtt://${esc(wg.mqtt)}</code> (plain, no TLS needed)` : ''], ['Devices', (wg.peers||[]).length]]);
+  const f = $('#wgForm'); if(!f.dataset.filled && wg.updated_at){ f.enabled.checked = wg.enabled; f.listen_port.value = wg.listen_port || 51820; f.address.value = wg.address || '10.66.0.1/24'; f.endpoint.value = wg.endpoint || ''; f.dns.value = wg.dns || ''; f.dataset.filled = '1'; }
+  $('#peers tbody').innerHTML = (wg.peers||[]).map(p => `<tr><td><b>${esc(p.name)}</b><div class="muted" style="font-size:12px">${esc(p.public_key)}</div></td><td>${esc(p.address)}</td><td>${p.online ? '<span class="badge ok">online</span>' : '<span class="badge">offline</span>'}</td><td>${p.latest_handshake ? fmt(p.latest_handshake) : '<span class="muted">never</span>'}</td><td>${esc(p.endpoint || '')}</td><td>${bytes(p.rx_bytes)} ↓ ${bytes(p.tx_bytes)} ↑</td><td>${fmt(p.created_at)}<div class="muted" style="font-size:12px">${esc(p.created_by || '')}</div></td><td><button class="btn small danger" data-remove="${p.id}" type="button">Remove</button></td></tr>`).join('') || '<tr><td colspan="8" class="muted">no devices yet</td></tr>';
+  for(const b of document.querySelectorAll('[data-remove]')) b.onclick = () => askReason('Remove device from the VPN', 'The peer loses access immediately; its configuration becomes invalid.', async reason => { await api('POST',`/api/v1/server/wireguard/peers/${b.dataset.remove}/remove`,{reason}); ctrl32.toast('peer removed','ok'); load(); });
+}
+function renderUpdates(){
+  const u = INFO.update, newer = u.available && u.available !== u.current;
+  kv($('#kvUpd'), [['Installed', esc(u.current)], ['Available', u.available ? esc(u.available) + (newer ? ' <span class="badge primary">update available</span>' : ' <span class="badge ok">up to date</span>') : '<span class="muted">' + esc(u.error || 'unknown') + '</span>'], ['Distribution point', esc(u.url)], ['Checked', fmt(u.checked_at)]]);
+  if(newer && !$('#updForm').version.value) $('#updForm').version.value = u.available;
+}
+let reasonCb = null;
+function askReason(title, hint, cb){ reasonCb = cb; $('#reasonTitle').textContent = title; $('#reasonHint').textContent = hint; $('#reasonForm').reset(); $('#reasonErr').textContent=''; $('#reasonDlg').showModal(); }
+$('#reasonForm').onsubmit = async e => { e.preventDefault(); $('#reasonErr').textContent=''; try{ await reasonCb(e.target.reason.value); $('#reasonDlg').close(); }catch(x){ $('#reasonErr').textContent = x.message; } };
+$('#restartAppBtn').onclick = () => askReason('Restart the ctrl32 telemetry service', 'Users and devices reconnect within seconds. Requires the server agent.', async reason => { await api('POST','/api/v1/server/restart',{unit: 'app', reason}); ctrl32.toast('service restarting','ok'); setTimeout(load, 5000); });
+$('#restartCaddyBtn').onclick = () => askReason('Restart the reverse proxy', 'HTTPS is unavailable for a few seconds.', async reason => { await api('POST','/api/v1/server/restart',{unit: 'caddy', reason}); ctrl32.toast('proxy restarting','ok'); setTimeout(load, 4000); });
+$('#caddyForm').dns_provider.onchange = e => { $('#cfTokenRow').hidden = e.target.value !== 'cloudflare'; };
+$('#caddyForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#caddyErr').textContent=''; $('#caddyMsg').textContent = 'Applying… building the Caddy image with the DNS module can take a few minutes.'; $('#caddySubmit').disabled = true;
+  try{ const r = await api('PUT','/api/v1/server/caddy',{domain: f.domain.value.trim().toLowerCase(), extra_domains: f.extra_domains.value.split(',').map(s => s.trim()).filter(Boolean), email: f.email.value.trim(), dns_provider: f.dns_provider.value, cloudflare_token: f.cloudflare_token.value, reason: f.reason.value}); $('#caddyMsg').textContent = r.message || 'applied'; f.cloudflare_token.value=''; f.reason.value=''; ctrl32.toast('domain configured','ok'); setTimeout(load, 3000); }
+  catch(x){ $('#caddyErr').textContent = x.message; $('#caddyMsg').textContent=''; } finally { $('#caddySubmit').disabled = false; } };
+$('#wgForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#wgErr').textContent=''; $('#wgSubmit').disabled = true;
+  try{ await api('PUT','/api/v1/server/wireguard',{enabled: f.enabled.checked, listen_port: parseInt(f.listen_port.value, 10) || 51820, address: f.address.value.trim(), endpoint: f.endpoint.value.trim(), dns: f.dns.value.trim(), reason: f.reason.value}); f.reason.value=''; f.dataset.filled=''; ctrl32.toast('WireGuard configured','ok'); setTimeout(load, 2500); }
+  catch(x){ $('#wgErr').textContent = x.message; } finally { $('#wgSubmit').disabled = false; } };
+$('#addPeerBtn').onclick = () => { const f = $('#peerForm'); f.reset(); $('#peerErr').textContent=''; $('#peerResult').hidden = true; $('#peerSubmit').hidden = false; $('#peerDlg').showModal(); };
+$('#peerForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#peerErr').textContent='';
+  try{ const r = await api('POST','/api/v1/server/wireguard/peers',{name: f.name.value, reason: f.reason.value}); $('#peerQr').src = r.qr || ''; $('#peerQr').hidden = !r.qr; $('#peerConf').textContent = r.config; const wg = INFO.agent.status && INFO.agent.status.wireguard; $('#peerHint').textContent = 'Inside the tunnel the device reaches the broker at ' + (wg && wg.mqtt ? 'mqtt://' + wg.mqtt : 'the server VPN address, port 1883') + ' and this UI at the public URL.'; $('#peerResult').hidden = false; $('#peerSubmit').hidden = true; ctrl32.toast('device added','ok'); load(); }
+  catch(x){ $('#peerErr').textContent = x.message; } };
+$('#updForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#updErr').textContent=''; $('#updMsg').textContent = 'Downloading and verifying…'; $('#updSubmit').disabled = true;
+  try{ const r = await api('POST','/api/v1/server/update',{version: f.version.value.trim(), reason: f.reason.value}); $('#updMsg').textContent = r.message + ' (SHA-256 ' + r.sha256.slice(0, 16) + '…). Reloading in 10 s.'; setTimeout(() => location.reload(), 10000); }
+  catch(x){ $('#updErr').textContent = x.message; $('#updMsg').textContent=''; } finally { $('#updSubmit').disabled = false; } };
+$('#refreshBtn').onclick = () => load();
+let BK = null, bkTimer = null;
+function hhmm(h, m){ return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); }
+async function renderBackups(){
+  if(!INFO.agent.connected){ kv($('#kvBk'), [['Backups', '<span class="muted">needs the server agent</span>']]); $('#bkFiles tbody').innerHTML = '<tr><td colspan="5" class="muted">needs the server agent</td></tr>'; return; }
+  BK = await api('GET','/api/v1/server/backups'); const s = BK.schedule;
+  kv($('#kvBk'), [['Database', esc(BK.db_mode === 'docker' ? 'PostgreSQL in Docker' : (BK.db_mode === 'native' ? 'native PostgreSQL' : 'not found'))], ['Directory', esc(BK.dir)], ['Running now', BK.running ? '<span class="badge warn">backup in progress…</span>' : 'no'],
+    ['Schedule', s.enabled ? `daily at ${hhmm(s.hour, s.minute)}, keep ${s.keep}` + (s.has_passphrase ? ', encrypted' : ', unencrypted') : 'disabled'],
+    ['Last run', s.last_run && !s.last_run.startsWith('0001') ? fmt(s.last_run) + (s.last_error ? ` <span class="badge bad">${esc(s.last_error)}</span>` : (s.last_file ? ` <span class="badge ok">${esc(s.last_file)}</span>` : '')) : '<span class="muted">never</span>'], ['Stored', BK.files.length]]);
+  const f = $('#bkForm'); if(!f.dataset.filled){ f.enabled.checked = s.enabled; f.time.value = hhmm(s.hour, s.minute); f.keep.value = s.keep; f.dataset.filled = '1'; }
+  $('#bkFiles tbody').innerHTML = BK.files.map(b => `<tr><td><code>${esc(b.name)}</code></td><td>${bytes(b.size_bytes)}</td><td>${fmt(b.created_at)}</td><td>${b.encrypted ? '<span class="badge ok">yes</span>' : '<span class="badge warn">no</span>'}</td><td style="white-space:nowrap"><a class="btn small" href="/api/v1/server/backups/${encodeURIComponent(b.name)}" download>Download</a> <button class="btn small danger" data-bkdel="${esc(b.name)}" type="button">Delete</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">no backups yet</td></tr>';
+  for(const b of document.querySelectorAll('[data-bkdel]')) b.onclick = () => askReason('Delete backup ' + b.dataset.bkdel, 'The file is removed from the server. Records in the database are not affected.', async reason => { await api('POST',`/api/v1/server/backups/${encodeURIComponent(b.dataset.bkdel)}/delete`,{reason}); ctrl32.toast('backup deleted','ok'); renderBackups(); });
+  clearTimeout(bkTimer); if(BK.running) bkTimer = setTimeout(renderBackups, 3000);
+}
+$('#backupNowBtn').onclick = () => { const f = $('#bkNow'); f.reset(); $('#bkNowErr').textContent=''; $('#bkDlg').showModal(); };
+$('#bkNow').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#bkNowErr').textContent='';
+  try{ await api('POST','/api/v1/server/backups',{passphrase: f.passphrase.value, reason: f.reason.value}); $('#bkDlg').close(); ctrl32.toast('backup started','ok'); renderBackups(); }catch(x){ $('#bkNowErr').textContent = x.message; } };
+$('#bkForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#bkErr').textContent=''; const [h, m] = f.time.value.split(':').map(x => parseInt(x, 10));
+  try{ await api('PUT','/api/v1/server/backups/schedule',{enabled: f.enabled.checked, hour: h, minute: m, keep: parseInt(f.keep.value, 10) || 14, passphrase: f.passphrase.value, clear_passphrase: f.clear_passphrase.checked, reason: f.reason.value}); f.passphrase.value=''; f.clear_passphrase.checked=false; f.reason.value=''; f.dataset.filled=''; ctrl32.toast('schedule saved','ok'); renderBackups(); }catch(x){ $('#bkErr').textContent = x.message; } };
+let SEC = 'overview';
+async function load(){ INFO = await api('GET','/api/v1/server'); agentNote(); ({overview: renderOverview, domain: renderDomain, wireguard: renderWg, backups: renderBackups, updates: renderUpdates})[SEC](); }
+ctrl32.ready({requireAuth: true, requirePerm: 'system.admin'}).then(() => { SEC = ctrl32.section('overview', Object.keys(TITLES)); document.title = TITLES[SEC] + ' — Server'; load().catch(x => ctrl32.toast(x.message,'bad')); });
+</script>
+</body>
+</html>

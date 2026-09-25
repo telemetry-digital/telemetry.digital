@@ -1,0 +1,30 @@
+meta {
+  name: Observations (bound datastreams only)
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public/:token/observations
+  body: none
+  auth: inherit
+}
+
+params:path {
+  token: 
+}
+
+params:query {
+  datastream_id: 
+  ~from: 
+  ~to: 
+  ~bucket: 
+  ~limit: 
+  ~cursor: 
+}
+
+docs {
+  Observations (bound datastreams only)
+  
+  Same parameters and cursor pagination as `GET /api/v1/observations`.
+}

@@ -1,0 +1,86 @@
+meta {
+  name: Update a rule (new version in place when the spec changes)
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{baseUrl}}/api/v1/rules/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "description": "string",
+    "enabled": true,
+    "name": "string",
+    "reason": "string",
+    "spec": {
+      "actions": [
+        {
+          "args": {},
+          "channel_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "datastream_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "device_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "escalation_policy_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "expr": "string",
+          "key": "string",
+          "method": "string",
+          "secret": "string",
+          "severity": "warning",
+          "subject": "string",
+          "text": "string",
+          "type": "notify",
+          "url": "string",
+          "value": null
+        }
+      ],
+      "clear_actions": [
+        {
+          "args": {},
+          "channel_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "datastream_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "device_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "escalation_policy_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "expr": "string",
+          "key": "string",
+          "method": "string",
+          "secret": "string",
+          "severity": "warning",
+          "subject": "string",
+          "text": "string",
+          "type": "notify",
+          "url": "string",
+          "value": null
+        }
+      ],
+      "conditions": [
+        {
+          "input": "string",
+          "op": "\u003e",
+          "value": null
+        }
+      ],
+      "cooldown_s": 1,
+      "for_s": 1,
+      "inputs": [
+        {
+          "datastream_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "name": "string"
+        }
+      ],
+      "match": "all"
+    }
+  }
+}
+
+docs {
+  Update a rule (new version in place when the spec changes)
+  
+  Requires permission `config.write`.
+}

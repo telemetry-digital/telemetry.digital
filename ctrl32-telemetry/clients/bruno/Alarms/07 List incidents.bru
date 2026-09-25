@@ -1,0 +1,23 @@
+meta {
+  name: List incidents
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/incidents
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~status: 
+}
+
+docs {
+  List incidents
+  
+  Incident log (URS C-07, I-09): an alarm whose escalation step could not be delivered and a broken audit trail chain open incidents automatically; operators add their own. Each incident carries impact, cause and CAPA (corrective and preventive action). `status` = `open` (default: open + investigating), `all`, or one status. System administrators also see instance-level incidents (no organization).
+  
+  Requires a signed-in user or an API token (any permission).
+}

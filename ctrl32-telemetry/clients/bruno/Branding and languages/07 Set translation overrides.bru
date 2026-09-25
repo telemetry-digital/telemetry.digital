@@ -1,0 +1,32 @@
+meta {
+  name: Set translation overrides
+  type: http
+  seq: 7
+}
+
+put {
+  url: {{baseUrl}}/api/v1/i18n/:locale
+  body: json
+  auth: inherit
+}
+
+params:path {
+  locale: 
+}
+
+body:json {
+  {
+    "entries": {
+      "key": "string"
+    },
+    "reason": "string"
+  }
+}
+
+docs {
+  Set translation overrides
+  
+  An empty value removes the override.
+  
+  Requires permission `content.write`.
+}

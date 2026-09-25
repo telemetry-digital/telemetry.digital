@@ -1,0 +1,27 @@
+meta {
+  name: Open a console session
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/devices/:id/console
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Open a console session
+  
+  Requires permission `device.console`.
+}

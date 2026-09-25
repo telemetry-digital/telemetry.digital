@@ -1,0 +1,27 @@
+meta {
+  name: Approve a pending rule (four eyes)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/rules/:id/approve
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Approve a pending rule (four eyes)
+  
+  Requires permission `device.command`.
+}

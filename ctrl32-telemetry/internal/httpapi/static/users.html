@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Users — ctrl32 telemetry</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  .perm-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px 12px; }
+  .perm-grid label { font-size: 13px; }
+  .perm-grid small { display: block; color: var(--muted); margin-left: 24px; }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<nav class="subnav">
+  <a href="/users" data-section="accounts">Accounts</a>
+  <a href="/users/roles" data-section="roles">Roles and permissions</a>
+</nav>
+
+<section data-section="accounts">
+  <div class="page-head"><h1>Users</h1><span class="grow"></span><button class="btn primary" id="newUserBtn" type="button">New user</button></div>
+  <div class="card">
+    <div class="table-wrap"><table id="users"><thead><tr><th>Username</th><th>Name</th><th>E-mail</th><th>Roles</th><th>MFA</th><th>Status</th><th>Last login</th></tr></thead><tbody></tbody></table></div>
+    <p class="muted" style="margin-bottom:0">Click a user to see effective permissions, history and actions. Every change needs a reason and is written to the audit trail.</p>
+  </div>
+  <div class="card" id="reqCard" style="margin-top:16px" hidden>
+    <h2>Account requests</h2>
+    <div class="table-wrap"><table id="reqs"><thead><tr><th>Name</th><th>E-mail</th><th>Message</th><th>Received</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+</section>
+
+<section data-section="roles">
+  <div class="page-head"><h1>Roles and permissions</h1><span class="grow"></span><button class="btn primary" id="newRoleBtn" type="button">New role</button></div>
+  <div class="card">
+    <h2>Who is allowed what</h2>
+    <div class="table-wrap"><table class="matrix" id="matrix"><thead></thead><tbody></tbody></table></div>
+    <p class="muted" style="margin-bottom:0">Built-in roles are fixed. Organization roles (marked) can be edited below; a user's permissions are the union of all their roles.</p>
+  </div>
+  <div class="card" id="roleEditor" style="margin-top:16px">
+    <h2>Organization roles</h2>
+    <div id="orgRoles"></div>
+  </div>
+</section>
+<dialog id="roleDlg">
+  <form id="newRole" class="form" method="dialog">
+    <h2 style="margin-top:0">New organization role</h2>
+    <label>Name (a-z, 0-9, _) <input name="name" required pattern="[a-z][a-z0-9_]{1,31}" maxlength="32"></label>
+    <div class="perm-grid" id="newRolePerms"></div>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="newRoleErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Create role</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button></div>
+  </form>
+</dialog>
+
+<dialog id="userDlg"></dialog>
+<dialog id="newUserDlg">
+  <form id="newUser" class="form" method="dialog">
+    <h2 style="margin-top:0">New user</h2>
+    <label>Username <input name="username" required minlength="2" maxlength="64" autocomplete="off"></label>
+    <label>Full name <input name="full_name" required maxlength="128"></label>
+    <label>E-mail <input name="email" type="email" maxlength="254"></label>
+    <div><div class="muted" style="font-size:13px;margin-bottom:4px">Roles</div><div class="perm-grid" id="newUserRoles"></div></div>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="newUserErr"></div>
+    <div id="newUserResult" hidden><div class="muted">One-time password (shown once, must be changed at first login):</div><div class="secret" id="newUserPw"></div></div>
+    <div class="actions"><button class="btn primary" type="submit" id="newUserSubmit">Create</button><button class="btn" type="button" id="newUserClose">Close</button></div>
+  </form>
+</dialog>
+
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
+let PERMS = [], ROLES = [], USERS = [];
+const roleBadge = r => { const role = ROLES.find(x => x.name === r); return `<span class="badge ${role && role.is_admin ? 'primary' : ''}" title="${esc(role ? role.permissions.join(', ') : '')}">${esc(r)}</span>`; };
+const status = u => u.disabled_at ? '<span class="badge bad">disabled</span>' : (u.locked_until && new Date(u.locked_until) > new Date() ? '<span class="badge warn">locked</span>' : (u.must_change_password ? '<span class="badge warn">password change</span>' : '<span class="badge ok">active</span>'));
+const permBox = (name, checked, disabled) => { const p = PERMS.find(x => x.name === name) || {}; return `<label class="inline"><input type="checkbox" name="perm" value="${esc(name)}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>${esc(name)}<small>${esc(p.description || '')}</small></span></label>`; };
+async function loadAll(){
+  [PERMS, ROLES, USERS] = await Promise.all([api('GET','/api/v1/permissions'), api('GET','/api/v1/roles'), api('GET','/api/v1/users')]);
+  renderUsers(); renderMatrix(); renderOrgRoles();
+  $('#newRolePerms').innerHTML = PERMS.map(p => permBox(p.name, false, false)).join('');
+  $('#newUserRoles').innerHTML = ROLES.map(r => `<label class="inline"><input type="checkbox" name="role" value="${esc(r.name)}" ${r.name === 'viewer' ? 'checked' : ''}><span>${esc(r.name)}${r.builtin ? '' : ' <span class="badge">org</span>'}<small>${esc(r.permissions.join(', '))}</small></span></label>`).join('');
+}
+function renderUsers(){
+  $('#users tbody').innerHTML = USERS.map(u => `<tr class="clickable" data-id="${u.id}"><td><b>${esc(u.username)}</b></td><td>${esc(u.full_name)}</td><td>${esc(u.email || '')}</td><td>${(u.roles || []).map(roleBadge).join(' ') || '<span class="muted">none</span>'}</td><td>${u.mfa_enabled ? '<span class="badge ok">on</span>' : '<span class="badge">off</span>'}</td><td>${status(u)}</td><td>${fmt(u.last_login_at)}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">no users</td></tr>';
+  for(const tr of document.querySelectorAll('#users tr.clickable')) tr.onclick = () => openUser(tr.dataset.id);
+}
+function renderMatrix(){
+  $('#matrix thead').innerHTML = '<tr><th>Permission</th>' + ROLES.map(r => `<th title="${esc(r.builtin ? 'built-in' : 'organization role')}">${esc(r.name)}${r.builtin ? '' : '<br><span class="badge">org</span>'}<br><span class="muted" style="font-weight:400">${r.users} user${r.users === 1 ? '' : 's'}</span></th>`).join('') + '</tr>';
+  $('#matrix tbody').innerHTML = PERMS.map(p => `<tr><td><b>${esc(p.name)}</b><br><span class="muted" style="white-space:normal">${esc(p.description)}</span></td>` + ROLES.map(r => `<td class="${r.permissions.includes(p.name) ? 'yes' : 'no'}">${r.permissions.includes(p.name) ? '✓' : '·'}</td>`).join('') + '</tr>').join('');
+}
+function renderOrgRoles(){
+  const org = ROLES.filter(r => !r.builtin);
+  $('#orgRoles').innerHTML = org.length ? org.map(r => `<details><summary><b>${esc(r.name)}</b> <span class="muted">· ${r.permissions.length} permissions · ${r.users} users</span></summary>
+    <form class="form roleForm" data-id="${r.id}"><div class="perm-grid">${PERMS.map(p => permBox(p.name, r.permissions.includes(p.name), false)).join('')}</div>
+    <label>Reason <input name="reason" required maxlength="200"></label><div class="err"></div><div><button class="btn primary" type="submit">Save permissions</button></div></form></details>`).join('') : '<p class="muted">No organization roles yet. Built-in roles cover the usual cases; create one when a team needs a different mix.</p>';
+  for(const f of document.querySelectorAll('.roleForm')) f.onsubmit = async e => { e.preventDefault(); const perms = [...f.querySelectorAll('input[name=perm]:checked')].map(i => i.value); try{ await api('PUT', `/api/v1/roles/${f.dataset.id}`, {permissions: perms, reason: f.reason.value}); ctrl32.toast('role updated','ok'); loadAll(); }catch(x){ f.querySelector('.err').textContent = x.message; } };
+}
+$('#newRoleBtn').onclick = () => { $('#newRole').reset(); $('#newRoleErr').textContent=''; $('#roleDlg').showModal(); };
+$('#newRole').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#newRoleErr').textContent=''; const perms = [...f.querySelectorAll('input[name=perm]:checked')].map(i => i.value); try{ await api('POST','/api/v1/roles',{name: f.name.value, permissions: perms, reason: f.reason.value}); f.reset(); $('#roleDlg').close(); ctrl32.toast('role created','ok'); loadAll(); }catch(x){ $('#newRoleErr').textContent = x.message; } };
+let fromRequest = null;
+function openNewUser(prefill){ const f = $('#newUser'); f.reset(); fromRequest = prefill ? prefill.id : null; if(prefill){ f.full_name.value = prefill.full_name; f.email.value = prefill.email; f.username.value = prefill.email.split('@')[0].replace(/[^a-z0-9._-]/gi,'').toLowerCase(); } $('#newUserResult').hidden = true; $('#newUserErr').textContent=''; $('#newUserSubmit').hidden=false; for(const i of f.querySelectorAll('input[name=role]')) i.checked = i.value === 'viewer'; $('#newUserDlg').showModal(); }
+$('#newUserBtn').onclick = () => openNewUser(null);
+async function loadRequests(){
+  try{ const rs = await api('GET','/api/v1/account-requests'); $('#reqCard').hidden = rs.length === 0;
+    $('#reqs tbody').innerHTML = rs.map(r => `<tr><td><b>${esc(r.full_name)}</b></td><td>${esc(r.email)}</td><td style="white-space:normal">${esc(r.message)}</td><td>${fmt(r.created_at)}</td><td><button class="btn small primary" type="button" data-create="${r.id}">Create account</button> <button class="btn small" type="button" data-dismiss="${r.id}">Dismiss</button></td></tr>`).join('');
+    for(const b of document.querySelectorAll('[data-create]')) b.onclick = () => openNewUser(rs.find(x => x.id === b.dataset.create));
+    for(const b of document.querySelectorAll('[data-dismiss]')) b.onclick = async () => { const reason = ctrl32.ask('Reason for dismissing this request:'); if(!reason) return; try{ await api('POST',`/api/v1/account-requests/${b.dataset.dismiss}/dismiss`,{reason}); loadRequests(); }catch(x){ ctrl32.toast(x.message,'bad'); } };
+  }catch(x){ /* not an admin */ }
+}
+$('#newUserClose').onclick = () => { $('#newUserDlg').close(); loadAll(); };
+$('#newUser').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#newUserErr').textContent='';
+  const roles = [...f.querySelectorAll('input[name=role]:checked')].map(i => i.value);
+  try{ const r = await api('POST','/api/v1/users',{username: f.username.value, full_name: f.full_name.value, email: f.email.value, roles, reason: f.reason.value}); $('#newUserPw').textContent = r.initial_password; $('#newUserResult').hidden = false; $('#newUserSubmit').hidden = true; ctrl32.toast('user created','ok');
+    if(fromRequest){ try{ await api('POST',`/api/v1/account-requests/${fromRequest}/created`,{reason: 'account created'}); }catch(x){} fromRequest = null; loadRequests(); } }
+  catch(x){ $('#newUserErr').textContent = x.message; } };
+async function openUser(id){
+  const dlg = $('#userDlg'); dlg.innerHTML = '<p class="muted">Loading…</p>'; dlg.showModal();
+  let d; try{ d = await api('GET', `/api/v1/users/${id}`); }catch(x){ dlg.innerHTML = `<p class="err">${esc(x.message)}</p><button class="btn" onclick="this.closest('dialog').close()">Close</button>`; return; }
+  const u = d.user, self = ctrl32.me && ctrl32.me.user_id === u.id;
+  dlg.innerHTML = `<div class="row"><h2 style="margin:0">${esc(u.username)}</h2>${status(u)}${u.mfa_enabled ? '<span class="badge ok">MFA on</span>' : '<span class="badge">MFA off</span>'}<span class="grow"></span><button class="btn ghost icon" id="dlgClose" type="button" aria-label="Close">${ctrl32.ICON.close}</button></div>
+    <form id="profile" class="form" style="margin-top:12px"><div class="row"><label>Full name <input name="full_name" value="${esc(u.full_name)}" maxlength="128"></label><label>E-mail <input name="email" type="email" value="${esc(u.email || '')}" maxlength="254"></label></div>
+    <div><div class="muted" style="font-size:13px;margin-bottom:4px">Roles</div><div class="perm-grid">${ROLES.map(r => `<label class="inline"><input type="checkbox" name="role" value="${esc(r.name)}" ${(u.roles||[]).includes(r.name) ? 'checked' : ''} ${self && r.name === 'org_admin' ? 'disabled' : ''}><span>${esc(r.name)}${r.builtin ? '' : ' <span class="badge">org</span>'}</span></label>`).join('')}</div></div>
+    <div><div class="muted" style="font-size:13px;margin-bottom:4px">Effective permissions (${d.permissions.length})</div><div class="perm-list">${d.permissions.map(p => `<span class="badge primary" title="${esc((PERMS.find(x=>x.name===p)||{}).description || '')}">${esc(p)}</span>`).join('') || '<span class="muted">none</span>'}</div></div>
+    <label>Reason for the change (audit trail) <input name="reason" maxlength="200"></label><div class="err" id="profileErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save changes</button>
+      ${self ? '' : `<button class="btn" type="button" data-act="${u.disabled_at ? 'enable' : 'disable'}">${u.disabled_at ? 'Enable' : 'Disable'}</button>`}
+      <button class="btn" type="button" data-act="unlock">Unlock</button>
+      <button class="btn" type="button" data-act="reset-password">Reset password</button>
+      <button class="btn" type="button" data-act="mfa-reset">Reset MFA</button>
+      <button class="btn" type="button" data-act="sessions">Sign out everywhere</button></div>
+    <div id="actResult" hidden><div class="muted">One-time password (shown once):</div><div class="secret" id="actPw"></div></div></form>
+    <h3>API tokens (${d.api_tokens.length})</h3><div class="table-wrap"><table><thead><tr><th>Name</th><th>Scopes</th><th>Created</th><th>Last used</th><th>Expires</th><th>State</th></tr></thead><tbody>${d.api_tokens.map(t => `<tr><td>${esc(t.name)}</td><td style="white-space:normal">${(t.scopes||[]).map(s=>`<span class="badge">${esc(s)}</span>`).join(' ')}</td><td>${fmt(t.created_at)}</td><td>${fmt(t.last_used_at)}</td><td>${fmt(t.expires_at)}</td><td>${t.revoked_at ? '<span class="badge bad">revoked</span>' : '<span class="badge ok">active</span>'}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">none</td></tr>'}</tbody></table></div>
+    <h3>Role history</h3><div class="table-wrap"><table><thead><tr><th>When</th><th>Event</th><th>Role</th><th>By</th><th>Reason</th></tr></thead><tbody>${d.role_history.map(h => `<tr><td>${fmt(h.ts)}</td><td>${h.event === 'granted' ? '<span class="badge ok">granted</span>' : '<span class="badge bad">revoked</span>'}</td><td>${esc(h.role)}</td><td>${esc(h.actor_name || 'system')}</td><td style="white-space:normal">${esc(h.reason)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">none</td></tr>'}</tbody></table></div>
+    <p class="muted">Created ${fmt(u.created_at)} · id <code>${esc(u.id)}</code></p>`;
+  $('#dlgClose').onclick = () => { dlg.close(); loadAll(); };
+  const form = $('#profile');
+  const reason = () => { const r = form.reason.value.trim(); if(!r){ $('#profileErr').textContent = 'reason is required'; form.reason.focus(); return null; } return r; };
+  form.onsubmit = async e => { e.preventDefault(); const r = reason(); if(!r) return; $('#profileErr').textContent='';
+    const roles = [...form.querySelectorAll('input[name=role]:checked')].map(i => i.value); if(self && !roles.includes('org_admin')) roles.push('org_admin');
+    try{ await api('PATCH', `/api/v1/users/${u.id}`, {full_name: form.full_name.value, email: form.email.value, roles, reason: r}); ctrl32.toast('saved','ok'); openUser(u.id); }catch(x){ $('#profileErr').textContent = x.message; } };
+  for(const b of form.querySelectorAll('[data-act]')) b.onclick = async () => { const r = reason(); if(!r) return; $('#profileErr').textContent=''; const act = b.dataset.act;
+    try{
+      if(act === 'disable' || act === 'enable'){ await api('PATCH', `/api/v1/users/${u.id}`, {disabled: act === 'disable', reason: r}); }
+      else if(act === 'reset-password'){ const res = await api('POST', `/api/v1/users/${u.id}/reset-password`, {reason: r}); $('#actPw').textContent = res.initial_password; $('#actResult').hidden = false; ctrl32.toast('password reset','ok'); return; }
+      else { const path = {unlock: 'unlock', 'mfa-reset': 'mfa-reset', sessions: 'sessions/revoke'}[act]; await api('POST', `/api/v1/users/${u.id}/${path}`, {reason: r}); }
+      ctrl32.toast('done','ok'); openUser(u.id);
+    }catch(x){ $('#profileErr').textContent = x.message; } };
+}
+ctrl32.ready({requireAuth: true, requirePerm: 'user.admin'}).then(() => {
+  const sec = ctrl32.section('accounts', ['accounts', 'roles']); document.title = (sec === 'roles' ? 'Roles and permissions' : 'Users') + ' — ctrl32 telemetry';
+  loadAll().catch(x => ctrl32.toast(x.message, 'bad'));
+  if(sec === 'accounts') loadRequests();
+});
+</script>
+</body>
+</html>

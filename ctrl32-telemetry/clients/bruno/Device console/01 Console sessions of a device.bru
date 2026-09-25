@@ -1,0 +1,21 @@
+meta {
+  name: Console sessions of a device
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/devices/:id/console
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  Console sessions of a device
+  
+  Requires permission `device.console`.
+}

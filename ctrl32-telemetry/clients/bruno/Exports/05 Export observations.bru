@@ -1,0 +1,27 @@
+meta {
+  name: Export observations
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/export/observations
+  body: none
+  auth: inherit
+}
+
+params:query {
+  datastream_id: 
+  ~from: 
+  ~to: 
+  ~format: 
+  ~limit: 
+}
+
+docs {
+  Export observations
+  
+  `format` csv (default), jsonl or pdf (a signed report stored under Reports). Flagged rows (quality other than ok) are marked.
+  
+  Requires permission `data.export`.
+}

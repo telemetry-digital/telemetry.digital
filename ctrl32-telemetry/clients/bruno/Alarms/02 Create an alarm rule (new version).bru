@@ -1,0 +1,32 @@
+meta {
+  name: Create an alarm rule (new version)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/alarm-rules
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "action": 21.5,
+    "datastream_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "delay_seconds": 21.5,
+    "escalation_policy_id": "string",
+    "hysteresis": 21.5,
+    "reason": "string",
+    "type": "high",
+    "warning": 21.5
+  }
+}
+
+docs {
+  Create an alarm rule (new version)
+  
+  A rule of the same type on the same datastream is superseded (its `valid_to` is set); the new row carries the next version number. With the policy `four_eyes_limits` the call answers 202 with a pending change request instead.
+  
+  Requires permission `config.write`.
+}

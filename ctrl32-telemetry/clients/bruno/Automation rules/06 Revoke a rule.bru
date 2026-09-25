@@ -1,0 +1,27 @@
+meta {
+  name: Revoke a rule
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/rules/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Revoke a rule
+  
+  Alarms raised by the rule are cleared.
+  
+  Requires permission `config.write`.
+}

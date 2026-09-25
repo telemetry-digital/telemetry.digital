@@ -1,0 +1,19 @@
+meta {
+  name: Server status and configuration summary
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/server
+  body: none
+  auth: inherit
+}
+
+docs {
+  Server status and configuration summary
+  
+  Version, listeners, database, SMTP, storage paths, connected MQTT clients, update availability.
+  
+  Requires permission `system.admin`.
+}

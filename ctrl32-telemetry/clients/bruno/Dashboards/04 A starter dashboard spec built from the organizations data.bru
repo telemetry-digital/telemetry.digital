@@ -1,0 +1,21 @@
+meta {
+  name: A starter dashboard spec built from the organizations data
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/dashboards/starter
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~kind: 
+}
+
+docs {
+  A starter dashboard spec built from the organization's data
+  
+  Requires permission `data.read`.
+}

@@ -1,0 +1,21 @@
+meta {
+  name: Alarms newest first (200)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/alarms
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~datastream_id: 
+}
+
+docs {
+  Alarms, newest first (200)
+  
+  Requires permission `data.read`.
+}

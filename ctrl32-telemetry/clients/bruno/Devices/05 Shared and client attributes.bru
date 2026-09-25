@@ -1,0 +1,21 @@
+meta {
+  name: Shared and client attributes
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/devices/:id/attributes
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  Shared and client attributes
+  
+  Requires permission `data.read`.
+}

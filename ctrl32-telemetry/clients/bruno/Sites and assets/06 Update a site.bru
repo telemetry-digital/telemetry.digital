@@ -1,0 +1,30 @@
+meta {
+  name: Update a site
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/sites/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "address": "string",
+    "name": "string",
+    "reason": "string",
+    "tz": "string"
+  }
+}
+
+docs {
+  Update a site
+  
+  Requires permission `config.write`.
+}

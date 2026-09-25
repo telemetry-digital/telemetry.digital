@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ctrl32 telemetry</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<meta name="description" content="Free, self-hosted data collection: devices, energies, OPC UA, LoRaWAN, alarms, audit-ready reports.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-192.png">
+</head>
+<body>
+<header class="topbar"></header>
+
+<main class="container">
+  <section id="landing" hidden>
+    <div class="hero">
+      <img src="/logo.svg" alt="telemetry.digital" id="heroLogo" data-logo>
+      <h1>Industrial telemetry on your own infrastructure</h1>
+      <p>ctrl32 telemetry collects measurements from devices, PLCs and gateways, stores every value as a verifiable record and turns the data into alarms, reports and exports. Self-hosted, multi-tenant and free of charge for every deployment.</p>
+      <a class="btn primary" href="/login" id="signinBtn">Sign in</a>
+    </div>
+    <div class="grid">
+      <div class="card"><b>Connectivity</b><br><span class="muted">MQTT over TLS with per-device tokens, HTTP, LoRaWAN through ChirpStack and OPC UA polling of PLCs and servers. Client libraries for Arduino, ESP-IDF and STM32.</span></div>
+      <div class="card"><b>Device management</b><br><span class="muted">Provisioning with claim codes, firmware campaigns with rollback, remote console, commands with acknowledgement and shared attributes.</span></div>
+      <div class="card"><b>Records you can prove</b><br><span class="muted">Append-only observations with device and server timestamps, gap detection, a hash-chained audit trail and integrity-checked exports.</span></div>
+      <div class="card"><b>Alarms and reports</b><br><span class="muted">Warning and action limits with hysteresis, e-mail notification, CSV and JSON Lines exports and PDF reports built from blocks or your own templates.</span></div>
+      <div class="card"><b>Organizations and access</b><br><span class="muted">Separate tenants on one server, roles and permissions, two-factor authentication, 19 languages, your logo and colours.</span></div>
+      <div class="card"><b>Operations</b><br><span class="muted">One-command installer for Linux and Windows, TLS, WireGuard for devices, backups, updates and server settings from the UI. The data stays with you.</span></div>
+    </div>
+  </section>
+
+  <section id="dash" hidden>
+    <div class="page-head"><h1 id="dashTitle"></h1><span class="badge ok" id="liveBadge" hidden title="Values update as they arrive">live</span><span class="grow"></span><label style="flex-direction:row;align-items:center;gap:6px">Range <select id="dashRange"></select></label><a class="btn" href="/dashboards">All dashboards</a><a class="btn" id="dashEdit" hidden>Edit</a></div>
+    <div id="dashGrid"></div>
+  </section>
+
+  <section id="app" hidden>
+    <div class="row"><h1 style="margin:0">Dashboard</h1><span class="grow"></span><label style="flex-direction:row;align-items:center;gap:8px">Datastream <select id="ds"></select></label></div>
+    <div class="two" style="margin-top:12px">
+      <div class="card">
+        <h2>Last 6 hours</h2>
+        <svg id="chart" class="chart" viewBox="0 0 960 240" preserveAspectRatio="none" aria-label="trend"></svg>
+        <div id="stats" class="muted"></div>
+        <h2>Exports</h2>
+        <div class="row" id="exports"></div>
+      </div>
+      <div class="card">
+        <h2>Alarms</h2>
+        <div class="table-wrap"><table id="alarms"><thead><tr><th>Raised</th><th>Severity</th><th>State</th><th>Key</th><th>Value</th><th>Retro</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="card">
+        <h2>Devices</h2>
+        <div class="table-wrap"><table id="devices"><thead><tr><th>Device</th><th>Transport</th><th>Last seen</th><th>Status</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="card">
+        <h2>Reports</h2>
+        <div class="table-wrap"><table id="reports"><thead><tr><th>Generated</th><th>Kind</th><th>By</th><th>Size</th><th>File hash</th><th></th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+    <p class="muted" style="margin-top:12px"><span id="health"></span> · audit chain: <span id="audit">…</span></p>
+  </section>
+</main>
+
+<script src="/app.js"></script>
+<script src="/widgets.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt;
+const j = (u) => ctrl32.api('GET', u);
+function draw(points){
+  const svg = $('#chart'); svg.innerHTML='';
+  if(!points.length){ $('#stats').textContent='no data'; return; }
+  const xs = points.map(p=>new Date(p.measured_at).getTime()), ys = points.map(p=>p.value);
+  const x0=Math.min(...xs), x1=Math.max(...xs), y0=Math.min(...ys), y1=Math.max(...ys);
+  const px = x => 10 + (x1===x0?0:(x-x0)/(x1-x0))*940, py = y => 230 - (y1===y0?0.5:(y-y0)/(y1-y0))*220;
+  const d = points.map((p,i)=>(i?'L':'M')+px(xs[i]).toFixed(1)+','+py(ys[i]).toFixed(1)).join(' ');
+  const gaps = points.filter(p=>p.quality!=='ok').map(p=>`<circle cx="${px(new Date(p.measured_at).getTime()).toFixed(1)}" cy="${py(p.value).toFixed(1)}" r="3" fill="#d97706"><title>${esc(p.quality)}</title></circle>`).join('');
+  svg.innerHTML = `<path d="${d}" fill="none" stroke="var(--primary)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>${gaps}`;
+  $('#stats').textContent = `${points.length} points · min ${y0} · max ${y1} · last ${ys[ys.length-1]} (${fmt(points[points.length-1].measured_at)}) · orange = backfilled/suspect`;
+}
+function exportsRow(){
+  const id=$('#ds').value; if(!id) return;
+  const from = encodeURIComponent(new Date(Date.now()-24*3600e3).toISOString());
+  const links = [];
+  if(ctrl32.can('data.export')){
+    for(const f of ['csv','jsonl','pdf']) links.push(`<a class="btn" target="_blank" rel="noopener" href="/api/v1/export/observations?datastream_id=${id}&from=${from}&format=${f}">Observations ${f.toUpperCase()} (24 h)</a>`);
+    links.push(`<a class="btn" target="_blank" rel="noopener" href="/api/v1/export/alarms?format=pdf">Alarm log PDF</a>`);
+  }
+  if(ctrl32.can('audit.read')) links.push(`<a class="btn" target="_blank" rel="noopener" href="/api/v1/export/audit?format=pdf">Audit trail PDF</a>`);
+  $('#exports').innerHTML = links.join('') || '<span class="muted">your role has no export permission</span>';
+}
+async function reports(){
+  try{
+    const rs = await j('/api/v1/reports?limit=10');
+    $('#reports tbody').innerHTML = rs.map(r=>`<tr><td>${fmt(r.generated_at)}</td><td>${esc(r.kind)}</td><td>${esc(r.generated_by)}</td><td>${(r.bytes/1024).toFixed(0)} KiB</td><td><code>${esc(r.file_hash.slice(0,16))}…</code></td><td><a href="/api/v1/reports/${r.id}/file">download</a></td></tr>`).join('') || '<tr><td colspan="6" class="muted">none yet</td></tr>';
+  }catch(e){ $('#reports tbody').innerHTML = `<tr><td colspan="6" class="muted">${esc(e.message)}</td></tr>`; }
+}
+async function load(){
+  try { const h = await j('/healthz'); $('#health').textContent = `db ${h.db} · mqtt clients ${h.mqtt_clients} · v${h.version}`; } catch(e){ $('#health').textContent = e.message; }
+  const ds = await j('/api/v1/datastreams'); const sel=$('#ds'); sel.innerHTML = ds.map(d=>`<option value="${d.id}">${esc(d.asset)} / ${esc(d.key)} [${esc(d.unit)}]</option>`).join('');
+  sel.onchange = ()=>{ refresh(); exportsRow(); }; refresh(); exportsRow();
+  const devs = await j('/api/v1/devices'); $('#devices tbody').innerHTML = devs.map(d=>`<tr><td>${esc(d.external_id)}</td><td>${esc(d.transport)}</td><td>${d.last_seen?fmt(d.last_seen):'—'}</td><td><code>${esc(JSON.stringify(d.status))}</code></td></tr>`).join('') || '<tr><td colspan="4" class="muted">none</td></tr>';
+  const a = await j('/api/v1/audit/verify'); $('#audit').innerHTML = a.ok ? `<span class="ok">chain OK</span> · ${a.checked} entries · head #${a.head_seq} <code>${esc((a.head_hash||'').slice(0,16))}…</code>` : `<span class="action">CHAIN BROKEN at seq ${a.first_bad_seq}</span>`;
+  reports();
+}
+async function refresh(){
+  const id=$('#ds').value; if(!id) return;
+  const from = new Date(Date.now()-6*3600e3).toISOString();
+  draw(await j(`/api/v1/observations?datastream_id=${id}&from=${encodeURIComponent(from)}&limit=5000`));
+  const al = await j(`/api/v1/alarms?datastream_id=${id}`);
+  $('#alarms tbody').innerHTML = al.map(x=>`<tr><td>${fmt(x.raised_at)}</td><td class="${esc(x.severity)}">${esc(x.severity)}</td><td>${esc(x.state)}</td><td>${esc(x.key)}</td><td>${x.value}</td><td>${x.retrospective?'yes':''}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">none</td></tr>';
+}
+ctrl32.ready().then(({me, brand}) => {
+  if(!me){ $('#landing').hidden=false; return; }
+  ctrl32.api('GET','/api/v1/dashboards/default').then(async d => {
+    $('#dash').hidden = false; $('#dashTitle').textContent = d.name; $('#dashRange').innerHTML = ['1h','6h','24h','7d','30d','90d'].map(r => `<option ${r === d.spec.range ? 'selected' : ''}>${r}</option>`).join('');
+    if(ctrl32.can('content.write')){ $('#dashEdit').hidden = false; $('#dashEdit').href = `/dashboards/${d.slug}/edit`; }
+    let fn = null; const run = async () => { fn = await ctrl32Widgets.render($('#dashGrid'), d.spec, {range: $('#dashRange').value}); }; $('#dashRange').onchange = run; await run(); setInterval(() => fn && fn(), (d.spec.refresh_s || 30) * 1000);
+  }).catch(() => { $('#app').hidden=false; load(); setInterval(refresh, 10000); });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Organizations</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<div class="page-head"><h1>Organizations</h1><span class="grow"></span><button class="btn primary" id="newOrgBtn" type="button">New organization</button></div>
+<div class="card">
+  <p class="muted">Each organization is a separate tenant on this server: its own users and roles, devices, sites, alarm rules, templates, branding, languages and reports. Nothing is shared between organizations. A disabled organization cannot sign in and its devices cannot connect.</p>
+  <div class="table-wrap"><table id="orgs"><thead><tr><th>Name</th><th>Slug</th><th>Administrator</th><th>Users</th><th>Devices</th><th>Time zone</th><th>Created</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
+</div>
+
+<dialog id="newOrgDlg">
+  <form id="newOrg" class="form" method="dialog">
+    <h2 style="margin-top:0">New organization</h2>
+    <label>Name <input name="name" required maxlength="128" placeholder="Acme s.r.o."></label>
+    <label>Slug (short identifier, lowercase) <input name="slug" required pattern="[a-z0-9][a-z0-9-]{1,62}" maxlength="63" placeholder="acme"></label>
+    <div class="two">
+      <label>Time zone <input name="tz" value="Europe/Bratislava" required maxlength="64" list="tzList"></label>
+      <label>Default language <select name="locale"></select></label>
+    </div>
+    <datalist id="tzList"><option>UTC</option><option>Europe/Bratislava</option><option>Europe/Prague</option><option>Europe/Vienna</option><option>Europe/Berlin</option><option>Europe/Warsaw</option><option>Europe/Budapest</option><option>Europe/Kyiv</option><option>Europe/London</option><option>Europe/Paris</option><option>Europe/Madrid</option><option>Europe/Rome</option><option>Europe/Bucharest</option><option>Europe/Helsinki</option><option>Europe/Stockholm</option><option>Europe/Oslo</option><option>Europe/Copenhagen</option><option>Europe/Tallinn</option><option>Europe/Amsterdam</option></datalist>
+    <h3 style="margin:8px 0 0">First administrator</h3>
+    <div class="muted">Gets the org_admin role, signs in with the password shown once below, must change it and set up an authenticator.</div>
+    <label>Username <input name="admin_username" required minlength="2" maxlength="64" placeholder="acme-admin"></label>
+    <label>Full name <input name="admin_full_name" maxlength="128"></label>
+    <label>E-mail <input name="admin_email" type="email" maxlength="254"></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="newOrgErr"></div>
+    <div id="newOrgResult" hidden><div class="muted">Organization created. Initial password of the administrator (shown once):</div><div class="secret" id="newOrgPw"></div></div>
+    <div class="actions"><button class="btn primary" type="submit" id="newOrgSubmit">Create organization</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="editOrgDlg">
+  <form id="editOrg" class="form" method="dialog">
+    <h2 style="margin-top:0">Edit organization</h2>
+    <label>Name <input name="name" required maxlength="128"></label>
+    <div class="two">
+      <label>Time zone <input name="tz" required maxlength="64" list="tzList"></label>
+      <label>Default language <select name="locale"></select></label>
+    </div>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="editOrgErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="stateDlg">
+  <form id="stateForm" class="form" method="dialog">
+    <h2 style="margin-top:0" id="stateTitle"></h2>
+    <div class="muted" id="stateHint"></div>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="stateErr"></div>
+    <div class="actions"><button class="btn primary" type="submit" id="stateSubmit"></button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="resetDlg">
+  <form id="resetForm" class="form" method="dialog">
+    <h2 style="margin-top:0">Reset administrator password</h2>
+    <div class="muted">A new one-time password is generated for the administrator of this organization. They must change it at the next sign-in.</div>
+    <label>Administrator username <input name="username" required maxlength="64"></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="resetErr"></div>
+    <div id="resetResult" hidden><div class="muted">New password (shown once):</div><div class="secret" id="resetPw"></div></div>
+    <div class="actions"><button class="btn primary" type="submit" id="resetSubmit">Reset password</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form>
+</dialog>
+</main>
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
+let ORGS = [], LANGS = null;
+function langOptions(sel, cur){ sel.innerHTML = (LANGS ? LANGS.supported : [{code:'en',name:'English'}]).map(l => `<option value="${l.code}" ${l.code === cur ? 'selected' : ''}>${esc(l.name)}</option>`).join(''); }
+async function load(){
+  ORGS = await api('GET','/api/v1/organizations');
+  $('#orgs tbody').innerHTML = ORGS.map(o => `<tr>
+    <td><b>${esc(o.name)}</b>${o.current ? ' <span class="badge primary">this one</span>' : ''}</td><td>${esc(o.slug)}</td><td>${esc(o.admin_username || '')}</td>
+    <td>${o.users}</td><td>${o.devices}</td><td>${esc(o.tz)}</td><td>${fmt(o.created_at)}</td>
+    <td>${o.disabled_at ? `<span class="badge bad" title="${esc(o.disabled_reason || '')}">disabled</span>` : '<span class="badge ok">active</span>'}</td>
+    <td style="white-space:nowrap"><button class="btn small" type="button" data-edit="${o.id}">Edit</button> <button class="btn small" type="button" data-reset="${o.id}">Reset admin password</button> ${o.current ? '' : (o.disabled_at ? `<button class="btn small" type="button" data-enable="${o.id}">Enable</button>` : `<button class="btn small danger" type="button" data-disable="${o.id}">Disable</button>`)}</td></tr>`).join('') || '<tr><td colspan="9" class="muted">no organizations</td></tr>';
+  for(const b of document.querySelectorAll('[data-edit]')) b.onclick = () => { const o = ORGS.find(x => x.id === b.dataset.edit); const f = $('#editOrg'); f.reset(); f.dataset.id = o.id; f.name.value = o.name; f.tz.value = o.tz; langOptions(f.locale, o.locale); $('#editOrgErr').textContent=''; $('#editOrgDlg').showModal(); };
+  for(const b of document.querySelectorAll('[data-reset]')) b.onclick = () => { const o = ORGS.find(x => x.id === b.dataset.reset); const f = $('#resetForm'); f.reset(); f.dataset.id = o.id; f.username.value = o.admin_username || ''; $('#resetErr').textContent=''; $('#resetResult').hidden = true; $('#resetSubmit').hidden = false; $('#resetDlg').showModal(); };
+  for(const b of document.querySelectorAll('[data-disable],[data-enable]')) b.onclick = () => { const dis = 'disable' in b.dataset; const o = ORGS.find(x => x.id === (b.dataset.disable || b.dataset.enable)); const f = $('#stateForm'); f.reset(); f.dataset.id = o.id; f.dataset.disabled = dis ? '1' : '';
+    $('#stateTitle').textContent = (dis ? 'Disable ' : 'Enable ') + o.name; $('#stateHint').textContent = dis ? 'All sessions of its users are signed out, sign-in is refused and its devices are rejected at the next connection. Data stays intact and the organization can be enabled again.' : 'Users can sign in and devices can connect again.';
+    $('#stateSubmit').textContent = dis ? 'Disable organization' : 'Enable organization'; $('#stateSubmit').className = 'btn ' + (dis ? 'danger' : 'primary'); $('#stateErr').textContent=''; $('#stateDlg').showModal(); };
+}
+$('#newOrgBtn').onclick = () => { const f = $('#newOrg'); f.reset(); langOptions(f.locale, 'en'); $('#newOrgErr').textContent=''; $('#newOrgResult').hidden = true; $('#newOrgSubmit').hidden = false; $('#newOrgDlg').showModal(); };
+$('#newOrg').slug.oninput = e => { const f = $('#newOrg'); if(!f.admin_username.dataset.touched) f.admin_username.value = e.target.value ? e.target.value + '-admin' : ''; };
+$('#newOrg').admin_username.oninput = e => { e.target.dataset.touched = '1'; };
+$('#newOrg').name.oninput = e => { const f = $('#newOrg'); if(!f.slug.dataset.touched) f.slug.value = e.target.value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,63); f.slug.dispatchEvent(new Event('input')); };
+$('#newOrg').slug.onchange = e => { e.target.dataset.touched = '1'; };
+$('#newOrg').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#newOrgErr').textContent='';
+  try{ const r = await api('POST','/api/v1/organizations',{name: f.name.value, slug: f.slug.value, tz: f.tz.value, locale: f.locale.value, admin_username: f.admin_username.value, admin_full_name: f.admin_full_name.value, admin_email: f.admin_email.value, reason: f.reason.value});
+    $('#newOrgPw').textContent = r.initial_password; $('#newOrgResult').hidden = false; $('#newOrgSubmit').hidden = true; ctrl32.toast('organization created','ok'); load(); }
+  catch(x){ $('#newOrgErr').textContent = x.message; } };
+$('#editOrg').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#editOrgErr').textContent='';
+  try{ await api('PATCH',`/api/v1/organizations/${f.dataset.id}`,{name: f.name.value, tz: f.tz.value, locale: f.locale.value, reason: f.reason.value}); $('#editOrgDlg').close(); ctrl32.toast('saved','ok'); load(); }catch(x){ $('#editOrgErr').textContent = x.message; } };
+$('#stateForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#stateErr').textContent='';
+  try{ await api('PATCH',`/api/v1/organizations/${f.dataset.id}`,{disabled: !!f.dataset.disabled, reason: f.reason.value}); $('#stateDlg').close(); ctrl32.toast(f.dataset.disabled ? 'organization disabled' : 'organization enabled','ok'); load(); }catch(x){ $('#stateErr').textContent = x.message; } };
+$('#resetForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#resetErr').textContent='';
+  try{ const r = await api('POST',`/api/v1/organizations/${f.dataset.id}/reset-admin`,{username: f.username.value, reason: f.reason.value}); $('#resetPw').textContent = r.initial_password; $('#resetResult').hidden = false; $('#resetSubmit').hidden = true; ctrl32.toast('password reset','ok'); }catch(x){ $('#resetErr').textContent = x.message; } };
+ctrl32.ready({requireAuth: true, requirePerm: 'system.admin'}).then(async () => { try{ LANGS = await api('GET','/api/v1/i18n/languages'); }catch(x){} load().catch(x => ctrl32.toast(x.message,'bad')); });
+</script>
+</body>
+</html>

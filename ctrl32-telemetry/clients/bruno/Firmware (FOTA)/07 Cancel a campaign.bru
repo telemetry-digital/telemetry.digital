@@ -1,0 +1,25 @@
+meta {
+  name: Cancel a campaign
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/fota/campaigns/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Cancel a campaign
+  
+  Requires permission `fota.manage`.
+}

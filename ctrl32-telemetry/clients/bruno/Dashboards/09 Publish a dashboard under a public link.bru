@@ -1,0 +1,29 @@
+meta {
+  name: Publish a dashboard under a public link
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v1/dashboards/:slug/share
+  body: json
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Publish a dashboard under a public link
+  
+  Creates the share token; the response carries the public URL and a QR code.
+  
+  Requires permission `content.write`.
+}

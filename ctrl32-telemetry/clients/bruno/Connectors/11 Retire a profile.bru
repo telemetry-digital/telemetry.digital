@@ -1,0 +1,27 @@
+meta {
+  name: Retire a profile
+  type: http
+  seq: 11
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/register-profiles/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Retire a profile
+  
+  Refused (409) while connectors use any version of it.
+  
+  Requires permission `config.write`.
+}

@@ -1,0 +1,21 @@
+meta {
+  name: Translation catalog of a locale
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/i18n/:locale
+  body: none
+  auth: inherit
+}
+
+params:path {
+  locale: 
+}
+
+docs {
+  Translation catalog of a locale
+  
+  Built-in strings merged with the organization's overrides; key = English text.
+}

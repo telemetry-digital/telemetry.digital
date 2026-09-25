@@ -1,0 +1,29 @@
+meta {
+  name: Create an API token
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/tokens
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "expires_at": "2026-09-24T12:00:00Z",
+    "name": "string",
+    "scopes": [
+      "string"
+    ]
+  }
+}
+
+docs {
+  Create an API token
+  
+  The raw token is returned once. Scopes must be a subset of the caller's permissions.
+  
+  Requires permission `token.manage`.
+}

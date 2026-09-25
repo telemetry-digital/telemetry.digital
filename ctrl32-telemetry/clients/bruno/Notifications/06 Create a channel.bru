@@ -1,0 +1,37 @@
+meta {
+  name: Create a channel
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/notification-channels
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "kind": "email",
+    "name": "string",
+    "reason": "string",
+    "settings": {
+      "body": "string",
+      "headers": {
+        "key": "string"
+      },
+      "method": "GET",
+      "recipients": [
+        "string"
+      ],
+      "secret": "string",
+      "url": "string"
+    }
+  }
+}
+
+docs {
+  Create a channel
+  
+  Requires permission `config.write`.
+}

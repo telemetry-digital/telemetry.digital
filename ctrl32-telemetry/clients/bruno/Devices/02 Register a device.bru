@@ -1,0 +1,28 @@
+meta {
+  name: Register a device
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/devices
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "external_id": "string",
+    "name": "string",
+    "reason": "string",
+    "transport": "mqtt"
+  }
+}
+
+docs {
+  Register a device
+  
+  Returns a claim code for self-provisioning (see `POST /api/v1/provision`); a token can also be issued with `POST /api/v1/devices/{id}/token`.
+  
+  Requires permission `device.manage`.
+}

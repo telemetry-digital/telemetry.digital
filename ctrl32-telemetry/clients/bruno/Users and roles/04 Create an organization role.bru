@@ -1,0 +1,27 @@
+meta {
+  name: Create an organization role
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/roles
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "string",
+    "permissions": [
+      "string"
+    ],
+    "reason": "string"
+  }
+}
+
+docs {
+  Create an organization role
+  
+  Requires permission `user.admin`.
+}

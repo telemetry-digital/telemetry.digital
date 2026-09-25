@@ -1,0 +1,17 @@
+meta {
+  name: List update campaigns
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/fota/campaigns
+  body: none
+  auth: inherit
+}
+
+docs {
+  List update campaigns
+  
+  Requires permission `fota.read`.
+}

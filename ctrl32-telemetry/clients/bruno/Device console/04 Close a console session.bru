@@ -1,0 +1,26 @@
+meta {
+  name: Close a console session
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/devices/:id/console/:sid
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+  sid: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Close a console session
+  
+  Requires permission `device.console`.
+}

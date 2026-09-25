@@ -1,0 +1,26 @@
+meta {
+  name: End a datastream assignment
+  type: http
+  seq: 8
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/devices/:id/datastreams/:ds
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+  ds: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  End a datastream assignment
+  
+  Requires permission `device.manage`.
+}

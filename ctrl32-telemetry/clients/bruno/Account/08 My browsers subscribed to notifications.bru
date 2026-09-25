@@ -1,0 +1,19 @@
+meta {
+  name: My browsers subscribed to notifications
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/push/subscriptions
+  body: none
+  auth: inherit
+}
+
+docs {
+  My browsers subscribed to notifications
+  
+  Keys are never returned; subscriptions revoked in the last 7 days are listed with `revoked_at`.
+  
+  Requires a signed-in user or an API token (any permission).
+}

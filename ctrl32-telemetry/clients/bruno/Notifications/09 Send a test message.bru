@@ -1,0 +1,27 @@
+meta {
+  name: Send a test message
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v1/notification-channels/:id/test
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {}
+}
+
+docs {
+  Send a test message
+  
+  Logged in the delivery log like any notification.
+  
+  Requires permission `config.write`.
+}

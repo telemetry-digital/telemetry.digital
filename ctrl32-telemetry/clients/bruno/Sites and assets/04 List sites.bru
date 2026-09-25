@@ -1,0 +1,17 @@
+meta {
+  name: List sites
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/sites
+  body: none
+  auth: inherit
+}
+
+docs {
+  List sites
+  
+  Requires permission `data.read`.
+}

@@ -1,0 +1,21 @@
+meta {
+  name: Remove one of my browser subscriptions
+  type: http
+  seq: 10
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/push/subscriptions/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  Remove one of my browser subscriptions
+  
+  Requires a signed-in user or an API token (any permission).
+}

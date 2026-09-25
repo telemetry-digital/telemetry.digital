@@ -1,0 +1,21 @@
+meta {
+  name: Download a firmware image (device)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/d/fota/:fw/blob
+  body: none
+  auth: inherit
+}
+
+params:path {
+  fw: 
+}
+
+docs {
+  Download a firmware image (device)
+  
+  Called by the device with its device token (`Authorization: Bearer`), supports HTTP range requests.
+}

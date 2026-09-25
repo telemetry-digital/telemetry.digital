@@ -1,0 +1,17 @@
+meta {
+  name: My API tokens
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/tokens
+  body: none
+  auth: inherit
+}
+
+docs {
+  My API tokens
+  
+  Requires permission `token.manage`.
+}

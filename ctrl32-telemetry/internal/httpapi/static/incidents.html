@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Incidents</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  .inc-meta { display:flex; flex-wrap:wrap; gap:6px 14px; font-size:13px; }
+  .inc-detail { background: var(--bg-2, rgba(127,127,127,.08)); border-radius: var(--radius); padding: 8px 10px; font-size: 12px; white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow:auto; }
+  .inc-events { list-style:none; padding:0; margin:0; font-size:13px; }
+  .inc-events li { padding:4px 0; border-top: 1px solid var(--border, rgba(127,127,127,.25)); }
+  #list tbody tr { cursor:pointer; }
+  textarea { min-height: 64px; }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<div class="page-head"><h1>Incidents</h1><span class="grow"></span>
+  <select id="filter"><option value="open">Open</option><option value="all">All</option><option value="resolved">Resolved</option><option value="closed">Closed</option></select>
+  <button class="btn primary" id="newBtn" type="button">New incident</button></div>
+<div class="card">
+  <p class="muted">Something went wrong operationally: an alarm nobody received, a broken audit chain, a failed backup, or anything an operator records by hand. Each incident carries its impact, the cause found and the corrective and preventive action (CAPA); it cannot be closed without them. The system opens its own incidents and tells administrators by e-mail and browser notification.</p>
+  <div class="table-wrap"><table id="list"><thead><tr><th>Opened</th><th>Kind</th><th>Severity</th><th>Status</th><th>Title</th><th>Organization</th></tr></thead><tbody></tbody></table></div>
+</div>
+
+<dialog id="dlg">
+  <form id="edit" class="form" method="dialog">
+    <h2 style="margin-top:0" id="dTitle"></h2>
+    <div class="inc-meta" id="dMeta"></div>
+    <div class="inc-detail" id="dDetail"></div>
+    <label>Impact <textarea name="impact" maxlength="4000"></textarea></label>
+    <label>Cause <textarea name="cause" maxlength="4000" placeholder="What was found to have caused it"></textarea></label>
+    <label>CAPA — corrective and preventive action <textarea name="capa" maxlength="4000" placeholder="What was done now and what prevents it from happening again"></textarea></label>
+    <label>Note (added to the history) <input name="note" maxlength="1000"></label>
+    <label>Reason for the change (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="dErr"></div>
+    <div class="actions" id="dActions"></div>
+    <h3 style="margin:12px 0 4px">History</h3>
+    <ul class="inc-events" id="dEvents"></ul>
+  </form>
+</dialog>
+
+<dialog id="newDlg">
+  <form id="newForm" class="form" method="dialog">
+    <h2 style="margin-top:0">New incident</h2>
+    <label>Title <input name="title" required maxlength="200"></label>
+    <label>Severity <select name="severity"><option value="minor">minor</option><option value="major" selected>major</option><option value="critical">critical</option></select></label>
+    <label>Impact <textarea name="impact" maxlength="4000"></textarea></label>
+    <label>Cause (if known) <textarea name="cause" maxlength="4000"></textarea></label>
+    <label>CAPA (if known) <textarea name="capa" maxlength="4000"></textarea></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="nErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Open incident</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button></div>
+  </form>
+</dialog>
+</main>
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
+const KIND = { alarm_undelivered: 'Alarm not delivered', audit_chain: 'Audit chain broken', backup_failed: 'Backup failed', manual: 'Manual' };
+const SEV = { minor: '', major: 'warn', critical: 'bad' }, STAT = { open: 'bad', investigating: 'warn', resolved: 'ok', closed: '' };
+const NEXT = { open: ['investigating', 'resolved', 'closed'], investigating: ['open', 'resolved', 'closed'], resolved: ['investigating', 'closed'], closed: ['investigating'] };
+const LABEL = { investigating: 'Start investigating', resolved: 'Mark resolved', closed: 'Close', open: 'Back to open' };
+let LIST = [], CUR = null;
+function canAck(){ return ctrl32.can('alarm.ack') || ctrl32.can('system.admin'); }
+async function load(){
+  try { LIST = await api('GET', '/api/v1/incidents?status=' + encodeURIComponent($('#filter').value)); } catch (x) { ctrl32.toast(x.message, 'bad'); LIST = []; }
+  $('#list tbody').innerHTML = LIST.map(i => `<tr data-id="${i.id}"><td>${fmt(i.opened_at)}</td><td>${esc(KIND[i.kind] || i.kind)}</td><td><span class="badge ${SEV[i.severity] || ''}">${esc(i.severity)}</span></td><td><span class="badge ${STAT[i.status] || ''}">${esc(i.status)}</span></td><td>${esc(i.title)}</td><td>${esc(i.org_name || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No incidents</td></tr>';
+  for (const tr of document.querySelectorAll('#list tbody tr[data-id]')) tr.onclick = () => open(tr.dataset.id);
+}
+function detailText(d){ const out = []; for (const [k, v] of Object.entries(d || {})) { if (k === 'alarm' && v && typeof v === 'object') { out.push(`alarm: ${v.key || ''} ${v.severity || ''} = ${v.value ?? ''} (${v.measured_at || ''})`); continue; } out.push(`${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`); } return out.join('\n'); }
+async function open(id){
+  let r; try { r = await api('GET', '/api/v1/incidents/' + id); } catch (x) { ctrl32.toast(x.message, 'bad'); return; }
+  CUR = r.incident; const f = $('#edit');
+  $('#dTitle').textContent = CUR.title;
+  $('#dMeta').innerHTML = `<span>${esc(KIND[CUR.kind] || CUR.kind)}</span><span class="badge ${SEV[CUR.severity] || ''}">${esc(CUR.severity)}</span><span class="badge ${STAT[CUR.status] || ''}">${esc(CUR.status)}</span><span class="muted">${esc(CUR.opened_by)} · ${fmt(CUR.opened_at)}</span>${CUR.org_name ? `<span class="muted">${esc(CUR.org_name)}</span>` : ''}${CUR.closed_at ? `<span class="muted">closed ${fmt(CUR.closed_at)} · ${esc(CUR.closed_by || '')}</span>` : ''}`;
+  $('#dDetail').textContent = detailText(CUR.detail); $('#dDetail').hidden = !Object.keys(CUR.detail || {}).length;
+  f.impact.value = CUR.impact || ''; f.cause.value = CUR.cause || ''; f.capa.value = CUR.capa || ''; f.note.value = ''; f.reason.value = ''; $('#dErr').textContent = '';
+  const ro = !canAck(); for (const el of [f.impact, f.cause, f.capa, f.note, f.reason]) el.disabled = ro;
+  $('#dActions').innerHTML = ro ? '<button class="btn" type="button" onclick="this.closest(\'dialog\').close()">Close window</button>' :
+    `<button class="btn primary" type="submit">Save fields and note</button> ${(NEXT[CUR.status] || []).map(s => `<button class="btn" type="button" data-status="${s}">${esc(LABEL[s])}</button>`).join(' ')} <button class="btn" type="button" onclick="this.closest('dialog').close()">Close window</button>`;
+  for (const b of document.querySelectorAll('#dActions [data-status]')) b.onclick = () => save(b.dataset.status);
+  $('#dEvents').innerHTML = (r.events || []).map(e => `<li><span class="muted">${fmt(e.at)}</span> · <b>${esc(e.actor)}</b> · ${esc(e.event)}${e.detail && Object.keys(e.detail).length ? ` <span class="muted">${esc(JSON.stringify(e.detail))}</span>` : ''}</li>`).join('');
+  $('#dlg').showModal();
+}
+async function save(status){
+  const f = $('#edit'); $('#dErr').textContent = '';
+  if (!f.reason.value.trim()) { $('#dErr').textContent = 'reason is required'; return; }
+  const body = { impact: f.impact.value, cause: f.cause.value, capa: f.capa.value, reason: f.reason.value };
+  if (f.note.value.trim()) body.note = f.note.value;
+  if (status) body.status = status;
+  try { await api('PATCH', '/api/v1/incidents/' + CUR.id, body); ctrl32.toast('incident updated', 'ok'); await load(); await open(CUR.id); } catch (x) { $('#dErr').textContent = x.message; }
+}
+$('#edit').onsubmit = e => { e.preventDefault(); save(null); };
+$('#filter').onchange = load;
+$('#newBtn').onclick = () => { if (!canAck()) { ctrl32.toast('permission alarm.ack is required', 'bad'); return; } $('#newForm').reset(); $('#nErr').textContent = ''; $('#newDlg').showModal(); };
+$('#newForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#nErr').textContent = '';
+  try { const inc = await api('POST', '/api/v1/incidents', { title: f.title.value, severity: f.severity.value, impact: f.impact.value, cause: f.cause.value, capa: f.capa.value, reason: f.reason.value }); $('#newDlg').close(); ctrl32.toast('incident opened', 'ok'); await load(); open(inc.id); } catch (x) { $('#nErr').textContent = x.message; } };
+ctrl32.ready({ requireAuth: true, requirePerm: 'data.read' }).then(() => { document.title = 'Incidents'; load(); });
+</script>
+</body>
+</html>

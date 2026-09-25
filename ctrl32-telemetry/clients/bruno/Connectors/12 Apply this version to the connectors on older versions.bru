@@ -1,0 +1,29 @@
+meta {
+  name: Apply this version to the connectors on older versions
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/v1/register-profiles/:id/apply
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Apply this version to the connectors on older versions
+  
+  Each connector's registers and byte order are replaced from the profile (audited as connector.update) and its poller restarts.
+  
+  Requires permission `config.write`.
+}

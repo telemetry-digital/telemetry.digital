@@ -1,0 +1,29 @@
+meta {
+  name: Acknowledge a command (device)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/d/cmd/:id/ack
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "err": "string",
+    "ok": true,
+    "r": null
+  }
+}
+
+docs {
+  Acknowledge a command (device)
+  
+  `{"ok":true,"r":{…}}` or `{"ok":false,"err":"…"}`; 404 when the command is not open for this device.
+}

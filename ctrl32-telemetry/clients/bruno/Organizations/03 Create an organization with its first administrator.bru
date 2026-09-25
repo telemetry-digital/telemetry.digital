@@ -1,0 +1,30 @@
+meta {
+  name: Create an organization with its first administrator
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/organizations
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "admin_email": "string",
+    "admin_full_name": "string",
+    "admin_username": "string",
+    "locale": "string",
+    "name": "string",
+    "reason": "string",
+    "slug": "string",
+    "tz": "string"
+  }
+}
+
+docs {
+  Create an organization with its first administrator
+  
+  Requires permission `system.admin`.
+}

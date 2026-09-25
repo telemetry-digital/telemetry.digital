@@ -1,0 +1,17 @@
+meta {
+  name: Organization security policy
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/settings/policy
+  body: none
+  auth: inherit
+}
+
+docs {
+  Organization security policy
+  
+  Requires permission `config.write`.
+}

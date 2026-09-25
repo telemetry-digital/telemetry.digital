@@ -1,0 +1,27 @@
+meta {
+  name: Revoke a connector
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/connectors/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Revoke a connector
+  
+  Stops polling and rejects its secret.
+  
+  Requires permission `config.write`.
+}

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Firmware — ctrl32 telemetry</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  .devlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 12px; max-height: 240px; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; }
+  dialog.wide { width: min(900px, calc(100vw - 32px)); }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; min-width: 80px; } .bar i { display: block; height: 100%; background: var(--primary); }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<nav class="subnav">
+  <a href="/fota" data-section="images">Images</a>
+  <a href="/fota/campaigns" data-section="campaigns">Campaigns</a>
+</nav>
+
+<section data-section="images">
+  <div class="page-head"><h1>Firmware images</h1><span class="grow"></span><button class="btn primary" id="uploadBtn" type="button" hidden>Upload image</button></div>
+  <div class="card"><div class="table-wrap"><table id="fw"><thead><tr><th>Name</th><th>Version</th><th>Hardware</th><th>Size</th><th>SHA-256</th><th>Uploaded</th><th>Campaigns</th></tr></thead><tbody></tbody></table></div></div>
+</section>
+
+<section data-section="campaigns">
+  <div class="page-head"><h1>Firmware campaigns</h1><span class="grow"></span><button class="btn primary" id="campBtn" type="button" hidden>New campaign</button></div>
+  <div class="card"><div class="table-wrap"><table id="camps"><thead><tr><th>Name</th><th>Firmware</th><th>Status</th><th>Created</th><th></th></tr></thead><tbody></tbody></table></div></div>
+</section>
+
+<dialog id="uploadDlg">
+  <form id="upload" class="form" method="dialog">
+    <h2 style="margin-top:0">Upload firmware image</h2>
+    <div class="row"><label>Name <input name="name" required maxlength="64" placeholder="fridge-node"></label><label>Version <input name="version" required pattern="[A-Za-z0-9._+-]{1,32}" placeholder="1.5.0"></label><label>Hardware id <input name="hw" required maxlength="32" placeholder="esp32-s3"></label></div>
+    <div class="row"><label>Minimum current version <input name="min_version" pattern="[A-Za-z0-9._+-]{1,32}" placeholder="optional"></label><label>Ed25519 signature (hex) <input name="signature" placeholder="optional" maxlength="128"></label></div>
+    <label>File <input name="file" type="file" required></label>
+    <label>Notes <input name="notes" maxlength="500"></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="upErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Upload</button><button class="btn" type="button" data-close>Cancel</button></div>
+  </form>
+</dialog>
+<dialog id="campDlg">
+  <form id="newCamp" class="form" method="dialog">
+    <h2 style="margin-top:0">New campaign</h2>
+    <div class="row"><label>Firmware <select name="firmware_id" required></select></label><label>Name <input name="name" maxlength="64" placeholder="optional"></label></div>
+    <div><div class="muted" style="font-size:13px;margin-bottom:4px">Devices <span id="devHint"></span></div><div class="devlist" id="devlist"></div></div>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="campErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Start campaign</button><button class="btn" type="button" data-close>Cancel</button></div>
+    <p class="muted" style="margin:0">A retained target is published to every MQTT device; devices download, verify and report progress.</p>
+  </form>
+</dialog>
+<dialog id="dlg" class="wide"></dialog>
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
+let FW = [], DEVS = [], timer = null;
+const manage = () => ctrl32.can('fota.manage');
+for(const b of document.querySelectorAll('[data-close]')) b.onclick = () => b.closest('dialog').close();
+async function load(){
+  [FW, DEVS] = await Promise.all([api('GET','/api/v1/firmware'), api('GET','/api/v1/devices')]);
+  $('#fw tbody').innerHTML = FW.map(f => `<tr><td><b>${esc(f.name)}</b>${f.signed ? ' <span class="badge ok">signed</span>' : ''}</td><td>${esc(f.version)}</td><td>${esc(f.hw)}</td><td>${(f.size/1024).toFixed(0)} KiB</td><td><code title="${esc(f.sha256)}">${esc(f.sha256.slice(0,12))}…</code></td><td title="${esc(f.uploaded_by)}">${fmt(f.uploaded_at)}</td><td>${f.campaigns}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">no images yet</td></tr>';
+  $('#newCamp').firmware_id.innerHTML = FW.map(f => `<option value="${f.id}">${esc(f.name)} ${esc(f.version)} (${esc(f.hw)})</option>`).join('');
+  const active = DEVS.filter(d => !d.revoked_at);
+  $('#devlist').innerHTML = active.map(d => `<label class="inline"><input type="checkbox" name="dev" value="${d.id}"><span>${esc(d.external_id)} <span class="muted">${esc(d.transport)}${d.status && d.status.fw ? ' · fw ' + esc(d.status.fw) : ''}${d.connected ? ' · online' : ''}</span></span></label>`).join('') || '<span class="muted">no devices</span>';
+  $('#devHint').textContent = `(${active.length} active)`;
+  campaigns();
+}
+async function campaigns(){
+  const cs = await api('GET','/api/v1/fota/campaigns');
+  const sum = c => Object.entries(c.counts || {}).map(([k,v]) => `<span class="badge ${k==='updated'?'ok':(k==='failed'||k==='rolled_back'?'bad':'')}">${esc(k)} ${v}</span>`).join(' ');
+  $('#camps tbody').innerHTML = cs.map(c => `<tr class="clickable" data-id="${c.id}"><td><b>${esc(c.name)}</b>${c.closed_at ? ' <span class="badge">closed</span>' : ''}</td><td>${esc(c.firmware)} <span class="muted">${esc(c.hw)}</span></td><td>${sum(c) || '<span class="muted">—</span>'}</td><td title="${esc(c.created_by)}">${fmt(c.created_at)}</td><td>${!c.closed_at && manage() ? `<button class="btn small danger" type="button" data-cancel="${c.id}">Cancel</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">no campaigns yet</td></tr>';
+  for(const tr of document.querySelectorAll('#camps tr.clickable')) tr.onclick = e => { if(e.target.dataset.cancel) return; openCampaign(tr.dataset.id); };
+  for(const b of document.querySelectorAll('[data-cancel]')) b.onclick = async () => { const reason = ctrl32.ask('Reason for cancelling the campaign:'); if(!reason) return; try{ await api('DELETE',`/api/v1/fota/campaigns/${b.dataset.cancel}?reason=${encodeURIComponent(reason)}`); campaigns(); }catch(x){ ctrl32.toast(x.message,'bad'); } };
+}
+$('#uploadBtn').onclick = () => { $('#upload').reset(); $('#upErr').textContent=''; $('#uploadDlg').showModal(); };
+$('#campBtn').onclick = () => { if(!FW.length){ ctrl32.toast('upload a firmware image first','bad'); return; } $('#newCamp').reason.value=''; $('#campErr').textContent=''; for(const i of document.querySelectorAll('input[name=dev]')) i.checked = false; $('#campDlg').showModal(); };
+$('#upload').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#upErr').textContent=''; const fd = new FormData(f);
+  try{ const r = await fetch('/api/v1/firmware', {method:'POST', body: fd, headers: {'X-CSRF-Token': ctrl32.csrf}, credentials:'same-origin'}); const j = await r.json(); if(!r.ok) throw new Error(j.error || r.status); $('#uploadDlg').close(); ctrl32.toast(`uploaded ${j.name} ${j.version}`,'ok'); load(); }
+  catch(x){ $('#upErr').textContent = x.message; } };
+$('#newCamp').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#campErr').textContent=''; const ids = [...f.querySelectorAll('input[name=dev]:checked')].map(i => i.value); if(!ids.length){ $('#campErr').textContent = 'select at least one device'; return; }
+  try{ const r = await api('POST','/api/v1/fota/campaigns',{firmware_id: f.firmware_id.value, device_ids: ids, name: f.name.value, reason: f.reason.value}); $('#campDlg').close(); ctrl32.toast(`campaign started: ${r.devices} devices, ${r.published} notified`,'ok'); campaigns(); openCampaign(r.id); }
+  catch(x){ $('#campErr').textContent = x.message; } };
+async function openCampaign(id){
+  const dlg = $('#dlg'); dlg.showModal(); if(timer) clearInterval(timer);
+  const refresh = async () => { try{ const d = await api('GET',`/api/v1/fota/campaigns/${id}`); const c = d.campaign;
+      dlg.innerHTML = `<div class="row"><h2 style="margin:0">${esc(c.name)}</h2><span class="badge">${esc(c.firmware)} · ${esc(c.hw)}</span>${c.closed_at ? `<span class="badge">closed: ${esc(c.close_reason || '')}</span>` : '<span class="badge ok">running</span>'}<span class="grow"></span><button class="btn ghost icon" id="dlgClose" type="button" aria-label="Close">${ctrl32.ICON.close}</button></div>
+        <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Device</th><th>Status</th><th>Progress</th><th>Reported version</th><th>Device fw</th><th>Error</th><th>Updated</th></tr></thead><tbody>${d.targets.map(t => `<tr><td><a href="/devices/${t.device_id}"><b>${esc(t.external_id)}</b></a> <span class="muted">${esc(t.name)}</span></td><td><span class="badge ${t.status==='updated'?'ok':(t.status==='failed'||t.status==='rolled_back'?'bad':(t.status==='pending'?'':'warn'))}">${esc(t.status)}</span></td><td><div class="bar"><i style="width:${t.pct ?? (t.status==='updated'?100:0)}%"></i></div></td><td>${esc(t.version || '')}</td><td>${esc(t.device_fw || '')}</td><td class="bad">${esc(t.error || '')}</td><td>${fmt(t.updated_at)}</td></tr>`).join('')}</tbody></table></div>
+        <p class="muted">Created ${fmt(c.created_at)} by ${esc(c.created_by)} · refreshes every 3 s</p>`;
+      $('#dlgClose').onclick = () => { dlg.close(); clearInterval(timer); timer = null; campaigns(); };
+    }catch(x){ dlg.innerHTML = `<p class="err">${esc(x.message)}</p>`; } };
+  refresh(); timer = setInterval(refresh, 3000);
+}
+ctrl32.ready({requireAuth: true, requirePerm: 'fota.read'}).then(() => {
+  const sec = ctrl32.section('images', ['images', 'campaigns']); document.title = (sec === 'campaigns' ? 'Firmware campaigns' : 'Firmware images') + ' — ctrl32 telemetry';
+  if(manage()){ $('#uploadBtn').hidden = false; $('#campBtn').hidden = false; }
+  load().catch(x => ctrl32.toast(x.message,'bad'));
+});
+</script>
+</body>
+</html>

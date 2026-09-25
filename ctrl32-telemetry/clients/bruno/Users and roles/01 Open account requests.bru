@@ -1,0 +1,17 @@
+meta {
+  name: Open account requests
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/account-requests
+  body: none
+  auth: inherit
+}
+
+docs {
+  Open account requests
+  
+  Requires permission `user.admin`.
+}

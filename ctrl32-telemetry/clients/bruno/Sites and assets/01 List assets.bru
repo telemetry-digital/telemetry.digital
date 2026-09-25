@@ -1,0 +1,21 @@
+meta {
+  name: List assets
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/assets
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~site_id: 
+}
+
+docs {
+  List assets
+  
+  Requires permission `data.read`.
+}

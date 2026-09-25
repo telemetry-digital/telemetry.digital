@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Devices — ctrl32 telemetry</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  .msg td { font-size: 12px; } .msg .payload { white-space: pre-wrap; word-break: break-all; max-width: 520px; font-family: var(--mono); }
+  #conOut { user-select: text; height: 320px; overflow: auto; font-size: 12px; }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<!-- list -->
+<div id="list" hidden>
+  <div class="page-head"><h1>Devices</h1><span class="grow"></span><button class="btn primary" id="newBtn" type="button" hidden>New device</button></div>
+  <div class="card"><div class="table-wrap"><table id="devices"><thead><tr><th>Device</th><th>Name</th><th>Transport</th><th>Last seen</th><th>Firmware</th><th>State</th></tr></thead><tbody></tbody></table></div></div>
+  <details class="card" id="revokedBox" hidden style="margin-top:12px"><summary style="cursor:pointer"><b>Revoked devices</b> (<span id="revokedCount">0</span>)</summary>
+    <div class="muted" style="margin:8px 0">Revoked devices stay as records: their credentials no longer work and they leave the active list. They can be removed only on the server, with the audited command admin purge.</div>
+    <div class="table-wrap"><table id="revokedDevices"><thead><tr><th>Device</th><th>Name</th><th>Transport</th><th>Last seen</th><th>Revoked</th></tr></thead><tbody></tbody></table></div>
+  </details>
+</div>
+
+<!-- detail: one screen per topic -->
+<div id="detail" hidden>
+  <div class="page-head"><a class="btn ghost small" href="/devices">← Devices</a><h1 id="devTitle"></h1><span id="devBadges"></span></div>
+  <nav class="subnav" id="tabs"></nav>
+
+  <section data-section="overview" class="two">
+    <div class="card">
+      <h2>Device</h2>
+      <div class="kv" id="devInfo"></div>
+      <form id="renameForm" class="row" style="margin-top:12px" hidden><input name="name" maxlength="128" placeholder="name"><input name="reason" placeholder="reason" maxlength="200" required><button class="btn small" type="submit">Rename</button></form>
+    </div>
+    <div class="card">
+      <h2>Credentials</h2>
+      <div class="table-wrap"><table><thead><tr><th>Kind</th><th>Issued</th><th>Valid to</th><th>State</th></tr></thead><tbody id="credRows"></tbody></table></div>
+      <form id="actForm" class="form" style="margin-top:12px" hidden>
+        <label>Reason for the action (audit trail) <input name="reason" maxlength="200"></label>
+        <div class="err" id="actErr"></div>
+        <div class="actions"><button class="btn" type="button" data-act="token">Issue / rotate token</button><button class="btn danger" type="button" data-act="revoke">Revoke device</button></div>
+        <div id="tokenOut" hidden><div class="muted">Token (shown once):</div><div class="secret" id="tokenOutValue"></div><div class="muted" id="connHint" style="margin-top:6px"></div></div>
+      </form>
+    </div>
+    <div class="card"><h2>Reported status</h2><pre id="devStatus" class="secret" style="user-select:text"></pre></div>
+    <div class="card"><h2>Location</h2>
+      <div class="muted" style="font-size:13px">A device either has a fixed position set here, or reports one with its telemetry (lat, lon) or status. A fixed position wins over reported ones. Positions show up on map widgets.</div>
+      <div id="locInfo" style="margin:8px 0"></div>
+      <form id="locForm" class="form" hidden>
+        <div class="row"><label>Latitude <input name="lat" type="number" step="any" min="-90" max="90" placeholder="48.1486"></label><label>Longitude <input name="lon" type="number" step="any" min="-180" max="180" placeholder="17.1077"></label><button class="btn" type="button" id="locPick">Pick on map</button></div>
+        <div id="locMap" hidden style="height:280px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line)"></div>
+        <label>Reason (audit trail) <input name="reason" maxlength="200" required></label>
+        <div class="err" id="locErr"></div>
+        <div class="actions"><button class="btn primary" type="submit">Save fixed position</button><button class="btn" type="button" id="locClear">Use reported position</button></div>
+      </form>
+    </div>
+  </section>
+
+  <section data-section="datastreams" class="card">
+    <h2>Datastreams fed by this device</h2>
+    <p class="muted">The device publishes keys; each key must match an assigned datastream key. Assigning a datastream here closes its previous source.</p>
+    <div class="table-wrap"><table><thead><tr><th>Key</th><th>Asset</th><th>Quantity</th><th>Since</th><th></th></tr></thead><tbody id="assignRows"></tbody></table></div>
+    <form id="assignForm" class="row" style="margin-top:12px" hidden><select name="datastream_id" required><option value="">add datastream…</option></select><input name="reason" placeholder="reason" maxlength="200" required><button class="btn small primary" type="submit">Assign</button></form>
+    <div class="err" id="assignErr"></div>
+  </section>
+
+  <section data-section="commands" class="two">
+    <div class="card">
+      <h2>Command log</h2>
+      <div class="table-wrap"><table><thead><tr><th>Issued</th><th>Method</th><th>Args</th><th>Status</th><th>Result</th><th>By</th></tr></thead><tbody id="cmdRows"><tr><td colspan="6" class="muted">…</td></tr></tbody></table></div>
+    </div>
+    <form id="cmdForm" class="card form" hidden>
+      <h2>Send command</h2>
+      <div class="row"><label>Method <input name="method" required pattern="[a-z][a-z0-9_]{0,31}" placeholder="ping" list="methods"></label><datalist id="methods"><option value="ping"><option value="reboot"><option value="get_attrs"><option value="set_interval"><option value="fota_check"><option value="console_on"><option value="console_off"></datalist><label>TTL (s) <input name="ttl" type="number" min="1" value="300"></label></div>
+      <label>Arguments (JSON) <input name="args" value="{}" maxlength="8192"></label>
+      <label>Reason <input name="reason" required maxlength="200"></label>
+      <div class="err" id="cmdErr"></div>
+      <div><button class="btn primary" type="submit">Send</button></div>
+    </form>
+  </section>
+
+  <section data-section="attributes" class="two">
+    <div class="card">
+      <h2>Shared attributes <span class="muted" style="font-weight:400">(server → device, retained)</span></h2>
+      <pre id="sharedAttrs" class="secret" style="user-select:text;min-height:60px"></pre>
+      <form id="attrForm" class="form" hidden><label>Set attributes (JSON object, merged) <input name="attributes" value='{"interval_s": 60}' maxlength="16384"></label><label>Remove keys (comma separated) <input name="remove" placeholder="temp_hi"></label><label>Reason <input name="reason" required maxlength="200"></label><div class="err" id="attrErr"></div><div><button class="btn primary" type="submit">Publish</button></div></form>
+    </div>
+    <div class="card">
+      <h2>Client attributes <span class="muted" style="font-weight:400">(reported by the device)</span></h2>
+      <pre id="clientAttrs" class="secret" style="user-select:text;min-height:60px"></pre>
+    </div>
+  </section>
+
+  <section data-section="console" class="card">
+    <div class="row"><h2 style="margin:0">Console</h2><span class="muted" id="conState"></span><span class="grow"></span><button class="btn small" id="conOpen" type="button">Open console</button><button class="btn small danger" id="conClose" type="button" hidden>Close</button></div>
+    <pre id="conOut" class="secret" style="margin-top:12px"></pre>
+    <form id="conForm" class="row" hidden><input name="line" placeholder="line for the device (max 512 bytes)" maxlength="512" autocomplete="off" style="flex:1"><button class="btn small primary" type="submit">Send</button></form>
+    <div class="err" id="conErr"></div>
+    <p class="muted" style="margin-bottom:0">The device only listens while a session is open; sessions close after 15 minutes without activity. Every line is a record.</p>
+  </section>
+
+  <section data-section="messages" class="card">
+    <div class="row"><h2 style="margin:0">Message viewer</h2><span class="muted" id="liveState"></span><span class="grow"></span><button class="btn small" id="liveBtn" type="button">Pause</button></div>
+    <div class="table-wrap" style="margin-top:12px"><table class="msg"><thead><tr><th>Received</th><th>Dir</th><th>Topic</th><th>Payload</th><th>Status</th></tr></thead><tbody id="msgRows"></tbody></table></div>
+  </section>
+</div>
+
+<dialog id="newDlg">
+  <form id="newForm" class="form" method="dialog">
+    <h2 style="margin-top:0">New device</h2>
+    <label>External id (MQTT client id / DevEUI / endpoint) <input name="external_id" required maxlength="64" pattern="[^/#+ ]+" autocomplete="off"></label>
+    <label>Name <input name="name" maxlength="128"></label>
+    <label>Transport <select name="transport"><option value="mqtt">MQTT</option><option value="http">HTTP</option><option value="lorawan">LoRaWAN</option><option value="opcua">OPC UA</option><option value="modbus">Modbus</option></select></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="newErr"></div>
+    <div id="newResult" hidden>
+      <div class="muted">Claim code (valid 24 h; the device exchanges it for a token via <code>POST /api/v1/provision</code>):</div><div class="secret" id="claimCode"></div>
+      <div class="row" style="margin-top:8px"><button class="btn" type="button" id="issueNow">Issue a token now instead</button><span class="muted">for devices you configure by hand</span></div>
+      <div id="tokenBox" hidden><div class="muted" style="margin-top:8px">Token (shown once):</div><div class="secret" id="tokenValue"></div><div class="muted" id="newConnHint" style="margin-top:6px"></div></div>
+    </div>
+    <div class="actions"><button class="btn primary" type="submit" id="newSubmit">Create</button><button class="btn" type="button" id="newClose">Close</button></div>
+  </form>
+</dialog>
+
+<script src="/app.js"></script>
+<script src="/widgets.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
+const TABS = [['overview','Overview'],['datastreams','Datastreams'],['commands','Commands'],['attributes','Attributes'],['console','Console'],['messages','Messages']];
+let DEVICES = [], DS = [], live = null, curId = null, conTimer = null, conSid = null, conAfter = '';
+const canManage = () => ctrl32.can('device.manage');
+function connHint(ext){ const h = location.hostname; const tls = location.protocol === 'https:'; return `MQTT host ${h}, port ${tls ? '8883 (TLS)' : '1883'} · username <code>${esc(ext)}</code> · password = token · publish to <code>d/${esc(ext)}/telemetry</code> e.g. <code>{"v":{"temp":4.5}}</code>`; }
+// ---- list
+// connection state: MQTT session now = online; otherwise by last message age (LoRaWAN and HTTP devices have no session)
+function devState(d){ if(d.revoked_at) return '<span class="badge bad">revoked</span>'; if(d.connected) return '<span class="badge ok">online</span>'; if(!d.last_seen) return '<span class="badge">never connected</span>'; const age = (Date.now() - new Date(d.last_seen).getTime())/60000; return age < 15 ? '<span class="badge ok">recent</span>' : `<span class="badge warn" title="last seen ${fmt(d.last_seen)}">offline</span>`; }
+let ME = null;
+async function loadList(){
+  DEVICES = await api('GET','/api/v1/devices');
+  const active = DEVICES.filter(d => !d.revoked_at), revoked = DEVICES.filter(d => d.revoked_at);
+  $('#devices tbody').innerHTML = active.map(d => `<tr class="clickable" data-id="${d.id}"><td><b>${esc(d.external_id)}</b></td><td>${esc(d.name)}</td><td>${esc(d.transport)}</td><td>${d.last_seen ? fmt(d.last_seen) : '—'}</td><td>${esc((d.status && d.status.fw) || '')}</td><td>${devState(d)}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">no devices yet</td></tr>';
+  $('#revokedBox').hidden = !revoked.length; $('#revokedCount').textContent = revoked.length;
+  $('#revokedDevices tbody').innerHTML = revoked.map(d => `<tr class="clickable" data-id="${d.id}"><td><b>${esc(d.external_id)}</b></td><td>${esc(d.name)}</td><td>${esc(d.transport)}</td><td>${d.last_seen ? fmt(d.last_seen) : '—'}</td><td>${fmt(d.revoked_at)}</td></tr>`).join('');
+  for(const tr of document.querySelectorAll('#devices tr.clickable, #revokedDevices tr.clickable')) tr.onclick = () => location.href = '/devices/' + tr.dataset.id;
+}
+$('#newBtn').onclick = () => { const f = $('#newForm'); f.reset(); $('#newResult').hidden = true; $('#tokenBox').hidden = true; $('#newErr').textContent=''; $('#newSubmit').hidden = false; $('#newDlg').showModal(); };
+$('#newClose').onclick = () => { $('#newDlg').close(); loadList(); };
+let newId = null;
+$('#newForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#newErr').textContent='';
+  try{ const r = await api('POST','/api/v1/devices',{external_id: f.external_id.value, name: f.name.value, transport: f.transport.value, reason: f.reason.value}); newId = r.id; $('#claimCode').textContent = r.claim_code; $('#newConnHint').innerHTML = connHint(r.external_id); $('#newResult').hidden = false; $('#newSubmit').hidden = true; ctrl32.toast('device created','ok'); }
+  catch(x){ $('#newErr').textContent = x.message; } };
+$('#issueNow').onclick = async () => { try{ const r = await api('POST',`/api/v1/devices/${newId}/token`,{reason: 'initial token issued in UI'}); $('#tokenValue').textContent = r.token; $('#tokenBox').hidden = false; }catch(x){ $('#newErr').textContent = x.message; } };
+// ---- detail
+async function loadDetail(id, tab){
+  const d = await api('GET',`/api/v1/devices/${id}`); const dev = d.device, m = canManage() && !dev.revoked_at;
+  $('#devTitle').textContent = dev.external_id; document.title = dev.external_id + ' — Devices';
+  $('#devBadges').innerHTML = devState({revoked_at: dev.revoked_at, connected: d.connected, last_seen: dev.status && dev.status.last_seen}) + ` <span class="badge">${esc(dev.transport)}</span>`;
+  $('#tabs').innerHTML = TABS.map(([k,l]) => `<a href="/devices/${id}/${k}" data-section="${k}" class="${k===tab?'active':''}">${l}</a>`).join('');
+  $('#devInfo').innerHTML = `<b>Name</b><span>${esc(dev.name)}</span><b>Created</b><span>${fmt(dev.created_at)}</span><b>Last message</b><span>${fmt(d.last_message_at)}</span><b>Messages 24 h</b><span>${d.messages_24h}</span><b>Firmware</b><span>${esc((dev.status && dev.status.fw) || '—')}</span><b>Id</b><code>${esc(dev.id)}</code>`;
+  renderLocation(dev, id, m);
+  $('#devStatus').textContent = JSON.stringify(dev.status || {}, null, 1);
+  $('#credRows').innerHTML = d.credentials.map(c => `<tr><td>${esc(c.kind)}</td><td>${fmt(c.valid_from)}</td><td>${c.valid_to ? fmt(c.valid_to) : '—'}</td><td>${c.revoked_at ? '<span class="badge bad">revoked</span>' : (c.used_at ? '<span class="badge">used</span>' : '<span class="badge ok">active</span>')}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">none — issue a token</td></tr>';
+  const assignedIds = new Set(d.datastreams.map(a => a.datastream_id));
+  $('#assignRows').innerHTML = d.datastreams.map(a => `<tr><td><code>${esc(a.key)}</code></td><td>${esc(a.asset)}</td><td>${esc(a.quantity)} [${esc(a.unit)}]</td><td>${fmt(a.since)}</td><td>${m ? `<button class="btn small" type="button" data-unassign="${a.datastream_id}">Remove</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">none yet</td></tr>';
+  for(const el of ['renameForm','actForm','assignForm','cmdForm','attrForm']) $('#'+el).hidden = !m || (el === 'cmdForm' && !ctrl32.can('device.command'));
+  if(m){
+    $('#renameForm').name.value = dev.name;
+    const free = DS.filter(x => !assignedIds.has(x.id));
+    $('#assignForm').datastream_id.innerHTML = '<option value="">add datastream…</option>' + free.map(x => `<option value="${x.id}">${esc(x.asset)} / ${esc(x.key)} [${esc(x.unit)}]</option>`).join('');
+    $('#connHint').innerHTML = connHint(dev.external_id);
+    for(const b of document.querySelectorAll('[data-unassign]')) b.onclick = async () => { const reason = ctrl32.ask('Reason for removing this assignment:'); if(!reason) return; try{ const r = await api('DELETE',`/api/v1/devices/${id}/datastreams/${b.dataset.unassign}?reason=${encodeURIComponent(reason)}`); if(r.status === 'pending') ctrl32.toast('change request recorded — waiting for approval by a second person','bad'); loadDetail(id, tab); }catch(x){ ctrl32.toast(x.message,'bad'); } };
+  }
+  if(tab === 'commands') loadCommands(id);
+  if(tab === 'attributes') loadAttributes(id);
+  if(tab === 'console' && ctrl32.can('device.console') && !dev.revoked_at) initConsole(id); else if(tab === 'console'){ $('#conOpen').hidden = true; $('#conState').textContent = dev.revoked_at ? 'device revoked' : 'your role has no device.console permission'; }
+  if(tab === 'messages') startLive();
+}
+function wireDetail(id, tab){
+  $('#renameForm').onsubmit = async e => { e.preventDefault(); const f = e.target; try{ await api('PATCH',`/api/v1/devices/${id}`,{name: f.name.value, reason: f.reason.value}); ctrl32.toast('renamed','ok'); f.reason.value=''; loadDetail(id, tab); }catch(x){ ctrl32.toast(x.message,'bad'); } };
+  const act = $('#actForm');
+  for(const b of act.querySelectorAll('[data-act]')) b.onclick = async () => { const reason = act.reason.value.trim(); if(!reason){ $('#actErr').textContent = 'reason is required'; return; } $('#actErr').textContent='';
+    try{ if(b.dataset.act === 'token'){ const r = await api('POST',`/api/v1/devices/${id}/token`,{reason}); $('#tokenOutValue').textContent = r.token; $('#tokenOut').hidden = false; ctrl32.toast('token issued; previous tokens revoked','ok'); }
+      else { if(!ctrl32.confirm('Revoke this device? Its credentials stop working immediately.')) return; await api('POST',`/api/v1/devices/${id}/revoke`,{reason}); ctrl32.toast('device revoked','ok'); loadDetail(id, tab); } }
+    catch(x){ $('#actErr').textContent = x.message; } };
+  $('#assignForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#assignErr').textContent=''; try{ const r = await api('POST',`/api/v1/devices/${id}/datastreams`,{datastream_id: f.datastream_id.value, reason: f.reason.value}); ctrl32.toast(r.status === 'pending' ? 'change request recorded — waiting for approval by a second person' : (r.closed_previous ? 'assigned (previous source closed)' : 'assigned'), r.status === 'pending' ? 'bad' : 'ok'); f.reason.value=''; loadDetail(id, tab); }catch(x){ $('#assignErr').textContent = x.message; } };
+  $('#cmdForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#cmdErr').textContent=''; let args; try{ args = JSON.parse(f.args.value || '{}'); }catch(x){ $('#cmdErr').textContent = 'arguments must be valid JSON'; return; }
+    try{ const r = await api('POST',`/api/v1/devices/${id}/commands`,{method: f.method.value, args, ttl_seconds: parseInt(f.ttl.value || '300', 10), reason: f.reason.value}); ctrl32.toast(`command ${r.status}`,'ok'); loadCommands(id); }catch(x){ $('#cmdErr').textContent = x.message; } };
+  $('#attrForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#attrErr').textContent=''; let attributes; try{ attributes = JSON.parse(f.attributes.value || '{}'); }catch(x){ $('#attrErr').textContent = 'attributes must be a JSON object'; return; }
+    const remove = f.remove.value.split(',').map(s => s.trim()).filter(Boolean);
+    try{ const r = await api('PUT',`/api/v1/devices/${id}/attributes`,{attributes, remove, reason: f.reason.value}); ctrl32.toast(r.published ? 'published (retained)' : 'stored','ok'); loadAttributes(id); }catch(x){ $('#attrErr').textContent = x.message; } };
+}
+async function loadCommands(id){
+  try{ const cs = await api('GET',`/api/v1/devices/${id}/commands?limit=30`);
+    const badge = s => ({pending:'warn',queued:'',sent:'warn',acked:'ok',failed:'bad',expired:'bad',rejected:'bad'}[s] || '');
+    $('#cmdRows').innerHTML = cs.map(c => `<tr><td>${fmt(c.issued_at)}</td><td><code>${esc(c.method)}</code></td><td><code>${esc(JSON.stringify(c.args)).slice(0,80)}</code></td><td><span class="badge ${badge(c.status)}" title="${esc(c.error || '')}">${esc(c.status)}</span>${c.status === 'pending' && ME && c.issued_by !== ME.username && ctrl32.can('device.command') ? ` <button class="btn small" type="button" data-approve="${c.id}">Approve</button> <button class="btn small danger" type="button" data-reject="${c.id}">Reject</button>` : (c.status === 'pending' ? ' <span class="muted" style="font-size:11px">waiting for approval by another user</span>' : '')}${c.approved_by ? `<div class="muted" style="font-size:11px">by ${esc(c.approved_by)}</div>` : ''}</td><td><code>${esc(c.result ? JSON.stringify(c.result) : (c.error || '')).slice(0,80)}</code></td><td title="${esc(c.reason)}">${esc(c.issued_by)}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">no commands yet</td></tr>';
+    for(const b of document.querySelectorAll('[data-approve]')) b.onclick = async () => { const reason = ctrl32.ask('Reason for approving this command:'); if(!reason) return; try{ const r = await api('POST',`/api/v1/devices/${id}/commands/${b.dataset.approve}/approve`,{reason}); ctrl32.toast('approved · ' + r.status,'ok'); loadCommands(id); }catch(x){ ctrl32.toast(x.message,'bad'); } };
+    for(const b of document.querySelectorAll('[data-reject]')) b.onclick = async () => { const reason = ctrl32.ask('Reason for rejecting this command:'); if(!reason) return; try{ await api('POST',`/api/v1/devices/${id}/commands/${b.dataset.reject}/reject`,{reason}); ctrl32.toast('rejected','ok'); loadCommands(id); }catch(x){ ctrl32.toast(x.message,'bad'); } };
+  }catch(x){ $('#cmdRows').innerHTML = `<tr><td colspan="6" class="muted">${esc(x.message)}</td></tr>`; }
+}
+async function loadAttributes(id){ try{ const a = await api('GET',`/api/v1/devices/${id}/attributes`); $('#sharedAttrs').textContent = JSON.stringify(a.shared, null, 1); $('#clientAttrs').textContent = JSON.stringify(a.client, null, 1); }catch(x){ $('#sharedAttrs').textContent = x.message; } }
+async function refreshMessages(){
+  if(!curId) return;
+  try{ const ms = await api('GET',`/api/v1/devices/${curId}/messages?limit=100`);
+    $('#msgRows').innerHTML = ms.map(x => { const pl = x.payload_json ? JSON.stringify(x.payload_json) : (x.payload_text || ''); return `<tr><td>${fmt(x.received_at)}</td><td>${esc(x.direction)}</td><td><code>${esc(x.topic || '')}</code></td><td class="payload">${esc(pl.slice(0, 600))}</td><td>${x.decode_status === 'ok' ? '<span class="badge ok">ok</span>' : `<span class="badge warn" title="${esc(x.decode_error || '')}">${esc(x.decode_status)}</span>`}</td></tr>`; }).join('') || '<tr><td colspan="5" class="muted">no messages yet</td></tr>';
+    $('#liveState').textContent = 'live · ' + new Date().toLocaleTimeString();
+  }catch(x){ $('#liveState').textContent = x.message; }
+}
+function startLive(){ stopLive(); refreshMessages(); live = setInterval(refreshMessages, 3000); const b = $('#liveBtn'); b.textContent = 'Pause'; b.onclick = () => { if(live){ stopLive(); b.textContent = 'Resume'; $('#liveState').textContent = 'paused'; } else startLive(); }; }
+function stopLive(){ if(live){ clearInterval(live); live = null; } }
+function conStop(){ if(conTimer){ clearInterval(conTimer); conTimer = null; } }
+async function initConsole(id){
+  const out = $('#conOut'), st = $('#conState');
+  const render = (lines) => { for(const l of lines){ const div = document.createElement('div'); div.textContent = (l.direction === 'in' ? '> ' : '  ') + l.line; if(l.direction === 'in') div.style.color = 'var(--primary)'; out.appendChild(div); conAfter = l.id; } if(lines.length) out.scrollTop = out.scrollHeight; };
+  const poll = async () => { try{ const r = await api('GET',`/api/v1/devices/${id}/console/${conSid}?after=${conAfter}`); render(r.lines); if(r.session.closed_at){ st.textContent = 'session closed (' + (r.session.close_reason || '') + ')'; stopSession(); } }catch(x){ st.textContent = x.message; } };
+  const startSession = (sess) => { conSid = sess.id; conAfter = ''; out.textContent = ''; st.textContent = 'session ' + sess.id.slice(0,8) + ' · ' + sess.opened_by; $('#conOpen').hidden = true; $('#conClose').hidden = false; $('#conForm').hidden = false; conStop(); poll(); conTimer = setInterval(poll, 1000); };
+  const stopSession = () => { conStop(); $('#conOpen').hidden = false; $('#conClose').hidden = true; $('#conForm').hidden = true; conSid = null; };
+  try{ const s = await api('GET',`/api/v1/devices/${id}/console`); if(s.open){ st.textContent = 'open by ' + s.open.opened_by; if(s.open.opened_by === ctrl32.me.username) startSession({id: s.open.id, opened_by: s.open.opened_by}); } else st.textContent = 'no session · idle timeout ' + s.idle_timeout_minutes + ' min'; }catch(x){ st.textContent = x.message; }
+  $('#conOpen').onclick = async () => { $('#conErr').textContent=''; try{ const s = await api('POST',`/api/v1/devices/${id}/console`,{}); startSession(s); }catch(x){ $('#conErr').textContent = x.message; } };
+  $('#conClose').onclick = async () => { try{ await api('DELETE',`/api/v1/devices/${id}/console/${conSid}?reason=${encodeURIComponent('closed by operator')}`); }catch(x){} stopSession(); st.textContent = 'session closed'; };
+  $('#conForm').onsubmit = async e => { e.preventDefault(); const f = e.target; const line = f.line.value; if(!line) return; $('#conErr').textContent=''; try{ await api('POST',`/api/v1/devices/${id}/console/${conSid}/in`,{line}); f.line.value=''; poll(); }catch(x){ $('#conErr').textContent = x.message; } };
+}
+ctrl32.ready({requireAuth: true}).then(async ({me}) => { ME = me;
+  const parts = location.pathname.replace(/\/$/, '').split('/').filter(Boolean); // devices, id?, tab?
+  if(parts.length >= 2 && parts[1].length > 20){
+    curId = parts[1]; const tab = ctrl32.section('overview', TABS.map(t => t[0]));
+    $('#detail').hidden = false;
+    try{ DS = await api('GET','/api/v1/datastreams'); wireDetail(curId, tab); await loadDetail(curId, tab); if(tab === 'commands') setInterval(() => loadCommands(curId), 3000); }
+    catch(x){ $('#devTitle').textContent = x.message; }
+  } else {
+    $('#list').hidden = false; if(canManage()) $('#newBtn').hidden = false; loadList().catch(x => ctrl32.toast(x.message,'bad'));
+  }
+});
+
+let locMap = null, locMarker = null;
+function renderLocation(dev, id, m){
+  const l = dev.location; const f = $('#locForm');
+  $('#locInfo').innerHTML = l && l.lat != null ? `<b>${l.lat.toFixed ? l.lat.toFixed(5) : l.lat}, ${l.lon.toFixed ? l.lon.toFixed(5) : l.lon}</b> <span class="badge ${l.source === 'fixed' ? 'primary' : 'ok'}">${esc(l.source || 'reported')}</span> <span class="muted">${l.updated_at ? fmt(l.updated_at) : ''}</span>` : '<span class="muted">no position yet</span>';
+  f.hidden = !m; if(!m) return;
+  if(l && l.lat != null && !f.lat.value){ f.lat.value = l.lat; f.lon.value = l.lon; }
+  f.onsubmit = async e => { e.preventDefault(); $('#locErr').textContent=''; try{ await api('PATCH', `/api/v1/devices/${id}`, {location: {lat: parseFloat(f.lat.value), lon: parseFloat(f.lon.value)}, reason: f.reason.value}); ctrl32.toast('position saved','ok'); f.reason.value=''; loadDetail(id, 'overview'); }catch(x){ $('#locErr').textContent = x.message; } };
+  $('#locClear').onclick = async () => { $('#locErr').textContent=''; if(!f.reason.value){ $('#locErr').textContent = 'reason is required'; return; } try{ await api('PATCH', `/api/v1/devices/${id}`, {clear_location: true, reason: f.reason.value}); ctrl32.toast('fixed position removed','ok'); f.reason.value=''; f.lat.value=''; f.lon.value=''; loadDetail(id, 'overview'); }catch(x){ $('#locErr').textContent = x.message; } };
+  $('#locPick').onclick = async () => { const cfg = ctrl32Widgets.mapConfig(); if(!cfg.tile_url){ $('#locErr').textContent = 'Set map tiles under Settings → Branding first.'; return; }
+    const box = $('#locMap'); box.hidden = false; await ctrl32Widgets.loadLeaflet();
+    if(!locMap){ locMap = ctrl32Widgets.makeMap(box, cfg); const start = f.lat.value ? [parseFloat(f.lat.value), parseFloat(f.lon.value)] : [cfg.center_lat || 48.7, cfg.center_lon || 19.5]; locMap.setView(start, f.lat.value ? 14 : (cfg.zoom || 7));
+      if(f.lat.value) locMarker = L.marker(start).addTo(locMap);
+      locMap.on('click', ev => { f.lat.value = ev.latlng.lat.toFixed(6); f.lon.value = ev.latlng.lng.toFixed(6); if(locMarker) locMarker.setLatLng(ev.latlng); else locMarker = L.marker(ev.latlng).addTo(locMap); }); }
+    setTimeout(() => locMap.invalidateSize(), 50); };
+}
+</script>
+</body>
+</html>

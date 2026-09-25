@@ -1,0 +1,27 @@
+meta {
+  name: Enable languages and set the default
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{baseUrl}}/api/v1/i18n/languages
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "default": "string",
+    "enabled": [
+      "string"
+    ],
+    "reason": "string"
+  }
+}
+
+docs {
+  Enable languages and set the default
+  
+  Requires permission `content.write`.
+}

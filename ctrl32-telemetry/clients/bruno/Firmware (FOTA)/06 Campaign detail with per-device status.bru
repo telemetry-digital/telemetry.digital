@@ -1,0 +1,21 @@
+meta {
+  name: Campaign detail with per-device status
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/fota/campaigns/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  Campaign detail with per-device status
+  
+  Requires permission `fota.read`.
+}

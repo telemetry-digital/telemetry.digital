@@ -1,0 +1,19 @@
+meta {
+  name: VAPID public key for Web Push
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/push/key
+  body: none
+  auth: inherit
+}
+
+docs {
+  VAPID public key for Web Push
+  
+  Pass it as `applicationServerKey` to `PushManager.subscribe` in the browser.
+  
+  Requires a signed-in user or an API token (any permission).
+}

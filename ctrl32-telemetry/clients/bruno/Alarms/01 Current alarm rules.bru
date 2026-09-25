@@ -1,0 +1,21 @@
+meta {
+  name: Current alarm rules
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/alarm-rules
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~datastream_id: 
+}
+
+docs {
+  Current alarm rules
+  
+  Requires permission `data.read`.
+}

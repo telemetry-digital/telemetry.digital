@@ -1,0 +1,47 @@
+meta {
+  name: New version of a profile
+  type: http
+  seq: 10
+}
+
+put {
+  url: {{baseUrl}}/api/v1/register-profiles/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "changelog": "string",
+    "description": "string",
+    "reason": "string",
+    "spec": {
+      "byte_order": "big",
+      "registers": [
+        {
+          "address": 1,
+          "key": "string",
+          "max": 21.5,
+          "min": 21.5,
+          "offset": 21.5,
+          "scale": 21.5,
+          "table": "holding",
+          "type": "bool",
+          "writable": true
+        }
+      ]
+    }
+  }
+}
+
+docs {
+  New version of a profile
+  
+  The current version is closed (`valid_to`) and a new row with the next version number is created; connectors keep their version until it is applied.
+  
+  Requires permission `config.write`.
+}

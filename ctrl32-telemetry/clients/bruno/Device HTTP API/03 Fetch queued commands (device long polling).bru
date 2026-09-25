@@ -1,0 +1,21 @@
+meta {
+  name: Fetch queued commands (device long polling)
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/d/cmd
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~wait: 
+}
+
+docs {
+  Fetch queued commands (device, long polling)
+  
+  Returns the queued commands of the device and marks them sent. `wait` (0–60 s) keeps the request open until a command appears. Devices registered with transport `http` receive commands only this way; acknowledge each with `POST /api/v1/d/cmd/{id}/ack`.
+}

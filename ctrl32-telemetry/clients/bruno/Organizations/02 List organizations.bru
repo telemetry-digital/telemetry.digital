@@ -1,0 +1,17 @@
+meta {
+  name: List organizations
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/organizations
+  body: none
+  auth: inherit
+}
+
+docs {
+  List organizations
+  
+  Requires permission `system.admin`.
+}

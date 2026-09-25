@@ -1,0 +1,43 @@
+meta {
+  name: Update a channel
+  type: http
+  seq: 7
+}
+
+put {
+  url: {{baseUrl}}/api/v1/notification-channels/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "enabled": true,
+    "name": "string",
+    "reason": "string",
+    "settings": {
+      "body": "string",
+      "headers": {
+        "key": "string"
+      },
+      "method": "GET",
+      "recipients": [
+        "string"
+      ],
+      "secret": "string",
+      "url": "string"
+    }
+  }
+}
+
+docs {
+  Update a channel
+  
+  A blank webhook secret keeps the stored one.
+  
+  Requires permission `config.write`.
+}

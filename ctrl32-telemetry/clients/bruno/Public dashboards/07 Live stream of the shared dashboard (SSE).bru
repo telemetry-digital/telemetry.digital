@@ -1,0 +1,19 @@
+meta {
+  name: Live stream of the shared dashboard (SSE)
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public/:token/stream
+  body: none
+  auth: inherit
+}
+
+params:path {
+  token: 
+}
+
+docs {
+  Live stream of the shared dashboard (SSE)
+}

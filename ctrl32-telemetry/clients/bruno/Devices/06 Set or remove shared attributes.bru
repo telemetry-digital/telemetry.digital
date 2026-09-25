@@ -1,0 +1,33 @@
+meta {
+  name: Set or remove shared attributes
+  type: http
+  seq: 6
+}
+
+put {
+  url: {{baseUrl}}/api/v1/devices/:id/attributes
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "attributes": {},
+    "reason": "string",
+    "remove": [
+      "string"
+    ]
+  }
+}
+
+docs {
+  Set or remove shared attributes
+  
+  Merged into the retained MQTT attributes message.
+  
+  Requires permission `device.manage`.
+}

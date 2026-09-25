@@ -1,0 +1,25 @@
+meta {
+  name: Disable an alarm rule
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/alarm-rules/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Disable an alarm rule
+  
+  Requires permission `config.write`.
+}

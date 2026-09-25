@@ -1,0 +1,27 @@
+meta {
+  name: Revoke a policy
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/escalation-policies/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Revoke a policy
+  
+  Refused (409) while alarm rules use it.
+  
+  Requires permission `config.write`.
+}

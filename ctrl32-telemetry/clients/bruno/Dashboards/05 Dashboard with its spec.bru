@@ -1,0 +1,21 @@
+meta {
+  name: Dashboard with its spec
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/dashboards/:slug
+  body: none
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+docs {
+  Dashboard with its spec
+  
+  Requires permission `data.read`.
+}

@@ -1,0 +1,19 @@
+meta {
+  name: Start TOTP enrolment
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/totp/setup
+  body: none
+  auth: inherit
+}
+
+docs {
+  Start TOTP enrolment
+  
+  Returns the secret, an otpauth URL and a QR code (data URL). Confirm with `POST /api/v1/auth/totp/confirm`.
+  
+  Requires a signed-in user or an API token (any permission).
+}

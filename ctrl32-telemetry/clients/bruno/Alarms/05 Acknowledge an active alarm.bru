@@ -1,0 +1,29 @@
+meta {
+  name: Acknowledge an active alarm
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/alarms/:id/ack
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Acknowledge an active alarm
+  
+  Stops the escalation ladder; recorded in the alarm log with the actor and reason.
+  
+  Requires permission `alarm.ack`.
+}

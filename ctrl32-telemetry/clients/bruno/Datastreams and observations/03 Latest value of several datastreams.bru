@@ -1,0 +1,21 @@
+meta {
+  name: Latest value of several datastreams
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/datastreams/latest
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ids: 
+}
+
+docs {
+  Latest value of several datastreams
+  
+  Requires permission `data.read`.
+}

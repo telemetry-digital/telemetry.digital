@@ -1,0 +1,3617 @@
+// ctrl32 telemetry API client — generated from the OpenAPI document by tools/apigen. Do not edit; run: go run ./tools/apigen
+// Usage: const api = new Ctrl32Client({ baseUrl: 'https://telemetry.example.com', token: 'c32_…' });
+//        const devices = await api.getDevices();
+// In a browser signed in with a session, pass { csrfToken } from getAuthMe() instead of a token.
+
+export type APIToken = {
+  created_at?: string;
+  expires_at?: string | null;
+  id?: string;
+  last_used_at?: string | null;
+  name?: string;
+  revoked_at?: string | null;
+  scopes?: string[];
+};
+
+export type AccountRequest = {
+  created_at?: string;
+  email?: string;
+  full_name?: string;
+  id?: string;
+  message?: string;
+};
+
+export type Alarm = {
+  cleared_at?: string | null;
+  id?: string;
+  /** datastream key, or input name for rule alarms */
+  key?: string;
+  raised_at?: string;
+  /** raised on backfilled data */
+  retrospective?: boolean;
+  severity?: "warning" | "action" | "critical";
+  state?: "active" | "acknowledged" | "suppressed" | "cleared";
+  value?: number | null;
+};
+
+export type AlarmRule = {
+  action?: number | null;
+  asset?: string;
+  datastream_id?: string;
+  delay_seconds?: number;
+  escalation_policy_id?: string | null;
+  hysteresis?: number;
+  id?: string;
+  key?: string;
+  reason?: string;
+  type?: string;
+  valid_from?: string;
+  version?: number;
+  warning?: number | null;
+};
+
+export type Asset = {
+  attributes?: Record<string, unknown>;
+  created_at?: string;
+  datastreams?: number;
+  id?: string;
+  name?: string;
+  parent_id?: string | null;
+  site?: string;
+  site_id?: string;
+  type?: string;
+};
+
+export type Branding = {
+  /** fixed footer text, licence, github */
+  footer?: Record<string, unknown>;
+  logo_custom?: boolean;
+  logo_url?: string;
+  map?: MapSettings;
+  org_name?: string;
+  product?: string;
+  public_read?: boolean;
+  theme?: Theme;
+  version?: string;
+};
+
+export type Campaign = {
+  close_reason?: string | null;
+  closed_at?: string | null;
+  /** status → number of devices */
+  counts?: Record<string, unknown>;
+  created_at?: string;
+  created_by?: string;
+  firmware?: string;
+  firmware_id?: string;
+  hw?: string;
+  id?: string;
+  name?: string;
+};
+
+export type ChangeRequest = {
+  /** the original request body */
+  body?: Record<string, unknown>;
+  /** the caller may approve it */
+  can_approve?: boolean;
+  decided_at?: string | null;
+  decided_by?: string | null;
+  decision_reason?: string | null;
+  expires_at?: string;
+  id?: string;
+  kind?: "limits" | "assignments" | "calibration";
+  method?: string;
+  path?: string;
+  reason?: string;
+  requested_at?: string;
+  requested_by?: string;
+  /** code and body of the replayed call */
+  result?: unknown;
+  status?: "pending" | "approved" | "rejected" | "expired" | "failed";
+  /** what the change does, in words */
+  summary?: string;
+};
+
+export type Channel = {
+  created_at?: string;
+  enabled?: boolean;
+  has_secret?: boolean;
+  id?: string;
+  kind?: "email" | "webhook" | "sms_http";
+  name?: string;
+  revoked_at?: string | null;
+  settings?: ChannelSettings;
+};
+
+export type ChannelSettings = {
+  /** sms_http POST body template */
+  body?: string;
+  headers?: Record<string, string>;
+  /** sms_http */
+  method?: "GET" | "POST";
+  recipients?: string[];
+  /** webhook: HMAC-SHA256 key (X-Ctrl32-Signature) */
+  secret?: string;
+  /** webhook or SMS gateway URL; {to} and {text} placeholders for sms_http */
+  url?: string;
+};
+
+export type Command = {
+  acked_at?: string | null;
+  approved_by?: string | null;
+  args?: Record<string, unknown>;
+  error?: string | null;
+  expires_at?: string | null;
+  id?: string;
+  issued_at?: string;
+  /** username or rule:<name> */
+  issued_by?: string;
+  method?: string;
+  reason?: string;
+  result?: unknown;
+  sent_at?: string | null;
+  status?: "pending" | "queued" | "sent" | "acked" | "failed" | "expired" | "rejected";
+};
+
+export type CommandResult = {
+  error?: string;
+  expires_at?: string;
+  id?: string;
+  method?: string;
+  /** connector writes: {readback} */
+  result?: unknown;
+  status?: string;
+};
+
+export type Connector = {
+  created_at?: string;
+  id?: string;
+  kind?: string;
+  last_seen_at?: string | null;
+  messages?: number;
+  name?: string;
+  revoked_at?: string | null;
+  settings?: ConnectorSettings;
+  /** opcua/modbus: connection state, last values, errors, writes */
+  status?: Record<string, unknown>;
+  /** chirpstack: ingest URL */
+  url?: string;
+};
+
+export type ConnectorCreated = {
+  /** chirpstack: integration hints */
+  chirpstack?: Record<string, unknown>;
+  id?: string;
+  kind?: string;
+  name?: string;
+  /** chirpstack: bearer secret, shown once */
+  secret?: string;
+  settings?: ConnectorSettings;
+  /** chirpstack: ingest URL */
+  url?: string;
+};
+
+export type ConnectorSettings = {
+  /** opcua: anonymous | username */
+  auth?: string;
+  /** modbus */
+  byte_order?: "big" | "big_swap" | "little" | "little_swap";
+  /** virtual device the values arrive under */
+  device_external_id?: string;
+  /** opcua: opc.tcp://host:4840 */
+  endpoint?: string;
+  /** modbus */
+  framing?: "tcp" | "rtuovertcp";
+  /** modbus */
+  host?: string;
+  /** polling interval */
+  interval_s?: number;
+  nodes?: (Record<string, unknown>)[];
+  password?: string;
+  /** modbus, default 502 */
+  port?: number;
+  /** modbus: register profile version the registers come from */
+  profile_id?: string;
+  /** modbus, informational */
+  profile_name?: string;
+  /** modbus, informational */
+  profile_version?: number;
+  registers?: ModbusRegister[];
+  /** opcua */
+  security_mode?: string;
+  /** opcua */
+  security_policy?: string;
+  /** modbus */
+  timeout_ms?: number;
+  /** modbus */
+  unit_id?: number;
+  username?: string;
+};
+
+export type ConsoleSession = {
+  close_reason?: string | null;
+  closed_at?: string | null;
+  id?: string;
+  last_activity_at?: string;
+  lines?: number;
+  opened_at?: string;
+  opened_by?: string;
+};
+
+export type Dashboard = {
+  checksum?: string;
+  created_at?: string;
+  id?: string;
+  is_default?: boolean;
+  name?: string;
+  slug?: string;
+  spec?: DashboardSpec;
+  version?: number;
+};
+
+export type DashboardSpec = {
+  /** screen-v1 */
+  format?: string;
+  /** {type: grid, columns: 12, row_height} */
+  layout?: Record<string, unknown>;
+  widgets?: (Record<string, unknown>)[];
+};
+
+export type DashboardSummary = {
+  created_at?: string;
+  id?: string;
+  is_default?: boolean;
+  name?: string;
+  slug?: string;
+  version?: number;
+  widgets?: number;
+};
+
+export type Datastream = {
+  /** asset name */
+  asset?: string;
+  asset_id?: string;
+  expected_interval?: string;
+  id?: string;
+  key?: string;
+  kind?: "gauge" | "counter" | "state" | "event";
+  quantity?: string;
+  unit?: string;
+};
+
+export type Device = {
+  /** MQTT session open */
+  connected?: boolean;
+  external_id?: string;
+  id?: string;
+  last_seen?: string | null;
+  location?: {
+    lat?: number;
+    lon?: number;
+    /** manual | reported */
+    source?: string;
+    updated_at?: string;
+  } | null;
+  name?: string;
+  revoked_at?: string | null;
+  /** last_seen, fw, battery, rssi, last_values, … */
+  status?: Record<string, unknown>;
+  transport?: "mqtt" | "http" | "lorawan" | "opcua" | "modbus";
+};
+
+export type Error = {
+  /** human-readable message */
+  error: string;
+};
+
+export type EscalationPolicy = {
+  id?: string;
+  name?: string;
+  revoked_at?: string | null;
+  /** alarm rules using it */
+  rules?: number;
+  steps?: EscalationStep[];
+  version?: number;
+};
+
+export type EscalationStep = {
+  /** seconds after the alarm */
+  after_s: number;
+  channel_id: string;
+  /** in responses */
+  channel_name?: string;
+};
+
+export type Firmware = {
+  campaigns?: number;
+  hw?: string;
+  id?: string;
+  min_version?: string;
+  name?: string;
+  notes?: string;
+  sha256?: string;
+  signed?: boolean;
+  size?: number;
+  uploaded_at?: string;
+  uploaded_by?: string;
+  version?: string;
+};
+
+export type Incident = {
+  /** Corrective and preventive action */
+  capa?: string;
+  cause?: string;
+  closed_at?: string | null;
+  closed_by?: string;
+  /** Source data: alarm id and step, channel, error, sequence number … */
+  detail?: Record<string, unknown>;
+  id?: string;
+  impact?: string;
+  /** alarm_undelivered, audit_chain, backup_failed or manual */
+  kind?: string;
+  opened_at?: string;
+  /** Username or system */
+  opened_by?: string;
+  /** Empty for instance-level incidents */
+  org_id?: string;
+  org_name?: string;
+  resolved_at?: string | null;
+  /** minor, major or critical */
+  severity?: string;
+  /** open, investigating, resolved or closed */
+  status?: string;
+  title?: string;
+  updated_at?: string;
+};
+
+export type IncidentEvent = {
+  actor?: string;
+  at?: string;
+  detail?: Record<string, unknown>;
+  /** opened, fields, note, status or notified */
+  event?: string;
+  id?: string;
+};
+
+export type LatestValue = {
+  asset?: string;
+  key?: string;
+  measured_at?: string;
+  quality?: string;
+  unit?: string;
+  value?: number | null;
+  value_json?: unknown;
+};
+
+export type LoginResponse = {
+  /** MFA step needed */
+  mfa_required?: boolean;
+  must_change_password?: boolean;
+  /** for POST /api/v1/auth/mfa */
+  pre_auth_token?: string;
+  user?: Me;
+};
+
+export type MapSettings = {
+  attribution?: string;
+  /** built-in OpenStreetMap source in use (read-only) */
+  builtin?: boolean;
+  center_lat?: number;
+  center_lon?: number;
+  /** the server's PMTiles archive in use (read-only) */
+  local?: boolean;
+  max_zoom?: number;
+  /** custom, pmtiles or builtin (read-only) */
+  source?: string;
+  /** XYZ tile URL template; empty = the server's PMTiles archive when configured, otherwise built-in OpenStreetMap */
+  tile_url?: string;
+  zoom?: number;
+};
+
+export type Me = {
+  auth?: "session" | "token";
+  /** send as X-CSRF-Token with cookie sessions */
+  csrf_token?: string;
+  full_name?: string;
+  locale?: string;
+  mfa_enabled?: boolean;
+  mfa_required?: boolean;
+  must_change_password?: boolean;
+  org_id?: string;
+  permissions?: string[];
+  roles?: string[];
+  user_id?: string;
+  username?: string;
+};
+
+export type Message = {
+  connector?: string;
+  decode_error?: string | null;
+  decode_status?: string;
+  direction?: "in" | "out";
+  id?: string;
+  meta?: Record<string, unknown>;
+  payload_json?: unknown;
+  payload_text?: string;
+  received_at?: string;
+  topic?: string;
+};
+
+export type ModbusRegister = {
+  /** 0-based */
+  address: number;
+  /** ^[a-z][a-z0-9_]{0,31}$ */
+  key: string;
+  /** limit for writes */
+  max?: number;
+  /** limit for writes */
+  min?: number;
+  offset?: number;
+  scale?: number;
+  table: "holding" | "input" | "coil" | "discrete";
+  /** default int16 (bool for coils) */
+  type?: "bool" | "int16" | "uint16" | "int32" | "uint32" | "float32" | "int64" | "uint64" | "float64";
+  /** holding registers and coils only */
+  writable?: boolean;
+};
+
+export type Notification = {
+  alarm_id?: string | null;
+  attempts?: number;
+  channel?: string | null;
+  due_at?: string;
+  error?: string | null;
+  event?: "raised" | "escalated" | "cleared" | "test" | "rule";
+  id?: string;
+  kind?: string | null;
+  sent_at?: string | null;
+  status?: "scheduled" | "sent" | "failed" | "cancelled";
+  step?: number;
+  subject?: string;
+};
+
+export type Observation = {
+  /** source time */
+  measured_at: string;
+  quality: "ok" | "backfilled" | "sensor_fault" | "out_of_range" | "clock_suspect" | "stale" | "simulated";
+  /** server time */
+  received_at: string;
+  time_source: "device" | "device_relative" | "server";
+  value?: number | null;
+  /** structured/string value */
+  value_json?: unknown;
+};
+
+export type ObservationBuckets = {
+  bucket_s: number;
+  from: string;
+  points: ({
+    avg?: number | null;
+    /** any row with quality other than ok */
+    flagged: boolean;
+    max?: number | null;
+    min?: number | null;
+    /** rows in the bucket */
+    n: number;
+    /** bucket start */
+    t: string;
+  })[];
+  to: string;
+};
+
+export type Organization = {
+  admin_username?: string;
+  created_at?: string;
+  /** the caller's organization */
+  current?: boolean;
+  devices?: number;
+  disabled_at?: string | null;
+  disabled_reason?: string | null;
+  id?: string;
+  locale?: string;
+  name?: string;
+  profile?: string;
+  slug?: string;
+  tz?: string;
+  users?: number;
+};
+
+export type Permission = {
+  description?: string;
+  name?: string;
+};
+
+export type Policy = {
+  four_eyes_assignments?: boolean;
+  four_eyes_commands?: boolean;
+  four_eyes_limits?: boolean;
+  mfa_required_all?: boolean;
+  mfa_required_roles?: string[];
+  password_min_length?: number;
+};
+
+export type PushSubscription = {
+  created_at?: string;
+  /** push service URL */
+  endpoint?: string;
+  failed_at?: string | null;
+  id?: string;
+  last_used_at?: string | null;
+  revoked_at?: string | null;
+  user_agent?: string;
+  user_id?: string;
+};
+
+export type RegisterProfile = {
+  changelog?: string;
+  /** connectors on any version */
+  connectors?: number;
+  created_by?: string;
+  description?: string;
+  /** current version id */
+  id?: string;
+  /** same across versions */
+  lineage?: string;
+  name?: string;
+  /** connectors on an older version */
+  outdated?: number;
+  reason?: string;
+  registers?: number;
+  retired_at?: string | null;
+  spec?: RegisterProfileSpec;
+  valid_from?: string;
+  version?: number;
+  writable?: number;
+};
+
+export type RegisterProfileDetail = {
+  changelog?: string;
+  created_by?: string;
+  description?: string;
+  id?: string;
+  lineage?: string;
+  name?: string;
+  reason?: string;
+  retired_at?: string | null;
+  spec?: RegisterProfileSpec;
+  valid_from?: string;
+  valid_to?: string | null;
+  version?: number;
+  versions?: ({
+    changelog?: string;
+    connectors?: number;
+    created_by?: string;
+    id?: string;
+    reason?: string;
+    valid_from?: string;
+    valid_to?: string | null;
+    version?: number;
+  })[];
+};
+
+export type RegisterProfileSpec = {
+  byte_order?: "big" | "big_swap" | "little" | "little_swap";
+  registers: ModbusRegister[];
+};
+
+export type Report = {
+  created_at?: string;
+  created_by?: string;
+  file_hash?: string;
+  id?: string;
+  kind?: string;
+  params?: Record<string, unknown>;
+  signed?: boolean;
+  size_bytes?: number;
+};
+
+export type Role = {
+  id?: string;
+  is_admin?: boolean;
+  is_qa?: boolean;
+  name?: string;
+  /** empty for built-in roles */
+  org_id?: string;
+  permissions?: string[];
+  /** members */
+  users?: number;
+};
+
+export type Rule = {
+  approved_at?: string | null;
+  approved_by?: string | null;
+  created_at?: string;
+  created_by?: string;
+  description?: string;
+  enabled?: boolean;
+  id?: string;
+  last_event?: string | null;
+  last_run?: string | null;
+  name?: string;
+  revoked_at?: string | null;
+  spec?: RuleSpec;
+  state?: {
+    active?: boolean;
+    loaded?: boolean;
+    /** holding / cooldown */
+    pending?: boolean;
+    since?: string | null;
+  };
+  status?: "active" | "pending" | "rejected";
+  updated_at?: string;
+  updated_by?: string;
+  version?: number;
+};
+
+export type RuleAction = {
+  /** command: custom RPC arguments instead of {key, value} */
+  args?: Record<string, unknown>;
+  /** notify */
+  channel_id?: string;
+  /** derive: target datastream */
+  datastream_id?: string;
+  /** command */
+  device_id?: string;
+  /** alarm */
+  escalation_policy_id?: string;
+  /** derive: expression, e.g. t_in - t_out */
+  expr?: string;
+  /** command: writable register/node */
+  key?: string;
+  /** command: default write */
+  method?: string;
+  /** webhook: HMAC key */
+  secret?: string;
+  /** alarm */
+  severity?: "warning" | "action" | "critical";
+  /** notify: template with {rule} {event} {inputs} {<input>} */
+  subject?: string;
+  /** notify: template */
+  text?: string;
+  type: "notify" | "webhook" | "command" | "alarm" | "derive";
+  /** webhook */
+  url?: string;
+  /** command: number, boolean or expression string */
+  value?: unknown;
+};
+
+export type RuleCondition = {
+  /** input name */
+  input: string;
+  op: ">" | ">=" | "<" | "<=" | "==" | "!=" | "stale";
+  /** number, or an expression string over the inputs; stale: seconds without data */
+  value: unknown;
+};
+
+export type RuleEvaluation = {
+  active?: boolean;
+  ages_s?: Record<string, number>;
+  condition?: boolean;
+  errors?: string[];
+  inputs?: Record<string, number>;
+  missing?: string[];
+  pending?: boolean;
+};
+
+export type RuleInput = {
+  datastream_id: string;
+  /** ^[a-z][a-z0-9_]{0,31}$, used in conditions and expressions */
+  name: string;
+};
+
+export type RuleRun = {
+  actions?: ({
+    alarm_id?: string;
+    command_id?: string;
+    detail?: string;
+    status?: "done" | "failed";
+    type?: string;
+  })[];
+  event?: "enter" | "exit";
+  fired_at?: string;
+  id?: string;
+  inputs?: Record<string, number>;
+  ok?: boolean;
+  rule?: string;
+  rule_id?: string;
+  version?: number;
+};
+
+export type RuleSpec = {
+  actions?: RuleAction[];
+  clear_actions?: RuleAction[];
+  conditions?: RuleCondition[];
+  /** minimum seconds between firings */
+  cooldown_s?: number;
+  /** hold time before firing */
+  for_s?: number;
+  inputs: RuleInput[];
+  /** default all */
+  match?: "all" | "any";
+};
+
+export type Share = {
+  public?: boolean;
+  /** data URL of the QR code */
+  qr?: string;
+  slug?: string;
+  token_prefix?: string;
+  /** public URL */
+  url?: string;
+};
+
+export type Site = {
+  address?: string;
+  assets?: number;
+  created_at?: string;
+  customer_id?: string | null;
+  id?: string;
+  name?: string;
+  tz?: string;
+};
+
+export type Theme = {
+  font?: string;
+  font_scale?: "small" | "normal" | "large";
+  mode?: "auto" | "light" | "dark";
+  /** hex colour */
+  primary?: string;
+  radius?: "none" | "small" | "medium" | "large";
+};
+
+export type TilesInfo = {
+  attribution?: string;
+  bounds?: number[];
+  center?: number[];
+  /** [map] pmtiles is set in config.toml */
+  configured?: boolean;
+  /** why the archive is not usable */
+  error?: string;
+  max_zoom?: number;
+  min_zoom?: number;
+  /** from the archive metadata */
+  name?: string;
+  /** the archive opened and holds raster tiles */
+  ok?: boolean;
+  size_bytes?: number;
+  /** png, jpg, webp or avif */
+  tile_type?: string;
+  /** template served by this server */
+  tile_url?: string;
+  /** addressed tiles */
+  tiles?: number;
+};
+
+export type User = {
+  created_at?: string;
+  disabled?: boolean;
+  email?: string;
+  full_name?: string;
+  id?: string;
+  last_login_at?: string | null;
+  locked_until?: string | null;
+  mfa_enabled?: boolean;
+  must_change_password?: boolean;
+  roles?: string[];
+  username?: string;
+};
+
+export interface Ctrl32Options {
+  /** Server origin, e.g. https://telemetry.example.com (default: the page's origin) */
+  baseUrl?: string;
+  /** Personal API token; when absent the browser session cookie is used */
+  token?: string;
+  /** csrf_token from getAuthMe() — required for mutating calls with a session cookie */
+  csrfToken?: string;
+  /** Custom fetch (Node < 18, tests) */
+  fetch?: typeof fetch;
+}
+
+export class Ctrl32Error extends Error {
+  constructor(public readonly status: number, message: string, public readonly body?: unknown) {
+    super(message);
+    this.name = 'Ctrl32Error';
+  }
+}
+
+export class Ctrl32Client {
+  constructor(private readonly opts: Ctrl32Options = {}) {}
+
+  /** Low-level request; returns the parsed JSON body, or the Response when raw is true. */
+  async request<T>(method: string, path: string, query?: Record<string, unknown>, body?: unknown, raw = false): Promise<T> {
+    const base = this.opts.baseUrl ?? (typeof location !== 'undefined' ? location.origin : 'http://127.0.0.1:8080');
+    const url = new URL(path, base);
+    if (query) for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (this.opts.token) headers['Authorization'] = 'Bearer ' + this.opts.token;
+    if (this.opts.csrfToken && method !== 'GET') headers['X-CSRF-Token'] = this.opts.csrfToken;
+    let payload: BodyInit | undefined;
+    if (typeof FormData !== 'undefined' && body instanceof FormData) payload = body;
+    else if (body !== undefined) { headers['Content-Type'] = 'application/json'; payload = JSON.stringify(body); }
+    const f = this.opts.fetch ?? fetch;
+    const res = await f(url.toString(), { method, headers, body: payload, credentials: this.opts.token ? 'omit' : 'include' });
+    if (!res.ok) {
+      let message = res.status + ' ' + res.statusText;
+      let data: unknown;
+      try { data = await res.json(); const e = (data as { error?: string }).error; if (e) message = e; } catch { /* no JSON body */ }
+      throw new Ctrl32Error(res.status, message, data);
+    }
+    if (raw) return res as unknown as T;
+    if (res.status === 204) return undefined as T;
+    return (await res.json()) as T;
+  }
+
+  /** Cursor pagination helper: follows X-Next-Cursor until the server stops sending one. */
+  async *pages<T>(path: string, query: Record<string, unknown>): AsyncGenerator<T[]> {
+    let cursor: string | undefined;
+    for (;;) {
+      const res = await this.request<Response>('GET', path, { ...query, cursor }, undefined, true);
+      const rows = (await res.json()) as T[];
+      yield rows;
+      const next = res.headers.get('X-Next-Cursor');
+      if (!next) return;
+      cursor = next;
+    }
+  }
+
+  /** Open account requests
+   *
+   * Requires permission `user.admin`. */
+  getAccountRequests(): Promise<AccountRequest[]> {
+    return this.request<AccountRequest[]>('GET', `/api/v1/account-requests`, undefined, undefined, false);
+  }
+
+  /** Close an account request as fulfilled
+   *
+   * Requires permission `user.admin`. */
+  postAccountRequestsIdCreated(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/account-requests/${encodeURIComponent(id)}/created`, undefined, body, false);
+  }
+
+  /** Dismiss an account request
+   *
+   * Requires permission `user.admin`. */
+  postAccountRequestsIdDismiss(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/account-requests/${encodeURIComponent(id)}/dismiss`, undefined, body, false);
+  }
+
+  /** Current alarm rules
+   *
+   * Requires permission `data.read`. */
+  getAlarmRules(query?: { datastream_id?: string; /** only rules of this datastream */ }): Promise<AlarmRule[]> {
+    return this.request<AlarmRule[]>('GET', `/api/v1/alarm-rules`, query, undefined, false);
+  }
+
+  /** Create an alarm rule (new version)
+   *
+   * A rule of the same type on the same datastream is superseded (its `valid_to` is set); the new row carries the next version number. With the policy `four_eyes_limits` the call answers 202 with a pending change request instead.
+   * 
+   * Requires permission `config.write`. */
+  postAlarmRules(body: {
+    /** action limit */
+    action?: number | null;
+    datastream_id: string;
+    delay_seconds?: number;
+    /** optional; empty = global e-mail recipients */
+    escalation_policy_id?: string;
+    hysteresis?: number;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    type: "high" | "low" | "comm_loss" | "sensor_fault" | "low_battery" | "power_loss" | "door_open";
+    /** warning limit */
+    warning?: number | null;
+  }): Promise<AlarmRule> {
+    return this.request<AlarmRule>('POST', `/api/v1/alarm-rules`, undefined, body, false);
+  }
+
+  /** Disable an alarm rule
+   *
+   * Requires permission `config.write`. */
+  deleteAlarmRulesId(id: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/alarm-rules/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Alarms, newest first (200)
+   *
+   * Requires permission `data.read`. */
+  getAlarms(query?: { datastream_id?: string; }): Promise<Alarm[]> {
+    return this.request<Alarm[]>('GET', `/api/v1/alarms`, query, undefined, false);
+  }
+
+  /** Acknowledge an active alarm
+   *
+   * Stops the escalation ladder; recorded in the alarm log with the actor and reason.
+   * 
+   * Requires permission `alarm.ack`. */
+  postAlarmsIdAck(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/alarms/${encodeURIComponent(id)}/ack`, undefined, body, false);
+  }
+
+  /** List assets
+   *
+   * Requires permission `data.read`. */
+  getAssets(query?: { site_id?: string; /** only assets of this site */ }): Promise<Asset[]> {
+    return this.request<Asset[]>('GET', `/api/v1/assets`, query, undefined, false);
+  }
+
+  /** Create an asset
+   *
+   * Requires permission `config.write`. */
+  postAssets(body: {
+    /** free JSON */
+    attributes?: Record<string, unknown>;
+    name: string;
+    /** parent asset */
+    parent_id?: string | null;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    site_id: string;
+    /** fridge, room, meter, machine, … */
+    type: string;
+  }): Promise<Asset> {
+    return this.request<Asset>('POST', `/api/v1/assets`, undefined, body, false);
+  }
+
+  /** Update an asset
+   *
+   * Requires permission `config.write`. */
+  patchAssetsId(id: string, body: {
+    attributes?: Record<string, unknown>;
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    type?: string;
+  }): Promise<Asset> {
+    return this.request<Asset>('PATCH', `/api/v1/assets/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Verify the audit hash chain
+   *
+   * Requires permission `data.read`. */
+  getAuditVerify(): Promise<{
+    /** rows */
+    checked?: number;
+    first_bad_seq?: number | null;
+    head_hash?: string;
+    head_seq?: number;
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** rows */
+    checked?: number;
+    first_bad_seq?: number | null;
+    head_hash?: string;
+    head_seq?: number;
+    ok?: boolean;
+  }>('GET', `/api/v1/audit/verify`, undefined, undefined, false);
+  }
+
+  /** Request a password reset link
+   *
+   * Always answers 200 (no account enumeration). Sends an e-mail when SMTP is configured and the login matches an account with an e-mail address. */
+  postAuthForgot(body: {
+    /** Username or e-mail */
+    login: string;
+  }): Promise<{
+    /** whether the server can send e-mail */
+    mail_configured?: boolean;
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** whether the server can send e-mail */
+    mail_configured?: boolean;
+    ok?: boolean;
+  }>('POST', `/api/v1/auth/forgot`, undefined, body, false);
+  }
+
+  /** Set my UI language
+   *
+   * Requires a signed-in user or an API token (any permission). */
+  putAuthLocale(body: {
+    /** Enabled locale code, e.g. sk */
+    locale: string;
+  }): Promise<{
+    locale?: string;
+  }> {
+    return this.request<{
+    locale?: string;
+  }>('PUT', `/api/v1/auth/locale`, undefined, body, false);
+  }
+
+  /** Sign in
+   *
+   * Starts a browser session (cookie `ctrl32_session`). When the user has MFA enrolled the response carries `mfa_required` and a short-lived `pre_auth_token` for `POST /api/v1/auth/mfa`. Rate limited per IP; repeated failures lock the account per the security policy. */
+  postAuthLogin(body: {
+    /** Password */
+    password: string;
+    /** Username */
+    username: string;
+  }): Promise<LoginResponse> {
+    return this.request<LoginResponse>('POST', `/api/v1/auth/login`, undefined, body, false);
+  }
+
+  /** Sign out
+   *
+   * Ends the session; safe to call without one. */
+  postAuthLogout(): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/auth/logout`, undefined, undefined, false);
+  }
+
+  /** Who am I
+   *
+   * The signed-in principal: user, organization, roles, effective permissions and the CSRF token for cookie sessions.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  getAuthMe(): Promise<Me> {
+    return this.request<Me>('GET', `/api/v1/auth/me`, undefined, undefined, false);
+  }
+
+  /** Complete sign-in with a TOTP or recovery code */
+  postAuthMfa(body: {
+    /** 6-digit TOTP code or a recovery code */
+    code: string;
+    /** From the login response */
+    pre_auth_token: string;
+  }): Promise<LoginResponse> {
+    return this.request<LoginResponse>('POST', `/api/v1/auth/mfa`, undefined, body, false);
+  }
+
+  /** Change my password
+   *
+   * Requires a signed-in user or an API token (any permission). */
+  postAuthPassword(body: {
+    current: string;
+    new: string;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/auth/password`, undefined, body, false);
+  }
+
+  /** Ask for an account
+   *
+   * Self-service request handled by an administrator under *Users → Account requests*. Rate limited. */
+  postAuthRegisterRequest(body: {
+    email: string;
+    full_name: string;
+    /** optional */
+    message?: string;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/auth/register-request`, undefined, body, false);
+  }
+
+  /** Set a new password with a reset token */
+  postAuthReset(body: {
+    /** New password (policy: minimum length, mixed classes) */
+    password: string;
+    /** Token from the reset link */
+    token: string;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/auth/reset`, undefined, body, false);
+  }
+
+  /** Confirm TOTP enrolment
+   *
+   * Returns the one-time recovery codes; store them safely.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  postAuthTotpConfirm(body: {
+    /** Current TOTP code */
+    code: string;
+  }): Promise<{
+    ok?: boolean;
+    recovery_codes?: string[];
+  }> {
+    return this.request<{
+    ok?: boolean;
+    recovery_codes?: string[];
+  }>('POST', `/api/v1/auth/totp/confirm`, undefined, body, false);
+  }
+
+  /** Start TOTP enrolment
+   *
+   * Returns the secret, an otpauth URL and a QR code (data URL). Confirm with `POST /api/v1/auth/totp/confirm`.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  postAuthTotpSetup(): Promise<{
+    otpauth_url?: string;
+    /** data:image/png;base64,… */
+    qr?: string;
+    secret?: string;
+  }> {
+    return this.request<{
+    otpauth_url?: string;
+    /** data:image/png;base64,… */
+    qr?: string;
+    secret?: string;
+  }>('POST', `/api/v1/auth/totp/setup`, undefined, undefined, false);
+  }
+
+  /** Branding, theme, map settings and version
+   *
+   * Public: the sign-in page uses it. */
+  getBranding(): Promise<Branding> {
+    return this.request<Branding>('GET', `/api/v1/branding`, undefined, undefined, false);
+  }
+
+  /** Set branding, theme and map tiles
+   *
+   * Logo as base64 (PNG/SVG/JPEG, max 256 KiB).
+   * 
+   * Requires permission `content.write`. */
+  putBranding(body: {
+    clear_logo?: boolean;
+    logo?: {
+      /** base64 */
+      data?: string;
+      mime?: string;
+    } | null;
+    map?: MapSettings;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    theme?: Theme;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('PUT', `/api/v1/branding`, undefined, body, false);
+  }
+
+  /** Organization logo image */
+  getBrandingLogo(): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/branding/logo`, undefined, undefined, true);
+  }
+
+  /** Change requests waiting for a second person
+   *
+   * Alarm rule and assignment changes held by the four-eyes policies (`status=pending`, default) or the full history (`status=all`). Requires config.write or device.manage.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  getChangeRequests(query?: { status?: string; /** pending (default) | approved | rejected | expired | failed | all */ }): Promise<ChangeRequest[]> {
+    return this.request<ChangeRequest[]>('GET', `/api/v1/change-requests`, query, undefined, false);
+  }
+
+  /** Approve a change request
+   *
+   * A different user than the requester, holding the permission of the change (config.write for limits, device.manage for assignments). The original call is replayed under the approver's identity; `code` and `result` are its response.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  postChangeRequestsIdApprove(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** HTTP status of the replayed call */
+    code?: number;
+    id?: string;
+    result?: unknown;
+    status?: "approved" | "failed";
+  }> {
+    return this.request<{
+    /** HTTP status of the replayed call */
+    code?: number;
+    id?: string;
+    result?: unknown;
+    status?: "approved" | "failed";
+  }>('POST', `/api/v1/change-requests/${encodeURIComponent(id)}/approve`, undefined, body, false);
+  }
+
+  /** Reject a change request
+   *
+   * Requires a signed-in user or an API token (any permission). */
+  postChangeRequestsIdReject(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    id?: string;
+    status?: string;
+  }> {
+    return this.request<{
+    id?: string;
+    status?: string;
+  }>('POST', `/api/v1/change-requests/${encodeURIComponent(id)}/reject`, undefined, body, false);
+  }
+
+  /** List connectors
+   *
+   * Requires permission `config.write`. */
+  getConnectors(): Promise<Connector[]> {
+    return this.request<Connector[]>('GET', `/api/v1/connectors`, undefined, undefined, false);
+  }
+
+  /** Create a connector
+   *
+   * `kind` chirpstack: returns the ingest URL and a bearer secret (shown once) for the ChirpStack HTTP integration. `kind` opcua / modbus_tcp: `settings` describe the endpoint and the nodes/registers; values arrive under a virtual device (`settings.device_external_id`).
+   * 
+   * Requires permission `config.write`. */
+  postConnectors(body: {
+    /** chirpstack: register unknown DevEUIs automatically */
+    auto_create_devices?: boolean;
+    kind: "chirpstack" | "opcua" | "modbus_tcp";
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    settings?: ConnectorSettings;
+  }): Promise<ConnectorCreated> {
+    return this.request<ConnectorCreated>('POST', `/api/v1/connectors`, undefined, body, false);
+  }
+
+  /** This server's OPC UA client certificate (PEM)
+   *
+   * Trust it on the OPC UA server for signed/encrypted sessions.
+   * 
+   * Requires permission `config.write`. */
+  getConnectorsOpcuaCertificate(): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/connectors/opcua/certificate`, undefined, undefined, true);
+  }
+
+  /** Test connector settings without saving
+   *
+   * Connects once and reads the configured nodes/registers.
+   * 
+   * Requires permission `config.write`. */
+  postConnectorsTest(body: {
+    /** existing connector id (reuse its stored password) */
+    id?: string;
+    /** default opcua */
+    kind?: "opcua" | "modbus_tcp";
+    settings: ConnectorSettings;
+  }): Promise<{
+    bad_nodes?: string[];
+    endpoint?: string;
+    ok?: boolean;
+    /** OPC UA: negotiated policy */
+    security?: string;
+    /** key → value */
+    values?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    bad_nodes?: string[];
+    endpoint?: string;
+    ok?: boolean;
+    /** OPC UA: negotiated policy */
+    security?: string;
+    /** key → value */
+    values?: Record<string, unknown>;
+  }>('POST', `/api/v1/connectors/test`, undefined, body, false);
+  }
+
+  /** Update connector settings (OPC UA, Modbus)
+   *
+   * Requires permission `config.write`. */
+  putConnectorsId(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    settings: ConnectorSettings;
+  }): Promise<Connector> {
+    return this.request<Connector>('PUT', `/api/v1/connectors/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Revoke a connector
+   *
+   * Stops polling and rejects its secret.
+   * 
+   * Requires permission `config.write`. */
+  deleteConnectorsId(id: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/connectors/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Report client attributes (device)
+   *
+   * JSON object such as `{"fw":"1.4.2","hw":"esp32-s3","model":"…","ip":"10.0.0.12"}`; merged into the device's client attributes. */
+  postDAttributes(body: Record<string, unknown>): Promise<{
+    ok?: boolean;
+  }> {
+    return this.request<{
+    ok?: boolean;
+  }>('POST', `/api/v1/d/attributes`, undefined, body, false);
+  }
+
+  /** Shared attributes (device)
+   *
+   * The configuration the server holds for the device (the retained `attributes/shared` document over MQTT). */
+  getDAttributesShared(): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('GET', `/api/v1/d/attributes/shared`, undefined, undefined, false);
+  }
+
+  /** Fetch queued commands (device, long polling)
+   *
+   * Returns the queued commands of the device and marks them sent. `wait` (0–60 s) keeps the request open until a command appears. Devices registered with transport `http` receive commands only this way; acknowledge each with `POST /api/v1/d/cmd/{id}/ack`. */
+  getDCmd(query?: { wait?: string; /** Seconds to wait for a command (0–60) */ }): Promise<({
+    /** Arguments */
+    a?: Record<string, unknown>;
+    /** Unix time after which the command must not be executed */
+    exp?: number;
+    id?: string;
+    /** Method */
+    m?: string;
+  })[]> {
+    return this.request<({
+    /** Arguments */
+    a?: Record<string, unknown>;
+    /** Unix time after which the command must not be executed */
+    exp?: number;
+    id?: string;
+    /** Method */
+    m?: string;
+  })[]>('GET', `/api/v1/d/cmd`, query, undefined, false);
+  }
+
+  /** Acknowledge a command (device)
+   *
+   * `{"ok":true,"r":{…}}` or `{"ok":false,"err":"…"}`; 404 when the command is not open for this device. */
+  postDCmdIdAck(id: string, body: {
+    err?: string;
+    ok: boolean;
+    /** Result */
+    r?: unknown;
+  }): Promise<{
+    id?: string;
+    /** acked or failed */
+    status?: string;
+  }> {
+    return this.request<{
+    id?: string;
+    /** acked or failed */
+    status?: string;
+  }>('POST', `/api/v1/d/cmd/${encodeURIComponent(id)}/ack`, undefined, body, false);
+  }
+
+  /** Report firmware update progress (device)
+   *
+   * `{"fw_id":"…","st":"downloading|verifying|applying|updated|failed|rolled_back","pct":42,"ver":"1.5.0","err":"…"}`. */
+  postDFotaStatus(body: Record<string, unknown>): Promise<{
+    ok?: boolean;
+  }> {
+    return this.request<{
+    ok?: boolean;
+  }>('POST', `/api/v1/d/fota/status`, undefined, body, false);
+  }
+
+  /** Download a firmware image (device)
+   *
+   * Called by the device with its device token (`Authorization: Bearer`), supports HTTP range requests. */
+  getDFotaFwBlob(fw: string): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/d/fota/${encodeURIComponent(fw)}/blob`, undefined, undefined, true);
+  }
+
+  /** Heartbeat (device)
+   *
+   * `{"online":true,"bat":3.61,"rssi":-71,"up_s":86400,"free":120000,"fw":"1.4.2","buf":12}`; `lat`/`lon` update the reported position. */
+  postDStatus(body: Record<string, unknown>): Promise<{
+    ok?: boolean;
+  }> {
+    return this.request<{
+    ok?: boolean;
+  }>('POST', `/api/v1/d/status`, undefined, body, false);
+  }
+
+  /** Send telemetry (device)
+   *
+   * One sample or an array. Accepted shapes: ctrl32 `{"ts":1700000000,"v":{"temp":4.2}}`, ThingsBoard `{"ts":1700000000000,"values":{…}}`, or a flat object `{"temp":4.2}` (every non-reserved key is a value). `ts` in seconds or milliseconds, `bf: 1` for backfill, `seq` for deduplication. Keys are normalised (lower case, `-`/`.`/space → `_`) and must match a datastream assigned to the device; unknown keys are reported and stored as a raw message. Up to 64 KiB, 2000 samples. */
+  postDTelemetry(body: unknown): Promise<{
+    /** Observations stored */
+    accepted?: number;
+    error?: string;
+    /** ok, unknown_key or error */
+    status?: string;
+    unknown_keys?: string[];
+  }> {
+    return this.request<{
+    /** Observations stored */
+    accepted?: number;
+    error?: string;
+    /** ok, unknown_key or error */
+    status?: string;
+    unknown_keys?: string[];
+  }>('POST', `/api/v1/d/telemetry`, undefined, body, false);
+  }
+
+  /** List dashboards
+   *
+   * Requires permission `data.read`. */
+  getDashboards(): Promise<DashboardSummary[]> {
+    return this.request<DashboardSummary[]>('GET', `/api/v1/dashboards`, undefined, undefined, false);
+  }
+
+  /** Create a dashboard
+   *
+   * `spec` is screen format v1 (`GET /api/v1/dashboards/catalog` lists the widget types; `GET /api/v1/dashboards/starter` returns a ready-made spec).
+   * 
+   * Requires permission `content.write`. */
+  postDashboards(body: {
+    is_default?: boolean;
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** URL-safe; generated from the name when empty */
+    slug?: string;
+    spec: DashboardSpec;
+  }): Promise<Dashboard> {
+    return this.request<Dashboard>('POST', `/api/v1/dashboards`, undefined, body, false);
+  }
+
+  /** Widget catalog and time ranges
+   *
+   * Requires permission `data.read`. */
+  getDashboardsCatalog(): Promise<{
+    ranges?: string[];
+    widgets?: (Record<string, unknown>)[];
+  }> {
+    return this.request<{
+    ranges?: string[];
+    widgets?: (Record<string, unknown>)[];
+  }>('GET', `/api/v1/dashboards/catalog`, undefined, undefined, false);
+  }
+
+  /** A starter dashboard spec built from the organization's data
+   *
+   * Requires permission `data.read`. */
+  getDashboardsStarter(query?: { kind?: string; /** overview (default), showcase, or mimic (process picture on a canvas) */ }): Promise<{
+    kind?: string;
+    name?: string;
+    spec?: DashboardSpec;
+  }> {
+    return this.request<{
+    kind?: string;
+    name?: string;
+    spec?: DashboardSpec;
+  }>('GET', `/api/v1/dashboards/starter`, query, undefined, false);
+  }
+
+  /** Dashboard with its spec
+   *
+   * Requires permission `data.read`. */
+  getDashboardsSlug(slug: string): Promise<Dashboard> {
+    return this.request<Dashboard>('GET', `/api/v1/dashboards/${encodeURIComponent(slug)}`, undefined, undefined, false);
+  }
+
+  /** Save a new version of a dashboard
+   *
+   * Requires permission `content.write`. */
+  putDashboardsSlug(slug: string, body: {
+    is_default?: boolean;
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    spec?: DashboardSpec;
+  }): Promise<Dashboard> {
+    return this.request<Dashboard>('PUT', `/api/v1/dashboards/${encodeURIComponent(slug)}`, undefined, body, false);
+  }
+
+  /** Delete a dashboard
+   *
+   * Requires permission `content.write`. */
+  deleteDashboardsSlug(slug: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/dashboards/${encodeURIComponent(slug)}`, query, undefined, false);
+  }
+
+  /** Public share of a dashboard
+   *
+   * Requires permission `content.write`. */
+  getDashboardsSlugShare(slug: string): Promise<Share> {
+    return this.request<Share>('GET', `/api/v1/dashboards/${encodeURIComponent(slug)}/share`, undefined, undefined, false);
+  }
+
+  /** Publish a dashboard under a public link
+   *
+   * Creates the share token; the response carries the public URL and a QR code.
+   * 
+   * Requires permission `content.write`. */
+  postDashboardsSlugShare(slug: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<Share> {
+    return this.request<Share>('POST', `/api/v1/dashboards/${encodeURIComponent(slug)}/share`, undefined, body, false);
+  }
+
+  /** Withdraw the public link
+   *
+   * Requires permission `content.write`. */
+  deleteDashboardsSlugShare(slug: string, query: { reason: string; }): Promise<Share> {
+    return this.request<Share>('DELETE', `/api/v1/dashboards/${encodeURIComponent(slug)}/share`, query, undefined, false);
+  }
+
+  /** List datastreams
+   *
+   * Requires permission `data.read`. */
+  getDatastreams(): Promise<Datastream[]> {
+    return this.request<Datastream[]>('GET', `/api/v1/datastreams`, undefined, undefined, false);
+  }
+
+  /** Create a datastream
+   *
+   * Requires permission `config.write`. */
+  postDatastreams(body: {
+    /** required accuracy in the unit */
+    accuracy?: number | null;
+    asset_id: string;
+    /** PostgreSQL interval for gap detection, e.g. 5 minutes; empty = none */
+    expected_interval?: string;
+    /** what the device publishes, ^[a-z][a-z0-9_]{0,31}$ */
+    key: string;
+    kind: "gauge" | "counter" | "state" | "event";
+    /** temperature, humidity, power_active, … */
+    quantity: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    unit?: string;
+  }): Promise<Datastream> {
+    return this.request<Datastream>('POST', `/api/v1/datastreams`, undefined, body, false);
+  }
+
+  /** Latest value of several datastreams
+   *
+   * Requires permission `data.read`. */
+  getDatastreamsLatest(query: { ids: string; /** comma-separated datastream ids */ }): Promise<Record<string, LatestValue>> {
+    return this.request<Record<string, LatestValue>>('GET', `/api/v1/datastreams/latest`, query, undefined, false);
+  }
+
+  /** Datastream detail
+   *
+   * Datastream, asset, site, source device, last observation and current alarm rules.
+   * 
+   * Requires permission `data.read`. */
+  getDatastreamsId(id: string): Promise<{
+    alarm_rules?: AlarmRule[];
+    asset?: Record<string, unknown>;
+    datastream?: Datastream;
+    /** assigned device */
+    device?: Record<string, unknown> | null;
+    last_observation?: Observation;
+    rules?: ({
+      enabled?: boolean;
+      id?: string;
+      name?: string;
+      /** automation rules that read (input) or write (derive) this datastream */
+      role?: "input" | "derive";
+      status?: string;
+    })[];
+    site?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    alarm_rules?: AlarmRule[];
+    asset?: Record<string, unknown>;
+    datastream?: Datastream;
+    /** assigned device */
+    device?: Record<string, unknown> | null;
+    last_observation?: Observation;
+    rules?: ({
+      enabled?: boolean;
+      id?: string;
+      name?: string;
+      /** automation rules that read (input) or write (derive) this datastream */
+      role?: "input" | "derive";
+      status?: string;
+    })[];
+    site?: Record<string, unknown>;
+  }>('GET', `/api/v1/datastreams/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Update a datastream
+   *
+   * Requires permission `config.write`. */
+  patchDatastreamsId(id: string, body: {
+    accuracy?: number | null;
+    expected_interval?: string;
+    quantity?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    unit?: string;
+  }): Promise<Datastream> {
+    return this.request<Datastream>('PATCH', `/api/v1/datastreams/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** List devices
+   *
+   * Requires permission `data.read`. */
+  getDevices(): Promise<Device[]> {
+    return this.request<Device[]>('GET', `/api/v1/devices`, undefined, undefined, false);
+  }
+
+  /** Register a device
+   *
+   * Returns a claim code for self-provisioning (see `POST /api/v1/provision`); a token can also be issued with `POST /api/v1/devices/{id}/token`.
+   * 
+   * Requires permission `device.manage`. */
+  postDevices(body: {
+    /** MQTT client id / DevEUI / connector id */
+    external_id: string;
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** default mqtt */
+    transport?: "mqtt" | "http" | "lorawan" | "opcua" | "modbus";
+  }): Promise<{
+    claim_code?: string;
+    claim_expires_in_hours?: number;
+    external_id?: string;
+    id?: string;
+    name?: string;
+    transport?: string;
+  }> {
+    return this.request<{
+    claim_code?: string;
+    claim_expires_in_hours?: number;
+    external_id?: string;
+    id?: string;
+    name?: string;
+    transport?: string;
+  }>('POST', `/api/v1/devices`, undefined, body, false);
+  }
+
+  /** Device detail
+   *
+   * Device, its datastream assignments (current and past) and credentials (no secrets).
+   * 
+   * Requires permission `data.read`. */
+  getDevicesId(id: string): Promise<{
+    assignments?: (Record<string, unknown>)[];
+    credentials?: (Record<string, unknown>)[];
+    device?: Device;
+  }> {
+    return this.request<{
+    assignments?: (Record<string, unknown>)[];
+    credentials?: (Record<string, unknown>)[];
+    device?: Device;
+  }>('GET', `/api/v1/devices/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Rename a device or set its location
+   *
+   * Requires permission `device.manage`. */
+  patchDevicesId(id: string, body: {
+    clear_location?: boolean;
+    location?: {
+      lat?: number;
+      lon?: number;
+    } | null;
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<Device> {
+    return this.request<Device>('PATCH', `/api/v1/devices/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Shared and client attributes
+   *
+   * Requires permission `data.read`. */
+  getDevicesIdAttributes(id: string): Promise<{
+    /** reported by the device */
+    client?: Record<string, unknown>;
+    /** set by the server, pushed to the device */
+    shared?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    /** reported by the device */
+    client?: Record<string, unknown>;
+    /** set by the server, pushed to the device */
+    shared?: Record<string, unknown>;
+  }>('GET', `/api/v1/devices/${encodeURIComponent(id)}/attributes`, undefined, undefined, false);
+  }
+
+  /** Set or remove shared attributes
+   *
+   * Merged into the retained MQTT attributes message.
+   * 
+   * Requires permission `device.manage`. */
+  putDevicesIdAttributes(id: string, body: {
+    /** keys to set */
+    attributes?: Record<string, unknown>;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    remove?: string[];
+  }): Promise<{
+    published?: boolean;
+    shared?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    published?: boolean;
+    shared?: Record<string, unknown>;
+  }>('PUT', `/api/v1/devices/${encodeURIComponent(id)}/attributes`, undefined, body, false);
+  }
+
+  /** Command log of a device
+   *
+   * Newest first (default 50, max 500). Commands past their deadline are marked expired.
+   * 
+   * Requires permission `data.read`. */
+  getDevicesIdCommands(id: string, query?: { limit?: number; }): Promise<Command[]> {
+    return this.request<Command[]>('GET', `/api/v1/devices/${encodeURIComponent(id)}/commands`, query, undefined, false);
+  }
+
+  /** Send a command or write a value
+   *
+   * MQTT devices receive `{id, m, a, exp}` on `d/{external_id}/cmd` and acknowledge on `d/{external_id}/cmd/ack`. OPC UA and Modbus devices accept `method: write` with `args: {key, value}` for a writable node/register (limits checked, value read back). With the four-eyes policy the command is stored as `pending` (202) until another user approves it.
+   * 
+   * Requires permission `device.command`. */
+  postDevicesIdCommands(id: string, body: {
+    /** method arguments */
+    args?: Record<string, unknown>;
+    /** ^[a-z][a-z0-9_]{0,31}$ */
+    method: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** deadline for the acknowledgement (default 300) */
+    ttl_seconds?: number;
+  }): Promise<CommandResult> {
+    return this.request<CommandResult>('POST', `/api/v1/devices/${encodeURIComponent(id)}/commands`, undefined, body, false);
+  }
+
+  /** Approve a pending command (four eyes)
+   *
+   * Must be a different user than the issuer; the command is then executed.
+   * 
+   * Requires permission `device.command`. */
+  postDevicesIdCommandsCidApprove(id: string, cid: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<CommandResult> {
+    return this.request<CommandResult>('POST', `/api/v1/devices/${encodeURIComponent(id)}/commands/${encodeURIComponent(cid)}/approve`, undefined, body, false);
+  }
+
+  /** Reject a pending command
+   *
+   * Requires permission `device.command`. */
+  postDevicesIdCommandsCidReject(id: string, cid: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<CommandResult> {
+    return this.request<CommandResult>('POST', `/api/v1/devices/${encodeURIComponent(id)}/commands/${encodeURIComponent(cid)}/reject`, undefined, body, false);
+  }
+
+  /** Console sessions of a device
+   *
+   * Requires permission `device.console`. */
+  getDevicesIdConsole(id: string): Promise<{
+    idle_timeout_minutes?: number;
+    open?: ConsoleSession;
+    sessions?: ConsoleSession[];
+  }> {
+    return this.request<{
+    idle_timeout_minutes?: number;
+    open?: ConsoleSession;
+    sessions?: ConsoleSession[];
+  }>('GET', `/api/v1/devices/${encodeURIComponent(id)}/console`, undefined, undefined, false);
+  }
+
+  /** Open a console session
+   *
+   * Requires permission `device.console`. */
+  postDevicesIdConsole(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    external_id?: string;
+    session_id?: string;
+  }> {
+    return this.request<{
+    external_id?: string;
+    session_id?: string;
+  }>('POST', `/api/v1/devices/${encodeURIComponent(id)}/console`, undefined, body, false);
+  }
+
+  /** Read console output
+   *
+   * Lines after a sequence number (poll with `after`).
+   * 
+   * Requires permission `device.console`. */
+  getDevicesIdConsoleSid(id: string, sid: string, query?: { after?: number; /** last sequence number seen */ limit?: number; }): Promise<{
+    lines?: ({
+      dir?: "in" | "out";
+      seq?: number;
+      text?: string;
+      ts?: string;
+    })[];
+    session?: ConsoleSession;
+  }> {
+    return this.request<{
+    lines?: ({
+      dir?: "in" | "out";
+      seq?: number;
+      text?: string;
+      ts?: string;
+    })[];
+    session?: ConsoleSession;
+  }>('GET', `/api/v1/devices/${encodeURIComponent(id)}/console/${encodeURIComponent(sid)}`, query, undefined, false);
+  }
+
+  /** Close a console session
+   *
+   * Requires permission `device.console`. */
+  deleteDevicesIdConsoleSid(id: string, sid: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/devices/${encodeURIComponent(id)}/console/${encodeURIComponent(sid)}`, query, undefined, false);
+  }
+
+  /** Send a line to the device
+   *
+   * Requires permission `device.console`. */
+  postDevicesIdConsoleSidIn(id: string, sid: string, body: {
+    line: string;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/devices/${encodeURIComponent(id)}/console/${encodeURIComponent(sid)}/in`, undefined, body, false);
+  }
+
+  /** Assign a datastream to the device
+   *
+   * The device's value with the datastream's key is stored into it; a previous assignment of the datastream is closed. With the policy `four_eyes_assignments` the call answers 202 with a pending change request instead.
+   * 
+   * Requires permission `device.manage`. */
+  postDevicesIdDatastreams(id: string, body: {
+    datastream_id: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    closed_previous?: boolean;
+    datastream_id?: string;
+    device_id?: string;
+    /** assignment id */
+    id?: string;
+  }> {
+    return this.request<{
+    closed_previous?: boolean;
+    datastream_id?: string;
+    device_id?: string;
+    /** assignment id */
+    id?: string;
+  }>('POST', `/api/v1/devices/${encodeURIComponent(id)}/datastreams`, undefined, body, false);
+  }
+
+  /** End a datastream assignment
+   *
+   * Requires permission `device.manage`. */
+  deleteDevicesIdDatastreamsDs(id: string, ds: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/devices/${encodeURIComponent(id)}/datastreams/${encodeURIComponent(ds)}`, query, undefined, false);
+  }
+
+  /** Raw messages of a device
+   *
+   * Every stored message in both directions with decode status (default 50, max 500).
+   * 
+   * Requires permission `data.read`. */
+  getDevicesIdMessages(id: string, query?: { limit?: number; }): Promise<Message[]> {
+    return this.request<Message[]>('GET', `/api/v1/devices/${encodeURIComponent(id)}/messages`, query, undefined, false);
+  }
+
+  /** Revoke a device
+   *
+   * Disconnects it and rejects its credentials; data stays.
+   * 
+   * Requires permission `device.manage`. */
+  postDevicesIdRevoke(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/devices/${encodeURIComponent(id)}/revoke`, undefined, body, false);
+  }
+
+  /** Issue or rotate the device token
+   *
+   * The previous token stops working at once; the new one is returned once.
+   * 
+   * Requires permission `device.manage`. */
+  postDevicesIdToken(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    external_id?: string;
+    /** shown once */
+    token?: string;
+  }> {
+    return this.request<{
+    external_id?: string;
+    /** shown once */
+    token?: string;
+  }>('POST', `/api/v1/devices/${encodeURIComponent(id)}/token`, undefined, body, false);
+  }
+
+  /** List escalation policies
+   *
+   * Requires permission `config.write`. */
+  getEscalationPolicies(): Promise<EscalationPolicy[]> {
+    return this.request<EscalationPolicy[]>('GET', `/api/v1/escalation-policies`, undefined, undefined, false);
+  }
+
+  /** Create an escalation policy
+   *
+   * Step 0 (after_s = 0) is delivered at once; later steps only while the alarm is still active and unacknowledged.
+   * 
+   * Requires permission `config.write`. */
+  postEscalationPolicies(body: {
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    steps: EscalationStep[];
+  }): Promise<EscalationPolicy> {
+    return this.request<EscalationPolicy>('POST', `/api/v1/escalation-policies`, undefined, body, false);
+  }
+
+  /** Update a policy (new version in place)
+   *
+   * Requires permission `config.write`. */
+  putEscalationPoliciesId(id: string, body: {
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    steps: EscalationStep[];
+  }): Promise<EscalationPolicy> {
+    return this.request<EscalationPolicy>('PUT', `/api/v1/escalation-policies/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Revoke a policy
+   *
+   * Refused (409) while alarm rules use it.
+   * 
+   * Requires permission `config.write`. */
+  deleteEscalationPoliciesId(id: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/escalation-policies/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Export the access log
+   *
+   * Sign-ins, failures, token use, session events.
+   * 
+   * Requires permission `audit.read`. */
+  getExportAccessLog(query?: { from?: string; to?: string; format?: string; /** csv | jsonl */ limit?: number; }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/export/access-log`, query, undefined, true);
+  }
+
+  /** Export the alarm log
+   *
+   * Requires permission `data.export`. */
+  getExportAlarms(query?: { from?: string; to?: string; format?: string; /** csv | jsonl */ limit?: number; }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/export/alarms`, query, undefined, true);
+  }
+
+  /** Export the audit trail
+   *
+   * Hash-chained rows: seq, hash, prev_hash, actor, action, entity, old/new values, reason, request id.
+   * 
+   * Requires permission `audit.read`. */
+  getExportAudit(query?: { from?: string; to?: string; format?: string; /** csv | jsonl */ limit?: number; }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/export/audit`, query, undefined, true);
+  }
+
+  /** Export raw messages
+   *
+   * Requires permission `data.export`. */
+  getExportMessages(query?: { device_id?: string; from?: string; to?: string; format?: string; /** csv | jsonl */ limit?: number; }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/export/messages`, query, undefined, true);
+  }
+
+  /** Export observations
+   *
+   * `format` csv (default), jsonl or pdf (a signed report stored under Reports). Flagged rows (quality other than ok) are marked.
+   * 
+   * Requires permission `data.export`. */
+  getExportObservations(query: { datastream_id: string; from?: string; /** RFC 3339 */ to?: string; /** RFC 3339 */ format?: string; /** csv | jsonl | pdf */ limit?: number; }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/export/observations`, query, undefined, true);
+  }
+
+  /** Export an organization as a ZIP archive
+   *
+   * CSV files of every table of the organization for a period, with a manifest and SHA-256 checksums.
+   * 
+   * Requires permission `system.admin`. */
+  getExportOrganization(query?: { from?: string; /** RFC 3339 start (optional) */ to?: string; /** RFC 3339 end (optional) */ }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/export/organization`, query, undefined, true);
+  }
+
+  /** List firmware images
+   *
+   * Requires permission `fota.read`. */
+  getFirmware(): Promise<Firmware[]> {
+    return this.request<Firmware[]>('GET', `/api/v1/firmware`, undefined, undefined, false);
+  }
+
+  /** Upload a firmware image
+   *
+   * multipart/form-data. The SHA-256 is computed on the server; an Ed25519 signature may be attached for devices that verify it.
+   * 
+   * Requires permission `fota.manage`. */
+  postFirmware(body: FormData): Promise<Firmware> {
+    return this.request<Firmware>('POST', `/api/v1/firmware`, undefined, body, false);
+  }
+
+  /** List update campaigns
+   *
+   * Requires permission `fota.read`. */
+  getFotaCampaigns(): Promise<Campaign[]> {
+    return this.request<Campaign[]>('GET', `/api/v1/fota/campaigns`, undefined, undefined, false);
+  }
+
+  /** Start an update campaign
+   *
+   * Publishes the update offer to the selected devices; progress arrives on `d/{id}/fota/status`.
+   * 
+   * Requires permission `fota.manage`. */
+  postFotaCampaigns(body: {
+    device_ids: string[];
+    firmware_id: string;
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    devices?: number;
+    firmware_id?: string;
+    id?: string;
+    name?: string;
+    published?: number;
+    version?: string;
+  }> {
+    return this.request<{
+    devices?: number;
+    firmware_id?: string;
+    id?: string;
+    name?: string;
+    published?: number;
+    version?: string;
+  }>('POST', `/api/v1/fota/campaigns`, undefined, body, false);
+  }
+
+  /** Campaign detail with per-device status
+   *
+   * Requires permission `fota.read`. */
+  getFotaCampaignsId(id: string): Promise<{
+    campaign?: Campaign;
+    devices?: ({
+      device_fw?: string;
+      device_id?: string;
+      error?: string | null;
+      external_id?: string;
+      name?: string;
+      pct?: number;
+      status?: string;
+      updated_at?: string;
+      version?: string;
+    })[];
+  }> {
+    return this.request<{
+    campaign?: Campaign;
+    devices?: ({
+      device_fw?: string;
+      device_id?: string;
+      error?: string | null;
+      external_id?: string;
+      name?: string;
+      pct?: number;
+      status?: string;
+      updated_at?: string;
+      version?: string;
+    })[];
+  }>('GET', `/api/v1/fota/campaigns/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Cancel a campaign
+   *
+   * Requires permission `fota.manage`. */
+  deleteFotaCampaignsId(id: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/fota/campaigns/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Supported and enabled languages */
+  getI18nLanguages(): Promise<{
+    default?: string;
+    enabled?: string[];
+    supported?: ({
+      /** built-in translated strings */
+      builtin?: number;
+      code?: string;
+      name?: string;
+    })[];
+  }> {
+    return this.request<{
+    default?: string;
+    enabled?: string[];
+    supported?: ({
+      /** built-in translated strings */
+      builtin?: number;
+      code?: string;
+      name?: string;
+    })[];
+  }>('GET', `/api/v1/i18n/languages`, undefined, undefined, false);
+  }
+
+  /** Enable languages and set the default
+   *
+   * Requires permission `content.write`. */
+  putI18nLanguages(body: {
+    default: string;
+    enabled: string[];
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    default?: string;
+    enabled?: string[];
+  }> {
+    return this.request<{
+    default?: string;
+    enabled?: string[];
+  }>('PUT', `/api/v1/i18n/languages`, undefined, body, false);
+  }
+
+  /** Translation catalog of a locale
+   *
+   * Built-in strings merged with the organization's overrides; key = English text. */
+  getI18nLocale(locale: string): Promise<Record<string, string>> {
+    return this.request<Record<string, string>>('GET', `/api/v1/i18n/${encodeURIComponent(locale)}`, undefined, undefined, false);
+  }
+
+  /** Set translation overrides
+   *
+   * An empty value removes the override.
+   * 
+   * Requires permission `content.write`. */
+  putI18nLocale(locale: string, body: {
+    entries: Record<string, string>;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    locale?: string;
+    removed?: number;
+    set?: number;
+  }> {
+    return this.request<{
+    locale?: string;
+    removed?: number;
+    set?: number;
+  }>('PUT', `/api/v1/i18n/${encodeURIComponent(locale)}`, undefined, body, false);
+  }
+
+  /** Catalog for editing (built-in and override per key)
+   *
+   * Requires permission `content.write`. */
+  getI18nLocaleEdit(locale: string): Promise<{
+    entries?: ({
+      builtin?: string;
+      key?: string;
+      override?: string;
+    })[];
+    locale?: string;
+  }> {
+    return this.request<{
+    entries?: ({
+      builtin?: string;
+      key?: string;
+      override?: string;
+    })[];
+    locale?: string;
+  }>('GET', `/api/v1/i18n/${encodeURIComponent(locale)}/edit`, undefined, undefined, false);
+  }
+
+  /** List incidents
+   *
+   * Incident log (URS C-07, I-09): an alarm whose escalation step could not be delivered and a broken audit trail chain open incidents automatically; operators add their own. Each incident carries impact, cause and CAPA (corrective and preventive action). `status` = `open` (default: open + investigating), `all`, or one status. System administrators also see instance-level incidents (no organization).
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  getIncidents(query?: { status?: string; /** open, all, investigating, resolved or closed */ }): Promise<Incident[]> {
+    return this.request<Incident[]>('GET', `/api/v1/incidents`, query, undefined, false);
+  }
+
+  /** Open an incident by hand
+   *
+   * Requires permission `alarm.ack`. */
+  postIncidents(body: {
+    capa?: string;
+    cause?: string;
+    impact?: string;
+    /** Audit trail */
+    reason: string;
+    /** minor, major (default) or critical */
+    severity?: string;
+    /** Up to 200 characters */
+    title: string;
+  }): Promise<Incident> {
+    return this.request<Incident>('POST', `/api/v1/incidents`, undefined, body, false);
+  }
+
+  /** Incident with its history
+   *
+   * Requires a signed-in user or an API token (any permission). */
+  getIncidentsId(id: string): Promise<{
+    events?: IncidentEvent[];
+    incident?: Incident;
+  }> {
+    return this.request<{
+    events?: IncidentEvent[];
+    incident?: Incident;
+  }>('GET', `/api/v1/incidents/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Update an incident: fields, a note, the status
+   *
+   * Transitions: open → investigating, resolved or closed; investigating → open, resolved or closed; resolved → investigating or closed; closed → investigating (reopen). Resolving needs a cause, closing a cause and a CAPA. Every change becomes an incident event and an audit trail entry.
+   * 
+   * Requires permission `alarm.ack`. */
+  patchIncidentsId(id: string, body: {
+    capa?: string;
+    cause?: string;
+    impact?: string;
+    /** Free text appended to the history */
+    note?: string;
+    /** Audit trail */
+    reason: string;
+    /** New status (optional) */
+    status?: string;
+  }): Promise<Incident> {
+    return this.request<Incident>('PATCH', `/api/v1/incidents/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** ChirpStack HTTP integration endpoint
+   *
+   * Called by ChirpStack with `?event=up` (and others) and the connector's bearer secret. Uplinks are decoded per device profile and stored like MQTT telemetry. */
+  postIngestChirpstackId(id: string, body: Record<string, unknown>, query: { event: string; /** ChirpStack event type, e.g. up */ }): Promise<{
+    accepted?: boolean;
+    decoded_keys?: string[];
+    device?: string;
+    event?: string;
+    note?: string;
+  }> {
+    return this.request<{
+    accepted?: boolean;
+    decoded_keys?: string[];
+    device?: string;
+    event?: string;
+    note?: string;
+  }>('POST', `/api/v1/ingest/chirpstack/${encodeURIComponent(id)}`, query, body, false);
+  }
+
+  /** List channels
+   *
+   * Requires permission `config.write`. */
+  getNotificationChannels(): Promise<Channel[]> {
+    return this.request<Channel[]>('GET', `/api/v1/notification-channels`, undefined, undefined, false);
+  }
+
+  /** Create a channel
+   *
+   * Requires permission `config.write`. */
+  postNotificationChannels(body: {
+    kind: "email" | "webhook" | "sms_http" | "voice_http" | "web_push";
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    settings: ChannelSettings;
+  }): Promise<Channel> {
+    return this.request<Channel>('POST', `/api/v1/notification-channels`, undefined, body, false);
+  }
+
+  /** Update a channel
+   *
+   * A blank webhook secret keeps the stored one.
+   * 
+   * Requires permission `config.write`. */
+  putNotificationChannelsId(id: string, body: {
+    enabled?: boolean;
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    settings?: ChannelSettings;
+  }): Promise<Channel> {
+    return this.request<Channel>('PUT', `/api/v1/notification-channels/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Revoke a channel
+   *
+   * Requires permission `config.write`. */
+  deleteNotificationChannelsId(id: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/notification-channels/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Send a test message
+   *
+   * Logged in the delivery log like any notification.
+   * 
+   * Requires permission `config.write`. */
+  postNotificationChannelsIdTest(id: string, body: Record<string, unknown>): Promise<{
+    channel?: string;
+    kind?: string;
+    ok?: boolean;
+  }> {
+    return this.request<{
+    channel?: string;
+    kind?: string;
+    ok?: boolean;
+  }>('POST', `/api/v1/notification-channels/${encodeURIComponent(id)}/test`, undefined, body, false);
+  }
+
+  /** Delivery log, newest first
+   *
+   * Requires permission `config.write`. */
+  getNotifications(query?: { limit?: number; /** default 50, max 500 */ }): Promise<Notification[]> {
+    return this.request<Notification[]>('GET', `/api/v1/notifications`, query, undefined, false);
+  }
+
+  /** Observations of a datastream
+   *
+   * Raw rows ordered by time, or aggregated per bucket (`bucket` = seconds: avg/min/max/count per bucket, at most 20000 buckets). Raw pages are bounded by `limit` (default 1000, max 10000) and 366 days per request; when more rows exist the response carries the header `X-Next-Cursor` (and a `Link: <…>; rel="next"`), pass it as `cursor` to continue.
+   * 
+   * Requires permission `data.read`. */
+  getObservations(query: { datastream_id: string; from?: string; /** RFC 3339 (default: 24 hours ago) */ to?: string; /** RFC 3339 (default: now) */ bucket?: number; /** aggregation bucket in seconds; omitted = raw rows */ limit?: number; /** max rows per page */ cursor?: string; /** X-Next-Cursor of the previous page */ }): Promise<Observation[] | ObservationBuckets> {
+    return this.request<Observation[] | ObservationBuckets>('GET', `/api/v1/observations`, query, undefined, false);
+  }
+
+  /** OpenAPI 3.1 document
+   *
+   * This description. The reference page at `/api/docs` renders it. */
+  getOpenapiJson(): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('GET', `/api/v1/openapi.json`, undefined, undefined, false);
+  }
+
+  /** List organizations
+   *
+   * Requires permission `system.admin`. */
+  getOrganizations(): Promise<Organization[]> {
+    return this.request<Organization[]>('GET', `/api/v1/organizations`, undefined, undefined, false);
+  }
+
+  /** Create an organization with its first administrator
+   *
+   * Requires permission `system.admin`. */
+  postOrganizations(body: {
+    admin_email?: string;
+    admin_full_name?: string;
+    admin_username: string;
+    locale?: string;
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** URL-safe identifier */
+    slug: string;
+    /** IANA time zone */
+    tz?: string;
+  }): Promise<{
+    admin?: {
+      /** shown once */
+      initial_password?: string;
+      username?: string;
+    };
+    organization?: Organization;
+  }> {
+    return this.request<{
+    admin?: {
+      /** shown once */
+      initial_password?: string;
+      username?: string;
+    };
+    organization?: Organization;
+  }>('POST', `/api/v1/organizations`, undefined, body, false);
+  }
+
+  /** Update or disable an organization
+   *
+   * Requires permission `system.admin`. */
+  patchOrganizationsId(id: string, body: {
+    disabled?: boolean;
+    locale?: string;
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    tz?: string;
+  }): Promise<Organization> {
+    return this.request<Organization>('PATCH', `/api/v1/organizations/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Reset the organization administrator's password
+   *
+   * Requires permission `system.admin`. */
+  postOrganizationsIdResetAdmin(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** shown once */
+    initial_password?: string;
+    username?: string;
+  }> {
+    return this.request<{
+    /** shown once */
+    initial_password?: string;
+    username?: string;
+  }>('POST', `/api/v1/organizations/${encodeURIComponent(id)}/reset-admin`, undefined, body, false);
+  }
+
+  /** Permission catalog
+   *
+   * Requires a signed-in user or an API token (any permission). */
+  getPermissions(): Promise<Permission[]> {
+    return this.request<Permission[]>('GET', `/api/v1/permissions`, undefined, undefined, false);
+  }
+
+  /** Device self-provisioning with a claim code
+   *
+   * The device presents the claim code from device registration and receives its token and MQTT connection details. Rate limited per IP. */
+  postProvision(body: {
+    /** claim code */
+    claim: string;
+    /** firmware version */
+    fw?: string;
+    /** hardware id */
+    hw?: string;
+  }): Promise<{
+    device_id?: string;
+    external_id?: string;
+    mqtt?: {
+      host?: string;
+      port?: number;
+      tls?: boolean;
+    };
+    protocol?: string;
+    /** device token, shown once */
+    token?: string;
+  }> {
+    return this.request<{
+    device_id?: string;
+    external_id?: string;
+    mqtt?: {
+      host?: string;
+      port?: number;
+      tls?: boolean;
+    };
+    protocol?: string;
+    /** device token, shown once */
+    token?: string;
+  }>('POST', `/api/v1/provision`, undefined, body, false);
+  }
+
+  /** Shared dashboard */
+  getPublicToken(token: string): Promise<{
+    name?: string;
+    slug?: string;
+    spec?: DashboardSpec;
+  }> {
+    return this.request<{
+    name?: string;
+    slug?: string;
+    spec?: DashboardSpec;
+  }>('GET', `/api/v1/public/${encodeURIComponent(token)}`, undefined, undefined, false);
+  }
+
+  /** Alarms of the bound datastreams */
+  getPublicTokenAlarms(token: string): Promise<Alarm[]> {
+    return this.request<Alarm[]>('GET', `/api/v1/public/${encodeURIComponent(token)}/alarms`, undefined, undefined, false);
+  }
+
+  /** Datastreams bound in the shared dashboard */
+  getPublicTokenDatastreams(token: string): Promise<Datastream[]> {
+    return this.request<Datastream[]>('GET', `/api/v1/public/${encodeURIComponent(token)}/datastreams`, undefined, undefined, false);
+  }
+
+  /** Latest values (bound datastreams only) */
+  getPublicTokenDatastreamsLatest(token: string, query: { ids: string; }): Promise<Record<string, LatestValue>> {
+    return this.request<Record<string, LatestValue>>('GET', `/api/v1/public/${encodeURIComponent(token)}/datastreams/latest`, query, undefined, false);
+  }
+
+  /** Devices shown in the shared dashboard */
+  getPublicTokenDevices(token: string): Promise<Device[]> {
+    return this.request<Device[]>('GET', `/api/v1/public/${encodeURIComponent(token)}/devices`, undefined, undefined, false);
+  }
+
+  /** Observations (bound datastreams only)
+   *
+   * Same parameters and cursor pagination as `GET /api/v1/observations`. */
+  getPublicTokenObservations(token: string, query: { datastream_id: string; from?: string; to?: string; bucket?: number; /** seconds */ limit?: number; cursor?: string; }): Promise<Observation[] | ObservationBuckets> {
+    return this.request<Observation[] | ObservationBuckets>('GET', `/api/v1/public/${encodeURIComponent(token)}/observations`, query, undefined, false);
+  }
+
+  /** Live stream of the shared dashboard (SSE) */
+  getPublicTokenStream(token: string): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/public/${encodeURIComponent(token)}/stream`, undefined, undefined, true);
+  }
+
+  /** VAPID public key for Web Push
+   *
+   * Pass it as `applicationServerKey` to `PushManager.subscribe` in the browser.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  getPushKey(): Promise<{
+    /** base64url */
+    public_key?: string;
+  }> {
+    return this.request<{
+    /** base64url */
+    public_key?: string;
+  }>('GET', `/api/v1/push/key`, undefined, undefined, false);
+  }
+
+  /** My browsers subscribed to notifications
+   *
+   * Keys are never returned; subscriptions revoked in the last 7 days are listed with `revoked_at`.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  getPushSubscriptions(): Promise<PushSubscription[]> {
+    return this.request<PushSubscription[]>('GET', `/api/v1/push/subscriptions`, undefined, undefined, false);
+  }
+
+  /** Register this browser for Web Push
+   *
+   * The JSON of the browser's `PushSubscription` (`endpoint`, `keys.p256dh`, `keys.auth`). Registering the same endpoint again refreshes the keys (200). Not allowed with an API token.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  postPushSubscriptions(body: {
+    /** push service URL */
+    endpoint: string;
+    /** ignored */
+    expirationTime?: unknown | null;
+    keys: {
+      /** base64url */
+      auth: string;
+      /** base64url */
+      p256dh: string;
+    };
+    /** optional label of the browser */
+    user_agent?: string;
+  }): Promise<{
+    created?: boolean;
+    id?: string;
+  }> {
+    return this.request<{
+    created?: boolean;
+    id?: string;
+  }>('POST', `/api/v1/push/subscriptions`, undefined, body, false);
+  }
+
+  /** Remove one of my browser subscriptions
+   *
+   * Requires a signed-in user or an API token (any permission). */
+  deletePushSubscriptionsId(id: string): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/push/subscriptions/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Send a test notification to my browsers
+   *
+   * Requires a signed-in user or an API token (any permission). */
+  postPushTest(body: Record<string, unknown>): Promise<{
+    failed?: number;
+    sent?: number;
+  }> {
+    return this.request<{
+    failed?: number;
+    sent?: number;
+  }>('POST', `/api/v1/push/test`, undefined, body, false);
+  }
+
+  /** Register profiles (current versions)
+   *
+   * Versioned Modbus register maps shared by connectors of the same device type, with the number of connectors using any version and how many are on an older version.
+   * 
+   * Requires permission `config.write`. */
+  getRegisterProfiles(): Promise<RegisterProfile[]> {
+    return this.request<RegisterProfile[]>('GET', `/api/v1/register-profiles`, undefined, undefined, false);
+  }
+
+  /** Create a register profile
+   *
+   * Requires permission `config.write`. */
+  postRegisterProfiles(body: {
+    description?: string;
+    /** unique among active profiles */
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    spec: RegisterProfileSpec;
+  }): Promise<{
+    id?: string;
+    name?: string;
+    registers?: number;
+    version?: number;
+  }> {
+    return this.request<{
+    id?: string;
+    name?: string;
+    registers?: number;
+    version?: number;
+  }>('POST', `/api/v1/register-profiles`, undefined, body, false);
+  }
+
+  /** One profile version with the history of its lineage
+   *
+   * Requires permission `config.write`. */
+  getRegisterProfilesId(id: string): Promise<RegisterProfileDetail> {
+    return this.request<RegisterProfileDetail>('GET', `/api/v1/register-profiles/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** New version of a profile
+   *
+   * The current version is closed (`valid_to`) and a new row with the next version number is created; connectors keep their version until it is applied.
+   * 
+   * Requires permission `config.write`. */
+  putRegisterProfilesId(id: string, body: {
+    /** what changed */
+    changelog?: string;
+    description?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    spec: RegisterProfileSpec;
+  }): Promise<{
+    /** new version id */
+    id?: string;
+    name?: string;
+    previous_id?: string;
+    registers?: number;
+    version?: number;
+  }> {
+    return this.request<{
+    /** new version id */
+    id?: string;
+    name?: string;
+    previous_id?: string;
+    registers?: number;
+    version?: number;
+  }>('PUT', `/api/v1/register-profiles/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Retire a profile
+   *
+   * Refused (409) while connectors use any version of it.
+   * 
+   * Requires permission `config.write`. */
+  deleteRegisterProfilesId(id: string, query: { reason: string; }): Promise<{
+    id?: string;
+    retired?: boolean;
+  }> {
+    return this.request<{
+    id?: string;
+    retired?: boolean;
+  }>('DELETE', `/api/v1/register-profiles/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Apply this version to the connectors on older versions
+   *
+   * Each connector's registers and byte order are replaced from the profile (audited as connector.update) and its poller restarts.
+   * 
+   * Requires permission `config.write`. */
+  postRegisterProfilesIdApply(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    applied?: number;
+    connectors?: ({
+      id?: string;
+      name?: string;
+    })[];
+    id?: string;
+    version?: number;
+  }> {
+    return this.request<{
+    applied?: number;
+    connectors?: ({
+      id?: string;
+      name?: string;
+    })[];
+    id?: string;
+    version?: number;
+  }>('POST', `/api/v1/register-profiles/${encodeURIComponent(id)}/apply`, undefined, body, false);
+  }
+
+  /** Report kinds, overrides and engine info
+   *
+   * Requires permission `data.export`. */
+  getReportTemplates(): Promise<{
+    builtin_kinds?: string[];
+    engine?: string;
+    engine_version?: string;
+    max_rows?: number;
+    overrides?: (Record<string, unknown>)[];
+  }> {
+    return this.request<{
+    builtin_kinds?: string[];
+    engine?: string;
+    engine_version?: string;
+    max_rows?: number;
+    overrides?: (Record<string, unknown>)[];
+  }>('GET', `/api/v1/report-templates`, undefined, undefined, false);
+  }
+
+  /** Compile a block spec to Typst source
+   *
+   * Requires permission `content.write`. */
+  postReportTemplatesCompile(body: {
+    spec: Record<string, unknown>;
+  }): Promise<{
+    /** Typst source */
+    body?: string;
+    spec?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    /** Typst source */
+    body?: string;
+    spec?: Record<string, unknown>;
+  }>('POST', `/api/v1/report-templates/compile`, undefined, body, false);
+  }
+
+  /** Render Typst source with sample data (PDF)
+   *
+   * Requires permission `content.write`. */
+  postReportTemplatesPreview(body: {
+    /** Typst source */
+    body: string;
+    kind: string;
+    locale?: string;
+  }): Promise<Response> {
+    return this.request<Response>('POST', `/api/v1/report-templates/preview`, undefined, body, true);
+  }
+
+  /** Template of a report kind
+   *
+   * The effective template (organization override or built-in) as Typst source and, when designed with blocks, its block spec.
+   * 
+   * Requires permission `data.export`. */
+  getReportTemplatesKind(kind: string, query?: { locale?: string; }): Promise<{
+    blocks?: (Record<string, unknown>)[];
+    layout?: string;
+    template?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    blocks?: (Record<string, unknown>)[];
+    layout?: string;
+    template?: Record<string, unknown>;
+  }>('GET', `/api/v1/report-templates/${encodeURIComponent(kind)}`, query, undefined, false);
+  }
+
+  /** Override a report template
+   *
+   * Either a block `spec` (compiled to Typst on the server) or a full Typst `body`.
+   * 
+   * Requires permission `content.write`. */
+  putReportTemplatesKind(kind: string, body: {
+    /** Typst source */
+    body?: string;
+    locale?: string;
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** block designer spec */
+    spec?: Record<string, unknown>;
+  }): Promise<{
+    checksum?: string;
+    id?: string;
+    kind?: string;
+    locale?: string;
+    name?: string;
+    version?: number;
+  }> {
+    return this.request<{
+    checksum?: string;
+    id?: string;
+    kind?: string;
+    locale?: string;
+    name?: string;
+    version?: number;
+  }>('PUT', `/api/v1/report-templates/${encodeURIComponent(kind)}`, undefined, body, false);
+  }
+
+  /** Revert to the built-in template
+   *
+   * Requires permission `content.write`. */
+  deleteReportTemplatesKind(kind: string, query: { locale?: string; reason: string; }): Promise<{
+    kind?: string;
+    locale?: string;
+    reverted?: boolean;
+  }> {
+    return this.request<{
+    kind?: string;
+    locale?: string;
+    reverted?: boolean;
+  }>('DELETE', `/api/v1/report-templates/${encodeURIComponent(kind)}`, query, undefined, false);
+  }
+
+  /** Data contract of a report kind
+   *
+   * The variables and tables a template of this kind receives.
+   * 
+   * Requires permission `data.export`. */
+  getReportTemplatesKindContract(kind: string): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('GET', `/api/v1/report-templates/${encodeURIComponent(kind)}/contract`, undefined, undefined, false);
+  }
+
+  /** Default block spec of a report kind
+   *
+   * Requires permission `data.export`. */
+  getReportTemplatesKindDefaultSpec(kind: string): Promise<{
+    blocks?: (Record<string, unknown>)[];
+    spec?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    blocks?: (Record<string, unknown>)[];
+    spec?: Record<string, unknown>;
+  }>('GET', `/api/v1/report-templates/${encodeURIComponent(kind)}/default-spec`, undefined, undefined, false);
+  }
+
+  /** Render the effective template with sample data (PDF)
+   *
+   * Requires permission `data.export`. */
+  getReportTemplatesKindPreview(kind: string, query?: { locale?: string; }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/report-templates/${encodeURIComponent(kind)}/preview`, query, undefined, true);
+  }
+
+  /** Stored reports, newest first
+   *
+   * Requires permission `data.export`. */
+  getReports(query?: { limit?: number; }): Promise<Report[]> {
+    return this.request<Report[]>('GET', `/api/v1/reports`, query, undefined, false);
+  }
+
+  /** Report metadata
+   *
+   * Requires permission `data.export`. */
+  getReportsId(id: string): Promise<Report> {
+    return this.request<Report>('GET', `/api/v1/reports/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Download the report PDF
+   *
+   * Requires permission `data.export`. */
+  getReportsIdFile(id: string): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/reports/${encodeURIComponent(id)}/file`, undefined, undefined, true);
+  }
+
+  /** Roles of the organization
+   *
+   * Built-in roles (immutable) and organization roles with their permission sets and member counts.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  getRoles(): Promise<Role[]> {
+    return this.request<Role[]>('GET', `/api/v1/roles`, undefined, undefined, false);
+  }
+
+  /** Create an organization role
+   *
+   * Requires permission `user.admin`. */
+  postRoles(body: {
+    name: string;
+    permissions: string[];
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<Role> {
+    return this.request<Role>('POST', `/api/v1/roles`, undefined, body, false);
+  }
+
+  /** Replace the permissions of an organization role
+   *
+   * Built-in roles cannot be changed.
+   * 
+   * Requires permission `user.admin`. */
+  putRolesId(id: string, body: {
+    permissions: string[];
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<Role> {
+    return this.request<Role>('PUT', `/api/v1/roles/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Rule transitions with their action results
+   *
+   * Requires permission `config.write`. */
+  getRuleRuns(query?: { rule_id?: string; limit?: number; /** default 50, max 500 */ }): Promise<RuleRun[]> {
+    return this.request<RuleRun[]>('GET', `/api/v1/rule-runs`, query, undefined, false);
+  }
+
+  /** List automation rules
+   *
+   * With the live state of each loaded rule (`state.active` = condition currently true).
+   * 
+   * Requires permission `config.write`. */
+  getRules(): Promise<Rule[]> {
+    return this.request<Rule[]>('GET', `/api/v1/rules`, undefined, undefined, false);
+  }
+
+  /** Create an automation rule
+   *
+   * Rules that send commands need `device.command`; with the four-eyes policy they are stored as `pending` (202) until a different user approves them.
+   * 
+   * Requires permission `config.write`. */
+  postRules(body: {
+    description?: string;
+    /** unique in the organization */
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    spec: RuleSpec;
+  }): Promise<{
+    id?: string;
+    name?: string;
+    status?: "active" | "pending";
+    version?: number;
+  }> {
+    return this.request<{
+    id?: string;
+    name?: string;
+    status?: "active" | "pending";
+    version?: number;
+  }>('POST', `/api/v1/rules`, undefined, body, false);
+  }
+
+  /** Dry run a rule spec
+   *
+   * Evaluates the condition against the current values; no action runs.
+   * 
+   * Requires permission `config.write`. */
+  postRulesTest(body: {
+    /** optional: include the live state of this rule */
+    rule_id?: string;
+    spec: RuleSpec;
+  }): Promise<RuleEvaluation> {
+    return this.request<RuleEvaluation>('POST', `/api/v1/rules/test`, undefined, body, false);
+  }
+
+  /** Update a rule (new version in place when the spec changes)
+   *
+   * Requires permission `config.write`. */
+  putRulesId(id: string, body: {
+    description?: string;
+    enabled?: boolean;
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    spec?: RuleSpec;
+  }): Promise<{
+    enabled?: boolean;
+    id?: string;
+    name?: string;
+    status?: string;
+    version?: number;
+  }> {
+    return this.request<{
+    enabled?: boolean;
+    id?: string;
+    name?: string;
+    status?: string;
+    version?: number;
+  }>('PUT', `/api/v1/rules/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Revoke a rule
+   *
+   * Alarms raised by the rule are cleared.
+   * 
+   * Requires permission `config.write`. */
+  deleteRulesId(id: string, query: { reason: string; }): Promise<{
+    id?: string;
+    revoked?: boolean;
+  }> {
+    return this.request<{
+    id?: string;
+    revoked?: boolean;
+  }>('DELETE', `/api/v1/rules/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Approve a pending rule (four eyes)
+   *
+   * Requires permission `device.command`. */
+  postRulesIdApprove(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    id?: string;
+    status?: string;
+  }> {
+    return this.request<{
+    id?: string;
+    status?: string;
+  }>('POST', `/api/v1/rules/${encodeURIComponent(id)}/approve`, undefined, body, false);
+  }
+
+  /** Reject a pending rule
+   *
+   * Requires permission `device.command`. */
+  postRulesIdReject(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    id?: string;
+    status?: string;
+  }> {
+    return this.request<{
+    id?: string;
+    status?: string;
+  }>('POST', `/api/v1/rules/${encodeURIComponent(id)}/reject`, undefined, body, false);
+  }
+
+  /** Server status and configuration summary
+   *
+   * Version, listeners, database, SMTP, storage paths, connected MQTT clients, update availability.
+   * 
+   * Requires permission `system.admin`. */
+  getServer(): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('GET', `/api/v1/server`, undefined, undefined, false);
+  }
+
+  /** Backups and schedule
+   *
+   * Requires permission `system.admin`. */
+  getServerBackups(): Promise<{
+    dir?: string;
+    files?: ({
+      created_at?: string;
+      encrypted?: boolean;
+      name?: string;
+      size_bytes?: number;
+    })[];
+    running?: boolean;
+    schedule?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    dir?: string;
+    files?: ({
+      created_at?: string;
+      encrypted?: boolean;
+      name?: string;
+      size_bytes?: number;
+    })[];
+    running?: boolean;
+    schedule?: Record<string, unknown>;
+  }>('GET', `/api/v1/server/backups`, undefined, undefined, false);
+  }
+
+  /** Start a backup now
+   *
+   * Requires permission `system.admin`. */
+  postServerBackups(body: Record<string, unknown>): Promise<{
+    encrypted?: boolean;
+  }> {
+    return this.request<{
+    encrypted?: boolean;
+  }>('POST', `/api/v1/server/backups`, undefined, body, false);
+  }
+
+  /** Set the backup schedule
+   *
+   * Requires permission `system.admin`. */
+  putServerBackupsSchedule(body: {
+    enabled?: boolean;
+    hour?: number;
+    /** files to keep */
+    keep?: number;
+    minute?: number;
+    /** encrypt backups (blank keeps the stored one) */
+    passphrase?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    enabled?: boolean;
+    hour?: number;
+    keep?: number;
+    minute?: number;
+    passphrase_changed?: boolean;
+  }> {
+    return this.request<{
+    enabled?: boolean;
+    hour?: number;
+    keep?: number;
+    minute?: number;
+    passphrase_changed?: boolean;
+  }>('PUT', `/api/v1/server/backups/schedule`, undefined, body, false);
+  }
+
+  /** Download a backup archive
+   *
+   * Requires permission `system.admin`. */
+  getServerBackupsName(name: string): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/server/backups/${encodeURIComponent(name)}`, undefined, undefined, true);
+  }
+
+  /** Delete a backup archive
+   *
+   * Requires permission `system.admin`. */
+  postServerBackupsNameDelete(name: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/server/backups/${encodeURIComponent(name)}/delete`, undefined, body, false);
+  }
+
+  /** Configure the domain and TLS (Caddy)
+   *
+   * Requires permission `system.admin`. */
+  putServerCaddy(body: {
+    /** optional DNS challenge provider */
+    dns_provider?: string;
+    domain: string;
+    /** ACME account e-mail */
+    email?: string;
+    extra_domains?: string[];
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** DNS provider token (blank keeps the stored one) */
+    token?: string;
+  }): Promise<{
+    dns_provider?: string;
+    domain?: string;
+    email?: string;
+    extra_domains?: string[];
+    token_changed?: boolean;
+  }> {
+    return this.request<{
+    dns_provider?: string;
+    domain?: string;
+    email?: string;
+    extra_domains?: string[];
+    token_changed?: boolean;
+  }>('PUT', `/api/v1/server/caddy`, undefined, body, false);
+  }
+
+  /** Restart the service (through the agent)
+   *
+   * Requires permission `system.admin`. */
+  postServerRestart(body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    unit?: string;
+  }> {
+    return this.request<{
+    unit?: string;
+  }>('POST', `/api/v1/server/restart`, undefined, body, false);
+  }
+
+  /** Download, verify and install a release
+   *
+   * The agent fetches the binary and SHA256SUMS from the update URL, verifies, installs and restarts.
+   * 
+   * Requires permission `system.admin`. */
+  postServerUpdate(body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** release version, e.g. 0.24.0 */
+    version: string;
+  }): Promise<{
+    sha256?: string;
+    version?: string;
+  }> {
+    return this.request<{
+    sha256?: string;
+    version?: string;
+  }>('POST', `/api/v1/server/update`, undefined, body, false);
+  }
+
+  /** WireGuard status and peers
+   *
+   * Requires permission `system.admin`. */
+  getServerWireguard(): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('GET', `/api/v1/server/wireguard`, undefined, undefined, false);
+  }
+
+  /** Enable or configure WireGuard
+   *
+   * Requires permission `system.admin`. */
+  putServerWireguard(body: {
+    /** server address in the tunnel, CIDR */
+    address?: string;
+    enabled?: boolean;
+    /** public endpoint host:port */
+    endpoint?: string;
+    listen_port?: number;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    address?: string;
+    enabled?: boolean;
+    endpoint?: string;
+    listen_port?: number;
+  }> {
+    return this.request<{
+    address?: string;
+    enabled?: boolean;
+    endpoint?: string;
+    listen_port?: number;
+  }>('PUT', `/api/v1/server/wireguard`, undefined, body, false);
+  }
+
+  /** Add a WireGuard peer
+   *
+   * Returns the peer's client configuration (private key shown once).
+   * 
+   * Requires permission `system.admin`. */
+  postServerWireguardPeers(body: {
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** client configuration file */
+    config?: string;
+    peer?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    /** client configuration file */
+    config?: string;
+    peer?: Record<string, unknown>;
+  }>('POST', `/api/v1/server/wireguard/peers`, undefined, body, false);
+  }
+
+  /** Remove a WireGuard peer
+   *
+   * Requires permission `system.admin`. */
+  postServerWireguardPeersIdRemove(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/server/wireguard/peers/${encodeURIComponent(id)}/remove`, undefined, body, false);
+  }
+
+  /** Organization security policy
+   *
+   * Requires permission `config.write`. */
+  getSettingsPolicy(): Promise<Policy> {
+    return this.request<Policy>('GET', `/api/v1/settings/policy`, undefined, undefined, false);
+  }
+
+  /** Set the four-eyes policies
+   *
+   * `four_eyes_commands`: commands wait for approval. `four_eyes_limits`: alarm rule changes become change requests. `four_eyes_assignments`: device ↔ datastream assignments become change requests. At least one field.
+   * 
+   * Requires permission `user.admin`. */
+  putSettingsPolicy(body: {
+    four_eyes_assignments?: boolean;
+    four_eyes_commands?: boolean;
+    four_eyes_limits?: boolean;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    four_eyes_assignments?: boolean;
+    four_eyes_commands?: boolean;
+    four_eyes_limits?: boolean;
+  }> {
+    return this.request<{
+    four_eyes_assignments?: boolean;
+    four_eyes_commands?: boolean;
+    four_eyes_limits?: boolean;
+  }>('PUT', `/api/v1/settings/policy`, undefined, body, false);
+  }
+
+  /** List sites
+   *
+   * Requires permission `data.read`. */
+  getSites(): Promise<Site[]> {
+    return this.request<Site[]>('GET', `/api/v1/sites`, undefined, undefined, false);
+  }
+
+  /** Create a site
+   *
+   * Requires permission `config.write`. */
+  postSites(body: {
+    address?: string;
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** IANA time zone, default Europe/Bratislava */
+    tz?: string;
+  }): Promise<Site> {
+    return this.request<Site>('POST', `/api/v1/sites`, undefined, body, false);
+  }
+
+  /** Update a site
+   *
+   * Requires permission `config.write`. */
+  patchSitesId(id: string, body: {
+    address?: string;
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    tz?: string;
+  }): Promise<Site> {
+    return this.request<Site>('PATCH', `/api/v1/sites/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Live events (Server-Sent Events)
+   *
+   * Long-lived `text/event-stream`. Events: `hello`, `observation` {datastream_id, key, value, measured_at}, `device` {device_id, connected}, `alarm` {alarm_id, datastream_id, state, severity, value}, `command` {device_id, command_id, method, status, detail}; `ping` every 25 s with the count of dropped events. Filters: `datastreams` (comma-separated ids), `devices` (`all` or ids), `alarms=1`.
+   * 
+   * Requires permission `data.read`. */
+  getStream(query?: { datastreams?: string; /** comma-separated datastream ids */ devices?: string; /** all, or comma-separated device ids */ alarms?: string; /** 1 to include alarm events */ }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/stream`, query, undefined, true);
+  }
+
+  /** Self-hosted map tiles (PMTiles archive)
+   *
+   * Status of the server's local map: a raster PMTiles v3 archive named by `[map] pmtiles` in config.toml. When it is configured and the organization has no tile URL of its own, the branding map points at `/tiles/{z}/{x}/{y}.<ext>` on this server (public, cacheable; 404 outside the archive), so map widgets work without the Internet. Create an archive with `pmtiles convert map.mbtiles map.pmtiles` (go-pmtiles) or try `go run ./tools/pmtilesgen`. */
+  getTiles(): Promise<TilesInfo> {
+    return this.request<TilesInfo>('GET', `/api/v1/tiles`, undefined, undefined, false);
+  }
+
+  /** My API tokens
+   *
+   * Requires permission `token.manage`. */
+  getTokens(): Promise<APIToken[]> {
+    return this.request<APIToken[]>('GET', `/api/v1/tokens`, undefined, undefined, false);
+  }
+
+  /** Create an API token
+   *
+   * The raw token is returned once. Scopes must be a subset of the caller's permissions.
+   * 
+   * Requires permission `token.manage`. */
+  postTokens(body: {
+    /** optional expiry */
+    expires_at?: string | null;
+    name: string;
+    scopes: string[];
+  }): Promise<{
+    info?: APIToken;
+    /** raw token, shown once */
+    token?: string;
+  }> {
+    return this.request<{
+    info?: APIToken;
+    /** raw token, shown once */
+    token?: string;
+  }>('POST', `/api/v1/tokens`, undefined, body, false);
+  }
+
+  /** Revoke an API token
+   *
+   * Requires permission `token.manage`. */
+  deleteTokensId(id: string): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/tokens/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** List users
+   *
+   * Requires permission `user.admin`. */
+  getUsers(): Promise<User[]> {
+    return this.request<User[]>('GET', `/api/v1/users`, undefined, undefined, false);
+  }
+
+  /** Create a user
+   *
+   * Returns a one-time initial password that must be changed at first sign-in.
+   * 
+   * Requires permission `user.admin`. */
+  postUsers(body: {
+    email?: string;
+    full_name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    roles: string[];
+    username: string;
+  }): Promise<{
+    /** shown once */
+    initial_password?: string;
+    user?: User;
+  }> {
+    return this.request<{
+    /** shown once */
+    initial_password?: string;
+    user?: User;
+  }>('POST', `/api/v1/users`, undefined, body, false);
+  }
+
+  /** User detail
+   *
+   * Profile, effective permissions, role history and API tokens.
+   * 
+   * Requires permission `user.admin`. */
+  getUsersId(id: string): Promise<{
+    api_tokens?: APIToken[];
+    permissions?: string[];
+    role_history?: (Record<string, unknown>)[];
+    user?: User;
+  }> {
+    return this.request<{
+    api_tokens?: APIToken[];
+    permissions?: string[];
+    role_history?: (Record<string, unknown>)[];
+    user?: User;
+  }>('GET', `/api/v1/users/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Update a user
+   *
+   * Roles, disabled flag, name, e-mail. Every role change is a row in the role history.
+   * 
+   * Requires permission `user.admin`. */
+  patchUsersId(id: string, body: {
+    disabled?: boolean;
+    email?: string;
+    full_name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    roles?: string[];
+  }): Promise<User> {
+    return this.request<User>('PATCH', `/api/v1/users/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Remove a user's MFA enrolment
+   *
+   * Requires permission `user.admin`. */
+  postUsersIdMfaReset(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    by?: string;
+    username?: string;
+  }> {
+    return this.request<{
+    by?: string;
+    username?: string;
+  }>('POST', `/api/v1/users/${encodeURIComponent(id)}/mfa-reset`, undefined, body, false);
+  }
+
+  /** Reset a user's password
+   *
+   * Returns a new one-time password.
+   * 
+   * Requires permission `user.admin`. */
+  postUsersIdResetPassword(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    by?: string;
+    initial_password?: string;
+  }> {
+    return this.request<{
+    by?: string;
+    initial_password?: string;
+  }>('POST', `/api/v1/users/${encodeURIComponent(id)}/reset-password`, undefined, body, false);
+  }
+
+  /** Sign a user out everywhere
+   *
+   * Requires permission `user.admin`. */
+  postUsersIdSessionsRevoke(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    by?: string;
+    /** revoked sessions */
+    sessions?: number;
+    username?: string;
+  }> {
+    return this.request<{
+    by?: string;
+    /** revoked sessions */
+    sessions?: number;
+    username?: string;
+  }>('POST', `/api/v1/users/${encodeURIComponent(id)}/sessions/revoke`, undefined, body, false);
+  }
+
+  /** Unlock a locked-out user
+   *
+   * Requires permission `user.admin`. */
+  postUsersIdUnlock(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    by?: string;
+    username?: string;
+  }> {
+    return this.request<{
+    by?: string;
+    username?: string;
+  }>('POST', `/api/v1/users/${encodeURIComponent(id)}/unlock`, undefined, body, false);
+  }
+}

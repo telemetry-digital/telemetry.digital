@@ -1,0 +1,27 @@
+meta {
+  name: Close an account request as fulfilled
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/account-requests/:id/created
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Close an account request as fulfilled
+  
+  Requires permission `user.admin`.
+}

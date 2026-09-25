@@ -1,0 +1,21 @@
+meta {
+  name: Report client attributes (device)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/d/attributes
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {}
+}
+
+docs {
+  Report client attributes (device)
+  
+  JSON object such as `{"fw":"1.4.2","hw":"esp32-s3","model":"…","ip":"10.0.0.12"}`; merged into the device's client attributes.
+}

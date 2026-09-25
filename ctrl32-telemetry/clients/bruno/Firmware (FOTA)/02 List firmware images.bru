@@ -1,0 +1,17 @@
+meta {
+  name: List firmware images
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/firmware
+  body: none
+  auth: inherit
+}
+
+docs {
+  List firmware images
+  
+  Requires permission `fota.read`.
+}

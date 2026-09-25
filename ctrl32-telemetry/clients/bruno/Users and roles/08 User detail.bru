@@ -1,0 +1,23 @@
+meta {
+  name: User detail
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/users/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  User detail
+  
+  Profile, effective permissions, role history and API tokens.
+  
+  Requires permission `user.admin`.
+}

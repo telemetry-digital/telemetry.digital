@@ -1,0 +1,32 @@
+meta {
+  name: Send a command or write a value
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/devices/:id/commands
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "args": {},
+    "method": "string",
+    "reason": "string",
+    "ttl_seconds": 1
+  }
+}
+
+docs {
+  Send a command or write a value
+  
+  MQTT devices receive `{id, m, a, exp}` on `d/{external_id}/cmd` and acknowledge on `d/{external_id}/cmd/ack`. OPC UA and Modbus devices accept `method: write` with `args: {key, value}` for a writable node/register (limits checked, value read back). With the four-eyes policy the command is stored as `pending` (202) until another user approves it.
+  
+  Requires permission `device.command`.
+}

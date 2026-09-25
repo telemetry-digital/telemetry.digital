@@ -1,0 +1,21 @@
+meta {
+  name: Catalog for editing (built-in and override per key)
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/i18n/:locale/edit
+  body: none
+  auth: inherit
+}
+
+params:path {
+  locale: 
+}
+
+docs {
+  Catalog for editing (built-in and override per key)
+  
+  Requires permission `content.write`.
+}

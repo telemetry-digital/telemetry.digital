@@ -1,0 +1,19 @@
+meta {
+  name: Register profiles (current versions)
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/register-profiles
+  body: none
+  auth: inherit
+}
+
+docs {
+  Register profiles (current versions)
+  
+  Versioned Modbus register maps shared by connectors of the same device type, with the number of connectors using any version and how many are on an older version.
+  
+  Requires permission `config.write`.
+}
