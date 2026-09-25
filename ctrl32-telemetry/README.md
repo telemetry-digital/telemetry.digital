@@ -58,6 +58,7 @@ go run ./cmd/ctrl32-telemetry admin reset-password -username admin -password adm
 go run ./cmd/ctrl32-telemetry serve -config config.toml      # http://127.0.0.1:8080
 go test ./...                                  # unit and integration tests (OpenAPI completeness, generated clients, agent)
 bash tests/e2e/assets.sh                       # 26 end-to-end suites against the running server, one at a time
+bash tests/run-all.sh                          # everything above on a fresh database (PG_ADMIN_URL, SKIP; also run by CI)
 ```
 
 Static files under `internal/httpapi/static` are embedded: rebuild before checking a UI change. New user-visible strings are added to all 19 catalogs in `internal/i18n/catalog` (English key = text). After an API change run `go run ./tools/apigen`; the test in `tools/apigen` fails while `clients/` is stale. Releases: `deploy/publish.sh <version> root@host -i key` builds Linux amd64/arm64 and Windows amd64 and publishes them with the installers.
