@@ -37,3 +37,4 @@ Thumbs.db
 /opcua/
 /firmware/
 /e2e-*.log
+test-results/
