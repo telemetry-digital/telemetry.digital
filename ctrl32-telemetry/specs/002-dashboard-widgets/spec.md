@@ -11,6 +11,13 @@ ThingsBoard has."
 
 **Related**: URS J-02 (extended), new J-28…J-31; spec 001 (widgets can be placed on process pictures too).
 
+## Clarifications
+
+### Session 2026-09-25
+
+- Q: Refuse unknown widget settings (FR-006)? → A: No — refuse invalid values, drop unknown names with a warning
+  in the response; legacy dashboards stay saveable (found while planning).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Every widget can be styled and titled like in ThingsBoard (Priority: P1)
@@ -119,7 +126,8 @@ click action (open another screen, open the datastream trend, open a faceplate).
 - **FR-004**: The catalogue MUST add at least the 24 widget types listed in US3.
 - **FR-005**: Widgets MUST support conditional formatting (up to 8 ranges) and one click action.
 - **FR-006**: The server MUST validate every widget setting against the catalogue (type, range, allowed values,
-  colour format, text length) and ignore nothing silently: unknown settings are refused.
+  colour format, text length); invalid values are refused, and unknown settings are dropped and reported back as
+  warnings in the save response (so dashboards stored by older versions can still be saved).
 - **FR-007**: Existing dashboards MUST render unchanged after the upgrade (defaults equal the current look).
 - **FR-008**: The property panel MUST group settings into tabs (Data, Appearance, Series, Time, Actions) and offer
   a live preview; every label MUST be translatable (Slovak and Czech provided).
