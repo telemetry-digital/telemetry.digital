@@ -70,6 +70,7 @@ func StarterSpec(ctx context.Context, pool *pgxpool.Pool, org, kind string) (str
 			w("devices", "devices", 9, 8, 3, 2, map[string][]string{"devices": {}}, map[string]any{"title": "Devices", "limit": 20}),
 			w("note", "text", 0, 10, 12, 1, nil, map[string]any{"title": "Note", "style": "note", "text": "Showcase of every widget type. Click Edit to move, resize and rebind the widgets to your own datastreams."}),
 		}
+		widgets = append(widgets, showcaseMore(w, dsb, ds, first)...)
 	case "mimic":
 		name = "Process picture — showcase"
 		second, third := first, first
@@ -290,4 +291,51 @@ func plantPicture(ds []string) json.RawMessage {
 		}}
 	raw, _ := json.Marshal(spec)
 	return raw
+}
+
+// showcaseMore adds one widget of every type from spec 002 below the original showcase (which stays unchanged),
+// including examples of per-series settings, a right axis, legend values and conditional formatting.
+func showcaseMore(w func(id, typ string, x, y, wd, h int, binds map[string][]string, params map[string]any) map[string]any, dsb func([]string) map[string][]string, ds, first []string) []map[string]any {
+	series := []map[string]any{}
+	for i := range ds {
+		s := map[string]any{"style": "line"}
+		if i == 1 {
+			s["axis"] = "right"
+		}
+		series = append(series, s)
+	}
+	ranges := []map[string]any{{"op": "<", "v": 10.0, "target": "value", "color": "#2563eb"}, {"op": ">", "v": 80.0, "target": "background", "color": "#fee2e2"}}
+	devs := map[string][]string{"devices": {}, "datastreams": first}
+	y := 11
+	return []map[string]any{
+		w("vcard", "value_card", 0, y, 3, 2, dsb(first), map[string]any{"title": "Value card", "icon": "gauge", "decimals": 1, "ranges": ranges}),
+		w("agg", "agg_card", 3, y, 3, 2, dsb(first), map[string]any{"title": "Maximum (24 h)", "agg": "max", "decimals": 1, "icon": "trending-up"}),
+		w("trend3", "chart", 6, y, 6, 3, dsb(ds), map[string]any{"title": "Trend — series, right axis, legend values", "series": series, "legend_values": []string{"min", "max", "avg", "latest"}, "legend_pos": "bottom", "agg": "avg", "agg_interval": "15m", "filters": []string{"range", "agg", "interval", "series"}}),
+		w("progress", "progress", 0, y+2, 3, 1, dsb(first), map[string]any{"title": "Progress bar", "decimals": 1}),
+		w("battery", "battery", 3, y+2, 3, 1, dsb(first), map[string]any{"title": "Battery"}),
+		w("level", "level_card", 0, y+3, 3, 3, dsb(first), map[string]any{"title": "Liquid level", "capacity": 5000, "capacity_unit": "l", "decimals": 1}),
+		w("thermo", "thermometer", 3, y+3, 2, 3, dsb(first), map[string]any{"title": "Thermometer", "decimals": 1, "warn": 30, "action": 40}),
+		w("radial", "radial_gauge", 5, y+3, 3, 3, dsb(first), map[string]any{"title": "Radial gauge", "decimals": 1, "warn": 70, "action": 90}),
+		w("signal", "signal", 8, y+3, 2, 2, dsb(first), map[string]any{"title": "Signal", "scale": "percent"}),
+		w("compass", "compass", 10, y+3, 2, 2, dsb(ds), map[string]any{"title": "Wind direction"}),
+		w("linear", "linear_gauge", 8, y+5, 4, 1, dsb(first), map[string]any{"title": "Linear gauge", "decimals": 1, "warn": 70, "action": 90}),
+		w("leds", "led_grid", 0, y+6, 4, 2, dsb(ds), map[string]any{"title": "LED indicators", "on_value": 1}),
+		w("acount", "alarm_count", 4, y+6, 2, 2, nil, map[string]any{"title": "Active alarms"}),
+		w("states", "state_timeline", 6, y+6, 6, 2, dsb(first), map[string]any{"title": "State timeline"}),
+		w("bartime", "bar_time", 0, y+8, 6, 3, dsb(ds), map[string]any{"title": "Bars over time (stacked)", "stacked": true, "agg_interval": "1h"}),
+		w("pie", "pie", 6, y+8, 3, 3, dsb(ds), map[string]any{"title": "Pie"}),
+		w("polar", "polar", 9, y+8, 3, 3, dsb(ds), map[string]any{"title": "Polar area"}),
+		w("radar", "radar", 0, y+11, 4, 3, dsb(ds), map[string]any{"title": "Radar"}),
+		w("tstable", "ts_table", 4, y+11, 4, 3, dsb(ds), map[string]any{"title": "Time-series table", "range": "6h", "limit": 50}),
+		w("entities", "entity_table", 8, y+11, 4, 3, dsb(ds), map[string]any{"title": "Entity table"}),
+		w("clock", "clock", 0, y+14, 3, 2, nil, map[string]any{"title": "Clock", "title_icon": "clock"}),
+		w("md", "markdown", 3, y+14, 3, 2, dsb(first), map[string]any{"title": "Markdown", "text": "## Line 1\nLatest value: **{value:1}**\n- values update live\n- [open the overview](screen:overview)"}),
+		w("qr", "qr", 6, y+14, 2, 2, nil, map[string]any{"title": "QR code"}),
+		w("nav", "nav_card", 8, y+14, 4, 1, nil, map[string]any{"title": "Overview", "icon": "home", "target": "overview", "description": "Open the overview dashboard"}),
+		w("image", "image", 8, y+15, 4, 1, nil, map[string]any{"title": "Image", "src": ""}),
+		w("knob", "knob", 0, y+16, 3, 3, devs, map[string]any{"title": "Knob", "key": "setpoint", "min": 0, "max": 100, "step": 5}),
+		w("slider", "slider", 3, y+16, 5, 2, devs, map[string]any{"title": "Slider", "key": "setpoint", "min": 0, "max": 100, "step": 5}),
+		w("rswitch", "round_switch", 8, y+16, 2, 3, devs, map[string]any{"title": "Round switch", "key": "run"}),
+		w("styled", "value", 10, y+16, 2, 3, dsb(first), map[string]any{"title": "Styled", "bg_color": "#0f172a", "text_color": "#f8fafc", "border_width": 0, "radius": 16, "shadow": true, "title_icon": "bolt", "value_size": 40, "sparkline": false}),
+	}
 }

@@ -43,35 +43,61 @@
   // ---- SVG chart ----------------------------------------------------------------------------------
   function niceTicks(lo, hi, n) { if (!(hi > lo)) { hi = lo + 1; lo = lo - 1; } const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), norm = raw / mag; const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag; const t = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) t.push(+v.toFixed(10)); return t; }
   function timeTicks(t0, t1, n) { const span = t1 - t0, steps = [60e3, 300e3, 900e3, 1800e3, 3600e3, 7200e3, 6 * 3600e3, 12 * 3600e3, 86400e3, 2 * 86400e3, 7 * 86400e3, 30 * 86400e3]; const step = steps.find((s) => span / s <= n) || steps[steps.length - 1]; const out = []; for (let t = Math.ceil(t0 / step) * step; t <= t1; t += step) out.push(t); return { ticks: out, fmt: span <= 2 * 86400e3 ? (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (t) => new Date(t).toLocaleDateString([], { day: '2-digit', month: '2-digit' }) }; }
+  // Series with an explicit window and aggregation (spec 002): buckets carry avg/min/max/n, so sum = avg·n and count = n.
+  const AGG_S = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '6h': 21600, '1d': 86400 };
+  function aggPlan(t0, t1, agg, interval) {
+    const span = (t1 - t0) / 1000, floor = Math.ceil(span / 2000); // at most ~2000 points
+    if (agg === 'none' && span <= 366 * 86400) return { bucket: 0, raised: false };
+    let b = AGG_S[interval] || 0; if (!b) { const s = Math.round(span / 600); b = s >= 60 ? Math.ceil(s / 60) * 60 : (agg && agg !== 'auto' && agg !== 'none' ? 60 : 0); }
+    if (b && b < floor) return { bucket: Math.ceil(floor / 60) * 60, raised: true };
+    return { bucket: b, raised: false };
+  }
+  async function seriesWin(id, t0, t1, agg, interval) {
+    const plan = aggPlan(t0, t1, agg, interval); const from = encodeURIComponent(new Date(t0).toISOString()), to = encodeURIComponent(new Date(t1).toISOString());
+    if (!plan.bucket) { const rows = await api('GET', P(`/api/v1/observations?datastream_id=${id}&from=${from}&to=${to}&limit=10000`)); return { plan, points: rows.filter((r) => r.value != null).map((r) => ({ t: new Date(r.measured_at).getTime(), v: r.value, flagged: r.quality !== 'ok' })) }; }
+    const r = await api('GET', P(`/api/v1/observations?datastream_id=${id}&from=${from}&to=${to}&bucket=${plan.bucket}`)); const f = agg || 'auto';
+    const pick = (p) => f === 'min' ? p.min : f === 'max' ? p.max : f === 'sum' ? (p.avg == null ? null : p.avg * p.n) : f === 'count' ? p.n : p.avg;
+    const band = f === 'auto' || f === 'avg';
+    return { plan, points: r.points.filter((p) => p.n > 0).map((p) => ({ t: new Date(p.t).getTime(), v: pick(p), min: band ? p.min : null, max: band ? p.max : null, flagged: p.flagged })) };
+  }
+  function winOf(p, ctx) {
+    if (p.time_mode === 'fixed' && p.from && p.to) { const t0 = Date.parse(p.from), t1 = Date.parse(p.to); if (t1 > t0) return { t0, t1, label: new Date(t0).toLocaleString() + ' – ' + new Date(t1).toLocaleString() }; }
+    const range = p.range || ctx.range; const t1 = Date.now(); return { t0: t1 - (RANGE_MS[range] || RANGE_MS['24h']), t1, label: range, range };
+  }
+  const statsOf = (pts) => { const vs = pts.map((p) => p.v).filter((v) => v != null); if (!vs.length) return {}; const total = vs.reduce((a, b) => a + b, 0); return { min: Math.min(...vs), max: Math.max(...vs), avg: total / vs.length, total, latest: vs[vs.length - 1] }; };
   function renderChart(el, list, o) {
-    const W = 960, H = Math.max(160, o.height || 240), L = 54, R = 14, T = 12, B = 30; const all = list.flatMap((s) => s.points);
+    const W = 960, H = Math.max(160, o.height || 240), T = 12, B = 30; const vis = list.filter((s) => !s.hidden); const all = vis.flatMap((s) => s.points);
     if (!all.length) { el.innerHTML = '<div class="muted" style="padding:24px 0;text-align:center">no data in this range</div>'; return; }
-    const t0 = o.t0, t1 = o.t1; let lo = o.yMin, hi = o.yMax;
-    if (lo == null || hi == null) { const vals = all.flatMap((p) => [p.v, p.min, p.max]).filter((v) => v != null); const mn = Math.min(...vals), mx = Math.max(...vals), pad = (mx - mn) * 0.08 || 1; if (lo == null) lo = o.style === 'bar' ? Math.min(0, mn) : mn - pad; if (hi == null) hi = mx + pad; }
-    const px = (t) => L + (t - t0) / (t1 - t0) * (W - L - R), py = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B), y0 = py(Math.max(lo, Math.min(hi, 0)));
-    const yt = niceTicks(lo, hi, 5), xt = timeTicks(t0, t1, 8);
+    const hasR = vis.some((s) => s.axis === 'right'), L = 54, R = hasR ? 54 : 14;
+    const t0 = o.t0, t1 = o.t1;
+    const scale = (ss, yMin, yMax) => { let lo = yMin, hi = yMax; const pts = ss.flatMap((s) => s.points); if (lo == null || hi == null) { const vals = pts.flatMap((p) => [p.v, p.min, p.max]).filter((v) => v != null); if (!vals.length) vals.push(0, 1); const mn = Math.min(...vals), mx = Math.max(...vals), pad = (mx - mn) * 0.08 || 1; const bars = ss.some((s) => (s.style || o.style) === 'bar'); if (lo == null) lo = bars ? Math.min(0, mn) : mn - pad; if (hi == null) hi = mx + pad; } return { lo, hi }; };
+    const sl = scale(vis.filter((s) => s.axis !== 'right'), o.yMin, o.yMax), sr = hasR ? scale(vis.filter((s) => s.axis === 'right')) : null;
+    const px = (t) => L + (t - t0) / (t1 - t0) * (W - L - R), pyOf = (sc) => (v) => T + (1 - (v - sc.lo) / (sc.hi - sc.lo)) * (H - T - B), py = pyOf(sl);
+    const yt = niceTicks(sl.lo, sl.hi, 5), xt = timeTicks(t0, t1, 8);
     let g = `<g stroke="var(--line)" stroke-width="1">${yt.map((v) => `<line x1="${L}" x2="${W - R}" y1="${py(v).toFixed(1)}" y2="${py(v).toFixed(1)}"/>`).join('')}</g>`;
     g += `<g fill="var(--muted)" font-size="11">${yt.map((v) => `<text x="${L - 6}" y="${(py(v) + 4).toFixed(1)}" text-anchor="end">${num(v, o.decimals)}</text>`).join('')}${xt.ticks.map((t) => `<text x="${px(t).toFixed(1)}" y="${H - 9}" text-anchor="middle">${xt.fmt(t)}</text>`).join('')}</g>`;
+    if (sr) { const pr = pyOf(sr), rs = vis.filter((s) => s.axis === 'right'); g += `<g fill="var(--muted)" font-size="11">${niceTicks(sr.lo, sr.hi, 5).map((v) => `<text x="${W - R + 6}" y="${(pr(v) + 4).toFixed(1)}">${num(v, o.decimals)}</text>`).join('')}<text x="${W - 4}" y="${T + 2}" text-anchor="end" font-size="10">${esc(rs.map((s) => s.unit || s.label).filter((x, i, a) => a.indexOf(x) === i).join(', '))}</text></g>`; }
     if (o.warn != null) g += `<line x1="${L}" x2="${W - R}" y1="${py(o.warn).toFixed(1)}" y2="${py(o.warn).toFixed(1)}" stroke="#d97706" stroke-dasharray="4 4"/>`;
     if (o.action != null) g += `<line x1="${L}" x2="${W - R}" y1="${py(o.action).toFixed(1)}" y2="${py(o.action).toFixed(1)}" stroke="#dc2626" stroke-dasharray="4 4"/>`;
-    const style = o.style || 'line';
+    const nBars = vis.filter((s) => (s.style || o.style) === 'bar').length || 1; let barI = 0;
     list.forEach((s, i) => {
-      const c = color(i), pts = s.points; if (!pts.length) return;
-      if (o.band !== false && style !== 'bar' && style !== 'scatter') { const band = pts.filter((p) => p.min != null && p.max != null); if (band.length > 1) g += `<path d="${band.map((p, k) => (k ? 'L' : 'M') + px(p.t).toFixed(1) + ',' + py(p.max).toFixed(1)).join(' ')} ${band.slice().reverse().map((p) => 'L' + px(p.t).toFixed(1) + ',' + py(p.min).toFixed(1)).join(' ')} Z" fill="${c}" opacity="0.12"/>`; }
-      if (style === 'scatter') { g += pts.map((p) => `<circle cx="${px(p.t).toFixed(1)}" cy="${py(p.v).toFixed(1)}" r="2.6" fill="${c}" opacity="0.85"/>`).join(''); return; }
-      if (style === 'bar') { const bw = Math.max(1.5, (W - L - R) / Math.max(pts.length, 1) * 0.8 / list.length); g += pts.map((p) => { const x = px(p.t) - bw * list.length / 2 + i * bw, y = py(p.v); return `<rect x="${x.toFixed(1)}" y="${Math.min(y, y0).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.5, Math.abs(y0 - y)).toFixed(1)}" fill="${c}" opacity="0.85"/>`; }).join(''); return; }
+      if (s.hidden) return; const c = s.color || color(i), pts = s.points; if (!pts.length) return; const style = s.style || o.style || 'line'; const yp = s.axis === 'right' && sr ? pyOf(sr) : py; const sc = s.axis === 'right' && sr ? sr : sl; const y0 = yp(Math.max(sc.lo, Math.min(sc.hi, 0)));
+      if (o.band !== false && style !== 'bar' && style !== 'scatter') { const band = pts.filter((p) => p.min != null && p.max != null); if (band.length > 1) g += `<path d="${band.map((p, k) => (k ? 'L' : 'M') + px(p.t).toFixed(1) + ',' + yp(p.max).toFixed(1)).join(' ')} ${band.slice().reverse().map((p) => 'L' + px(p.t).toFixed(1) + ',' + yp(p.min).toFixed(1)).join(' ')} Z" fill="${c}" opacity="0.12"/>`; }
+      if (style === 'scatter') { g += pts.map((p) => `<circle cx="${px(p.t).toFixed(1)}" cy="${yp(p.v).toFixed(1)}" r="2.6" fill="${c}" opacity="0.85"/>`).join(''); return; }
+      if (style === 'bar') { const bw = Math.max(1.5, (W - L - R) / Math.max(pts.length, 1) * 0.8 / nBars), bi = barI++; g += pts.map((p) => { const x = px(p.t) - bw * nBars / 2 + bi * bw, y = yp(p.v); return `<rect x="${x.toFixed(1)}" y="${Math.min(y, y0).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.5, Math.abs(y0 - y)).toFixed(1)}" fill="${c}" opacity="0.85"/>`; }).join(''); return; }
       let d = '';
-      if (style === 'step') pts.forEach((p, k) => { const x = px(p.t).toFixed(1), y = py(p.v).toFixed(1); d += k ? ` H${x} V${y}` : `M${x},${y}`; });
-      else d = pts.map((p, k) => (k ? 'L' : 'M') + px(p.t).toFixed(1) + ',' + py(p.v).toFixed(1)).join(' ');
-      if (style === 'area') g += `<path d="${d} L${px(pts[pts.length - 1].t).toFixed(1)},${y0.toFixed(1)} L${px(pts[0].t).toFixed(1)},${y0.toFixed(1)} Z" fill="${c}" opacity="0.18"/>`;
+      if (style === 'step') pts.forEach((p, k) => { const x = px(p.t).toFixed(1), y = yp(p.v).toFixed(1); d += k ? ` H${x} V${y}` : `M${x},${y}`; });
+      else d = pts.map((p, k) => (k ? 'L' : 'M') + px(p.t).toFixed(1) + ',' + yp(p.v).toFixed(1)).join(' ');
+      if (style === 'area' || s.fill) g += `<path d="${d} L${px(pts[pts.length - 1].t).toFixed(1)},${y0.toFixed(1)} L${px(pts[0].t).toFixed(1)},${y0.toFixed(1)} Z" fill="${c}" opacity="0.18"/>`;
       g += `<path d="${d}" fill="none" stroke="${c}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>`;
-      g += pts.filter((p) => p.flagged).map((p) => `<circle cx="${px(p.t).toFixed(1)}" cy="${py(p.v).toFixed(1)}" r="2.5" fill="#d97706"/>`).join('');
+      if (s.showPoints) g += pts.map((p) => `<circle cx="${px(p.t).toFixed(1)}" cy="${yp(p.v).toFixed(1)}" r="2.2" fill="${c}"/>`).join('');
+      g += pts.filter((p) => p.flagged).map((p) => `<circle cx="${px(p.t).toFixed(1)}" cy="${yp(p.v).toFixed(1)}" r="2.5" fill="#d97706"/>`).join('');
     });
     g += `<line class="cursor" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-dasharray="2 3" visibility="hidden"/>`;
     el.style.display = 'flex'; el.style.flexDirection = 'column'; el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;flex:1;min-height:60px;display:block">${g}</svg><div class="chart-tip muted" style="font-size:12px;height:16px;line-height:16px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>`;
     const svg = el.querySelector('svg'), tip = el.querySelector('.chart-tip'), cursor = svg.querySelector('.cursor');
     svg.onmousemove = (e) => { const rect = svg.getBoundingClientRect(); const x = (e.clientX - rect.left) / rect.width * W; const t = t0 + (x - L) / (W - L - R) * (t1 - t0); cursor.setAttribute('x1', x.toFixed(1)); cursor.setAttribute('x2', x.toFixed(1)); cursor.setAttribute('visibility', 'visible');
-      tip.textContent = new Date(t).toLocaleString() + ' · ' + list.map((s) => { let best = null; for (const p of s.points) if (!best || Math.abs(p.t - t) < Math.abs(best.t - t)) best = p; return best ? `${s.label}: ${num(best.v, o.decimals)}${s.unit ? ' ' + s.unit : ''}${best.min != null ? ` (${num(best.min, o.decimals)}–${num(best.max, o.decimals)})` : ''}` : s.label + ': —'; }).join(' · '); };
+      tip.textContent = new Date(t).toLocaleString() + ' · ' + vis.map((s) => { const dd = s.decimals ?? o.decimals; let best = null; for (const p of s.points) if (!best || Math.abs(p.t - t) < Math.abs(best.t - t)) best = p; return best ? `${s.label}: ${num(best.v, dd)}${s.unit ? ' ' + s.unit : ''}${best.min != null ? ` (${num(best.min, dd)}–${num(best.max, dd)})` : ''}` : s.label + ': —'; }).join(' · '); };
     svg.onmouseleave = () => { cursor.setAttribute('visibility', 'hidden'); tip.textContent = ''; };
   }
   function sparkline(points, c) { if (points.length < 2) return ''; const t0 = points[0].t, t1 = points[points.length - 1].t, vs = points.map((p) => p.v), lo = Math.min(...vs), hi = Math.max(...vs); return `<svg viewBox="0 0 120 30" style="width:120px;height:30px;display:block;flex:none"><path d="${points.map((p, k) => (k ? 'L' : 'M') + ((p.t - t0) / ((t1 - t0) || 1) * 120).toFixed(1) + ',' + (28 - ((p.v - lo) / ((hi - lo) || 1)) * 26).toFixed(1)).join(' ')}" fill="none" stroke="${c}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`; }
@@ -80,11 +106,21 @@
   const W = {};
   const ids = (ctx) => (ctx.bindings && ctx.bindings.datastreams) || [];
   W.chart = async (el, p, ctx) => {
-    const all = await datastreams(); const range = p.range || ctx.range; const ms = RANGE_MS[range] || RANGE_MS['24h']; const t1 = Date.now(), t0 = t1 - ms;
-    const list = await Promise.all(ids(ctx).map(async (id) => { const d = dsInfo(all, id); return { label: dsLabel(d), unit: d.unit, points: await series(id, range) }; }));
-    const legend = p.legend === false ? '' : list.map((s, i) => `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px"><i style="display:inline-block;width:12px;height:3px;background:${color(i)}"></i>${esc(s.label)}${s.unit ? ' [' + esc(s.unit) + ']' : ''}</span>`).join('');
-    el.innerHTML = `<div class="muted" style="font-size:12px;margin-bottom:2px;display:flex;justify-content:space-between;flex-wrap:wrap"><span>${legend}</span><span>${esc(range)}${bucketFor(range) ? ' · avg/' + Math.round(bucketFor(range) / 60) + ' min' : ''}</span></div><div class="chart-box" style="flex:1;min-height:0"></div>`;
-    renderChart(el.querySelector('.chart-box'), list, { t0, t1, yMin: p.y_min, yMax: p.y_max, decimals: p.decimals, warn: p.warn, action: p.action, style: p.chart, band: p.band, height: Math.max(160, ctx.px_h - 60) });
+    const all = await datastreams(); const win = winOf(p, ctx); const cfg = Array.isArray(p.series) ? p.series : []; let raised = false, bucket = 0;
+    const list = await Promise.all(ids(ctx).map(async (id, i) => { const d = dsInfo(all, id), c = cfg[i] || {}; const r = await seriesWin(id, win.t0, win.t1, p.agg, p.agg_interval); raised = raised || r.plan.raised; bucket = r.plan.bucket;
+      return { label: c.label || dsLabel(d), unit: c.unit != null && c.unit !== '' ? c.unit : d.unit, color: c.color || color(i), style: c.style || '', axis: c.axis || 'left', showPoints: !!c.points, fill: !!c.fill, hidden: !!c.hidden, decimals: c.decimals, points: r.points }; }));
+    const pos = p.legend === false ? 'none' : (p.legend_pos || 'top'); const lv = Array.isArray(p.legend_values) ? p.legend_values : [];
+    const aggTxt = (p.agg && p.agg !== 'auto' ? p.agg : 'avg') + (bucket ? '/' + (bucket >= 3600 ? bucket / 3600 + ' h' : Math.round(bucket / 60) + ' min') : '');
+    const info = `<span class="dw-win">${esc(win.label)}${bucket ? ' · ' + esc(aggTxt) : ''}${raised ? ' · <span title="interval raised to keep at most 2000 points">interval raised</span>' : ''}</span>`;
+    const draw = () => {
+      const legend = pos === 'none' ? '' : list.map((s, i) => { const st = statsOf(s.points); const vals = lv.map((k) => `<span class="muted"> ${k} <b>${num(st[k], s.decimals ?? p.decimals)}</b></span>`).join(''); return `<span class="dw-leg${s.hidden ? ' off' : ''}" data-s="${i}" style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;cursor:pointer${s.hidden ? ';opacity:.45' : ''}"><i style="display:inline-block;width:12px;height:3px;background:${s.color}"></i>${esc(s.label)}${s.unit ? ' [' + esc(s.unit) + ']' : ''}${s.axis === 'right' ? ' ▸' : ''}${vals}</span>`; }).join('');
+      const side = pos === 'right';
+      el.innerHTML = `<div style="display:flex;flex-direction:${side ? 'row' : 'column'};flex:1;min-height:0;gap:6px">${pos === 'bottom' || side ? '' : `<div class="muted dw-legend" style="font-size:12px;margin-bottom:2px;display:flex;justify-content:space-between;flex-wrap:wrap"><span>${legend}</span>${info}</div>`}<div class="chart-box" style="flex:1;min-height:0;min-width:0"></div>${pos === 'bottom' ? `<div class="muted dw-legend" style="font-size:12px;display:flex;justify-content:space-between;flex-wrap:wrap"><span>${legend}</span>${info}</div>` : ''}${side ? `<div class="muted dw-legend" style="font-size:12px;display:flex;flex-direction:column;gap:4px;max-width:40%;overflow:auto">${legend}${info}</div>` : ''}${pos === 'none' ? `<div class="muted" style="font-size:11px;text-align:right">${info}</div>` : ''}</div>`;
+      el.style.display = 'flex'; el.style.flexDirection = 'column';
+      renderChart(el.querySelector('.chart-box'), list, { t0: win.t0, t1: win.t1, yMin: p.y_min, yMax: p.y_max, decimals: p.decimals, warn: p.warn, action: p.action, style: p.chart, band: p.band, height: Math.max(160, ctx.px_h - 60) });
+      for (const x of el.querySelectorAll('.dw-leg')) x.onclick = (e) => { e.stopPropagation(); const s = list[+x.dataset.s]; s.hidden = !s.hidden; draw(); };
+    };
+    draw();
   };
   W.bars = async (el, p, ctx) => {
     const all = await datastreams(); const lv = await latest(ids(ctx)); const rows = ids(ctx).map((id, i) => ({ d: dsInfo(all, id), v: lv[id] ? lv[id].value : null, c: color(i) }));
@@ -106,14 +142,14 @@
   };
   W.value = async (el, p, ctx) => {
     const all = await datastreams(); const list = ids(ctx); const lv = await latest(list);
-    const cards = await Promise.all(list.map(async (id, i) => { const d = dsInfo(all, id), v = lv[id]; const pts = (p.sparkline === false || ctx.w < 3) ? [] : await series(id, '6h').catch(() => []); const c = lvlColor(level(v && v.value, p), color(i));
-      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:2px 0;${i ? 'border-top:1px solid var(--line)' : ''}"><div style="min-width:0;flex:1"><div style="font-size:1.6em;font-weight:600;color:${c};line-height:1.1;white-space:nowrap">${v ? num(v.value, p.decimals) : '—'} <span style="font-size:0.5em;font-weight:400;color:var(--muted)">${esc(d.unit)}</span></div><div class="muted" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(dsLabel(d))}">${esc(dsLabel(d))}${v ? ' · ' + fmt(v.measured_at) + (v.quality !== 'ok' ? ' · ' + esc(v.quality) : '') : ' · no value yet'}</div></div>${sparkline(pts, c)}</div>`; }));
+    const cards = await Promise.all(list.map(async (id, i) => { const d = dsInfo(all, id), v = lv[id]; const pts = (p.sparkline === false || ctx.w < 3) ? [] : await series(id, '6h').catch(() => []); const cf = i === 0 && ctx.cond ? ctx.cond(v && v.value) : condFormat(null, p, v && v.value); const c = cf.value || lvlColor(level(v && v.value, p), p.text_color || color(i));
+      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:2px 0;${i ? 'border-top:1px solid var(--line)' : ''}"><div style="min-width:0;flex:1"><div style="font-size:var(--dw-value,1.6em);font-weight:600;color:${c};line-height:1.1;white-space:nowrap">${v ? num(v.value, p.decimals) : '—'} <span style="font-size:0.5em;font-weight:400;color:var(--muted)">${esc(d.unit)}</span></div><div class="muted" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(dsLabel(d))}">${esc(dsLabel(d))}${v ? ' · ' + fmt(v.measured_at) + (v.quality !== 'ok' ? ' · ' + esc(v.quality) : '') : ' · no value yet'}</div></div>${sparkline(pts, c)}</div>`; }));
     el.style.justifyContent = list.length === 1 ? 'center' : 'flex-start'; el.innerHTML = cards.join('');
   };
   W.gauge = async (el, p, ctx) => {
     const all = await datastreams(); const list = ids(ctx); const lv = await latest(list);
     const arc = (a, b, r) => `M${(70 + r * Math.cos(a)).toFixed(1)},${(70 + r * Math.sin(a)).toFixed(1)} A${r},${r} 0 ${b - a > Math.PI ? 1 : 0} 1 ${(70 + r * Math.cos(b)).toFixed(1)},${(70 + r * Math.sin(b)).toFixed(1)}`;
-    el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-around">` + list.map((id, i) => { const d = dsInfo(all, id), v = lv[id] && lv[id].value; const lo = p.y_min ?? 0, hi = p.y_max ?? 100; const frac = v == null ? 0 : Math.max(0, Math.min(1, (v - lo) / ((hi - lo) || 1))); const c = lvlColor(level(v, p), color(i));
+    el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-around">` + list.map((id, i) => { const d = dsInfo(all, id), v = lv[id] && lv[id].value; const lo = p.y_min ?? 0, hi = p.y_max ?? 100; const frac = v == null ? 0 : Math.max(0, Math.min(1, (v - lo) / ((hi - lo) || 1))); const cf = i === 0 && ctx.cond ? ctx.cond(v) : condFormat(null, p, v); const c = cf.value || lvlColor(level(v, p), p.text_color || color(i));
       const zone = (val, col) => (val == null || val < lo || val > hi) ? '' : `<path d="${arc(Math.PI + (val - lo) / (hi - lo) * Math.PI, 2 * Math.PI, 58)}" fill="none" stroke="${col}" stroke-width="4" opacity="0.6"/>`;
       return `<div style="text-align:center"><svg viewBox="0 0 140 84" style="width:150px;height:90px"><path d="${arc(Math.PI, 2 * Math.PI, 58)}" fill="none" stroke="var(--line)" stroke-width="10"/>${zone(p.warn, '#d97706')}${zone(p.action, '#dc2626')}${v == null ? '' : `<path d="${arc(Math.PI, Math.PI + Math.max(frac, 0.002) * Math.PI, 58)}" fill="none" stroke="${c}" stroke-width="10" stroke-linecap="round"/>`}<text x="70" y="66" text-anchor="middle" font-size="18" font-weight="600" fill="${c}">${v == null ? '—' : num(v, p.decimals)}</text><text x="70" y="80" text-anchor="middle" font-size="9" fill="var(--muted)">${esc(d.unit)}</text><text x="12" y="82" font-size="8" fill="var(--muted)">${lo}</text><text x="128" y="82" font-size="8" fill="var(--muted)" text-anchor="end">${hi}</text></svg><div class="muted" style="font-size:11px">${esc(dsLabel(d))}</div></div>`; }).join('') + '</div>';
   };
@@ -228,13 +264,90 @@
   const MIMIC_TYPES = new Set(['tank', 'pump', 'valve', 'pipe', 'instrument']);
   const isCanvas = (spec) => !!(spec.layout && spec.layout.type === 'canvas');
   const framed = (w) => MIMIC_TYPES.has(w.type) ? !!(w.params && w.params.frame) : !(w.params && w.params.frame === false);
+  // ---- appearance, conditional formatting, click actions, full screen (spec 002) -------------------------------
+  const ICON = (n, sz) => { const d = window.ctrl32Icons && window.ctrl32Icons[n]; return d ? `<svg class="dw-icon" viewBox="0 0 24 24" width="${sz || 16}" height="${sz || 16}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;vertical-align:-3px">${d}</svg>` : ''; };
+  function appearance(el, p) {
+    const st = el.style;
+    if (p.bg_color) st.background = p.bg_color;
+    if (p.text_color) st.color = p.text_color;
+    if (p.border_color) { st.borderStyle = 'solid'; st.borderColor = p.border_color; }
+    if (p.border_width != null) { st.borderStyle = p.border_width ? 'solid' : 'none'; st.borderWidth = p.border_width + 'px'; }
+    if (p.radius != null) st.borderRadius = p.radius + 'px';
+    if (p.padding != null) st.padding = p.padding + 'px';
+    if (p.shadow) st.boxShadow = '0 4px 14px rgba(0,0,0,.18)';
+    if (p.transparent) { st.background = 'transparent'; st.border = 'none'; st.boxShadow = 'none'; }
+    if (p.value_size) st.setProperty('--dw-value', p.value_size + 'px');
+    el.dataset.bg = st.background || '';
+    if (p.bg_color || p.text_color || (Array.isArray(p.ranges) && p.ranges.some((r) => r.target === 'background'))) el.classList.add('dw-tinted');
+  }
+  function decorate(card, w, opts, ctxOf) {
+    const p = w.params || {}; appearance(card, p); if (p.tooltip) card.title = p.tooltip;
+    const head = card.querySelector('.dash-head'), title = card.querySelector('.dash-title');
+    if (title) { if (p.title_size) title.style.fontSize = p.title_size + 'px'; if (p.title_icon) title.insertAdjacentHTML('afterbegin', ICON(p.title_icon, 16) + ' '); }
+    if (p.show_title === false) { if (title) title.hidden = true; if (head && !opts.header) head.hidden = true; }
+    if (opts.header) return; // editing: no full screen, no click actions
+    if (p.fullscreen !== false && framed(w)) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'btn small ghost dw-fs'; b.title = 'Full screen'; b.innerHTML = ICON('maximize', 14) || '⤢';
+      b.onclick = (e) => { e.stopPropagation(); fullView(w, ctxOf()); };
+      if (head && !head.hidden) head.appendChild(b); else { b.classList.add('floating'); card.appendChild(b); }
+    }
+    if (p.click) { card.classList.add('dw-click'); card.addEventListener('click', (e) => { if (e.target.closest('button,input,select,textarea,a,.dw-leg,.leaflet-container')) return; clickAction(w); }); }
+  }
+  function clickAction(w) {
+    const p = w.params || {}, tag = ((w.bindings || {}).datastreams || [])[0], dev = ((w.bindings || {}).devices || [])[0];
+    if (p.click === 'screen') { if (p.click_target && !PUBLIC) location.href = '/dashboards/' + encodeURIComponent(p.click_target); return; }
+    if (!tag || !window.ctrl32Scada || !window.ctrl32Scada.openTag) return;
+    window.ctrl32Scada.openTag(tag, { trendOnly: p.click === 'trend', name: p.title, device: dev, key: p.key, decimals: p.decimals });
+  }
+  async function fullView(w, ctx) {
+    const p = w.params || {}; const d = document.createElement('dialog'); d.className = 'dw-full';
+    d.innerHTML = `<div class="dash-head"><b class="dash-title">${ICON(p.title_icon, 16)} ${esc(p.title || labelOf(w.type))}</b><span class="grow"></span><button class="btn small ghost" type="button" data-close title="Close (Esc)">✕</button></div><div class="dash-body"><span class="muted">loading…</span></div>`;
+    appearance(d, p); if (!p.bg_color && !p.transparent) d.style.background = 'var(--bg)'; if (p.transparent) d.style.background = 'var(--bg)';
+    document.body.appendChild(d); d.addEventListener('close', () => d.remove()); d.querySelector('[data-close]').onclick = () => d.close(); d.showModal();
+    const body = d.querySelector('.dash-body'); const full = Object.assign({}, ctx, { w: 12, h: 8, px_h: Math.max(240, window.innerHeight - 110), cond: (v) => condFormat(d, p, v) });
+    try { await (W[w.type] || (async () => {}))(body, p, full); } catch (e) { body.innerHTML = `<span class="muted">${esc(e.message)}</span>`; }
+  }
+  const matches = (r, v) => { switch (r.op) { case '>': return v > r.v; case '>=': return v >= r.v; case '<': return v < r.v; case '<=': return v <= r.v; case '==': return v === r.v; case '!=': return v !== r.v; case 'between': return v >= Math.min(r.v, r.v2) && v <= Math.max(r.v, r.v2); } return false; };
+  // condFormat applies the first matching range: background → the card, value/icon → returned for the renderer.
+  function condFormat(card, p, v) {
+    const out = { value: null, icon: null, bg: null }; if (card) card.style.background = card.dataset.bg || '';
+    if (v == null || isNaN(v) || !Array.isArray(p.ranges)) return out;
+    const r = p.ranges.find((x) => matches(x, Number(v))); if (!r) return out;
+    out[r.target === 'background' ? 'bg' : r.target] = r.color;
+    if (r.target === 'background' && card) card.style.background = r.color;
+    return out;
+  }
+  // Viewer filters (spec 002): the author enables them per widget (params.filters); the viewer switches time range,
+  // aggregation, interval and series on the widget itself. Choices are remembered per widget in this browser.
+  const FILTER_OPTS = { range: ['', '1h', '6h', '24h', '7d', '30d', '90d'], agg: ['auto', 'none', 'avg', 'min', 'max', 'sum', 'count'], agg_interval: ['auto', '1m', '5m', '15m', '1h', '6h', '1d'] };
+  const FILTER_LBL = { range: 'Range', agg: 'Aggregation', agg_interval: 'Interval' };
+  const fKey = (w) => 'ctrl32.wf.' + location.pathname + '.' + (w.id || '');
+  function filterBar(card, w, redraw) {
+    const p = w.params || {}; const f = Array.isArray(p.filters) ? p.filters : []; if (!f.length) return;
+    let ovr = {}; try { ovr = JSON.parse(localStorage.getItem(fKey(w)) || '{}') || {}; } catch (e) { ovr = {}; }
+    card._ovr = ovr; const bar = document.createElement('div'); bar.className = 'dw-filters';
+    const save = () => { try { localStorage.setItem(fKey(w), JSON.stringify(card._ovr)); } catch (e) { /* private mode */ } redraw(); };
+    const draw = () => {
+      const sel = (k) => `<label>${FILTER_LBL[k]} <select data-f="${k}">${FILTER_OPTS[k].map((o) => `<option value="${o}" ${(ovr[k] ?? p[k] ?? '') === o ? 'selected' : ''}>${o === '' ? '(dashboard)' : esc(o)}</option>`).join('')}</select></label>`;
+      let h = (f.includes('range') ? sel('range') : '') + (f.includes('agg') ? sel('agg') : '') + (f.includes('interval') ? sel('agg_interval') : '');
+      if (f.includes('series')) { const list = (w.bindings || {}).datastreams || []; const cfg = ovr.series || p.series || []; h += list.map((id, i) => { const c = cfg[i] || {}; const on = !c.hidden; const d = dsCache ? dsInfo(dsCache, id) : null; return `<button type="button" class="dw-chip${on ? ' on' : ''}" data-si="${i}" aria-pressed="${on}" title="${esc(d ? dsLabel(d) : '')}"><i style="background:${esc(c.color || color(i))}"></i><span class="notranslate">${esc(c.label || (d ? d.key : '#' + (i + 1)))}</span></button>`; }).join(''); }
+      if (Object.keys(ovr).length) h += '<button type="button" class="dw-chip" data-reset title="Back to the widget settings">↺</button>';
+      bar.innerHTML = h;
+      for (const s of bar.querySelectorAll('[data-f]')) s.onchange = () => { ovr[s.dataset.f] = s.value; draw(); save(); };
+      for (const b of bar.querySelectorAll('[data-si]')) b.onclick = (e) => { e.stopPropagation(); const n = ((w.bindings || {}).datastreams || []).length; const base = ovr.series || p.series || []; ovr.series = Array.from({ length: n }, (_, i) => Object.assign({}, base[i] || {})); const s = ovr.series[+b.dataset.si]; if (s.hidden) delete s.hidden; else s.hidden = true; draw(); save(); };
+      const r = bar.querySelector('[data-reset]'); if (r) r.onclick = (e) => { e.stopPropagation(); for (const k of Object.keys(ovr)) delete ovr[k]; draw(); save(); };
+    };
+    draw(); card.querySelector('.dash-body').before(bar); if (f.includes('series') && !dsCache) datastreams().then(draw).catch(() => {});
+  }
+  const ALARM_TYPES = new Set(['alarms', 'alarm_count']);
+  function register(type, fn, o) { o = o || {}; W[type] = fn; if (o.label) LABELS[type] = o.label; if (o.needsDs) NEEDS_DS.add(type); if (o.alarms) ALARM_TYPES.add(type); }
   // Live updates (SSE): one stream per rendered dashboard; an event re-renders only the widgets bound to it, debounced.
   let ES = null, liveTimer = null;
   function connectLive(container, spec, refreshOne, layer) {
     if (ES) { ES.close(); ES = null; }
     const ds = new Set(), devs = new Set(); let allDevs = false, alarms = false;
     const layerTags = layer ? layer.tags() : new Set(); layerTags.forEach((id) => ds.add(id)); let layerDue = false;
-    for (const w of spec.widgets || []) { const b = w.bindings || {}; (b.datastreams || []).forEach((id) => ds.add(id)); if (Array.isArray(b.devices)) { if (!b.devices.length && (w.type === 'map' || w.type === 'devices')) allDevs = true; b.devices.forEach((id) => devs.add(id)); } if (w.type === 'alarms') alarms = true; }
+    for (const w of spec.widgets || []) { const b = w.bindings || {}; (b.datastreams || []).forEach((id) => ds.add(id)); if (Array.isArray(b.devices)) { if (!b.devices.length && (w.type === 'map' || w.type === 'devices')) allDevs = true; b.devices.forEach((id) => devs.add(id)); } if (ALARM_TYPES.has(w.type)) alarms = true; }
     if (!ds.size && !devs.size && !allDevs && !alarms) return;
     const qs = 'datastreams=' + [...ds].join(',') + '&devices=' + (allDevs ? 'all' : [...devs].join(',')) + '&alarms=' + (alarms ? 1 : 0);
     const pending = new Set();
@@ -245,7 +358,7 @@
     es.onopen = () => state(true); es.onerror = () => state(false);
     es.addEventListener('observation', (e) => { const d = JSON.parse(e.data); if (layerTags.has(d.datastream_id)) layerDue = true; mark((w) => ((w.bindings || {}).datastreams || []).includes(d.datastream_id)); });
     es.addEventListener('device', (e) => { const d = JSON.parse(e.data); mark((w) => (w.type === 'map' || w.type === 'devices') && (!((w.bindings || {}).devices || []).length || w.bindings.devices.includes(d.device_id))); });
-    es.addEventListener('alarm', () => mark((w) => w.type === 'alarms'));
+    es.addEventListener('alarm', () => mark((w) => ALARM_TYPES.has(w.type)));
     es.addEventListener('command', (e) => { const d = JSON.parse(e.data); const out = PENDING.get(d.command_id); if (!out) return; const det = d.detail || {}; const res = det.result && typeof det.result === 'object' ? det.result : {}; showCmd(out, d.status, { readback: res.readback, error: det.error }); if (d.status !== 'queued' && d.status !== 'sent' && d.status !== 'pending') PENDING.delete(d.command_id); });
     window.addEventListener('pagehide', () => es.close(), { once: true });
   }
@@ -268,10 +381,13 @@
       container.innerHTML = `<div class="dash-grid" style="--row-h:${rowH}px">${(spec.widgets || []).map((w, i) => `<div class="card dash-widget" data-i="${i}" data-id="${esc(w.id || '')}"><div class="dash-head"><b class="dash-title">${esc((w.params && w.params.title) || labelOf(w.type))}</b><span class="grow"></span>${opts.header ? opts.header(w, i) : ''}</div><div class="dash-body"><span class="muted">loading…</span></div></div>`).join('')}</div>`;
       for (const card of container.querySelectorAll('.dash-widget')) place(card, spec.widgets[+card.dataset.i].geometry || { x: 0, y: 0, w: 6, h: 3 });
     }
+    const ctxOf = (w, card) => { const g = w.geometry || { w: 6, h: 3 }; const c = canvas ? { range, bindings: w.bindings || {}, w: Math.max(1, Math.round(g.w / 130)), h: Math.max(1, Math.round(g.h / 96)), px_h: g.h } : { range, bindings: w.bindings || {}, w: g.w, h: g.h, px_h: g.h * rowH }; c.cond = (v) => condFormat(card, w.params || {}, v); c.edit = !!opts.header; return c; };
+    for (const card of container.querySelectorAll('.dash-widget')) { const w = spec.widgets[+card.dataset.i]; decorate(card, w, opts, () => ctxOf(w, null)); }
+    for (const card of container.querySelectorAll('.dash-widget')) filterBar(card, spec.widgets[+card.dataset.i], () => refreshOne(card));
     const refreshOne = async (card) => {
-      const w = spec.widgets[+card.dataset.i]; const body = card.querySelector('.dash-body'); const g = w.geometry || { w: 6, h: 3 };
+      const w0 = spec.widgets[+card.dataset.i]; const w = card._ovr ? Object.assign({}, w0, { params: Object.assign({}, w0.params, card._ovr) }) : w0; const body = card.querySelector('.dash-body');
       if (NEEDS_DS.has(w.type) && !((w.bindings || {}).datastreams || []).length) { body.innerHTML = '<span class="muted">Select datastreams in the widget properties.</span>'; return; }
-      const ctx = canvas ? { range, bindings: w.bindings || {}, w: Math.max(1, Math.round(g.w / 130)), h: Math.max(1, Math.round(g.h / 96)), px_h: g.h } : { range, bindings: w.bindings || {}, w: g.w, h: g.h, px_h: g.h * rowH };
+      const ctx = ctxOf(w, card);
       try { await (W[w.type] || (async (el) => { el.innerHTML = '<span class="muted">unknown widget</span>'; }))(body, w.params || {}, ctx); }
       catch (e) { body.innerHTML = `<span class="muted">${esc(e.message)}</span>`; }
     };
@@ -281,5 +397,7 @@
     if (opts.live !== false && window.EventSource) connectLive(container, spec, refreshOne, layer);
     return refresh;
   }
-  window.ctrl32Widgets = { isPublic: () => !!PUBLIC, apiPath: P, render, renderChart, setPublic, series, datastreams, latest, devices, loadLeaflet, makeMap, mapConfig, RANGE_MS, labelOf, isCanvas, fitMimic, placeCanvas, MIMIC_TYPES, types: Object.keys(W) };
+  window.ctrl32Widgets = { isPublic: () => !!PUBLIC, apiPath: P, render, renderChart, setPublic, series, datastreams, latest, devices, loadLeaflet, makeMap, mapConfig, RANGE_MS, labelOf, isCanvas, fitMimic, placeCanvas, MIMIC_TYPES, register, condFormat, icon: ICON, get types() { return Object.keys(W); },
+    // helpers for renderers registered from other files (widgets-more.js)
+    util: { esc, api, fmt, num, color, COLORS, dsInfo, dsLabel, ids, level, lvlColor, niceTicks, timeTicks, sparkline, seriesWin, winOf, statsOf, hourly, ctlHead, ctlSend, ctlCurrent, reasonInput, canCmd, P } };
 })();

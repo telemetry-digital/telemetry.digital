@@ -6,12 +6,13 @@ Developer: telemetry.digital (Palo Krnáč). Revenue comes from implementation s
 
 ## Status
 
-Version **0.37.0** (25 Sep 2026; production runs 0.36.3). Phases 1–2 of the roadmap (`docs/02-navrh-systemu.md`, chapter 13) are functionally covered; the `Zdroj` column of the URS names the version and the test that fulfil each requirement. The production instance runs at `https://telemetry.digital/` (installed with the public installer, updated from the Server page). Every release has an entry in `JOURNAL.md`.
+Version **0.38.0** (25 Sep 2026; production runs 0.36.3). Phases 1–2 of the roadmap (`docs/02-navrh-systemu.md`, chapter 13) are functionally covered; the `Zdroj` column of the URS names the version and the test that fulfil each requirement. The production instance runs at `https://telemetry.digital/` (installed with the public installer, updated from the Server page). Every release has an entry in `JOURNAL.md`.
 
 ## What it does
 
 - **Collection:** MQTT broker in the process (TLS, WebSocket, per-device ACL, ThingsBoard-compatible topics and payloads), a device HTTP API (telemetry, status, attributes, commands by long polling), LoRaWAN through ChirpStack, OPC UA client with write, Modbus TCP and RTU-over-TCP with versioned register profiles, device provisioning with tokens, device positions.
 - **SCADA:** process pictures drawn in a WinCC-style editor (68 industrial symbols, pipes with flow, dynamics, faceplates, commands with reason, object library with SVG import), dashboards of widgets, or both on one screen.
+- **Dashboard widgets:** 47 widget types (values, gauges, charts, tables, controls, clock, Markdown, QR…), each with ThingsBoard-level settings — appearance, per-series options, two axes, time window and aggregation, legend values, conditional formatting, click actions, full screen, and filters the viewer can switch on the widget.
 - **Records:** append-only observations with two timestamps, gaps and quality, hash-chained audit trail with `audit verify`, versioned objects (assets, datastreams, screens, rules, profiles) with a reason on every change, CSV exports of audit and access logs, cursor pagination.
 - **Evaluation:** alarm rules with escalation policies and delivery records (e-mail, HMAC-signed webhooks, HTTP SMS and voice gateways, Web Push), automation rules "condition → action" with an expression language, commands to devices with four-eyes approval, change requests for limits and assignments, an incident log with impact, cause and CAPA (opened automatically for undelivered alarms and a broken audit chain).
 - **Presentation:** dashboards as a versioned screen format (20 widget types, live values over SSE, public read-only links with QR), ISA-101 process mimics on a free canvas, maps with the organization's tiles or a self-hosted PMTiles archive, PDF reports and exports rendered with Typst from block-designed templates.

@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-25
 
-**Status**: Draft
+**Status**: Implemented (0.38.0)
 
 **Input**: User description: "…plus in dashboards: add more widgets and give them many settings, at least as many as
 ThingsBoard has."
@@ -17,6 +17,9 @@ ThingsBoard has."
 
 - Q: Refuse unknown widget settings (FR-006)? → A: No — refuse invalid values, drop unknown names with a warning
   in the response; legacy dashboards stay saveable (found while planning).
+- Q: Filters on charts? → A: The user asked (25. 9.): "charts have no filters; the filters of widgets should be
+  switchable on and off". The author enables per widget which filters the viewer gets (time range, aggregation,
+  interval, series); the viewer switches them on the widget itself; the choice is remembered in the browser (FR-011).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -134,6 +137,8 @@ click action (open another screen, open the datastream trend, open a faceplate).
 - **FR-009**: Control widgets MUST send commands with reason, confirmation, permission and audit like the existing
   setpoint/switch/button widgets.
 - **FR-010**: The showcase starter MUST contain every widget type.
+- **FR-011**: Time-based widgets MUST offer viewer filters (time range, aggregation, interval, series on/off) that the
+  author enables per widget; the viewer's choice applies only to their browser and can be reset.
 
 ### Key Entities
 

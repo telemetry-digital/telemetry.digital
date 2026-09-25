@@ -110,7 +110,9 @@
 </main>
 <script src="/app.js"></script>
 <script src="/scada.js"></script>
+<script src="/vendor/tabler-icons.js"></script>
 <script src="/widgets.js"></script>
+<script src="/widgets-more.js"></script>
 <script src="/scada-editor.js"></script>
 <script>
 const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api, WG = ctrl32Widgets;
@@ -197,31 +199,84 @@ async function drawEdit(){
 }
 function select(i){ SEL = i; document.querySelectorAll('#eGrid .dash-widget').forEach((c, k) => c.classList.toggle('selected', k === i)); renderProps(); }
 function pickHTML(name, options, chosen, label){ return `<div class="pick"><label>${esc(label)} <input data-filter="${name}" placeholder="filter…"></label><select multiple data-pick="${name}">${options.map(o => `<option value="${o.id}" ${chosen.includes(o.id) ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select><span class="muted" style="font-size:11px">${chosen.length} selected · Ctrl/Cmd+click for several</span></div>`; }
+// Property panel (spec 002): settings grouped into tabs Data, Appearance, Series, Time, Actions; colour, icon,
+// date-time, multi-choice, per-series and conditional-formatting editors. Every change applies immediately.
+let PTAB = 'data';
+const TABS = [['data', 'Data'], ['appearance', 'Appearance'], ['series', 'Series'], ['time', 'Time'], ['actions', 'Actions']];
+const iconOpts = (v) => ['', ...Object.keys(window.ctrl32Icons || {})].map(n => `<option value="${esc(n)}" ${n === v ? 'selected' : ''}>${n ? esc(n) : '(none)'}</option>`).join('');
+const toLocalDT = (s) => { if(!s) return ''; const d = new Date(s); if(isNaN(d)) return ''; const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 16); };
+const colorField = (attr, v) => `<span class="row" style="gap:4px;align-items:center;flex-wrap:nowrap"><input type="color" data-cpick value="${/^#[0-9a-f]{6}$/i.test(v || '') ? v : '#000000'}" style="width:34px;height:28px;padding:0;border:none;background:none"><input ${attr} value="${esc(v || '')}" placeholder="#rrggbb" maxlength="9" style="width:92px;font-family:var(--mono)"><button class="btn small ghost" type="button" data-cclear title="Clear">✕</button></span>`;
+function paramHTML(p, v){
+  const lab = esc(p.label);
+  switch(p.kind){
+  case 'bool': return `<label class="inline"><input type="checkbox" data-p="${p.name}" ${v ? 'checked' : ''}><span>${lab}</span></label>`;
+  case 'select': return `<label>${lab} <select data-p="${p.name}">${(p.options || []).map(o => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${o === '' ? '(default)' : esc(o)}</option>`).join('')}</select></label>`;
+  case 'number': return `<label>${lab} <input type="number" step="any" data-p="${p.name}" value="${esc(v === null ? '' : String(v))}"${p.min != null ? ` min="${p.min}"` : ''}${p.max != null ? ` max="${p.max}"` : ''}></label>`;
+  case 'multiline': return `<label>${lab} <textarea rows="4" data-p="${p.name}">${esc(v)}</textarea></label>`;
+  case 'list': return `<label>${lab} <input data-p="${p.name}" value="${esc(Array.isArray(v) ? v.join(', ') : v)}"></label>`;
+  case 'color': return `<label>${lab} ${colorField(`data-p="${p.name}"`, v)}</label>`;
+  case 'icon': return `<label>${lab} <span class="row" style="gap:6px;align-items:center;flex-wrap:nowrap"><select data-p="${p.name}" style="flex:1">${iconOpts(v)}</select><span class="icon-prev">${v && window.ctrl32Widgets ? ctrl32Widgets.icon(v, 20) : ''}</span></span></label>`;
+  case 'datetime': return `<label>${lab} <input type="datetime-local" data-p="${p.name}" value="${toLocalDT(v)}"></label>`;
+  case 'multi': return `<fieldset style="border:none;padding:0;margin:0"><span style="font-size:13px">${lab}</span><div class="row" style="gap:10px;flex-wrap:wrap">${(p.options || []).map(o => `<label class="inline"><input type="checkbox" data-pm="${p.name}" value="${esc(o)}" ${(Array.isArray(v) ? v : []).includes(o) ? 'checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div></fieldset>`;
+  case 'series': return seriesHTML(p, Array.isArray(v) ? v : []);
+  case 'ranges': return rangesHTML(p, Array.isArray(v) ? v : []);
+  default: return `<label>${lab} <input data-p="${p.name}" value="${esc(v)}"></label>`;
+  }
+}
+function seriesHTML(p, list){
+  const w = SPEC.widgets[SEL]; const bound = (w.bindings.datastreams || []);
+  if(!bound.length) return '<p class="muted" style="font-size:12px">Bind datastreams on the Data tab to set per-series options.</p>';
+  const opt = (arr, v) => arr.map(o => `<option value="${o}" ${o === (v || '') ? 'selected' : ''}>${o || '(default)'}</option>`).join('');
+  return `<div style="font-size:13px">${esc(p.label)}</div>` + bound.map((id, i) => { const s = list[i] || {}; const ds = DS.find(x => x.id === id) || {key: id.slice(0, 8), asset: ''};
+    return `<fieldset class="ser" data-ser="${i}" style="border:1px solid var(--line);border-radius:var(--radius);padding:6px 8px;margin:4px 0"><legend class="notranslate" style="font-size:12px">${esc(ds.asset + ' / ' + ds.key)}</legend><div class="row" style="gap:6px;flex-wrap:wrap">
+      <label style="flex:1;min-width:120px">Label <input data-s="label" maxlength="64" value="${esc(s.label || '')}"></label><label>Colour ${colorField('data-s="color"', s.color)}</label>
+      <label style="width:70px">Unit <input data-s="unit" maxlength="16" value="${esc(s.unit || '')}"></label><label style="width:70px">Decimals <input data-s="decimals" type="number" min="0" max="6" value="${s.decimals ?? ''}"></label>
+      <label>Style <select data-s="style">${opt(['', 'line', 'area', 'step', 'bar', 'scatter'], s.style)}</select></label><label>Axis <select data-s="axis">${opt(['', 'left', 'right'], s.axis)}</select></label>
+      ${['points', 'fill', 'hidden'].map(k => `<label class="inline"><input type="checkbox" data-s="${k}" ${s[k] ? 'checked' : ''}><span>${{points: 'Points', fill: 'Fill', hidden: 'Hidden'}[k]}</span></label>`).join('')}</div></fieldset>`; }).join('');
+}
+function rangesHTML(p, list){
+  const ops = ['>', '>=', '<', '<=', '==', '!=', 'between'], tg = [['value', 'Value colour'], ['background', 'Background'], ['icon', 'Icon colour']];
+  return `<div style="font-size:13px;margin-top:6px">${esc(p.label)} <span class="muted" style="font-size:11px">(first match wins, up to 8)</span></div><div data-ranges="${p.name}">` + list.map((r, i) => `<div class="row rng" data-rng="${i}" style="gap:4px;align-items:center;flex-wrap:wrap;margin:3px 0"><select data-r="op">${ops.map(o => `<option ${o === r.op ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select><input data-r="v" type="number" step="any" value="${r.v ?? ''}" style="width:70px"><input data-r="v2" type="number" step="any" value="${r.v2 ?? ''}" style="width:70px" ${r.op === 'between' ? '' : 'hidden'} placeholder="to"><select data-r="target">${tg.map(([k, l]) => `<option value="${k}" ${k === (r.target || 'value') ? 'selected' : ''}>${l}</option>`).join('')}</select>${colorField('data-r="color"', r.color)}<button class="btn small ghost" type="button" data-rdel="${i}" title="Remove">✕</button></div>`).join('') + `</div>${list.length < 8 ? `<button class="btn small" type="button" data-radd="${p.name}">Add range</button>` : ''}`;
+}
 function renderProps(target){
   const box = target || $('#eProps'); if(SEL < 0 || !SPEC.widgets[SEL]){ box.innerHTML = '<span class="muted">Select a widget, or add one.</span>'; return; }
   const w = SPEC.widgets[SEL], d = defOf(w.type); w.params = w.params || {}; w.bindings = w.bindings || {};
-  let html = `<div class="row" style="align-items:center"><b>${esc(d.label)}</b><span class="grow"></span><span class="muted" style="font-size:12px">${w.geometry.w}×${w.geometry.h} at ${w.geometry.x},${w.geometry.y}</span></div><div class="muted" style="font-size:12px;margin-bottom:8px">${esc(d.help)}</div>`;
-  if(canvas()) html += `<div class="row">${['x', 'y', 'w', 'h'].map(k => `<label style="max-width:70px">${k} <input type="number" data-g="${k}" value="${w.geometry[k]}" min="0" step="10"></label>`).join('')}</div>`;
-  if((d.binds || []).includes('datastreams')){ html += pickHTML('datastreams', DS.map(x => ({id: x.id, label: `${x.asset} / ${x.key} [${x.unit}]`})), w.bindings.datastreams || [], 'Datastreams'); if(!(w.bindings.datastreams || []).length) html += '<div style="color:#d97706;font-size:12px">No datastream selected yet — pick one above; the widget stays empty until then.</div>'; }
-  if((d.binds || []).includes('devices')) html += pickHTML('devices', DEVS.map(x => ({id: x.id, label: `${x.name || x.external_id} (${x.external_id})`})), w.bindings.devices || [], 'Devices (empty = all)');
-  for(const p of d.params || []){ const v = w.params[p.name] ?? p.default ?? '';
-    if(p.kind === 'bool') html += `<label class="inline"><input type="checkbox" data-p="${p.name}" ${v ? 'checked' : ''}><span>${esc(p.label)}</span></label>`;
-    else if(p.kind === 'select') html += `<label>${esc(p.label)} <select data-p="${p.name}">${(p.options || []).map(o => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${o === '' ? '(dashboard)' : esc(o)}</option>`).join('')}</select></label>`;
-    else if(p.kind === 'number') html += `<label>${esc(p.label)} <input type="number" step="any" data-p="${p.name}" value="${esc(v === null ? '' : String(v))}"></label>`;
-    else if(p.kind === 'multiline') html += `<label>${esc(p.label)} <textarea rows="3" data-p="${p.name}">${esc(v)}</textarea></label>`;
-    else if(p.kind === 'list') html += `<label>${esc(p.label)} <input data-p="${p.name}" value="${esc(Array.isArray(v) ? v.join(', ') : v)}"></label>`;
-    else html += `<label>${esc(p.label)} <input data-p="${p.name}" value="${esc(v)}"></label>`; }
+  const groups = new Set(['data', ...(d.params || []).map(p => p.group || 'data')]); if(!groups.has(PTAB)) PTAB = 'data';
+  let html = `<div class="row" style="align-items:center"><b>${esc(d.label)}</b><span class="grow"></span><span class="muted" style="font-size:12px">${w.geometry.w}×${w.geometry.h} at ${w.geometry.x},${w.geometry.y}</span></div><div class="muted" style="font-size:12px;margin-bottom:6px">${esc(d.help)}</div>`;
+  html += `<div class="tabs ptabs" role="tablist" style="margin-bottom:8px">${TABS.filter(([k]) => groups.has(k)).map(([k, l]) => `<button type="button" role="tab" class="tab${k === PTAB ? ' active' : ''}" data-tab="${k}" aria-selected="${k === PTAB}">${l}</button>`).join('')}</div>`;
+  const sec = {data: '', appearance: '', series: '', time: '', actions: ''};
+  if(canvas()) sec.data += `<div class="row">${['x', 'y', 'w', 'h'].map(k => `<label style="max-width:70px">${k} <input type="number" data-g="${k}" value="${w.geometry[k]}" min="0" step="10"></label>`).join('')}</div>`;
+  if((d.binds || []).includes('datastreams')){ sec.data += pickHTML('datastreams', DS.map(x => ({id: x.id, label: `${x.asset} / ${x.key} [${x.unit}]`})), w.bindings.datastreams || [], 'Datastreams'); if(!(w.bindings.datastreams || []).length) sec.data += '<div style="color:#d97706;font-size:12px">No datastream selected yet — pick one above; the widget stays empty until then.</div>'; }
+  if((d.binds || []).includes('devices')) sec.data += pickHTML('devices', DEVS.map(x => ({id: x.id, label: `${x.name || x.external_id} (${x.external_id})`})), w.bindings.devices || [], 'Devices (empty = all)');
+  for(const p of d.params || []){ const v = w.params[p.name] ?? p.default ?? ''; sec[p.group || 'data'] = (sec[p.group || 'data'] || '') + paramHTML(p, v); }
+  html += Object.entries(sec).map(([k, s]) => `<div class="props" data-sec="${k}" ${k === PTAB ? '' : 'hidden'} style="display:flex;flex-direction:column;gap:8px">${s}</div>`).join('');
   html += `<div class="row" style="margin-top:8px"><button class="btn small" type="button" id="pApply">Apply to widget</button><button class="btn small danger" type="button" id="pRemove">Remove widget</button></div>`;
   box.innerHTML = html;
+  for(const t of box.querySelectorAll('[data-tab]')) t.onclick = () => { PTAB = t.dataset.tab; for(const x of box.querySelectorAll('[data-tab]')){ x.classList.toggle('active', x === t); x.setAttribute('aria-selected', x === t); } for(const s of box.querySelectorAll('[data-sec]')) s.hidden = s.dataset.sec !== PTAB; };
   for(const inp of box.querySelectorAll('[data-filter]')) inp.oninput = () => { const q = inp.value.toLowerCase(); for(const o of box.querySelector(`[data-pick=${inp.dataset.filter}]`).options) o.hidden = q && !o.textContent.toLowerCase().includes(q); };
+  for(const c of box.querySelectorAll('[data-cpick]')) c.oninput = () => { const t = c.nextElementSibling; t.value = c.value; };
+  for(const c of box.querySelectorAll('[data-cpick]')) c.onchange = () => { c.nextElementSibling.dispatchEvent(new Event('change', {bubbles: true})); };
+  for(const b of box.querySelectorAll('[data-cclear]')) b.onclick = () => { const t = b.previousElementSibling; t.value = ''; t.dispatchEvent(new Event('change', {bubbles: true})); };
+  const numOrNull = (x) => x === '' ? null : parseFloat(x);
   const applyProps = () => { for(const sel of box.querySelectorAll('[data-pick]')) w.bindings[sel.dataset.pick] = [...sel.selectedOptions].map(o => o.value);
     for(const el of box.querySelectorAll('[data-g]')){ const v = parseInt(el.value, 10); if(!isNaN(v)) w.geometry[el.dataset.g] = Math.max(el.dataset.g === 'w' || el.dataset.g === 'h' ? 20 : 0, v); }
-    for(const el of box.querySelectorAll('[data-p]')){ const p = (d.params || []).find(x => x.name === el.dataset.p); if(!p) continue; if(p.kind === 'bool') w.params[p.name] = el.checked; else if(p.kind === 'number') w.params[p.name] = el.value === '' ? null : parseFloat(el.value); else if(p.kind === 'list') w.params[p.name] = el.value.split(',').map(s => s.trim()).filter(Boolean); else w.params[p.name] = el.value; }
+    for(const el of box.querySelectorAll('[data-p]')){ const p = (d.params || []).find(x => x.name === el.dataset.p); if(!p) continue;
+      if(p.kind === 'bool') w.params[p.name] = el.checked; else if(p.kind === 'number') w.params[p.name] = numOrNull(el.value); else if(p.kind === 'list') w.params[p.name] = el.value.split(',').map(s => s.trim()).filter(Boolean);
+      else if(p.kind === 'datetime') w.params[p.name] = el.value ? new Date(el.value).toISOString().replace(/\.\d{3}Z$/, 'Z') : ''; else w.params[p.name] = el.value.trim(); }
+    for(const p of (d.params || []).filter(x => x.kind === 'multi')) w.params[p.name] = [...box.querySelectorAll(`[data-pm="${p.name}"]:checked`)].map(x => x.value);
+    const sp = (d.params || []).find(x => x.kind === 'series'); if(sp && box.querySelector('[data-ser]')) w.params[sp.name] = [...box.querySelectorAll('[data-ser]')].map(f => { const o = {}; for(const el of f.querySelectorAll('[data-s]')){ const k = el.dataset.s; if(el.type === 'checkbox'){ if(el.checked) o[k] = true; } else if(k === 'decimals'){ if(el.value !== '') o[k] = parseFloat(el.value); } else if(el.value.trim()) o[k] = el.value.trim(); } return o; });
+    for(const rp of (d.params || []).filter(x => x.kind === 'ranges')){ const host = box.querySelector(`[data-ranges="${rp.name}"]`); if(!host) continue; w.params[rp.name] = [...host.querySelectorAll('[data-rng]')].map(r => { const g = (k) => r.querySelector(`[data-r="${k}"]`).value; const o = {op: g('op'), v: numOrNull(g('v')), target: g('target'), color: g('color').trim()}; if(o.op === 'between') o.v2 = numOrNull(g('v2')); return o; }); }
     dirty(); if(EDITOR){ EDITOR.commit(); redraw(); } else drawEdit(); };
-  box.querySelector('#pApply').onclick = applyProps; box.onchange = e => { if(e.target.matches('[data-pick],[data-p],[data-g]')) applyProps(); };
+  const reopen = () => { applyProps(); renderProps(target); };
+  for(const b of box.querySelectorAll('[data-radd]')) b.onclick = () => { applyProps(); const k = b.dataset.radd; w.params[k] = (w.params[k] || []).concat([{op: '>', v: 0, target: 'value', color: '#dc2626'}]); dirty(); renderProps(target); if(EDITOR){ EDITOR.commit(); redraw(); } else drawEdit(); };
+  for(const b of box.querySelectorAll('[data-rdel]')) b.onclick = () => { b.closest('[data-rng]').remove(); reopen(); };
+  box.querySelector('#pApply').onclick = applyProps;
+  box.onchange = e => { if(e.target.matches('[data-p][data-p]') && e.target.tagName === 'SELECT' && e.target.closest('label') && e.target.closest('label').querySelector('.icon-prev')) e.target.closest('label').querySelector('.icon-prev').innerHTML = e.target.value ? ctrl32Widgets.icon(e.target.value, 20) : '';
+    if(e.target.matches('[data-r="op"]')){ const v2 = e.target.closest('[data-rng]').querySelector('[data-r="v2"]'); v2.hidden = e.target.value !== 'between'; }
+    if(e.target.matches('[data-pick],[data-p],[data-g],[data-pm],[data-s],[data-r]')){ if(e.target.matches('[data-pick]')) reopen(); else applyProps(); } };
   box.querySelector('#pRemove').onclick = () => { SPEC.widgets.splice(SEL, 1); SEL = -1; dirty(); if(EDITOR){ EDITOR.commit(); EDITOR.select([]); redraw(); } else { drawEdit(); renderProps(); } };
 }
-function addWidget(type){ const d = defOf(type); const params = {}; for(const p of d.params || []) if(p.default !== undefined) params[p.name] = p.default; params.title = d.label;
+function addWidget(type){ const d = defOf(type); const params = {}; for(const p of d.params || []) if(p.default !== undefined && (!p.group || p.group === 'data')) params[p.name] = p.default; params.title = d.label;
   const maxY = SPEC.widgets.reduce((m, w) => Math.max(m, w.geometry.y + w.geometry.h), 0);
   const n = SPEC.widgets.length; const geometry = canvas() ? {x: 40 + (n % 6) * 60, y: 40 + (n % 6) * 40, w: d.default_size[0] * 100, h: d.default_size[1] * 100} : {x: 0, y: maxY, w: d.default_size[0], h: d.default_size[1]};
   SPEC.widgets.push({id: uid(), type, geometry, bindings: Object.fromEntries((d.binds || []).map(b => [b, []])), params});
@@ -252,7 +307,7 @@ async function loadEdit(){
   $('#setForm').onsubmit = e => { e.preventDefault(); const f = e.target; DASH.name = f.name.value; SPEC.range = f.range.value; SPEC.refresh_s = parseInt(f.refresh_s.value, 10) || 30; if(canvas()){ SPEC.layout.width = parseInt(f.width.value, 10) || 1600; SPEC.layout.height = parseInt(f.height.value, 10) || 900; } SPEC.layout.row_height = parseInt(f.row_height.value, 10) || 96; DASH.is_default = f.is_default.checked; $('#eTitle').textContent = 'Edit: ' + DASH.name; $('#setDlg').close(); dirty(); if(EDITOR) EDITOR.commit(); redraw(); };
   $('#eSave').onclick = () => { $('#saveErr').textContent=''; $('#saveForm').reset(); $('#saveDlg').showModal(); };
   $('#saveForm').onsubmit = async e => { e.preventDefault(); $('#saveErr').textContent='';
-    try{ await api('PUT', `/api/v1/dashboards/${encodeURIComponent(SLUG)}`, {name: DASH.name, spec: SPEC, is_default: DASH.is_default, reason: e.target.reason.value}); ctrl32.toast('dashboard saved','ok'); DIRTY = false; location.href = `/dashboards/${SLUG}`; }catch(x){ $('#saveErr').textContent = x.message; if(EDITOR) EDITOR.showError(x.message); } };
+    try{ const res = await api('PUT', `/api/v1/dashboards/${encodeURIComponent(SLUG)}`, {name: DASH.name, spec: SPEC, is_default: DASH.is_default, reason: e.target.reason.value}); DIRTY = false; const warn = (res && res.warnings) || []; if(warn.length){ ctrl32.toast('dashboard saved · ' + warn.join('; '), 'warn'); $('#saveDlg').close(); setTimeout(() => { location.href = `/dashboards/${SLUG}`; }, 4000); return; } ctrl32.toast('dashboard saved','ok'); location.href = `/dashboards/${SLUG}`; }catch(x){ $('#saveErr').textContent = x.message; if(EDITOR) EDITOR.showError(x.message); } };
   const del = document.createElement('button'); del.className = 'btn danger'; del.type = 'button'; del.textContent = 'Retire'; $('#eCancel').before(del);
   del.onclick = () => { $('#delErr').textContent=''; $('#delForm').reset(); $('#delDlg').showModal(); };
   $('#delForm').onsubmit = async e => { e.preventDefault(); try{ await api('DELETE', `/api/v1/dashboards/${encodeURIComponent(SLUG)}?reason=${encodeURIComponent(e.target.reason.value)}`); location.href = '/dashboards'; }catch(x){ $('#delErr').textContent = x.message; } };

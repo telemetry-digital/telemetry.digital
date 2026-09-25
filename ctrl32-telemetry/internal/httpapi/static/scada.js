@@ -356,5 +356,11 @@
     if (tag) drawTrend('6h');
   }
 
-  window.ctrl32Scada = { mount, renderEl, bbox, symbolSVG, symbols: S, SYMBOL_IDS, CATS, SCHEMES, STATES, tagsOf, evalDyn, fmtVal, clickable, DEF };
+  // openTag: faceplate or trend of one datastream outside a picture (widget click actions, spec 002).
+  async function openTag(tag, o) {
+    o = o || {}; const WG = window.ctrl32Widgets; const [all, lv] = await Promise.all([WG.datastreams(), WG.latest([tag]).catch(() => ({}))]);
+    const d = all.find((x) => x.id === tag); faceplate({ tag, name: o.name, device: o.device, key: o.key, decimals: o.decimals, type: 'widget' }, { ds: d ? { [tag]: d } : {}, values: lv }, !!o.trendOnly);
+  }
+
+  window.ctrl32Scada = { openTag, mount, renderEl, bbox, symbolSVG, symbols: S, SYMBOL_IDS, CATS, SCHEMES, STATES, tagsOf, evalDyn, fmtVal, clickable, DEF };
 })();

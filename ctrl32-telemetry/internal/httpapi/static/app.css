@@ -329,3 +329,37 @@ dialog.sc-dlg { width: min(720px, calc(100vw - 32px)); }
 .se-lb { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 0; opacity: .35; } .se-lb.on { opacity: 1; color: var(--primary); } .se-lb svg { width: 14px; height: 14px; }
 .se-status { display: flex; gap: 14px; font-size: 12px; padding: 2px 6px; font-variant-numeric: tabular-nums; }
 @media (max-width: 1100px) { .se-main { grid-template-columns: 1fr; } .se-lib, .se-side { position: static; max-height: none; } }
+
+/* ---- widget appearance, full screen and click actions (spec 002) ---- */
+.dash-widget .dw-fs { padding: 2px 4px; line-height: 1; opacity: .55; }
+.dash-widget .dw-fs:hover { opacity: 1; }
+.dash-widget .dw-fs.floating { position: absolute; top: 4px; right: 4px; z-index: 2; opacity: 0; }
+.dash-widget:hover .dw-fs.floating, .dash-widget .dw-fs.floating:focus { opacity: .8; }
+.dash-widget.dw-click { cursor: pointer; }
+.dash-widget.dw-click:hover { outline: 1px solid var(--primary); outline-offset: -1px; }
+.dash-title { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+dialog.dw-full { width: calc(100vw - 32px); height: calc(100vh - 32px); max-width: none; max-height: none; padding: 12px 16px; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--radius); color: var(--fg); }
+dialog.dw-full:not([open]) { display: none; }
+dialog.dw-full .dash-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+dialog.dw-full::backdrop { background: rgba(15, 23, 42, .55); }
+.dw-gauge-lbl { font-size: 11px; color: var(--muted); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dw-center { flex: 1; display: flex; align-items: center; justify-content: center; flex-direction: column; min-height: 0; gap: 4px; }
+.dw-big { font-size: var(--dw-value, 2em); font-weight: 600; line-height: 1.1; white-space: nowrap; }
+.dw-kv { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.dw-md h1, .dw-md h2, .dw-md h3 { margin: 4px 0; } .dw-md p { margin: 4px 0; } .dw-md ul { margin: 4px 0; padding-left: 20px; }
+.dw-nav { flex: 1; display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit; padding: 4px; border-radius: var(--radius); }
+.dw-nav:hover { background: var(--bg2); }
+.dw-ctl-knob { touch-action: none; cursor: grab; user-select: none; }
+.dw-rsw { width: 72px; height: 72px; border-radius: 50%; border: 3px solid var(--line); background: var(--bg2); font-weight: 700; cursor: pointer; transition: background .2s, box-shadow .2s; }
+.dw-rsw.on { background: #16a34a; color: #fff; border-color: #15803d; box-shadow: 0 0 0 4px #16a34a33; }
+.dw-rsw:disabled { cursor: not-allowed; opacity: .7; }
+.dw-tinted .muted, .dw-tinted .dash-body .muted { color: inherit; opacity: .72; }
+.dash-widget .dw-fs, .dash-widget .dw-fs:hover { background: transparent; border-color: transparent; color: inherit; box-shadow: none; }
+.dw-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; margin-bottom: 4px; }
+.dw-filters label { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+.dw-filters select { font-size: 12px; padding: 1px 4px; height: auto; width: auto; }
+.dw-chip { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 12px; padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); cursor: pointer; }
+.dw-chip i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; opacity: .35; }
+.dw-chip.on { color: inherit; border-color: var(--muted); } .dw-chip.on i { opacity: 1; }
+.dw-filters label { flex-direction: row; font-size: 12px; }
+.dw-filters select { min-height: 0; padding: 1px 4px; width: auto; }

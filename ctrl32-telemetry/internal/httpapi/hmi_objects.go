@@ -400,5 +400,15 @@ func (s *Server) publicHMIObjectSVG(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Image widgets (spec 002) of the shared screen may show a library graphic too.
+	widgets, _ := si.Spec["widgets"].([]any)
+	for _, x := range widgets {
+		if wd, ok := x.(map[string]any); ok && wd["type"] == "image" {
+			if p, ok := wd["params"].(map[string]any); ok && p["src"] == slug {
+				s.writeSVG(w, r, si.Org, slug)
+				return
+			}
+		}
+	}
 	writeErr(w, 404, "graphic not found")
 }

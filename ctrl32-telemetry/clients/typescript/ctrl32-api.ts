@@ -1531,6 +1531,8 @@ export class Ctrl32Client {
 
   /** Save a new version of a dashboard
    *
+   * Widget settings are validated against the catalogue; invalid values are refused, settings the catalogue does not know are dropped and listed in `warnings` of the response.
+   * 
    * Requires permission `content.write`. */
   putDashboardsSlug(slug: string, body: {
     is_default?: boolean;

@@ -39,10 +39,13 @@ var (
 type ScreenParam struct {
 	Name    string   `json:"name"`
 	Label   string   `json:"label"`
-	Kind    string   `json:"kind"` // text, multiline, number, bool, select, list
+	Kind    string   `json:"kind"` // text, multiline, number, bool, select, list, multi, color, icon, datetime, series, ranges
 	Default any      `json:"default,omitempty"`
 	Options []string `json:"options,omitempty"`
 	Help    string   `json:"help,omitempty"`
+	Group   string   `json:"group,omitempty"` // editor tab: data (default), appearance, series, time, actions
+	Min     *float64 `json:"min,omitempty"`   // number bounds (optional)
+	Max     *float64 `json:"max,omitempty"`
 }
 
 type WidgetDef struct {
@@ -136,24 +139,31 @@ type screenSpec struct {
 
 // validateScreenSpec normalizes a screen (dashboard) spec and returns the canonical document.
 func validateScreenSpec(raw json.RawMessage) (map[string]any, error) {
+	spec, _, err := validateScreenSpecW(raw)
+	return spec, err
+}
+
+// validateScreenSpecW also returns warnings: settings the catalogue does not know, which are dropped (spec 002 FR-006).
+func validateScreenSpecW(raw json.RawMessage) (map[string]any, []string, error) {
+	var warnings []string
 	var sp screenSpec
 	if len(raw) == 0 {
-		return nil, errors.New("spec required")
+		return nil, nil, errors.New("spec required")
 	}
 	if err := json.Unmarshal(raw, &sp); err != nil {
-		return nil, fmt.Errorf("spec: %w", err)
+		return nil, nil, fmt.Errorf("spec: %w", err)
 	}
 	if sp.Version == 0 {
 		sp.Version = 1
 	}
 	if sp.Version != 1 {
-		return nil, errors.New("unsupported spec version")
+		return nil, nil, errors.New("unsupported spec version")
 	}
 	if sp.Kind == "" {
 		sp.Kind = "dashboard"
 	}
 	if sp.Kind != "dashboard" && sp.Kind != "mimic" {
-		return nil, errors.New("kind must be dashboard or mimic")
+		return nil, nil, errors.New("kind must be dashboard or mimic")
 	}
 	if sp.Layout.Type == "" {
 		if sp.Kind == "mimic" {
@@ -164,7 +174,7 @@ func validateScreenSpec(raw json.RawMessage) (map[string]any, error) {
 	}
 	canvas := sp.Layout.Type == "canvas"
 	if !canvas && sp.Layout.Type != "grid" {
-		return nil, errors.New("layout.type must be grid or canvas")
+		return nil, nil, errors.New("layout.type must be grid or canvas")
 	}
 	if canvas {
 		if sp.Layout.Width == 0 {
@@ -174,56 +184,56 @@ func validateScreenSpec(raw json.RawMessage) (map[string]any, error) {
 			sp.Layout.Height = 900
 		}
 		if sp.Layout.Width < 600 || sp.Layout.Width > 4000 || sp.Layout.Height < 300 || sp.Layout.Height > 3000 {
-			return nil, errors.New("layout.width must be 600..4000 and layout.height 300..3000")
+			return nil, nil, errors.New("layout.width must be 600..4000 and layout.height 300..3000")
 		}
 	} else {
 		if sp.Layout.Columns == 0 {
 			sp.Layout.Columns = 12
 		}
 		if sp.Layout.Columns != 12 {
-			return nil, errors.New("layout.columns must be 12")
+			return nil, nil, errors.New("layout.columns must be 12")
 		}
 		if sp.Layout.RowHeight == 0 {
 			sp.Layout.RowHeight = 96
 		}
 		if sp.Layout.RowHeight < 60 || sp.Layout.RowHeight > 240 {
-			return nil, errors.New("layout.row_height must be 60..240")
+			return nil, nil, errors.New("layout.row_height must be 60..240")
 		}
 	}
 	if sp.Range == "" {
 		sp.Range = "24h"
 	}
 	if !ranges[sp.Range] {
-		return nil, errors.New("range must be 1h, 6h, 24h, 7d, 30d or 90d")
+		return nil, nil, errors.New("range must be 1h, 6h, 24h, 7d, 30d or 90d")
 	}
 	if sp.RefreshS == 0 {
 		sp.RefreshS = 30
 	}
 	if sp.RefreshS < 5 || sp.RefreshS > 3600 {
-		return nil, errors.New("refresh_s must be 5..3600")
+		return nil, nil, errors.New("refresh_s must be 5..3600")
 	}
 	if len(sp.Elements) > 0 && !canvas {
-		return nil, errors.New("drawing elements need the canvas layout (kind mimic)")
+		return nil, nil, errors.New("drawing elements need the canvas layout (kind mimic)")
 	}
 	if len(sp.Widgets) == 0 && len(sp.Elements) == 0 {
-		return nil, errNoContent
+		return nil, nil, errNoContent
 	}
 	if len(sp.Widgets) > 60 {
-		return nil, errors.New("at most 60 widgets")
+		return nil, nil, errors.New("at most 60 widgets")
 	}
 	ids := map[string]bool{}
 	widgets := make([]map[string]any, 0, len(sp.Widgets))
 	for i, w := range sp.Widgets {
 		def := widgetDefOf(w.Type)
 		if def == nil {
-			return nil, fmt.Errorf("widget %d: unknown type %q", i+1, w.Type)
+			return nil, nil, fmt.Errorf("widget %d: unknown type %q", i+1, w.Type)
 		}
 		id := w.ID
 		if id == "" {
 			id = "w" + strconv.Itoa(i+1)
 		}
 		if !widgetIDRe.MatchString(id) || ids[id] {
-			return nil, fmt.Errorf("widget %d: id must be unique and simple", i+1)
+			return nil, nil, fmt.Errorf("widget %d: id must be unique and simple", i+1)
 		}
 		ids[id] = true
 		g := w.Geometry
@@ -235,7 +245,7 @@ func validateScreenSpec(raw json.RawMessage) (map[string]any, error) {
 				g.H = def.Default[1] * 100
 			}
 			if g.X < 0 || g.Y < 0 || g.W < 20 || g.H < 20 || g.X+g.W > sp.Layout.Width || g.Y+g.H > sp.Layout.Height {
-				return nil, fmt.Errorf("widget %d: geometry outside the %d×%d canvas", i+1, sp.Layout.Width, sp.Layout.Height)
+				return nil, nil, fmt.Errorf("widget %d: geometry outside the %d×%d canvas", i+1, sp.Layout.Width, sp.Layout.Height)
 			}
 		} else {
 			if g.W == 0 {
@@ -245,28 +255,29 @@ func validateScreenSpec(raw json.RawMessage) (map[string]any, error) {
 				g.H = def.Default[1]
 			}
 			if g.X < 0 || g.X > 11 || g.Y < 0 || g.Y > 999 || g.W < 1 || g.W > 12 || g.H < 1 || g.H > 40 || g.X+g.W > 12 {
-				return nil, fmt.Errorf("widget %d: geometry out of the 12-column grid", i+1)
+				return nil, nil, fmt.Errorf("widget %d: geometry out of the 12-column grid", i+1)
 			}
 		}
 		binds := map[string][]string{}
 		for _, b := range def.Binds {
 			list := w.Bindings[b]
 			if len(list) > 24 {
-				return nil, fmt.Errorf("widget %d: at most 24 %s", i+1, b)
+				return nil, nil, fmt.Errorf("widget %d: at most 24 %s", i+1, b)
 			}
 			out := []string{}
 			for _, v := range list {
 				if !uuidRe.MatchString(v) {
-					return nil, fmt.Errorf("widget %d: %s must be ids", i+1, b)
+					return nil, nil, fmt.Errorf("widget %d: %s must be ids", i+1, b)
 				}
 				out = append(out, v)
 			}
 			// Widgets may be saved before their datastreams are chosen (the renderer shows a hint); min_binds stays a UI hint.
 			binds[b] = out
 		}
+		warnings = append(warnings, unknownParams(i, def, w.Params)...)
 		params, err := validateParams(i, def, w.Params)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		widgets = append(widgets, map[string]any{"id": id, "type": w.Type, "geometry": map[string]int{"x": g.X, "y": g.Y, "w": g.W, "h": g.H}, "bindings": binds, "params": params})
 	}
@@ -276,13 +287,13 @@ func validateScreenSpec(raw json.RawMessage) (map[string]any, error) {
 		lay := map[string]any{"type": "canvas", "width": sp.Layout.Width, "height": sp.Layout.Height}
 		if sp.Layout.Bg != "" {
 			if !colorRe.MatchString(sp.Layout.Bg) {
-				return nil, errors.New("layout.bg must be a colour like #e5e7eb")
+				return nil, nil, errors.New("layout.bg must be a colour like #e5e7eb")
 			}
 			lay["bg"] = strings.ToLower(sp.Layout.Bg)
 		}
 		if sp.Layout.Grid != 0 {
 			if sp.Layout.Grid < 1 || sp.Layout.Grid > 100 {
-				return nil, errors.New("layout.grid must be 1..100")
+				return nil, nil, errors.New("layout.grid must be 1..100")
 			}
 			lay["grid"] = sp.Layout.Grid
 		}
@@ -292,17 +303,17 @@ func validateScreenSpec(raw json.RawMessage) (map[string]any, error) {
 		case "classic", "isa101":
 			out["scheme"] = sp.Scheme
 		default:
-			return nil, errors.New("scheme must be classic or isa101")
+			return nil, nil, errors.New("scheme must be classic or isa101")
 		}
 		elems, err := validateElements(sp.Elements, sp.Layout.Width, sp.Layout.Height)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if len(elems) > 0 {
 			out["elements"] = elems
 		}
 	}
-	return out, nil
+	return out, warnings, nil
 }
 
 func validateParams(i int, def *WidgetDef, src map[string]any) (map[string]any, error) {
@@ -313,7 +324,9 @@ func validateParams(i int, def *WidgetDef, src map[string]any) (map[string]any, 
 	for _, d := range def.Params {
 		v, ok := src[d.Name]
 		if !ok || v == nil || v == "" {
-			if d.Default != nil {
+			// Defaults of data settings are stored; appearance/series/time/action settings stay absent until set,
+			// so older dashboards keep their canonical form (spec 002 FR-007).
+			if d.Default != nil && (d.Group == "" || d.Group == "data") {
 				p[d.Name] = d.Default
 			}
 			continue
@@ -341,7 +354,7 @@ func validateParams(i int, def *WidgetDef, src map[string]any) (map[string]any, 
 			default:
 				return nil, fmt.Errorf("widget %d: %s must be a number", i+1, d.Name)
 			}
-			if f < -1e12 || f > 1e12 {
+			if f < -1e12 || f > 1e12 || (d.Min != nil && f < *d.Min) || (d.Max != nil && f > *d.Max) {
 				return nil, fmt.Errorf("widget %d: %s out of range", i+1, d.Name)
 			}
 			p[d.Name] = f
@@ -363,6 +376,12 @@ func validateParams(i int, def *WidgetDef, src map[string]any) (map[string]any, 
 				return nil, fmt.Errorf("widget %d: %s must be one of %s", i+1, d.Name, strings.Join(d.Options, ", "))
 			}
 			p[d.Name] = s
+		case "color", "icon", "datetime", "series", "ranges", "multi":
+			val, err := validateRichParam(d, v)
+			if err != nil {
+				return nil, fmt.Errorf("widget %d: %s %v", i+1, d.Name, err)
+			}
+			p[d.Name] = val
 		case "list":
 			var list []string
 			switch x := v.(type) {
@@ -510,10 +529,13 @@ func (s *Server) saveDashboard(w http.ResponseWriter, r *http.Request, org, slug
 		writeErr(w, 400, "slug must be lowercase letters, digits and dashes")
 		return
 	}
-	spec, err := validateScreenSpec(in.Spec)
+	spec, warnings, err := validateScreenSpecW(in.Spec)
 	if err != nil {
 		writeErr(w, 400, err.Error())
 		return
+	}
+	if warnings == nil {
+		warnings = []string{}
 	}
 	specJSON, _ := json.Marshal(spec)
 	sum := sha256.Sum256(specJSON)
@@ -579,7 +601,7 @@ func (s *Server) saveDashboard(w http.ResponseWriter, r *http.Request, org, slug
 	if create {
 		code = 201
 	}
-	writeJSON(w, code, map[string]any{"id": id, "slug": slug, "name": in.Name, "version": version, "is_default": def, "spec": spec})
+	writeJSON(w, code, map[string]any{"id": id, "slug": slug, "name": in.Name, "version": version, "is_default": def, "spec": spec, "warnings": warnings})
 }
 
 func (s *Server) createDashboard(w http.ResponseWriter, r *http.Request) {
