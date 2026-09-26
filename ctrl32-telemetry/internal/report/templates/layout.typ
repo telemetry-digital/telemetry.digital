@@ -34,7 +34,7 @@
       #set text(size: 8pt, fill: luma(90))
       #line(length: 100%, stroke: 0.5pt + luma(180))
       #grid(columns: (1fr, auto),
-        [ctrl32 · telemetry · generated #d.generated_at by #d.generated_by · audit head \##d.audit.seq #d.audit.hash.slice(0, 16)…],
+        [#(if "product" in d and d.product != none and d.product != "" { d.product } else { "ctrl32 · telemetry" }) · generated #d.generated_at by #d.generated_by · audit head \##d.audit.seq #d.audit.hash.slice(0, 16)…],
         [Page #counter(page).display() of #counter(page).final().first()])
     ],
   )

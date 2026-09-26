@@ -19,9 +19,13 @@ type TOTPSetup struct {
 	URL    string // otpauth:// URI for QR codes
 }
 
-// BeginTOTP generates a secret, stores it encrypted (unconfirmed) and returns the provisioning URI.
-func (s *Service) BeginTOTP(ctx context.Context, userID, username string) (*TOTPSetup, error) {
-	key, err := totp.Generate(totp.GenerateOpts{Issuer: totpIssuer, AccountName: username, Period: 30, Digits: otp.DigitsSix, Algorithm: otp.AlgorithmSHA1})
+// BeginTOTP generates a secret, stores it encrypted (unconfirmed) and returns the provisioning URI. issuer is the name
+// authenticator apps show (the product name; empty = ctrl32 telemetry).
+func (s *Service) BeginTOTP(ctx context.Context, userID, username, issuer string) (*TOTPSetup, error) {
+	if issuer == "" {
+		issuer = totpIssuer
+	}
+	key, err := totp.Generate(totp.GenerateOpts{Issuer: issuer, AccountName: username, Period: 30, Digits: otp.DigitsSix, Algorithm: otp.AlgorithmSHA1})
 	if err != nil {
 		return nil, err
 	}

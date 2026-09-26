@@ -1,0 +1,17 @@
+meta {
+  name: Browser icon
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/branding/icon
+  body: none
+  auth: inherit
+}
+
+docs {
+  Browser icon
+  
+  The white-label icon when active, otherwise a redirect to /favicon.svg.
+}

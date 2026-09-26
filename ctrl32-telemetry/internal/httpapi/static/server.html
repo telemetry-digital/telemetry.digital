@@ -26,6 +26,7 @@
   <a href="/server/wireguard" data-section="wireguard">WireGuard</a>
   <a href="/server/backups" data-section="backups">Backups</a>
   <a href="/server/updates" data-section="updates">Updates</a>
+  <a href="/server/license" data-section="license">License</a>
 </nav>
 
 <section data-section="overview">
@@ -231,6 +232,20 @@
   </div>
 </section>
 
+<section data-section="license">
+  <div class="page-head"><h1>License</h1></div>
+  <div class="card">
+    <p class="muted no-rebrand">ctrl32 telemetry is free. Paid features — white labeling — need a license issued for this server. Paste the license key you received; it is verified offline.</p>
+    <dl class="kv" id="kvLic"></dl>
+    <form id="licForm" class="form" style="margin-top:12px">
+      <label>License key <textarea name="token" rows="4" required placeholder="c32l1.…" class="notranslate" style="font-family:monospace"></textarea></label>
+      <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+      <div class="err" id="licErr"></div>
+      <div class="row"><button class="btn primary" type="submit">Install license</button><button class="btn danger" type="button" id="licRemove" hidden>Remove license</button></div>
+    </form>
+  </div>
+</section>
+
 <dialog id="reasonDlg">
   <form id="reasonForm" class="form" method="dialog">
     <h2 style="margin-top:0" id="reasonTitle"></h2>
@@ -244,7 +259,7 @@
 <script src="/app.js"></script>
 <script>
 const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
-const TITLES = {overview: 'Server', domain: 'Domain and TLS', wireguard: 'WireGuard', backups: 'Backups', redundancy: 'Redundant database', updates: 'Updates'};
+const TITLES = {overview: 'Server', domain: 'Domain and TLS', wireguard: 'WireGuard', backups: 'Backups', redundancy: 'Redundant database', updates: 'Updates', license: 'License'};
 let INFO = null;
 function kv(el, rows){ el.innerHTML = rows.filter(r => r).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v == null || v === '' ? '<span class="muted">—</span>' : v}</dd>`).join(''); }
 function dur(s){ if(!s && s !== 0) return ''; const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60); return (d ? d + ' d ' : '') + (h ? h + ' h ' : '') + m + ' min'; }
@@ -376,8 +391,23 @@ $('#replEditForm').onsubmit = async e => { e.preventDefault(); const f = e.targe
 $('#replDetachForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#replDetachErr').textContent='';
   try{ await api('POST',`/api/v1/replication/replicas/${f.dataset.id}/detach`,{reason: f.reason.value, accept_partial: f.accept_partial.checked}); $('#replDetachDlg').close(); replSel = f.dataset.id; ctrl32.toast('detach started','ok'); renderRedundancy(); }
   catch(x){ $('#replDetachErr').textContent = x.message; } };
+async function renderLicense(){
+  const l = await api('GET','/api/v1/server/license');
+  const status = !l.installed ? '<span class="badge">' + esc(ctrl32.t('none')) + '</span>' : (l.valid ? '<span class="badge ok">' + esc(ctrl32.t('valid')) + '</span>' : '<span class="badge bad">' + esc(ctrl32.t('not valid')) + '</span> ' + esc(l.problem || ''));
+  kv($('#kvLic'), [['Status', status], l.licensee ? ['Licensee', esc(l.licensee) + (l.email ? ' · ' + esc(l.email) : '')] : null, l.id ? ['License', '<code>' + esc(l.id) + '</code>'] : null,
+    l.features ? ['Features', esc(l.features.join(', '))] : null, l.installed ? ['Valid until', l.expires ? fmt(l.expires) : esc(ctrl32.t('no expiry'))] : null,
+    l.domains && l.domains.length ? ['Server names', esc(l.domains.join(', ')) + ' · ' + esc(ctrl32.t('this server')) + ': <code>' + esc(l.server_host || '—') + '</code>'] : null,
+    l.installed_at ? ['Installed', fmt(l.installed_at) + ' · ' + esc(l.installed_by || '')] : null,
+    !l.trusted_keys ? ['Note', esc(ctrl32.t('This build contains no licensor key, so no license can be installed.'))] : null]);
+  $('#licRemove').hidden = !l.installed;
+}
+$('#licForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#licErr').textContent='';
+  try{ await api('PUT','/api/v1/server/license',{token: f.token.value, reason: f.reason.value}); f.reset(); ctrl32.toast(ctrl32.t('license installed'),'ok'); renderLicense(); }
+  catch(x){ $('#licErr').textContent = x.message; } };
+$('#licRemove').onclick = async () => { const reason = prompt(ctrl32.t('Reason for removing the license (audit trail)')); if(!reason) return;
+  try{ await api('DELETE','/api/v1/server/license?reason=' + encodeURIComponent(reason)); ctrl32.toast(ctrl32.t('license removed'),'ok'); renderLicense(); }catch(x){ $('#licErr').textContent = x.message; } };
 let SEC = 'overview';
-async function load(){ INFO = await api('GET','/api/v1/server'); agentNote(); ({overview: renderOverview, domain: renderDomain, wireguard: renderWg, backups: renderBackups, redundancy: renderRedundancy, updates: renderUpdates})[SEC](); }
+async function load(){ if(SEC === 'license') return renderLicense(); INFO = await api('GET','/api/v1/server'); agentNote(); ({overview: renderOverview, domain: renderDomain, wireguard: renderWg, backups: renderBackups, redundancy: renderRedundancy, updates: renderUpdates})[SEC](); }
 ctrl32.ready({requireAuth: true, requirePerm: 'system.admin'}).then(() => { SEC = ctrl32.section('overview', Object.keys(TITLES)); document.title = TITLES[SEC] + ' — Server'; load().catch(x => ctrl32.toast(x.message,'bad')); });
 </script>
 </body>
