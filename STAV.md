@@ -13,7 +13,7 @@
 | 0.43.0 | Energia (spotreba, výroba, náklady po hodinách/dňoch/mesiacoch, podiel meračov, príkon) a scény (zachytenie stavu, spustenie jedným klikom, uzol toku) (spec 008) | e2e 37, unit |
 | 0.44.0 | Toky: podtoky (znovupoužiteľné časti, pripnuté verzie), uzol Rozdelenie, farebné skupiny na plátne (spec 009) | e2e 23, unit |
 
-Celá sada testov (`tests/run-all.sh`) pre 0.44.0: beží (26. 9. 2026).
+Celá sada testov (`tests/run-all.sh`) prešla pre 0.44.0 bez chyby (26. 9. 2026).
 
 ## Ďalšie možnosti (fáza 2)
 
