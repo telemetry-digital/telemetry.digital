@@ -165,16 +165,16 @@ func (s *Server) deviceMessages(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/provision {claim, hw, fw} — unauthenticated, rate limited; exchanges a one-time claim code for a token.
 func (s *Server) provision(w http.ResponseWriter, r *http.Request) {
 	ip := clientIP(r)
-	if !s.provisionLimiter.allow(ip) {
-		writeErr(w, http.StatusTooManyRequests, "too many attempts")
-		return
-	}
 	body, ok := readProvisionBody(w, r)
 	if !ok {
 		return
 	}
 	if strings.Contains(string(body), "provisionDeviceKey") {
-		s.provisionByKey(w, r, body)
+		s.provisionByKey(w, r, body) // limits failed attempts per address and key itself
+		return
+	}
+	if !s.provisionLimiter.allow(ip) {
+		writeErr(w, http.StatusTooManyRequests, "too many attempts")
 		return
 	}
 	var in struct{ Claim, HW, FW string }

@@ -55,30 +55,45 @@ func New(pool *pgxpool.Pool, log *slog.Logger) *Service {
 	return &Service{pool: pool, log: log, tries: map[string][]time.Time{}}
 }
 
-// Limit of attempts per key and per source address.
+// Limit of failed attempts per key and per source address (successes are not limited: a fleet behind one NAT
+// address registers at once).
 const perMinute = 10
 
-func (s *Service) allow(keys ...string) bool {
+func (s *Service) prune(k string, now time.Time) []time.Time {
+	var kept []time.Time
+	for _, t := range s.tries[k] {
+		if now.Sub(t) < time.Minute {
+			kept = append(kept, t)
+		}
+	}
+	return kept
+}
+
+// limited reports whether one of the keys had too many recent failures.
+func (s *Service) limited(keys ...string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now()
+	for _, k := range keys {
+		s.tries[k] = s.prune(k, now)
+		if len(s.tries[k]) >= perMinute {
+			return true
+		}
+	}
+	return false
+}
+
+// failed records a failed attempt for the keys.
+func (s *Service) failed(keys ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if len(s.tries) > 10000 {
 		s.tries = map[string][]time.Time{}
 	}
-	ok := true
+	now := time.Now()
 	for _, k := range keys {
-		var kept []time.Time
-		for _, t := range s.tries[k] {
-			if now.Sub(t) < time.Minute {
-				kept = append(kept, t)
-			}
-		}
-		if len(kept) >= perMinute {
-			ok = false
-		}
-		s.tries[k] = append(kept, now)
+		s.tries[k] = append(s.prune(k, now), now)
 	}
-	return ok
 }
 
 var (
@@ -119,10 +134,19 @@ func (s *Service) HandleMQTT(ctx context.Context, payload []byte, remote string)
 // Provision registers a device or refuses. via is "mqtt" or "http".
 func (s *Service) Provision(ctx context.Context, req Request, remote, via string) Response {
 	req.DeviceName = strings.TrimSpace(req.DeviceName)
-	if !s.allow("ip:"+hostOf(remote), "key:"+req.ProvisionDeviceKey) {
+	keys := []string{"ip:" + hostOf(remote), "key:" + req.ProvisionDeviceKey}
+	if s.limited(keys...) {
 		s.log.Warn("provisioning rate limited", "security", true, "remote", remote, "via", via)
-		return fail("too many attempts, try again in a minute")
+		return fail("too many failed attempts, try again in a minute")
 	}
+	resp := s.provision(ctx, req, remote, via)
+	if resp.Status != "SUCCESS" {
+		s.failed(keys...)
+	}
+	return resp
+}
+
+func (s *Service) provision(ctx context.Context, req Request, remote, via string) Response {
 	if req.CredentialsType != "" && req.CredentialsType != "ACCESS_TOKEN" {
 		return fail("only ACCESS_TOKEN credentials are issued")
 	}
