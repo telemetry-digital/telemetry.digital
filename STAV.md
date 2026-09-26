@@ -14,7 +14,7 @@
 | 0.44.0 | Toky: podtoky (znovupoužiteľné časti, pripnuté verzie), uzol Rozdelenie, farebné skupiny na plátne (spec 009) | e2e 23, unit |
 | 0.45.0 | Kamery: RTSP (H.264/H.265/MJPEG) a HTTP MJPEG, nepretržité nahrávanie s uchovaním a limitom disku, živý obraz a záznamy v prehliadači, časová os, export MP4, videosteny na viac monitorov (2 × 20), audit prezerania (spec 010) | e2e 44, unit |
 
-Celá sada testov (`tests/run-all.sh`) prešla pre 0.44.0 bez chyby (26. 9. 2026).
+Celá sada testov (`tests/run-all.sh`) prešla pre 0.45.0 bez chyby (26. 9. 2026).
 
 ## Ďalšie možnosti (fáza 2)
 
