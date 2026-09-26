@@ -2159,7 +2159,7 @@ export class Ctrl32Client {
   /** Entities with their state
    *
    * Requires permission `data.read`. */
-  getEntities(query?: { room?: string; device?: string; component?: string; }): Promise<({
+  getEntities(query?: { room?: string; device?: string; component?: string; source?: string; /** MQTT source id */ }): Promise<({
     attributes?: Record<string, unknown>;
     available?: boolean;
     /** sensor, binary_sensor, switch, light, cover, fan, lock, climate, number, select, button, text, … */

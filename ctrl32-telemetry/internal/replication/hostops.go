@@ -152,16 +152,19 @@ func (h *Host) BaseBackup(ctx context.Context, tunnelPort int, role, password, s
 	stamp := time.Now().Format("20060102-150405")
 	bb := fmt.Sprintf(`pg_basebackup -h %s -p %d -U %s -D "$D" -X stream -S %s -R -P --checkpoint=fast`, h.TunnelHost, tunnelPort, role, slot)
 	script := `set -e; D="` + h.DataDir + `"; A="$D.before-replica-` + stamp + `"; if [ -d "$D" ]; then mv "$D" "$A"; fi; mkdir -p "$D"; chmod 700 "$D"; `
+	// A primary whose configuration lives outside its data directory (Debian's /etc/postgresql) gives a copy without
+	// postgresql.conf and pg_hba.conf; the local cluster's own files (from the directory moved aside) are used then.
+	keepConf := `; for f in postgresql.conf pg_hba.conf pg_ident.conf; do if [ ! -f "$D/$f" ] && [ -f "$A/$f" ]; then cp -p "$A/$f" "$D/$f"; fi; done`
 	switch h.Mode {
 	case "docker":
-		script += `chown postgres:postgres "$D"; gosu postgres ` + bb
+		script += `chown postgres:postgres "$D"; gosu postgres ` + bb + keepConf
 		err = runStream(ctx, progress, []string{"PGPASSWORD=" + password}, "docker", "run", "--rm", "--network", "host", "-e", "PGPASSWORD",
 			"-v", h.Volume+":/var/lib/postgresql", "--entrypoint", "bash", h.Image, "-c", script)
 	case "native":
-		script += `chown postgres:postgres "$D"; runuser -u postgres -- env PGPASSWORD="$PGPASSWORD" ` + filepath.Join(h.BinDir, "") + "/" + bb
+		script += `chown postgres:postgres "$D"; runuser -u postgres -- env PGPASSWORD="$PGPASSWORD" ` + filepath.Join(h.BinDir, "") + "/" + bb + keepConf
 		err = runStream(ctx, progress, []string{"PGPASSWORD=" + password}, "sh", "-c", script)
 	case "manual":
-		script += filepath.Join(h.BinDir, "") + "/" + bb
+		script += filepath.Join(h.BinDir, "") + "/" + bb + keepConf
 		err = runStream(ctx, progress, []string{"PGPASSWORD=" + password}, "sh", "-c", script)
 	default:
 		return "", fmt.Errorf("unknown host mode %q", h.Mode)
