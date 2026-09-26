@@ -22,8 +22,8 @@
 
   <section data-sec="add" hidden>
     <div class="sh-paths">
-      <button type="button" class="sh-path" data-path="smart"><b>Smart-home device</b><span>zigbee2mqtt, Tasmota, ESPHome, Z-Wave JS UI, OpenMQTTGateway or any device with Home Assistant MQTT discovery connects to this server with its own MQTT account.</span></button>
-      <button type="button" class="sh-path" data-path="bridge"><b>Existing MQTT broker</b><span>You already run Mosquitto (e.g. for zigbee2mqtt or Home Assistant): this server connects to it and takes the devices from there.</span></button>
+      <button type="button" class="sh-path" data-path="smart"><b>Smart-home device</b><span>zigbee2mqtt, Tasmota, ESPHome, Shelly, Z-Wave JS UI, OpenMQTTGateway or any device that announces itself over MQTT connects to this server with its own MQTT account and is recognized automatically.</span></button>
+      <button type="button" class="sh-path" data-path="bridge"><b>Existing MQTT broker</b><span>You already run your own MQTT broker (for example the Mosquitto of zigbee2mqtt): this server connects to it and takes the devices from there.</span></button>
       <button type="button" class="sh-path" data-path="fleet"><b>Fleet of devices</b><span>Many identical devices register themselves with a provisioning key and secret (ThingsBoard-compatible over MQTT and HTTP).</span></button>
       <a class="sh-path" href="/devices"><b>A single ctrl32 device</b><span>Register it under Devices; it receives a one-time claim code and exchanges it for its token.</span></a>
       <a class="sh-path" href="/settings/connectors"><b>Industrial connector</b><span>OPC UA server, Modbus TCP device or a LoRaWAN network server (ChirpStack).</span></a>
@@ -63,7 +63,7 @@
       <label class="inline"><input type="checkbox" name="insecure"><span>Accept a self-signed certificate</span></label>
       <div class="row2"><label>User name <input name="username" autocomplete="off"></label><label>Password <input name="password" type="password" autocomplete="new-password" placeholder="unchanged when empty"></label></div>
       <label>Client id <input name="client_id" placeholder="generated when empty"></label>
-      <label>Share these values with Home Assistant (published with discovery; Ctrl/Cmd for several) <select name="publish" multiple size="6"></select></label>
+      <label>Publish these values on the broker so other systems see them as devices (Ctrl/Cmd for several) <select name="publish" multiple size="6"></select></label>
     </div>
     <div class="row2"><label>Discovery prefix <input name="prefix" value="homeassistant"></label>
       <label>New devices <select name="adopt"><option value="auto">add automatically</option><option value="inbox">ask first (inbox)</option></select></label></div>
@@ -144,7 +144,7 @@ async function renderPath() {
     const show = () => { const a = accts.find(x => x.id === $('#acctSel').value); if (a) $('#acctSnip').innerHTML = snippets(a.settings.username, LAST[a.id], a.settings.discovery_prefix || 'homeassistant'); };
     if (accts.length) { $('#acctSel').onchange = show; show(); }
   } else if (PATH === 'bridge') {
-    box.innerHTML = `<div class="card"><h2 style="margin-top:0">${esc(t('Existing MQTT broker'))}</h2><p>${esc(t('This server connects to your broker as a client, reads the Home Assistant discovery messages and controls the devices there. zigbee2mqtt and Home Assistant keep working as before.'))}</p>
+    box.innerHTML = `<div class="card"><h2 style="margin-top:0">${esc(t('Existing MQTT broker'))}</h2><p>${esc(t('This server connects to your broker as a client, recognizes the devices that announce themselves there and controls them. Your existing programs keep working as before.'))}</p>
       <div class="actions"><button class="btn primary" type="button" data-new="bridge">New bridge</button></div></div>`;
   } else if (PATH === 'fleet') {
     const profs = await api('GET', '/api/v1/provision-profiles');

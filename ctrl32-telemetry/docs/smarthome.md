@@ -1,11 +1,15 @@
 # Smart home and MQTT provisioning
 
-ctrl32 can be used like Home Assistant for devices that speak MQTT: they register themselves, appear with their
-rooms and entities, are recorded and controlled from the **Home** page, and take part in flows. Specification:
+ctrl32 runs the smart home itself for devices that speak MQTT: they announce themselves and are recognized
+automatically (auto-discovery), appear with their rooms and entities, are recorded and controlled from the **Home** page, and take part in flows. Specification:
 `specs/005-mqtt-provisioning-smarthome/` and `specs/006-smarthome-phase2/`, `specs/008-energy-scenes/`; URS A-20…A-31.
 
-Everything runs inside the ctrl32 server: the MQTT broker, the discovery engine, the bridges. No Home Assistant,
-Mosquitto or Node-RED is needed (an existing installation can keep running next to it).
+Everything runs inside the ctrl32 server: the MQTT broker, the automatic recognition, the bridges. No other home
+automation software, Mosquitto or Node-RED is needed (an existing installation can keep running next to it).
+
+*Compatibility note*: automatic recognition understands the common MQTT discovery format that zigbee2mqtt, Tasmota,
+ESPHome and many other devices publish (introduced by Home Assistant; its default topic prefix is
+`homeassistant/`). ctrl32 does not use Home Assistant itself.
 
 ## Ways to connect a device
 
@@ -13,9 +17,9 @@ Mosquitto or Node-RED is needed (an existing installation can keep running next 
 
 | Device | Path |
 |---|---|
-| zigbee2mqtt, Tasmota, ESPHome, Z-Wave JS UI, OpenMQTTGateway, any device with Home Assistant MQTT discovery | an **MQTT account** on the ctrl32 broker |
+| zigbee2mqtt, Tasmota, ESPHome, Z-Wave JS UI, OpenMQTTGateway, any device that announces itself over MQTT | an **MQTT account** on the ctrl32 broker |
 | Shelly Gen2+/Gen3 (Plus, Pro, Mini, Gen3, Gen4), Tasmota with default settings | an **MQTT account** (native support, see below) |
-| Devices already on your own broker (Mosquitto of zigbee2mqtt or Home Assistant) | a **bridge** |
+| Devices already on your own broker (for example the Mosquitto of zigbee2mqtt) | a **bridge** |
 | Many identical devices, ThingsBoard firmware | a **provisioning profile** (key and secret) |
 | A single ctrl32 device | a claim code (Devices) |
 | OPC UA, Modbus TCP, LoRaWAN (ChirpStack) | a connector (Settings → Connectors) |
@@ -31,13 +35,13 @@ Ready-to-paste settings:
 
 - **zigbee2mqtt** (`configuration.yaml`): `mqtt.server`, `mqtt.user`, `mqtt.password`, `homeassistant.enabled: true`.
 - **Tasmota** (console): `Backlog MqttHost …; MqttPort 1883; MqttUser …; MqttPassword …; SetOption19 1`
-  (`SetOption19 1` switches Tasmota to Home Assistant discovery).
+  (`SetOption19 1` switches Tasmota to the common MQTT discovery format; without it the native support below applies).
 - **ESPHome** (YAML): `mqtt:` with `broker`, `username`, `password`, `discovery: true`.
 
 New devices are added automatically (setting *New devices: add automatically*); set *ask first* to collect them in the
 inbox instead.
 
-### Shelly and Tasmota without Home Assistant discovery
+### Shelly and Tasmota natively
 
 - **Shelly Gen2 and later**: in the device's web page, *Settings → MQTT*: enable, server `host:1883`, the account's user
   and password, keep *RPC status notifications* on. ctrl32 recognizes the device by its notifications, asks it for its
@@ -47,7 +51,7 @@ inbox instead.
 - **Tasmota with default settings** (`SetOption19 0`, Tasmota's own discovery on `tasmota/discovery/…`): relays
   (as lights with `SetOption30 1`), lights with dimmer, colour temperature and colour, and every numeric value of
   `tele/<topic>/SENSOR` (temperature, humidity, power, energy, …) with units. After a device appears ctrl32 asks it for
-  its state (`cmnd/<topic>/STATE`). `SetOption19 1` (Home Assistant discovery) keeps working as before.
+  its state (`cmnd/<topic>/STATE`). `SetOption19 1` (the common discovery format) keeps working as before.
 
 Both appear like any other device (automatically or in the inbox) with entities, history, control and flows.
 
@@ -62,9 +66,9 @@ The connection is re-established with backoff; its state and last error are show
 disconnected longer than* (default 10 minutes, 0 = never), an incident *MQTT connection* opens and the administrators
 are notified; it is resolved automatically when the connection is back.
 
-**Sharing values with Home Assistant**: select datastreams in the bridge dialog; ctrl32 publishes a retained Home
-Assistant discovery config (`homeassistant/sensor/ctrl32_…/config`) and every new value to
-`ctrl32/<bridge>/<datastream>/state`, so an existing Home Assistant shows them as sensors.
+**Publishing values to other systems**: select datastreams in the bridge dialog; ctrl32 publishes a retained
+discovery config (`homeassistant/sensor/ctrl32_…/config`) and every new value to
+`ctrl32/<bridge>/<datastream>/state`, so other systems on that broker (for example an existing Home Assistant) show them as sensors.
 
 ### Provisioning profiles (fleets, ThingsBoard firmware)
 
