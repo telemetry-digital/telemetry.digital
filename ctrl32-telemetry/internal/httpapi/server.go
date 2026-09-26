@@ -39,6 +39,7 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/replication"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/report"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/rules"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/smarthome"
 )
 
 //go:embed static/*
@@ -73,12 +74,13 @@ type Server struct {
 	incidents        *incident.Manager
 	flows            *flows.Engine
 	prov             *provision.Service
+	smart            *smarthome.Manager
 	notifier         *notify.Notifier
 }
 
 // New builds the handler tree.
-func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.Service, rep *report.Engine, ing *ingest.Ingest, con *console.Manager, ag *agent.Client, opc *opcua.Manager, log *slog.Logger, version string, hub *live.Hub, mbm *modbus.Manager, esc *escalate.Engine, eng *rules.Engine, pm *push.Manager, tc *timecheck.Checker, inc *incident.Manager, rp *replication.Primary, fl *flows.Engine, nt *notify.Notifier) http.Handler {
-	s := &Server{cfg: cfg, pool: pool, br: br, iam: iamSvc, rep: rep, ing: ing, con: con, agent: ag, opc: opc, started: time.Now(), log: log.With("component", "http"), version: version, live: hub, mb: mbm, esc: esc, rules: eng, push: pm, tc: tc, incidents: inc, repl: rp, flows: fl, notifier: nt,
+func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.Service, rep *report.Engine, ing *ingest.Ingest, con *console.Manager, ag *agent.Client, opc *opcua.Manager, log *slog.Logger, version string, hub *live.Hub, mbm *modbus.Manager, esc *escalate.Engine, eng *rules.Engine, pm *push.Manager, tc *timecheck.Checker, inc *incident.Manager, rp *replication.Primary, fl *flows.Engine, nt *notify.Notifier, sh *smarthome.Manager) http.Handler {
+	s := &Server{cfg: cfg, pool: pool, br: br, iam: iamSvc, rep: rep, ing: ing, con: con, agent: ag, opc: opc, started: time.Now(), log: log.With("component", "http"), version: version, live: hub, mb: mbm, esc: esc, rules: eng, push: pm, tc: tc, incidents: inc, repl: rp, flows: fl, notifier: nt, smart: sh,
 		loginLimiter: newLimiter(10, 10), provisionLimiter: newLimiter(20, 10), pairLimiter: newLimiter(5, 5)}
 	if eng != nil {
 		eng.Commander = s
@@ -226,6 +228,20 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("POST /api/v1/provision-profiles/{id}/rotate", s.require("device.manage", s.rotateProvProfile))
 	mux.Handle("DELETE /api/v1/provision-profiles/{id}", s.require("device.manage", s.revokeProvProfile))
 	mux.Handle("GET /api/v1/device-approvals", s.require("device.manage", s.listApprovals))
+	mux.Handle("GET /api/v1/mqtt-sources", s.require("device.manage", s.listMQTTSources))
+	mux.Handle("POST /api/v1/mqtt-sources", s.require("device.manage", s.createMQTTSource))
+	mux.Handle("PUT /api/v1/mqtt-sources/{id}", s.require("device.manage", s.updateMQTTSource))
+	mux.Handle("POST /api/v1/mqtt-sources/{id}/password", s.require("device.manage", s.mqttAccountPassword))
+	mux.Handle("DELETE /api/v1/mqtt-sources/{id}", s.require("device.manage", s.deleteMQTTSource))
+	mux.Handle("GET /api/v1/discovery", s.require("device.manage", s.listDiscovery))
+	mux.Handle("POST /api/v1/discovery/{id}/adopt", s.require("device.manage", s.adoptDiscovery))
+	mux.Handle("POST /api/v1/discovery/{id}/ignore", s.require("device.manage", s.ignoreDiscovery))
+	mux.Handle("GET /api/v1/entities", s.require("data.read", s.listEntities))
+	mux.Handle("GET /api/v1/entities/{id}", s.require("data.read", s.getEntity))
+	mux.Handle("PATCH /api/v1/entities/{id}", s.require("device.manage", s.patchEntity))
+	mux.Handle("POST /api/v1/entities/{id}/command", s.require("device.command", s.entityCommand))
+	mux.Handle("GET /api/v1/home", s.require("data.read", s.home))
+	mux.Handle("GET /api/v1/onboarding", s.require("device.manage", s.onboarding))
 	mux.Handle("POST /api/v1/devices/{id}/approve", s.require("device.manage", s.decideDevice(true)))
 	mux.Handle("POST /api/v1/devices/{id}/reject", s.require("device.manage", s.decideDevice(false)))
 	mux.Handle("PUT /api/v1/devices/{id}/attributes", s.require("device.manage", s.putAttributes))

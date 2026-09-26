@@ -72,6 +72,24 @@ func (s *Server) dispatchCommand(ctx context.Context, e cmdExec) (status string,
 			s.log.Warn("command publish failed", "device", e.ext, "err", err)
 		}
 	}
+	if e.transport == "mqtt_discovery" {
+		if s.smart == nil {
+			status, cmdErr = "failed", "smart home is not available"
+		} else {
+			var res any
+			status, res, cmdErr = s.smart.Dispatch(ctx, e.deviceID, e.cid, e.method, e.args)
+			result = res
+		}
+		b, _ := json.Marshal(result)
+		switch status {
+		case "sent":
+			_, _ = s.pool.Exec(ctx, `UPDATE core.device_command SET status = 'sent', sent_at = now(), result = $2::jsonb WHERE id = $1::uuid AND status = 'queued'`, e.cid, string(b))
+		case "acked":
+			_, _ = s.pool.Exec(ctx, `UPDATE core.device_command SET status = 'acked', sent_at = now(), acked_at = now(), result = $2::jsonb WHERE id = $1::uuid`, e.cid, string(b))
+		default:
+			_, _ = s.pool.Exec(ctx, `UPDATE core.device_command SET status = 'failed', sent_at = now(), acked_at = now(), error = $2 WHERE id = $1::uuid`, e.cid, cmdErr)
+		}
+	}
 	finish := func(res map[string]any, err error) {
 		if err != nil {
 			status, cmdErr = "failed", err.Error()
