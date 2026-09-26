@@ -8,26 +8,16 @@
 | 0.38.0 | Widgety dashboardov s nastaveniami ako ThingsBoard, filtre v grafoch, plná nastaviteľnosť (spec 002) | e2e 81 + headless |
 | 0.39.0 | Redundantná databáza: kópia s bezpečným odpojením, priebežná replika, hot standby s failoverom (spec 003) | e2e 46 + headless |
 | 0.40.0 | Toky v štýle Node-RED: vlastný engine v Go, 28 uzlov, editor, ladenie, verzie, štyri oči, prevod pravidiel, metriky, sk/cs (spec 004) | e2e 69 + headless, ~30 000 správ/s |
+| 0.41.0 | Provisioning cez MQTT a smart home ako Home Assistant: profily provisioningu, ThingsBoard API, automatické datastreamy, MQTT účty s oddeleným priestorom tém, mosty, HA discovery, entity, stránky Domov a Zariadenia a pripojenia, uzly tokov, export do HA (spec 005) | e2e 33 + 39, headless, unit |
 
-Celá sada testov (`tests/run-all.sh`) prešla pre 0.40.0 bez chyby.
+Celá sada testov (`tests/run-all.sh`) prešla pre 0.41.0 bez chyby (26. 9. 2026).
 
-## Rozpracované: spec 005 — provisioning cez MQTT a smart home (ako Home Assistant)
+## Ďalšie možnosti (fáza 2)
 
-Hotové a overené naživo (simulátory zigbee2mqtt, Tasmota, ThingsBoard zariadenie, cudzí broker):
-- profily provisioningu, registrácia zariadení cez MQTT (`/provision/request`) aj HTTP, schvaľovanie, limity
-- ThingsBoard zariadenia: prihlásenie tokenom, telemetria, atribúty, RPC príkazy s potvrdením
-- automatické datastreamy z kľúčov telemetrie
-- MQTT účty s oddeleným priestorom tém (organizácie sa navzájom nevidia)
-- mosty na existujúci broker (napr. Mosquitto zo zigbee2mqtt), inbox objavených zariadení
-- Home Assistant discovery → zariadenia, miestnosti, entity, stavy s históriou
-- ovládanie entít (vypínače, stmievanie, žalúzie, termostaty, zámky, …) ako auditované príkazy s potvrdením stavu
-- stránka **Domov** a stránka **Zariadenia a pripojenia** (sprievodca, inbox, účty, mosty, provisioning)
-- uzly tokov: Entita, Akcia s entitou, Výsledok príkazu
-- zdieľanie hodnôt ctrl32 do Home Assistant cez most
-
-Zostáva:
-1. e2e testy `provisioning` a `smarthome`, headless test stránky Domov (T018, T019)
-2. preklady sk/cs, `docs/smarthome.md`, URS, JOURNAL, README, celá sada testov (T020)
+- smart home: Shelly Gen2 (natívne RPC), natívny formát discovery Tasmoty, kamery, výber farby na karte, incident pri
+  výpadku mosta
+- toky: MQTT cudzieho brokera ako spúšťač, rozdelenie správ, podtoky, skupiny na plátne
+- replika: prihlásenie na replike na prezeranie; Windows: test inštalátora na čistom serveri, podpis binárky
 
 ## Poznámka k prostrediu
 
@@ -36,7 +26,7 @@ Zostáva:
 
 ## Čaká na používateľa
 
-- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.40.0 root@2.29.5.17 -i <kľúč>` alebo
+- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.41.0 root@2.29.5.17 -i <kľúč>` alebo
   GitHub workflow (secrets `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS` a workflow na `main`)
 - zlúčenie vetvy do `main` (pull request na požiadanie)
 - potvrdenie ADR-0015 (SCADA editor v čistom JS nad SVG)
