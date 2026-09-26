@@ -413,20 +413,20 @@ func (s *Server) ignoreDiscovery(w http.ResponseWriter, r *http.Request) {
 // ---- entities -----------------------------------------------------------------------------------------------------
 
 const entityCols = `e.id::text, e.component, e.name, e.state, e.attributes, e.available, e.status, e.error, e.hidden, e.last_changed, e.last_updated,
-	e.device_id::text, d.name, e.room_id::text, coalesce(rm.name, ''), e.datastream_id::text, coalesce(ds.unit, ''), e.config`
+	e.device_id::text, d.name, e.room_id::text, coalesce(rm.name, ''), e.datastream_id::text, coalesce(ds.unit, ''), e.config, e.connector_id::text`
 
 func (s *Server) scanEntity(row interface{ Scan(...any) error }, withConfig bool) (map[string]any, error) {
-	var id, comp, name, status, errText, dev, devName, roomName, unit string
+	var id, comp, name, status, errText, dev, devName, roomName, unit, source string
 	var state, room, ds *string
 	var attrs, cfg map[string]any
 	var avail, hidden bool
 	var changed, updated *time.Time
-	if err := row.Scan(&id, &comp, &name, &state, &attrs, &avail, &status, &errText, &hidden, &changed, &updated, &dev, &devName, &room, &roomName, &ds, &unit, &cfg); err != nil {
+	if err := row.Scan(&id, &comp, &name, &state, &attrs, &avail, &status, &errText, &hidden, &changed, &updated, &dev, &devName, &room, &roomName, &ds, &unit, &cfg, &source); err != nil {
 		return nil, err
 	}
 	m := map[string]any{"id": id, "component": comp, "name": name, "state": state, "attributes": attrs, "available": avail, "status": status, "error": errText,
 		"hidden": hidden, "last_changed": changed, "last_updated": updated, "device_id": dev, "device": devName, "room_id": room, "room": roomName,
-		"datastream_id": ds, "unit": unit, "services": s.smart.Services(id)}
+		"datastream_id": ds, "unit": unit, "services": s.smart.Services(id), "source_id": source}
 	// what the UI needs to draw controls
 	ui := map[string]any{}
 	for _, k := range []string{"device_class", "state_class", "icon", "min", "max", "step", "mode", "options", "min_temp", "max_temp", "temp_step",
@@ -451,8 +451,8 @@ func (s *Server) listEntities(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.pool.Query(r.Context(), `SELECT `+entityCols+` FROM core.entity e JOIN core.device d ON d.id = e.device_id
 		LEFT JOIN core.asset rm ON rm.id = e.room_id LEFT JOIN core.datastream ds ON ds.id = e.datastream_id
 		WHERE e.org_id = $1::uuid AND e.status <> 'removed' AND d.revoked_at IS NULL
-		  AND ($2 = '' OR e.room_id::text = $2) AND ($3 = '' OR e.device_id::text = $3) AND ($4 = '' OR e.component = $4)
-		ORDER BY rm.name NULLS LAST, d.name, e.sort, e.name LIMIT 2000`, org, q.Get("room"), q.Get("device"), q.Get("component"))
+		  AND ($2 = '' OR e.room_id::text = $2) AND ($3 = '' OR e.device_id::text = $3) AND ($4 = '' OR e.component = $4) AND ($5 = '' OR e.connector_id::text = $5)
+		ORDER BY rm.name NULLS LAST, d.name, e.sort, e.name LIMIT 2000`, org, q.Get("room"), q.Get("device"), q.Get("component"), q.Get("source"))
 	if err != nil {
 		writeErr(w, 500, "query failed")
 		return

@@ -323,6 +323,9 @@ func (m *Manager) handle(ctx context.Context, src *source, topic string, payload
 // ---- discovery --------------------------------------------------------------------------------------------------
 
 func (m *Manager) discover(ctx context.Context, src *source, topic string, payload []byte) {
+	if strings.HasPrefix(topic, src.prefix+"/sensor/ctrl32_") {
+		return // our own values published to Home Assistant through this bridge
+	}
 	list, removed, err := ParseConfig(src.prefix, topic, payload)
 	if errors.Is(err, ErrNotDiscovery) {
 		return
