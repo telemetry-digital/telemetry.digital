@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -153,7 +154,7 @@ func (f *flow) process(n *rnode, m *Message, dry bool) {
 			n.st["last_at"] = time.Now()
 		}
 		f.emit(n, 0, m, dry)
-	case "alarm_event", "device_state", "schedule", "webhook", "entity", "command_result":
+	case "alarm_event", "device_state", "schedule", "webhook", "entity", "command_result", "mqtt_in":
 		f.emit(n, 0, m, dry)
 	case "inject":
 		if m.Value == nil {
@@ -491,6 +492,30 @@ func (f *flow) process(n *rnode, m *Message, dry bool) {
 		f.act(n, m, func(ctx context.Context) (map[string]Value, error) {
 			return nil, f.e.host.SetAttribute(ctx, f.org, dev, key, v, "flow:"+f.name, reason)
 		}, fmt.Sprintf("attribute %s = %s", key, Str(v)))
+	case "mqtt_out":
+		topic, err1 := f.render(str("topic"), m)
+		payload := Str(m.Value)
+		var err2 error
+		if str("payload") != "" {
+			payload, err2 = f.render(str("payload"), m)
+		}
+		if err := errors.Join(err1, err2); err != nil {
+			f.fail(n, m, err)
+			return
+		}
+		topic = strings.TrimSpace(topic)
+		if topic == "" || strings.ContainsAny(topic, "+#") || strings.HasPrefix(topic, "$") {
+			f.fail(n, m, fmt.Errorf("invalid topic %q", topic))
+			return
+		}
+		src, retain := str("source"), n.spec.Settings["retain"] == true
+		if dry || f.temp {
+			f.dryAction(n, m, fmt.Sprintf("would publish %q to %s", payload, topic))
+			return
+		}
+		f.act(n, m, func(ctx context.Context) (map[string]Value, error) {
+			return nil, f.e.host.MQTTPublish(ctx, f.org, src, topic, []byte(payload), retain)
+		}, "published to "+topic)
 	case "entity_action":
 		service, ent := str("service"), str("entity")
 		params := map[string]any{}
@@ -1099,4 +1124,47 @@ func testMsg(n *rnode, value Value, topic string) *Message {
 		topic = nameOr(n.spec)
 	}
 	return &Message{Topic: topic, Value: value, TS: time.Now().UTC(), Source: &Source{Kind: "inject", Name: nameOr(n.spec)}, Trigger: "test message"}
+}
+
+// mqttMessage turns an MQTT message into a flow message: a JSON scalar becomes the value, the scalar fields of a JSON
+// object become msg.<field> (the value is then the payload text), anything else is text.
+func mqttMessage(source, topic string, payload []byte) *Message {
+	if len(payload) > 64<<10 {
+		payload = payload[:64<<10]
+	}
+	m := &Message{Topic: topic, Value: string(payload), TS: time.Now().UTC(), Source: &Source{Kind: "mqtt", ID: source, Name: topic},
+		Fields: map[string]Value{}, Trigger: "MQTT " + topic}
+	var v any
+	if json.Unmarshal(payload, &v) == nil {
+		switch x := v.(type) {
+		case float64, bool, string, nil:
+			m.Value = x
+		case map[string]any:
+			flattenFields(m.Fields, "", x, 0)
+		}
+	}
+	return m
+}
+
+// flattenFields copies the scalar members of a JSON object into msg fields; nested objects become
+// parent_child (Tasmota's {"ENERGY":{"Power":5}} → msg.ENERGY_Power), at most three levels and 40 fields.
+func flattenFields(dst map[string]Value, prefix string, obj map[string]any, depth int) {
+	keys := make([]string, 0, len(obj))
+	for k := range obj {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if len(dst) >= 40 {
+			return
+		}
+		switch fv := obj[k].(type) {
+		case float64, string, bool, nil:
+			dst[fieldName(prefix+k)] = fv
+		case map[string]any:
+			if depth < 2 {
+				flattenFields(dst, prefix+k+"_", fv, depth+1)
+			}
+		}
+	}
 }

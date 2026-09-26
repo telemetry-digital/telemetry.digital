@@ -14,6 +14,7 @@ func (okRefs) Datastream(string) bool  { return true }
 func (okRefs) Device(string) bool      { return true }
 func (okRefs) Channel(string) bool     { return true }
 func (okRefs) Entity(string) bool      { return true }
+func (okRefs) MQTTSource(string) bool  { return true }
 func (okRefs) HostAllowed(string) bool { return true }
 
 func TestFromRule(t *testing.T) {

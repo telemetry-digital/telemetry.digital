@@ -51,6 +51,7 @@ type Manager struct {
 	sources map[string]*source // connector id -> source
 	byNS    map[string]*source // namespace -> account source
 	dropped atomic.Int64
+	raw     rawSubs
 }
 
 type msg struct {
@@ -307,6 +308,7 @@ func (m *Manager) worker(ctx context.Context, src *source) {
 }
 
 func (m *Manager) handle(ctx context.Context, src *source, topic string, payload []byte) {
+	m.deliverRaw(src, topic, payload)
 	if strings.HasPrefix(topic, src.prefix+"/") && strings.HasSuffix(topic, "/config") {
 		m.discover(ctx, src, topic, payload)
 		return

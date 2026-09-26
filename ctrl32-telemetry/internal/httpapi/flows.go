@@ -58,6 +58,9 @@ func (f flowRefs) Channel(id string) bool {
 func (f flowRefs) Entity(id string) bool {
 	return f.exists(`SELECT EXISTS (SELECT 1 FROM core.entity WHERE id = $1::uuid AND org_id = $2::uuid AND status <> 'removed')`, id)
 }
+func (f flowRefs) MQTTSource(id string) bool {
+	return f.exists(`SELECT EXISTS (SELECT 1 FROM core.connector WHERE id = $1::uuid AND org_id = $2::uuid AND kind IN ('mqtt_account', 'mqtt_bridge') AND revoked_at IS NULL)`, id)
+}
 func (f flowRefs) HostAllowed(host string) bool {
 	for _, h := range f.s.flowHosts(f.ctx, f.org) {
 		if strings.EqualFold(h, host) || (strings.HasPrefix(h, "*.") && strings.HasSuffix(strings.ToLower(host), strings.ToLower(h[1:]))) {
@@ -837,6 +840,20 @@ func (h *flowHost) EntityCommand(ctx context.Context, org, entityID, service str
 		return "", "", "", err
 	}
 	return res.ID, res.Status, res.Error, nil
+}
+
+func (h *flowHost) MQTTSubscribe(org, source, filter string, fn func(topic string, payload []byte)) (func(), error) {
+	if h.s.smart == nil {
+		return nil, errors.New("smart home is not available")
+	}
+	return h.s.smart.Subscribe(org, source, filter, fn)
+}
+
+func (h *flowHost) MQTTPublish(ctx context.Context, org, source, topic string, payload []byte, retain bool) error {
+	if h.s.smart == nil {
+		return errors.New("smart home is not available")
+	}
+	return h.s.smart.PublishRaw(ctx, org, source, topic, payload, retain)
 }
 
 func (h *flowHost) SetAttribute(ctx context.Context, org, dev, key string, value any, issuer, reason string) error {

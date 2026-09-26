@@ -24,6 +24,8 @@ type fakeHost struct {
 	incident []string
 	attrs    []string
 	entCmds  []string
+	mqttOut  []string
+	mqttSubs map[string]func(string, []byte)
 }
 
 func (h *fakeHost) DatastreamName(_ context.Context, _, id string) (string, string) {
@@ -59,6 +61,21 @@ func (h *fakeHost) EntityCommand(_ context.Context, _, ent, service string, para
 	defer h.mu.Unlock()
 	h.entCmds = append(h.entCmds, fmt.Sprintf("%s %s %v | %s | %s", ent, service, params, issuer, reason))
 	return "cmd1", "sent", "", nil
+}
+func (h *fakeHost) MQTTSubscribe(_, src, filter string, fn func(string, []byte)) (func(), error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.mqttSubs == nil {
+		h.mqttSubs = map[string]func(string, []byte){}
+	}
+	h.mqttSubs[filter] = fn
+	return func() { h.mu.Lock(); delete(h.mqttSubs, filter); h.mu.Unlock() }, nil
+}
+func (h *fakeHost) MQTTPublish(_ context.Context, _, src, topic string, payload []byte, retain bool) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.mqttOut = append(h.mqttOut, fmt.Sprintf("%s %s %v", topic, payload, retain))
+	return nil
 }
 func (h *fakeHost) EntityName(_ context.Context, _, id string) string { return "Hall door" }
 func (h *fakeHost) Incident(_ context.Context, _, action, sev, title, dedup string, _ map[string]any) error {
@@ -362,5 +379,49 @@ func TestFlowEntities(t *testing.T) {
 	waitFor(t, "command result", func() bool { return len(debugTexts(e, "debug")) == 1 })
 	if d := debugTexts(e, "debug")[0]; d != "failed no answer" {
 		t.Fatalf("debug %q", d)
+	}
+}
+
+// MQTT in → condition → MQTT out: a Tasmota sensor above 25 °C switches a relay.
+func TestFlowMQTT(t *testing.T) {
+	e, _, h, cancel := testEngine(t, `{"nodes":[{"id":"in","type":"mqtt_in","x":0,"y":0,"settings":{"source":"`+srcA+`","topic":"tele/+/SENSOR"}},
+		{"id":"hot","type":"filter","x":200,"y":0,"settings":{"condition":"msg.temperature > 25"}},
+		{"id":"out","type":"mqtt_out","x":400,"y":0,"settings":{"source":"`+srcA+`","topic":"cmnd/{{ replace(topic, '/SENSOR', '') }}/POWER","payload":"ON"}}],
+		"wires":[{"from":"in","port":0,"to":"hot"},{"from":"hot","port":0,"to":"out"}]}`)
+	defer cancel()
+	e.register(e.flows[key("org", "test")])
+	h.mu.Lock()
+	fn := h.mqttSubs["tele/+/SENSOR"]
+	h.mu.Unlock()
+	if fn == nil {
+		t.Fatal("not subscribed")
+	}
+	fn("tele/fan/SENSOR", []byte(`{"temperature":24}`))
+	fn("tele/fan/SENSOR", []byte(`{"temperature":26.5}`))
+	waitFor(t, "publish", func() bool { h.mu.Lock(); defer h.mu.Unlock(); return len(h.mqttOut) == 1 })
+	if h.mqttOut[0] != "cmnd/tele/fan/POWER ON false" {
+		t.Fatalf("published %v", h.mqttOut)
+	}
+	e.Stop("org", "test")
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.mqttSubs) != 0 {
+		t.Fatal("subscription kept after stop")
+	}
+}
+
+func TestMQTTMessageFields(t *testing.T) {
+	m := mqttMessage("src", "tele/plug/SENSOR", []byte(`{"Time":"2026-09-26T10:00:00","ENERGY":{"Power":42.5,"Voltage":231,"Deep":{"A":{"B":1}}},"POWER":"ON"}`))
+	if m.Fields["ENERGY_Power"] != 42.5 || m.Fields["ENERGY_Voltage"] != 231.0 || m.Fields["POWER"] != "ON" || m.Fields["Time"] == nil {
+		t.Fatalf("fields %v", m.Fields)
+	}
+	if _, ok := m.Fields["ENERGY_Deep_A_B"]; ok {
+		t.Fatalf("depth not limited: %v", m.Fields)
+	}
+	if m := mqttMessage("src", "stat/x/POWER", []byte("ON")); m.Value != "ON" {
+		t.Fatalf("plain text %v", m.Value)
+	}
+	if m := mqttMessage("src", "x", []byte("21.5")); m.Value != 21.5 {
+		t.Fatalf("number %v", m.Value)
 	}
 }

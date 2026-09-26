@@ -27,6 +27,10 @@ type Host interface {
 	RunCommand(ctx context.Context, org, deviceID, method string, args json.RawMessage, flowID, issuer, reason string) (id, status, errText string, err error)
 	// EntityCommand controls a smart-home entity; issuer and reason name the flow as the origin.
 	EntityCommand(ctx context.Context, org, entityID, service string, params map[string]any, flowID, issuer, reason string) (id, status, errText string, err error)
+	// MQTTSubscribe delivers the messages of an MQTT source's topic filter until the returned function is called.
+	MQTTSubscribe(org, source, filter string, fn func(topic string, payload []byte)) (func(), error)
+	// MQTTPublish publishes a message on an MQTT source.
+	MQTTPublish(ctx context.Context, org, source, topic string, payload []byte, retain bool) error
 	// EntityName is the display name of an entity.
 	EntityName(ctx context.Context, org, id string) string
 	// SetAttribute sets one shared attribute of a device; issuer and reason name the flow as the origin.
@@ -201,6 +205,9 @@ func (e *Engine) stop(org, slug string) {
 	}
 	e.mu.Unlock()
 	if f != nil {
+		for _, un := range f.unsubs {
+			un()
+		}
 		f.stopWait()
 	}
 }
@@ -222,6 +229,21 @@ func (e *Engine) register(f *flow) {
 			e.byDS[ds] = append(e.byDS[ds], trigRef{f, n.ID})
 		case "webhook":
 			e.hooks[e.HookToken(f.org, f.slug, n.ID)] = trigRef{f, n.ID}
+		case "mqtt_in":
+			if e.host == nil {
+				continue
+			}
+			src, _ := n.Settings["source"].(string)
+			filter, _ := n.Settings["topic"].(string)
+			node := n.ID
+			un, err := e.host.MQTTSubscribe(f.org, src, filter, func(topic string, payload []byte) {
+				f.enqueue(qitem{node: node, msg: mqttMessage(src, topic, payload)})
+			})
+			if err != nil {
+				f.info(node, "MQTT in not subscribed: "+err.Error())
+				continue
+			}
+			f.unsubs = append(f.unsubs, un)
 		}
 	}
 }
@@ -371,6 +393,7 @@ type flow struct {
 	slots               chan struct{}
 	ring                *ring
 	stopOnce            sync.Once
+	unsubs              []func() // MQTT in subscriptions
 	lastDropNote        time.Time
 }
 

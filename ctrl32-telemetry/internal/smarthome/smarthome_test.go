@@ -292,3 +292,22 @@ func TestDeviceDiscoveryAndOthers(t *testing.T) {
 		t.Fatal("not a discovery topic")
 	}
 }
+
+func TestTopicFilters(t *testing.T) {
+	for _, c := range []struct {
+		f, t string
+		ok   bool
+	}{{"a/b", "a/b", true}, {"a/+", "a/b", true}, {"a/+", "a/b/c", false}, {"a/#", "a/b/c", true}, {"#", "x", true}, {"a/+/c", "a/b/c", true}, {"a/b", "a/c", false}, {"a/#", "a", true}} {
+		if Match(c.f, c.t) != c.ok {
+			t.Errorf("Match(%q, %q) != %v", c.f, c.t, c.ok)
+		}
+	}
+	for f, ok := range map[string]bool{"a/#": true, "a/#/b": false, "a+/b": false, "+/+": true, "$SYS/#": false, "": false} {
+		if ValidFilter(f) != ok {
+			t.Errorf("ValidFilter(%q) != %v", f, ok)
+		}
+	}
+	if ValidTopic("a/+") || !ValidTopic("cmnd/x/POWER") {
+		t.Error("ValidTopic")
+	}
+}

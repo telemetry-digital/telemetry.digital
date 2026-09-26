@@ -36,6 +36,7 @@ type Refs interface {
 	Device(id string) bool
 	Channel(id string) bool
 	Entity(id string) bool
+	MQTTSource(id string) bool
 	HostAllowed(host string) bool
 }
 
@@ -249,7 +250,7 @@ func checkSetting(st Setting, v any, refs Refs) (any, string) {
 			return nil, err
 		}
 		return s, ""
-	case "datastream", "device", "channel", "entity":
+	case "datastream", "device", "channel", "entity", "mqtt_source":
 		s, _ := v.(string)
 		if !uuidRe.MatchString(s) {
 			return nil, "choose one"
@@ -265,6 +266,8 @@ func checkSetting(st Setting, v any, refs Refs) (any, string) {
 				ok = refs.Channel(s)
 			case "entity":
 				ok = refs.Entity(s)
+			case "mqtt_source":
+				ok = refs.MQTTSource(s)
 			}
 		}
 		if !ok {
