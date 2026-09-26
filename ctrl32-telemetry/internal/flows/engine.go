@@ -36,7 +36,6 @@ const (
 	QueueSize    = 1000
 	DebugEntries = 500
 	maxDepth     = 250
-	actionSlots  = 8
 )
 
 // DebugEntry is one line of a flow's debug panel.
@@ -329,6 +328,7 @@ type rnode struct {
 	exprs map[string]*Expr
 	rules []*Expr
 	st    map[string]any // node memory (only the flow goroutine touches it)
+	work  chan func()    // action nodes: jobs executed in order by one worker
 	dirty bool
 	in    atomic.Int64
 	out   atomic.Int64
@@ -370,7 +370,7 @@ type flow struct {
 func (e *Engine) newFlow(org, slug, id, name string, version int, owner string, sp *Spec, temp bool) (*flow, error) {
 	f := &flow{e: e, org: org, slug: slug, id: id, name: name, version: version, owner: owner, spec: sp, nodes: map[string]*rnode{},
 		outs: map[string][][]string{}, q: make(chan qitem, QueueSize), quit: make(chan struct{}), done: make(chan struct{}), mem: map[string]Value{},
-		temp: temp, slots: make(chan struct{}, actionSlots), ring: e.ringOf(org, slug)}
+		temp: temp, ring: e.ringOf(org, slug)}
 	f.loc = time.UTC
 	if e.host != nil {
 		if l := e.host.Location(context.Background(), org); l != nil {

@@ -664,17 +664,23 @@ func (f *flow) inWindow(from, to string, days any) bool {
 	return cur >= a || cur < b // over midnight
 }
 
-// act runs an action outside the flow goroutine (at most actionSlots at a time) and continues the message with the
-// result fields in the flow goroutine; failures go to the debug panel.
+// act runs an action outside the flow goroutine, in order per node (a command "on" then "off" arrives in that
+// order), and continues the message with the result fields in the flow goroutine; failures go to the debug panel.
 func (f *flow) act(n *rnode, m *Message, do func(ctx context.Context) (map[string]Value, error), desc string) {
-	select {
-	case f.slots <- struct{}{}:
-	default:
-		f.fail(n, m, errors.New("too many actions in progress; message dropped"))
-		return
+	if n.work == nil {
+		n.work = make(chan func(), 64)
+		go func() {
+			for {
+				select {
+				case job := <-n.work:
+					job()
+				case <-f.quit:
+					return
+				}
+			}
+		}()
 	}
-	go func() {
-		defer func() { <-f.slots }()
+	job := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		res, err := do(ctx)
@@ -689,7 +695,12 @@ func (f *flow) act(n *rnode, m *Message, do func(ctx context.Context) (map[strin
 			}
 			f.emit(n, 0, m, false)
 		}})
-	}()
+	}
+	select {
+	case n.work <- job:
+	default:
+		f.fail(n, m, errors.New("too many actions waiting at this node; message dropped"))
+	}
 }
 
 func (f *flow) dryAction(n *rnode, m *Message, text string) {
