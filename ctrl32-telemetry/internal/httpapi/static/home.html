@@ -33,7 +33,7 @@
 <script src="/vendor/tabler-icons.js"></script>
 <script>
 const $ = s => document.querySelector(s), esc = ctrl32.esc, api = ctrl32.api, t = ctrl32.t;
-let HOME = null, ROOM = '', ENT = new Map(), CAN = false, CMD = new Map();
+let HOME = null, ROOM = '', ENT = new Map(), CAN = false, CMD = new Map(), EARLY = new Map(); // EARLY: command results that arrived before the POST returned
 try { ROOM = localStorage.getItem('ctrl32.home.room') || ''; } catch (e) { /* private mode */ }
 
 const icon = (n, sz = 22) => { const p = (window.ctrl32Icons || {})[n]; return p ? `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${p}</svg>` : ''; };
@@ -168,7 +168,9 @@ function drawLine(svg, rows, W, H, axes) {
   let ax = '';
   if (axes) {
     for (let i = 0; i <= 4; i++) { const v = y0 + (y1 - y0) * i / 4, y = Y(v); ax += `<line x1="${L}" x2="${W}" y1="${y}" y2="${y}" class="hm-grid-line"/><text x="${L - 6}" y="${y + 4}" text-anchor="end">${esc(fmtNum(v, {}))}</text>`; }
-    for (let i = 0; i <= 4; i++) { const x = x0 + (x1 - x0) * i / 4; ax += `<text x="${X(x)}" y="${H - 2}" text-anchor="middle">${esc(ctrl32.fmt(new Date(x).toISOString()).replace(/:\d\d$/, ''))}</text>`; }
+    const short = x1 - x0 < 36 * 3600e3, loc = (typeof ctrl32.locale === 'function' ? ctrl32.locale() : ctrl32.locale) || undefined;
+    const lab = x => new Date(x).toLocaleString(loc, short ? {hour: '2-digit', minute: '2-digit'} : {day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit'});
+    for (let i = 0; i <= 4; i++) { const x = x0 + (x1 - x0) * i / 4; ax += `<text x="${X(x)}" y="${H - 2}" text-anchor="${i === 0 ? 'start' : i === 4 ? 'end' : 'middle'}">${esc(lab(x))}</text>`; }
   }
   svg.innerHTML = ax + `<path d="${d}" class="hm-line" vector-effect="non-scaling-stroke"/>`;
 }
@@ -202,7 +204,8 @@ async function command(id, body) {
   const e = ENT.get(id); showMsg(id, t('sending…'), 'busy');
   try {
     const r = await api('POST', `/api/v1/entities/${id}/command`, body);
-    CMD.set(r.id, id);
+    if (EARLY.has(r.id)) { const d = EARLY.get(r.id); EARLY.delete(r.id); r.status = d.status; r.error = (d.detail && d.detail.error) || r.error; }
+    else CMD.set(r.id, id);
     if (r.status === 'pending') showMsg(id, t('waiting for approval by another user (four eyes)'), 'warn');
     else if (r.status === 'acked') showMsg(id, t('done'), 'ok');
     else if (r.status === 'failed') { showMsg(id, r.error || t('failed'), 'bad'); updateCard(id); }
@@ -241,7 +244,8 @@ function live() {
     queue.add(d.entity_id); if (!timer) timer = setTimeout(() => { timer = null; queue.forEach(updateCard); queue.clear(); }, 250);
   });
   es.addEventListener('command', ev => {
-    const d = JSON.parse(ev.data), id = CMD.get(d.command_id); if (!id) return;
+    const d = JSON.parse(ev.data), id = CMD.get(d.command_id);
+    if (!id) { if (['acked', 'failed', 'rejected', 'expired'].includes(d.status)) { EARLY.set(d.command_id, d); setTimeout(() => EARLY.delete(d.command_id), 10000); } return; }
     if (d.status === 'acked') { showMsg(id, t('done'), 'ok'); CMD.delete(d.command_id); }
     else if (d.status === 'failed' || d.status === 'rejected' || d.status === 'expired') { showMsg(id, (d.detail && d.detail.error) || t('failed'), 'bad'); CMD.delete(d.command_id); updateCard(id); }
   });
