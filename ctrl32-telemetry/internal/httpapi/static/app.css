@@ -364,3 +364,60 @@ dialog.dw-full::backdrop { background: rgba(15, 23, 42, .55); }
 .dw-filters label { flex-direction: row; font-size: 12px; }
 .dw-filters select { min-height: 0; padding: 1px 4px; width: auto; }
 .dw-nolabel .dw-lbl { display: none !important; }
+
+/* ---- flow editor (spec 004) ---- */
+.fe-head h1 { margin: 0; }
+.fe-top { margin-bottom: 8px; }
+.fe-dry { font-size: 13px; gap: 4px; }
+.fe { display: grid; grid-template-columns: 200px minmax(0, 1fr) 320px; gap: 8px; height: calc(100vh - 330px); min-height: 420px; }
+.fe-pal, .fe-props { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); padding: 8px; overflow: auto; }
+.fe-pal details summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin: 6px 0 4px; }
+.fe-search { width: 100%; margin-bottom: 4px; }
+.fe-pal-list { display: flex; flex-direction: column; gap: 3px; }
+.fe-pal-item { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg2); cursor: grab; font-size: 12.5px; user-select: none; }
+.fe-pal-item:hover { border-color: var(--primary); }
+.fe-pal-item i, .fe-props-head i { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 4px; color: #fff; flex: none; }
+.fe-stage { position: relative; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); overflow: hidden; }
+.fe-svg { width: 100%; height: 100%; display: block; outline: none; cursor: default; }
+.fe-hint { position: absolute; left: 8px; bottom: 6px; font-size: 11px; pointer-events: none; }
+.fe-node { cursor: move; }
+.fe-body { fill: var(--card); stroke: var(--muted); stroke-width: 1; }
+.fe-node.sel .fe-body { stroke: var(--primary); stroke-width: 2.5; }
+.fe-node.bad .fe-body { stroke: #dc2626; stroke-width: 2.5; stroke-dasharray: 5 3; }
+.fe-node.off { opacity: .45; }
+.fe-node.comment .fe-body { fill: color-mix(in srgb, #facc15 18%, var(--card)); stroke-dasharray: 3 3; }
+.fe-ico { color: #fff; }
+.fe-lbl { font-size: 12.5px; font-weight: 600; fill: var(--fg); pointer-events: none; }
+.fe-sub { font-size: 10.5px; fill: var(--muted); pointer-events: none; font-family: var(--mono); }
+.fe-port { fill: var(--card); stroke: var(--muted); stroke-width: 1.5; cursor: crosshair; }
+.fe-port:hover { fill: var(--primary); stroke: var(--primary); }
+.fe-port-lbl { font-size: 9.5px; fill: var(--muted); pointer-events: none; }
+.fe-badge { font-size: 10px; fill: #16a34a; pointer-events: none; }
+.fe-badge.err { fill: #dc2626; }
+.fe-inject { cursor: pointer; }
+.fe-inject rect { fill: var(--bg2); stroke: var(--muted); }
+.fe-inject path { fill: #0e7490; }
+.fe-inject:hover rect { stroke: var(--primary); }
+.fe-wire-line { fill: none; stroke: var(--muted); stroke-width: 2; pointer-events: none; }
+.fe-wire-hit { fill: none; stroke: transparent; stroke-width: 12; cursor: pointer; }
+.fe-wire.sel .fe-wire-line, .fe-wire:hover .fe-wire-line { stroke: var(--primary); stroke-width: 3; }
+.fe-props h3 { margin: 0 0 6px; font-size: 14px; }
+.fe-props-head { display: flex; align-items: center; gap: 8px; }
+.fe-props-head .muted { margin-left: auto; font-size: 11px; }
+.fe-form { display: flex; flex-direction: column; gap: 8px; }
+.fe-form label { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.fe-form label.inline { flex-direction: row; align-items: center; gap: 6px; }
+.fe-mono { font-family: var(--mono); font-size: 12.5px; }
+.fe-multi { border: none; padding: 0; margin: 0; font-size: 13px; }
+.fe-multi div { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.fe-fields { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.fe-field-row { display: grid; grid-template-columns: 76px 1fr 1fr auto; gap: 4px; }
+.fe-problems { border: 1px solid #fca5a5; background: color-mix(in srgb, #dc2626 8%, var(--card)); border-radius: 6px; padding: 6px 8px; font-size: 12.5px; color: #b91c1c; display: flex; flex-direction: column; gap: 2px; }
+.fe-debug { margin-top: 8px; padding: 6px 8px; }
+.fe-debug-head { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.fe-debug-list { height: 150px; overflow: auto; font-size: 12px; margin-top: 4px; border-top: 1px solid var(--line); }
+.fe-dbg { display: grid; grid-template-columns: 96px 90px 120px 1fr; gap: 6px; align-items: baseline; padding: 2px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.fe-dbg.error .fe-dbg-text { color: #dc2626; }
+.fe-dbg details { grid-column: 1 / -1; }
+.fe-dbg pre { margin: 2px 0; font-size: 11px; max-height: 160px; overflow: auto; }
+@media (max-width: 900px) { .fe { grid-template-columns: 1fr; height: auto; } .fe-stage { height: 60vh; } .fe-pal, .fe-props { max-height: 260px; } }

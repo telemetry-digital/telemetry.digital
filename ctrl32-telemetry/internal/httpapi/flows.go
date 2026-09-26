@@ -626,8 +626,9 @@ func (s *Server) exportFlow(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/flows/import {json, reason}
 func (s *Server) importFlow(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Format, Name, Slug, Reason string
-		Spec                       json.RawMessage
+		Format, Name, Slug, Reason, Checksum string
+		Version                              int
+		Spec                                 json.RawMessage
 	}
 	if err := decodeJSON(r, &in, 2<<20); err != nil {
 		writeErr(w, 400, err.Error())
