@@ -87,7 +87,10 @@
     svg.addEventListener('dragover', (e) => e.preventDefault());
     svg.addEventListener('drop', (e) => { e.preventDefault(); const t = e.dataTransfer.getData('text/plain'); if (!defs[t]) return; const [x, y] = toWorld(e); addNode(t, x - NW / 2, y - NH / 2); });
     function defaults(d) { const s = {}; for (const p of d.settings) if (p.default !== undefined) s[p.name] = JSON.parse(JSON.stringify(p.default)); return s; }
-    function addNode(type, x, y) { commit(); const d = defs[type]; const n = { id: newId(type), type, x: snap(x), y: snap(y), settings: defaults(d) }; spec.nodes.push(n); sel = new Set([n.id]); selWire = -1; draw(); renderProps(); return n; }
+    function addNode(type, x, y) {
+      commit(); const d = defs[type]; x = snap(x); y = snap(y);
+      while (spec.nodes.some((m) => Math.abs(m.x - x) < 40 && Math.abs(m.y - y) < 30)) { x += 30; y += 60; } // never stack new nodes
+      const n = { id: newId(type), type, x, y, settings: defaults(d) }; spec.nodes.push(n); sel = new Set([n.id]); selWire = -1; draw(); renderProps(); return n; }
 
     // ---- pointer interaction
     let drag = null;
