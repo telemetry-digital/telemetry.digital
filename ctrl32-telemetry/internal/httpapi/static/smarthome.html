@@ -67,6 +67,7 @@
     </div>
     <div class="row2"><label>Discovery prefix <input name="prefix" value="homeassistant"></label>
       <label>New devices <select name="adopt"><option value="auto">add automatically</option><option value="inbox">ask first (inbox)</option></select></label></div>
+    <label>Incident when disconnected longer than (minutes, 0 = never) <input name="outage" type="number" min="0" max="10080" step="any" value="10"></label>
     <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
     <div class="err" id="srcErr"></div>
     <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
@@ -180,13 +181,14 @@ function editSource(kind, s) {
   }
   f.host.required = kind === 'bridge';
   f.adopt.value = kind === 'account' ? 'auto' : 'inbox';
-  if (s) { const st = s.settings; f.name.value = s.name; f.prefix.value = st.discovery_prefix || 'homeassistant'; f.adopt.value = st.adopt || f.adopt.value;
+  f.outage.value = 10;
+  if (s) { const st = s.settings; f.name.value = s.name; f.prefix.value = st.discovery_prefix || 'homeassistant'; f.adopt.value = st.adopt || f.adopt.value; f.outage.value = st.outage_incident_min != null ? st.outage_incident_min : 10;
     if (kind === 'bridge') { f.host.value = st.host || ''; f.port.value = st.port || 1883; f.tls.checked = !!st.tls; f.insecure.checked = !!st.insecure_skip_verify; f.username.value = st.username || ''; f.client_id.value = st.client_id || ''; } }
   $('#srcDlg').showModal();
 }
 $('#srcForm').onsubmit = async e => {
   e.preventDefault(); const f = e.target;
-  const body = {name: f.name.value, discovery_prefix: f.prefix.value, adopt: f.adopt.value, reason: f.reason.value};
+  const body = {name: f.name.value, discovery_prefix: f.prefix.value, adopt: f.adopt.value, outage_incident_min: +f.outage.value, reason: f.reason.value};
   if (KIND === 'bridge') Object.assign(body, {publish_datastreams: [...f.publish.selectedOptions].map(o => o.value), host: f.host.value, port: +f.port.value, tls: f.tls.checked, insecure_skip_verify: f.insecure.checked, username: f.username.value, client_id: f.client_id.value}, f.password.value ? {password: f.password.value} : {});
   try {
     if (EDIT) await api('PUT', '/api/v1/mqtt-sources/' + EDIT.id, body);

@@ -81,6 +81,7 @@ type mqttSourceIn struct {
 	Adopt              *string   `json:"adopt"`
 	SiteID             *string   `json:"site_id"`
 	PublishDatastreams *[]string `json:"publish_datastreams"`
+	OutageMinutes      *float64  `json:"outage_incident_min"`
 	Reason             string    `json:"reason"`
 }
 
@@ -98,6 +99,12 @@ func (s *Server) applySourceSettings(r *http.Request, org, kind string, in *mqtt
 			return "adopt must be auto or inbox"
 		}
 		st["adopt"] = *in.Adopt
+	}
+	if in.OutageMinutes != nil {
+		if *in.OutageMinutes < 0 || *in.OutageMinutes > 10080 || (*in.OutageMinutes > 0 && *in.OutageMinutes < 0.1) {
+			return "outage_incident_min must be 0 (off) or between 0.1 and 10080 minutes"
+		}
+		st["outage_incident_min"] = *in.OutageMinutes
 	}
 	if in.SiteID != nil {
 		if *in.SiteID != "" {
@@ -524,7 +531,7 @@ func (s *Server) patchEntity(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "entity not found")
 		return
 	}
-	_, err := s.pool.Exec(r.Context(), `UPDATE core.entity SET name = coalesce($2, name), room_id = CASE WHEN $3::boolean THEN nullif($4, '')::uuid ELSE room_id END,
+	_, err := s.pool.Exec(r.Context(), `UPDATE core.entity SET name = coalesce($2, name), name_locked = name_locked OR $2 IS NOT NULL, room_id = CASE WHEN $3::boolean THEN nullif($4, '')::uuid ELSE room_id END,
 		hidden = coalesce($5, hidden), sort = coalesce($6, sort) WHERE id = $1::uuid`, r.PathValue("id"), in.Name, in.RoomID != nil, deref(in.RoomID), in.Hidden, in.Sort)
 	if err != nil {
 		writeErr(w, 500, "update failed")

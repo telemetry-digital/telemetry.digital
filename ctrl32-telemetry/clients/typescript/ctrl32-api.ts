@@ -388,7 +388,7 @@ export type Incident = {
   detail?: Record<string, unknown>;
   id?: string;
   impact?: string;
-  /** alarm_undelivered, audit_chain, backup_failed or manual */
+  /** alarm_undelivered, audit_chain, backup_failed, manual, replica, flow or mqtt_source */
   kind?: string;
   opened_at?: string;
   /** Username or system */
@@ -2176,7 +2176,7 @@ export class Ctrl32Client {
     services?: string[];
     state?: string;
     status?: "active" | "unsupported" | "removed";
-    /** control hints: min, max, step, options, modes, … */
+    /** control hints: min, max, step, options, modes, …; lights: color {rgb, color_temp, min_mireds, max_mireds} */
     ui?: Record<string, unknown>;
     unit?: string;
   })[]> {
@@ -2197,7 +2197,7 @@ export class Ctrl32Client {
     services?: string[];
     state?: string;
     status?: "active" | "unsupported" | "removed";
-    /** control hints: min, max, step, options, modes, … */
+    /** control hints: min, max, step, options, modes, …; lights: color {rgb, color_temp, min_mireds, max_mireds} */
     ui?: Record<string, unknown>;
     unit?: string;
   })[]>('GET', `/api/v1/entities`, query, undefined, false);
@@ -2223,7 +2223,7 @@ export class Ctrl32Client {
     services?: string[];
     state?: string;
     status?: "active" | "unsupported" | "removed";
-    /** control hints: min, max, step, options, modes, … */
+    /** control hints: min, max, step, options, modes, …; lights: color {rgb, color_temp, min_mireds, max_mireds} */
     ui?: Record<string, unknown>;
     unit?: string;
   }> {
@@ -2244,7 +2244,7 @@ export class Ctrl32Client {
     services?: string[];
     state?: string;
     status?: "active" | "unsupported" | "removed";
-    /** control hints: min, max, step, options, modes, … */
+    /** control hints: min, max, step, options, modes, …; lights: color {rgb, color_temp, min_mireds, max_mireds} */
     ui?: Record<string, unknown>;
     unit?: string;
   }>('GET', `/api/v1/entities/${encodeURIComponent(id)}`, undefined, undefined, false);
@@ -2907,7 +2907,7 @@ export class Ctrl32Client {
         services?: string[];
         state?: string;
         status?: "active" | "unsupported" | "removed";
-        /** control hints: min, max, step, options, modes, … */
+        /** control hints: min, max, step, options, modes, …; lights: color {rgb, color_temp, min_mireds, max_mireds} */
         ui?: Record<string, unknown>;
         unit?: string;
       })[];
@@ -2937,7 +2937,7 @@ export class Ctrl32Client {
         services?: string[];
         state?: string;
         status?: "active" | "unsupported" | "removed";
-        /** control hints: min, max, step, options, modes, … */
+        /** control hints: min, max, step, options, modes, …; lights: color {rgb, color_temp, min_mireds, max_mireds} */
         ui?: Record<string, unknown>;
         unit?: string;
       })[];
@@ -3164,6 +3164,8 @@ export class Ctrl32Client {
     insecure_skip_verify?: boolean;
     kind?: "account" | "bridge";
     name?: string;
+    /** minutes disconnected before an incident opens (default 10, 0 = never; accounts only once they have entities) */
+    outage_incident_min?: number;
     /** bridge; stored encrypted */
     password?: string;
     /** bridge */
@@ -3221,6 +3223,8 @@ export class Ctrl32Client {
     insecure_skip_verify?: boolean;
     kind?: "account" | "bridge";
     name?: string;
+    /** minutes disconnected before an incident opens (default 10, 0 = never; accounts only once they have entities) */
+    outage_incident_min?: number;
     /** bridge; stored encrypted */
     password?: string;
     /** bridge */

@@ -52,6 +52,87 @@ type Manager struct {
 	byNS    map[string]*source // namespace -> account source
 	dropped atomic.Int64
 	raw     rawSubs
+
+	// Inc opens an incident for a source disconnected longer than its limit (spec 006); set before Start.
+	Inc     Incidents
+	outages map[string]*outage // source id -> connection watch; used by Start's loop only
+}
+
+// Incidents is the part of the incident manager the smart-home manager uses.
+type Incidents interface {
+	SourceDown(ctx context.Context, org, sourceID, title, impact string, detail map[string]any)
+	SourceRecovered(ctx context.Context, sourceID string)
+}
+
+type outage struct {
+	since               time.Time
+	known, up, reported bool
+}
+
+// DefaultOutageMinutes is how long a source may stay disconnected before an incident opens.
+const DefaultOutageMinutes = 10
+
+// checkOutages opens an incident for sources disconnected longer than their limit and resolves it when they are
+// back. Accounts count only once they have entities (their devices are expected to be connected).
+func (m *Manager) checkOutages(ctx context.Context) {
+	if m.outages == nil {
+		m.outages = map[string]*outage{}
+	}
+	m.mu.RLock()
+	list := make([]*source, 0, len(m.sources))
+	for _, s := range m.sources {
+		list = append(list, s)
+	}
+	m.mu.RUnlock()
+	now := time.Now()
+	seen := map[string]bool{}
+	for _, s := range list {
+		seen[s.id] = true
+		st := m.Status(s.id)
+		o := m.outages[s.id]
+		if o == nil {
+			o = &outage{}
+			m.outages[s.id] = o
+		}
+		if st.Connected {
+			if !o.known || !o.up {
+				o.known, o.up = true, true
+				if m.Inc != nil {
+					m.Inc.SourceRecovered(ctx, s.id)
+				}
+			}
+			o.reported = false
+			continue
+		}
+		if !o.known || o.up {
+			o.known, o.up, o.since = true, false, now
+		}
+		limit := float64(DefaultOutageMinutes)
+		if v, ok := toNum(s.settings["outage_incident_min"]); ok {
+			limit = v
+		}
+		if limit <= 0 || o.reported || m.Inc == nil || (s.kind == "mqtt_account" && st.Entities == 0) {
+			continue
+		}
+		if now.Sub(o.since) < time.Duration(limit*float64(time.Minute)) {
+			continue
+		}
+		o.reported = true
+		title, impact := "MQTT bridge "+s.name+" disconnected", "Devices behind this bridge are not recorded and cannot be controlled."
+		if s.kind == "mqtt_account" {
+			title, impact = "MQTT account "+s.name+": no device connected", "Devices of this account are not recorded and cannot be controlled."
+		}
+		m.Inc.SourceDown(ctx, s.org, s.id, title, impact, map[string]any{"source_id": s.id, "source": s.name, "kind": strings.TrimPrefix(s.kind, "mqtt_"),
+			"since": o.since.UTC().Format(time.RFC3339), "error": st.Error, "entities": st.Entities})
+	}
+	for id, o := range m.outages {
+		if !seen[id] {
+			if o.reported && m.Inc != nil {
+				m.Inc.SourceRecovered(ctx, id)
+			}
+			delete(m.outages, id)
+		}
+	}
 }
 
 type msg struct {
@@ -74,6 +155,8 @@ type source struct {
 	mu     sync.Mutex
 	ents   map[string]*ent   // entity id -> entity
 	topics map[string][]*ent // state topic -> entities
+
+	nat *nativeState // native adapters; used by the source's worker only
 }
 
 type ent struct {
@@ -124,6 +207,7 @@ func (m *Manager) Start(ctx context.Context) error {
 	}
 	t := time.NewTicker(2 * time.Second)
 	defer t.Stop()
+	n := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -135,6 +219,9 @@ func (m *Manager) Start(ctx context.Context) error {
 			return nil
 		case <-t.C:
 			m.expirePending()
+			if n++; n%3 == 0 {
+				m.checkOutages(ctx)
+			}
 		}
 	}
 }
@@ -287,7 +374,7 @@ func (s *source) reindex() {
 func (s *source) topicsToSubscribe() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := []string{s.prefix + "/#"}
+	out := append([]string{s.prefix + "/#"}, s.nativeTopics()...)
 	for t := range s.topics {
 		if !strings.HasPrefix(t, s.prefix+"/") {
 			out = append(out, t)
@@ -309,10 +396,18 @@ func (m *Manager) worker(ctx context.Context, src *source) {
 
 func (m *Manager) handle(ctx context.Context, src *source, topic string, payload []byte) {
 	m.deliverRaw(src, topic, payload)
+	if m.native(ctx, src, topic, payload) {
+		return
+	}
 	if strings.HasPrefix(topic, src.prefix+"/") && strings.HasSuffix(topic, "/config") {
 		m.discover(ctx, src, topic, payload)
 		return
 	}
+	m.dispatch(ctx, src, topic, payload)
+}
+
+// dispatch applies a state message to the entities listening on its topic.
+func (m *Manager) dispatch(ctx context.Context, src *source, topic string, payload []byte) {
 	src.mu.Lock()
 	list := append([]*ent(nil), src.topics[topic]...)
 	src.mu.Unlock()
@@ -601,7 +696,8 @@ func (m *Manager) upsertEntity(ctx context.Context, src *source, deviceID, roomI
 	var state *string
 	err := m.pool.QueryRow(ctx, `INSERT INTO core.entity (org_id, connector_id, device_id, unique_id, component, name, config, config_topic, datastream_id, room_id, status, error)
 		VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9::uuid, coalesce($10::uuid, (SELECT parent_id FROM core.asset WHERE attributes->>'device_id' = $3::text LIMIT 1)), $11, $12)
-		ON CONFLICT (connector_id, unique_id) DO UPDATE SET device_id = EXCLUDED.device_id, component = EXCLUDED.component, name = EXCLUDED.name,
+		ON CONFLICT (connector_id, unique_id) DO UPDATE SET device_id = EXCLUDED.device_id, component = EXCLUDED.component,
+		  name = CASE WHEN entity.name_locked THEN entity.name ELSE EXCLUDED.name END,
 		  config = EXCLUDED.config, config_topic = EXCLUDED.config_topic, datastream_id = coalesce(EXCLUDED.datastream_id, entity.datastream_id),
 		  room_id = coalesce(entity.room_id, EXCLUDED.room_id), status = EXCLUDED.status, error = EXCLUDED.error
 		RETURNING id::text, org_id::text, state, attributes, available`,

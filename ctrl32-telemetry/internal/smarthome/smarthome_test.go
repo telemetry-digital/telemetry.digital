@@ -45,6 +45,13 @@ func TestTemplates(t *testing.T) {
 		{`{"state": "{{ value }}"}`, `ON`, `{"state": "ON"}`},
 		{"{{ value_json.power | round(1, 'floor') }}", `{"power":1.99}`, "1.9"},
 		{"{{ value_json.data.temp if value_json.data is defined else 0 }}", `{"x":1}`, "0"},
+		{"{{ value_json.HSBColor.split(',')[0] }}", `{"HSBColor":"30,100,80"}`, "30"},
+		{"{{ value_json.Color[0:2] | int(0, 16) }},{{ value_json.Color[2:4] | int(0, 16) }},{{ value_json.Color[4:6] | int(0, 16) }}", `{"Color":"FF8000"}`, "255,128,0"},
+		{"{{ value[-3:] }}", `abcdef`, "def"},
+		{"{{ value.split()[1] | upper }}", `a b c`, "B"},
+		{"{{ value.startswith('shelly') }}", `shellyplus1-abc`, "True"},
+		{"{{ value_json.x | int(-1, 16) }}", `{"x":"zz"}`, "-1"},
+		{"{{ value_json.l[:2] | length }}", `{"l":[1,2,3]}`, "2"},
 	}
 	for _, c := range cases {
 		if got := render(t, c.tpl, c.payload); got != c.want {

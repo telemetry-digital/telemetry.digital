@@ -57,7 +57,7 @@ type Update struct {
 }
 
 var (
-	Kinds      = []string{"alarm_undelivered", "audit_chain", "backup_failed", "manual", "replica", "flow"}
+	Kinds      = []string{"alarm_undelivered", "audit_chain", "backup_failed", "manual", "replica", "flow", "mqtt_source"}
 	Severities = []string{"minor", "major", "critical"}
 	Statuses   = []string{"open", "investigating", "resolved", "closed"}
 	// allowed transitions
@@ -192,6 +192,44 @@ func (m *Manager) ReplicaProblem(ctx context.Context, replicaID, name, state, im
 	if _, _, err := m.Open(ctx, Incident{Kind: "replica", Severity: sev, Title: fmt.Sprintf("Database replica %s: %s", name, state), Detail: detail,
 		Impact: impact, DedupKey: "replica:" + replicaID}); err != nil {
 		m.log.Error("could not open incident for replica", "replica", replicaID, "err", err)
+	}
+}
+
+// SourceDown opens (once) an incident for an MQTT source (bridge or account) that has been disconnected longer than
+// its limit (spec 006).
+func (m *Manager) SourceDown(ctx context.Context, org, sourceID, title, impact string, detail map[string]any) {
+	if m == nil {
+		return
+	}
+	if _, _, err := m.Open(ctx, Incident{OrgID: org, Kind: "mqtt_source", Severity: "major", Title: title, Detail: detail, Impact: impact,
+		DedupKey: "mqtt_source:" + sourceID}); err != nil {
+		m.log.Error("could not open incident for MQTT source", "source", sourceID, "err", err)
+	}
+}
+
+// SourceRecovered resolves the open incident of an MQTT source, if any.
+func (m *Manager) SourceRecovered(ctx context.Context, sourceID string) {
+	m.resolveByKey(ctx, "mqtt_source:"+sourceID, "The connection was re-established.")
+}
+
+func (m *Manager) resolveByKey(ctx context.Context, key, cause string) {
+	if m == nil {
+		return
+	}
+	var id string
+	if err := m.pool.QueryRow(ctx, `SELECT id::text FROM core.incident WHERE dedup_key = $1 AND status IN ('open', 'investigating')`, key).Scan(&id); err != nil {
+		return
+	}
+	in, _, err := m.Get(ctx, "", id, true)
+	if err != nil {
+		return
+	}
+	status := "resolved"
+	if in.Cause != "" {
+		cause = in.Cause
+	}
+	if _, err := m.Apply(ctx, in, Update{Status: &status, Cause: &cause}, "system"); err != nil {
+		m.log.Warn("could not resolve incident", "incident", id, "err", err)
 	}
 }
 

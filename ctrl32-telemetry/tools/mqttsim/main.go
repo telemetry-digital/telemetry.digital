@@ -5,7 +5,9 @@
 //	                                                                         and answers RPC requests
 //	mqttsim z2m     -addr … -user hs_… -pass … [-base zigbee2mqtt]         zigbee2mqtt bridge with a temperature
 //	                                                                         sensor, a dimmable light and a plug
-//	mqttsim tasmota -addr … -user hs_… -pass … -id A1B2C3                 Tasmota relay with Home Assistant discovery
+//	mqttsim tasmota -addr … -user hs_… -pass … -id A1B2C3 [-native]       Tasmota relay with Home Assistant discovery
+//	                                                                         (-native: Tasmota's own discovery format)
+//	mqttsim shelly  -addr … -user hs_… -pass … -id a8032ab12345           Shelly Plus 1PM (Gen2 RPC over MQTT)
 //	mqttsim broker  -listen 127.0.0.1:1885 -user u -pass p                 a plain MQTT broker (a "foreign" broker)
 //
 // Every device prints one line per event on stdout ("EVENT <kind> <detail>") and runs for -wait seconds.
@@ -17,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"os"
 	"os/signal"
@@ -33,7 +36,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: mqttsim tb|z2m|tasmota|broker [flags]")
+		fmt.Fprintln(os.Stderr, "usage: mqttsim tb|z2m|tasmota|shelly|broker [flags]")
 		os.Exit(2)
 	}
 	fs := flag.NewFlagSet(os.Args[1], flag.ExitOnError)
@@ -48,6 +51,7 @@ func main() {
 	prefix := fs.String("prefix", "homeassistant", "discovery prefix")
 	id := fs.String("id", "A1B2C3", "device id (tasmota)")
 	listen := fs.String("listen", "127.0.0.1:1885", "listen address (broker)")
+	native := fs.Bool("native", false, "Tasmota native discovery instead of Home Assistant discovery (tasmota)")
 	wait := fs.Int("wait", 10, "seconds to run")
 	_ = fs.Parse(os.Args[2:])
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*wait)*time.Second)
@@ -61,7 +65,13 @@ func main() {
 	case "z2m":
 		err = runZ2M(ctx, *addr, *user, *pass, *base, *prefix)
 	case "tasmota":
-		err = runTasmota(ctx, *addr, *user, *pass, *id, *prefix)
+		if *native {
+			err = runTasmotaNative(ctx, *addr, *user, *pass, *id)
+		} else {
+			err = runTasmota(ctx, *addr, *user, *pass, *id, *prefix)
+		}
+	case "shelly":
+		err = runShelly(ctx, *addr, *user, *pass, *id)
 	case "broker":
 		err = runBroker(ctx, *listen, *user, *pass)
 	default:
@@ -391,6 +401,175 @@ func runTasmota(ctx context.Context, addr, user, pass, id, prefix string) error 
 		}
 		mu.Unlock()
 		cl.pub(ctx, "tele/"+topic+"/SENSOR", map[string]any{"ENERGY": map[string]any{"Power": w, "Voltage": 231}}, false)
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-tick.C:
+		}
+	}
+}
+
+// runTasmotaNative is a Sonoff POW with an AM2301 sensor using Tasmota's native discovery (SetOption19 0).
+func runTasmotaNative(ctx context.Context, addr, user, pass, id string) error {
+	topic := "tasmota_" + id
+	mac := "A4CF12" + strings.ToUpper(id)
+	cl, err := connect(ctx, addr, "DVES_"+id, user, pass, &paho.WillMessage{Topic: "tele/" + topic + "/LWT", Payload: []byte("Offline"), Retain: true})
+	if err != nil {
+		return err
+	}
+	defer cl.close()
+	event("connected")
+	cl.pub(ctx, "tele/"+topic+"/LWT", "Online", true)
+	cl.pub(ctx, "tasmota/discovery/"+mac+"/config", map[string]any{"ip": "192.168.1.50", "dn": "Workshop plug", "fn": []any{"Workshop plug", nil, nil, nil},
+		"hn": "tasmota-" + id + "-1234", "mac": mac, "md": "Sonoff POW R2", "ty": 0, "if": 0, "ofln": "Offline", "onln": "Online",
+		"state": []string{"OFF", "ON", "TOGGLE", "HOLD"}, "sw": "14.2.0", "t": topic, "ft": "%prefix%/%topic%/", "tp": []string{"cmnd", "stat", "tele"},
+		"rl": []int{1, 0, 0, 0}, "swc": []int{-1, -1, -1, -1}, "swn": []any{nil, nil, nil, nil}, "btn": []int{0, 0, 0, 0},
+		"so": map[string]int{"4": 0, "11": 0, "13": 0, "17": 0, "20": 0, "30": 0, "68": 0, "73": 0, "82": 0, "114": 0, "117": 0},
+		"lk": 0, "lt_st": 0, "sho": []int{}, "sht": []int{}, "ver": 1}, true)
+	var mu sync.Mutex
+	power := "OFF"
+	temp := 21.0
+	sensor := func() map[string]any {
+		w := 0.0
+		if power == "ON" {
+			w = 1200 + float64(time.Now().Second())
+		}
+		temp += 0.1
+		if temp > 24 {
+			temp = 21
+		}
+		return map[string]any{"Time": time.Now().Format("2006-01-02T15:04:05"), "ENERGY": map[string]any{"Total": 12.5, "Today": 0.4, "Power": w, "Voltage": 231, "Current": w / 231},
+			"AM2301": map[string]any{"Temperature": math.Round(temp*10) / 10, "Humidity": 45.5}, "TempUnit": "C"}
+	}
+	cl.pub(ctx, "tasmota/discovery/"+mac+"/sensors", map[string]any{"sn": sensor(), "ver": 1}, true)
+	cl.on(func(t string, payload []byte) {
+		if !strings.HasPrefix(t, "cmnd/"+topic+"/") {
+			return
+		}
+		cmd := strings.ToUpper(strings.TrimPrefix(t, "cmnd/"+topic+"/"))
+		event("command", t, string(payload))
+		mu.Lock()
+		defer mu.Unlock()
+		switch cmd {
+		case "POWER", "POWER1":
+			switch strings.ToUpper(string(payload)) {
+			case "ON", "1":
+				power = "ON"
+			case "OFF", "0":
+				power = "OFF"
+			case "TOGGLE", "2":
+				power = map[string]string{"ON": "OFF", "OFF": "ON"}[power]
+			}
+			cl.pub(ctx, "stat/"+topic+"/RESULT", map[string]string{"POWER": power}, false)
+			cl.pub(ctx, "stat/"+topic+"/POWER", power, false)
+		case "STATE":
+			cl.pub(ctx, "stat/"+topic+"/RESULT", map[string]any{"Time": time.Now().Format("2006-01-02T15:04:05"), "Uptime": "0T00:01:00", "POWER": power}, false)
+		}
+	})
+	if err := cl.sub(ctx, "cmnd/"+topic+"/#"); err != nil {
+		return err
+	}
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+	for {
+		mu.Lock()
+		s := sensor()
+		mu.Unlock()
+		cl.pub(ctx, "tele/"+topic+"/SENSOR", s, false)
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-tick.C:
+		}
+	}
+}
+
+// ---- Shelly Gen2 ----------------------------------------------------------------------------------------------------
+
+// runShelly is a Shelly Plus 1PM: RPC over MQTT on <id>/rpc, notifications on <id>/events/rpc, <id>/online.
+func runShelly(ctx context.Context, addr, user, pass, id string) error {
+	dev := "shellyplus1pm-" + strings.ToLower(id)
+	cl, err := connect(ctx, addr, dev, user, pass, &paho.WillMessage{Topic: dev + "/online", Payload: []byte("false"), Retain: true})
+	if err != nil {
+		return err
+	}
+	defer cl.close()
+	event("connected")
+	cl.pub(ctx, dev+"/online", "true", true)
+	var mu sync.Mutex
+	on, energy, input := false, 1234.5, false
+	sw := func() map[string]any {
+		p := 0.0
+		if on {
+			p = 35.2
+		}
+		return map[string]any{"id": 0, "source": "init", "output": on, "apower": p, "voltage": 230.8, "current": p / 230.8, "freq": 50.0,
+			"aenergy":     map[string]any{"total": energy, "by_minute": []float64{0, 0, 0}, "minute_ts": time.Now().Unix()},
+			"temperature": map[string]any{"tC": 44.1, "tF": 111.4}}
+	}
+	notify := func(params map[string]any) {
+		params["ts"] = float64(time.Now().UnixMilli()) / 1000
+		cl.pub(ctx, dev+"/events/rpc", map[string]any{"src": dev, "dst": dev + "/events", "method": "NotifyStatus", "params": params}, false)
+	}
+	cl.on(func(t string, payload []byte) {
+		if t != dev+"/rpc" {
+			return
+		}
+		var req struct {
+			ID     any            `json:"id"`
+			Src    string         `json:"src"`
+			Method string         `json:"method"`
+			Params map[string]any `json:"params"`
+		}
+		if json.Unmarshal(payload, &req) != nil || req.Src == "" {
+			return
+		}
+		event("rpc", req.Method, string(payload))
+		mu.Lock()
+		defer mu.Unlock()
+		var result any
+		switch req.Method {
+		case "Shelly.GetDeviceInfo":
+			result = map[string]any{"name": "Boiler", "id": dev, "mac": strings.ToUpper(id), "slot": 1, "model": "SNSW-001P16EU", "gen": 2,
+				"fw_id": "20241011-114455/1.4.4-g6d2a586", "ver": "1.4.4", "app": "Plus1PM", "auth_en": false}
+		case "Shelly.GetStatus":
+			result = map[string]any{"ble": map[string]any{}, "cloud": map[string]any{"connected": false}, "input:0": map[string]any{"id": 0, "state": input},
+				"mqtt": map[string]any{"connected": true}, "switch:0": sw(), "sys": map[string]any{"uptime": 60}, "wifi": map[string]any{"rssi": -58}}
+		case "Switch.Set", "Switch.Toggle":
+			was := on
+			if req.Method == "Switch.Toggle" {
+				on = !on
+			} else if v, ok := req.Params["on"].(bool); ok {
+				on = v
+			}
+			result = map[string]any{"was_on": was}
+			defer notify(map[string]any{"switch:0": map[string]any{"id": 0, "output": on, "source": "MQTT", "apower": sw()["apower"]}})
+		default:
+			cl.pub(ctx, req.Src+"/rpc", map[string]any{"id": req.ID, "src": dev, "dst": req.Src, "error": map[string]any{"code": 404, "message": "No handler for " + req.Method}}, false)
+			return
+		}
+		cl.pub(ctx, req.Src+"/rpc", map[string]any{"id": req.ID, "src": dev, "dst": req.Src, "result": result}, false)
+	})
+	if err := cl.sub(ctx, dev+"/rpc"); err != nil {
+		return err
+	}
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+	n := 0
+	for {
+		mu.Lock()
+		n++
+		if on {
+			energy += 0.01
+		}
+		if n%5 == 0 {
+			input = !input
+			notify(map[string]any{"input:0": map[string]any{"id": 0, "state": input}})
+		}
+		if on {
+			notify(map[string]any{"switch:0": map[string]any{"id": 0, "apower": 35.2 + float64(n%3), "aenergy": map[string]any{"total": energy}}})
+		}
+		mu.Unlock()
 		select {
 		case <-ctx.Done():
 			return nil

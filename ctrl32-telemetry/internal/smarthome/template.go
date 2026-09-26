@@ -298,6 +298,11 @@ type tCall struct {
 	args []texpr
 }
 type tList struct{ items []texpr }
+type tSlice struct{ x, from, to texpr } // from/to nil = open end
+
+// methods maps the string methods templates may call (value.split(',')) to filters.
+var methods = map[string]string{"split": "split", "lower": "lower", "upper": "upper", "strip": "trim", "replace": "replace",
+	"startswith": "startswith", "endswith": "endswith"}
 
 type xtok struct {
 	k string // num str id op
@@ -617,12 +622,40 @@ func (p *xparser) postfix() (texpr, error) {
 			if p.i >= len(p.t) || (p.t[p.i].k != "id" && p.t[p.i].k != "num") {
 				return nil, errors.New("member name expected after .")
 			}
-			x = tMember{x, tLit{p.t[p.i].s}}
+			name := p.t[p.i].s
 			p.i++
+			if p.accept("op", "(") {
+				f, ok := methods[name]
+				if !ok {
+					return nil, fmt.Errorf("unsupported method %q", name)
+				}
+				args, err := p.args()
+				if err != nil {
+					return nil, err
+				}
+				x = tCall{f, append([]texpr{x}, args...)}
+			} else {
+				x = tMember{x, tLit{name}}
+			}
 		case p.accept("op", "["):
-			k, err := p.cond()
-			if err != nil {
-				return nil, err
+			var k texpr
+			if !p.peek("op", ":") {
+				if k, err = p.cond(); err != nil {
+					return nil, err
+				}
+			}
+			if p.accept("op", ":") {
+				var to texpr
+				if !p.peek("op", "]") {
+					if to, err = p.cond(); err != nil {
+						return nil, err
+					}
+				}
+				if !p.accept("op", "]") {
+					return nil, errors.New("expected ]")
+				}
+				x = tSlice{x, k, to}
+				break
 			}
 			if !p.accept("op", "]") {
 				return nil, errors.New("expected ]")
@@ -748,6 +781,53 @@ func (st *tstate) eval(e texpr) (any, error) {
 			}
 		}
 		return Undefined, nil
+	case tSlice:
+		x, err := st.eval(e.x)
+		if err != nil {
+			return nil, err
+		}
+		var n int
+		switch v := x.(type) {
+		case string:
+			n = len([]rune(v))
+		case []any:
+			n = len(v)
+		default:
+			return Undefined, nil
+		}
+		bound := func(b texpr, def int) (int, error) {
+			if b == nil {
+				return def, nil
+			}
+			v, err := st.eval(b)
+			if err != nil {
+				return 0, err
+			}
+			f, ok := toNum(v)
+			if !ok {
+				return 0, errors.New("slice bounds must be numbers")
+			}
+			i := int(f)
+			if i < 0 {
+				i += n
+			}
+			return max(0, min(n, i)), nil
+		}
+		from, err := bound(e.from, 0)
+		if err != nil {
+			return nil, err
+		}
+		to, err := bound(e.to, n)
+		if err != nil {
+			return nil, err
+		}
+		if to < from {
+			to = from
+		}
+		if v, ok := x.(string); ok {
+			return string([]rune(v)[from:to]), nil
+		}
+		return append([]any(nil), x.([]any)[from:to]...), nil
 	case tUnary:
 		x, err := st.eval(e.x)
 		if err != nil {
@@ -955,6 +1035,18 @@ var filters map[string]filterFn
 
 func init() {
 	num := func(x any, args []any, round bool) (any, error) {
+		if round && len(args) > 1 { // int(default, base): "FF" | int(0, 16)
+			if b, ok := toNum(args[1]); ok && b >= 2 && b <= 36 {
+				str := strings.TrimSpace(ToString(x))
+				if b == 16 {
+					str = strings.TrimPrefix(strings.TrimPrefix(str, "0x"), "0X")
+				}
+				if i, err := strconv.ParseInt(str, int(b), 64); err == nil {
+					return float64(i), nil
+				}
+				return args[0], nil
+			}
+		}
 		if f, ok := toNum(x); ok {
 			if round {
 				return math.Trunc(f), nil
@@ -1028,6 +1120,40 @@ func init() {
 				return nil, errors.New("replace needs two arguments")
 			}
 			return strings.ReplaceAll(ToString(x), ToString(a[0]), ToString(a[1])), nil
+		},
+		"split": func(x any, a []any) (any, error) {
+			var parts []string
+			if len(a) == 0 || ToString(a[0]) == "" {
+				parts = strings.Fields(ToString(x))
+			} else {
+				parts = strings.Split(ToString(x), ToString(a[0]))
+			}
+			out := make([]any, len(parts))
+			for i, p := range parts {
+				out[i] = p
+			}
+			return out, nil
+		},
+		"join": func(x any, a []any) (any, error) {
+			l, ok := x.([]any)
+			if !ok {
+				return ToString(x), nil
+			}
+			sep := ""
+			if len(a) > 0 {
+				sep = ToString(a[0])
+			}
+			parts := make([]string, len(l))
+			for i, v := range l {
+				parts[i] = ToString(v)
+			}
+			return strings.Join(parts, sep), nil
+		},
+		"startswith": func(x any, a []any) (any, error) {
+			return len(a) > 0 && strings.HasPrefix(ToString(x), ToString(a[0])), nil
+		},
+		"endswith": func(x any, a []any) (any, error) {
+			return len(a) > 0 && strings.HasSuffix(ToString(x), ToString(a[0])), nil
 		},
 		"min": func(x any, a []any) (any, error) { return minmax(x, a, -1) },
 		"max": func(x any, a []any) (any, error) { return minmax(x, a, 1) },
