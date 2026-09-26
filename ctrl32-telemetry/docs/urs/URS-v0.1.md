@@ -80,6 +80,7 @@
 | C-15 | Toky sú verziovaný obsah: uloženie = nová verzia s dôvodom, nasadenie s dôvodom, obnova starej verzie, export/import JSON; tok s problémom (neznámy uzol, zlý výraz, chýbajúci odkaz, hostiteľ mimo zoznamu povolených, slučka bez oneskorenia) nemožno nasadiť. | M | áno | 2 | spec 004 · 0.40.0 · unit `validate` · e2e `flows` |
 | C-16 | HTTP požiadavky tokov len na hostiteľov zo zoznamu povolených organizácie; webhook spúšťač s tokenom odvodeným zo serverového tajomstva a voliteľným HMAC podpisom. | M | áno | 2 | spec 004 · 0.40.0 · e2e `flows` |
 | C-17 | Prevádzka: fronta 1 000 správ na tok (zahodené sa počítajú), stav počítadiel a pamätí prežije reštart, metriky v `/metrics`; prevod automatizačného pravidla na tok (`GET /api/v1/rules/{id}/as-flow`, voľba v dialógu nového toku); priepustnosť ≥ 1 000 správ/s cez 10 uzlov. Fáza 2: MQTT cudzieho brokera, spúšťače zmeny atribútu a potvrdenia príkazu, rozdelenie, podtoky, skupiny. | S | — | 2 | spec 004 · 0.40.0 · unit `TestFlowThroughput`, `TestFromRule` · e2e `flows` |
+| C-18 | Podtoky (znovupoužiteľné časti toku so vstupom a výstupmi 1–4, vnorenie do 4 úrovní, verzia pripnutá pri uložení toku, samostatne sa nenasadzujú, príkazy vnútri podliehajú štyrom očiam), uzol Rozdelenie (prvky zoznamu/objektu ako samostatné správy) a skupiny uzlov na plátne. | S | áno | 2 | spec 009 · 0.44.0 · unit `internal/flows` · e2e `subflows` |
 
 ## D. FOTA
 

@@ -64,6 +64,42 @@ func (f flowRefs) MQTTSource(id string) bool {
 func (f flowRefs) Scene(id string) bool {
 	return f.exists(`SELECT EXISTS (SELECT 1 FROM core.scene WHERE id = $1::uuid AND org_id = $2::uuid AND removed_at IS NULL)`, id)
 }
+func (f flowRefs) Subflow(slug string, version int) (flows.SubflowRef, bool) {
+	var raw []byte
+	var name string
+	var ver int
+	var err error
+	if version > 0 {
+		err = f.s.pool.QueryRow(f.ctx, `SELECT spec, name, version FROM core.flow WHERE org_id = $1::uuid AND slug = $2 AND version = $3`, f.org, slug, version).Scan(&raw, &name, &ver)
+	} else {
+		err = f.s.pool.QueryRow(f.ctx, `SELECT spec, name, version FROM core.flow WHERE org_id = $1::uuid AND slug = $2 AND valid_to IS NULL`, f.org, slug).Scan(&raw, &name, &ver)
+	}
+	if err != nil {
+		return flows.SubflowRef{}, false
+	}
+	var sp flows.Spec
+	if json.Unmarshal(raw, &sp) != nil || sp.Kind != "subflow" {
+		return flows.SubflowRef{}, false
+	}
+	out, cmd := flows.SubflowInfo(&sp)
+	if !cmd { // commands inside nested subflows count too
+		if x, err := flows.Expand(&sp, func(sl string, v int) (*flows.Spec, error) {
+			r, ok := f.Subflow(sl, v)
+			if !ok {
+				return nil, errors.New("not found")
+			}
+			var raw2 []byte
+			if f.s.pool.QueryRow(f.ctx, `SELECT spec FROM core.flow WHERE org_id = $1::uuid AND slug = $2 AND version = $3`, f.org, sl, r.Version).Scan(&raw2) != nil {
+				return nil, errors.New("not found")
+			}
+			var s2 flows.Spec
+			return &s2, json.Unmarshal(raw2, &s2)
+		}); err == nil {
+			cmd = flows.HasCommands(x)
+		}
+	}
+	return flows.SubflowRef{Name: name, Version: ver, Outputs: out, Commands: cmd}, true
+}
 func (f flowRefs) HostAllowed(host string) bool {
 	for _, h := range f.s.flowHosts(f.ctx, f.org) {
 		if strings.EqualFold(h, host) || (strings.HasPrefix(h, "*.") && strings.HasSuffix(strings.ToLower(host), strings.ToLower(h[1:]))) {
@@ -98,6 +134,8 @@ type flowRow struct {
 	Deployed    *int            `json:"deployed_version"`
 	Nodes       int             `json:"nodes"`
 	HasCommands bool            `json:"has_commands"`
+	Kind        string          `json:"kind"`              // flow | subflow
+	Outputs     int             `json:"outputs,omitempty"` // subflows: outputs of the node that uses it
 }
 
 const flowCols = `f.id::text, f.slug, f.name, f.version, f.state, f.spec, f.checksum, coalesce(u.username, ''), f.created_at, f.reason,
@@ -111,7 +149,11 @@ func scanFlow(row pgx.Row, withSpec bool) (*flowRow, error) {
 	}
 	var sp flows.Spec
 	_ = json.Unmarshal(spec, &sp)
-	f.Nodes, f.HasCommands = len(sp.Nodes), flows.HasCommands(&sp)
+	f.Nodes, f.HasCommands, f.Kind = len(sp.Nodes), flows.HasCommands(&sp), "flow"
+	if sp.Kind == "subflow" {
+		f.Kind = "subflow"
+		f.Outputs, _ = flows.SubflowInfo(&sp)
+	}
 	if withSpec {
 		f.Spec = spec
 	}
@@ -375,8 +417,16 @@ func (s *Server) deployFlow(w http.ResponseWriter, r *http.Request) {
 	}
 	var sp flows.Spec
 	_ = json.Unmarshal(f.Spec, &sp)
+	if sp.Kind == "subflow" {
+		writeErr(w, 400, flows.ErrNotDeployable.Error())
+		return
+	}
 	if p := flows.Validate(&sp, flowRefs{s, r.Context(), org}); len(p) > 0 {
 		writeJSON(w, 422, map[string]any{"error": "the flow has problems and cannot be deployed", "problems": p})
+		return
+	}
+	if _, err := flows.Expand(&sp, s.subflowLoader(r.Context(), org)); err != nil {
+		writeJSON(w, 422, map[string]any{"error": "the flow has problems and cannot be deployed", "problems": []flows.Problem{{Message: err.Error()}}})
 		return
 	}
 	if flows.HasCommands(&sp) {
@@ -1006,4 +1056,20 @@ func (s *Server) ruleAsFlow(w http.ResponseWriter, r *http.Request) {
 		problems = []flows.Problem{}
 	}
 	writeJSON(w, 200, map[string]any{"name": name, "spec": sp, "notes": notes, "problems": problems})
+}
+
+// subflowLoader loads stored subflow versions of an organization (for checks before a deploy).
+func (s *Server) subflowLoader(ctx context.Context, org string) flows.Loader {
+	return func(slug string, version int) (*flows.Spec, error) {
+		var raw []byte
+		q, args := `SELECT spec FROM core.flow WHERE org_id = $1::uuid AND slug = $2 AND valid_to IS NULL`, []any{org, slug}
+		if version > 0 {
+			q, args = `SELECT spec FROM core.flow WHERE org_id = $1::uuid AND slug = $2 AND version = $3`, []any{org, slug, version}
+		}
+		if err := s.pool.QueryRow(ctx, q, args...).Scan(&raw); err != nil {
+			return nil, errors.New("not found")
+		}
+		var sp flows.Spec
+		return &sp, json.Unmarshal(raw, &sp)
+	}
 }

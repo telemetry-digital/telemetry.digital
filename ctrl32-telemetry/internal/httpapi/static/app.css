@@ -508,3 +508,12 @@ dialog.dw-full::backdrop { background: rgba(15, 23, 42, .55); }
 .en-prod { fill: #16a34a; }
 .en-share { display: inline-block; width: 90px; height: 8px; border-radius: 4px; background: var(--line); vertical-align: middle; overflow: hidden; }
 .en-share span { display: block; height: 100%; background: var(--primary, #e30613); }
+/* flow editor groups (spec 009) */
+.fe-group-box { fill-opacity: .07; stroke-opacity: .55; stroke-width: 1.5; }
+.fe-group.sel .fe-group-box { stroke-opacity: .9; stroke-width: 2.5; stroke-dasharray: 6 3; }
+.fe-group-lbl { font-size: 12px; font-weight: 600; fill: var(--fg); pointer-events: none; }
+.fe-group-grip { fill: transparent; cursor: nwse-resize; }
+.fe-group.sel .fe-group-grip { fill: var(--muted, #94a3b8); fill-opacity: .5; }
+.fe-gcolors { display: flex; gap: 6px; margin: 4px 0 8px; }
+.fe-gcol { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+.fe-gcol.on { border-color: var(--fg); }

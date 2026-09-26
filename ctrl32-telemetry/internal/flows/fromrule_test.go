@@ -10,13 +10,14 @@ import (
 
 type okRefs struct{}
 
-func (okRefs) Datastream(string) bool  { return true }
-func (okRefs) Device(string) bool      { return true }
-func (okRefs) Channel(string) bool     { return true }
-func (okRefs) Entity(string) bool      { return true }
-func (okRefs) MQTTSource(string) bool  { return true }
-func (okRefs) Scene(string) bool       { return true }
-func (okRefs) HostAllowed(string) bool { return true }
+func (okRefs) Datastream(string) bool                        { return true }
+func (okRefs) Device(string) bool                            { return true }
+func (okRefs) Channel(string) bool                           { return true }
+func (okRefs) Entity(string) bool                            { return true }
+func (okRefs) MQTTSource(string) bool                        { return true }
+func (okRefs) Scene(string) bool                             { return true }
+func (okRefs) Subflow(slug string, v int) (SubflowRef, bool) { return testSubflowRef(slug, v) }
+func (okRefs) HostAllowed(string) bool                       { return true }
 
 func TestFromRule(t *testing.T) {
 	const a, b, dev, ch = "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222", "33333333-3333-3333-3333-333333333333", "44444444-4444-4444-4444-444444444444"

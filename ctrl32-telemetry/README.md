@@ -6,7 +6,7 @@ Developer: telemetry.digital (Palo Krnáč). Revenue comes from implementation s
 
 ## Status
 
-Version **0.43.0** (26 Sep 2026; production runs 0.36.3). Phases 1–2 of the roadmap (`docs/02-navrh-systemu.md`, chapter 13) are functionally covered; the `Zdroj` column of the URS names the version and the test that fulfil each requirement. The production instance runs at `https://telemetry.digital/` (installed with the public installer, updated from the Server page). Every release has an entry in `JOURNAL.md`.
+Version **0.44.0** (26 Sep 2026; production runs 0.36.3). Phases 1–2 of the roadmap (`docs/02-navrh-systemu.md`, chapter 13) are functionally covered; the `Zdroj` column of the URS names the version and the test that fulfil each requirement. The production instance runs at `https://telemetry.digital/` (installed with the public installer, updated from the Server page). Every release has an entry in `JOURNAL.md`.
 
 ## What it does
 

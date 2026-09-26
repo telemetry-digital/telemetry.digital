@@ -110,6 +110,37 @@ type Engine struct {
 	debug map[string]*ring
 
 	queued, dropped, processed, errored atomic.Int64
+
+	// LoadSubflow returns a stored subflow version (0 = current); nil = from the database.
+	LoadSubflow func(ctx context.Context, org, slug string, version int) (*Spec, error)
+}
+
+// loader binds the subflow loader to an organization.
+func (e *Engine) loader(org string) Loader {
+	return func(slug string, version int) (*Spec, error) {
+		ctx := context.Background()
+		if e.LoadSubflow != nil {
+			return e.LoadSubflow(ctx, org, slug, version)
+		}
+		if e.pool == nil {
+			return nil, errors.New("no subflows without a database")
+		}
+		var raw []byte
+		var err error
+		if version > 0 {
+			err = e.pool.QueryRow(ctx, `SELECT spec FROM core.flow WHERE org_id = $1::uuid AND slug = $2 AND version = $3`, org, slug, version).Scan(&raw)
+		} else {
+			err = e.pool.QueryRow(ctx, `SELECT spec FROM core.flow WHERE org_id = $1::uuid AND slug = $2 AND valid_to IS NULL`, org, slug).Scan(&raw)
+		}
+		if err != nil {
+			return nil, errors.New("not found")
+		}
+		var sp Spec
+		if err := json.Unmarshal(raw, &sp); err != nil {
+			return nil, err
+		}
+		return &sp, nil
+	}
 }
 
 type trigRef struct {
@@ -182,6 +213,9 @@ func (e *Engine) Reload(ctx context.Context, org, slug string) error {
 	var sp Spec
 	if err := json.Unmarshal(raw, &sp); err != nil {
 		return err
+	}
+	if sp.Kind == "subflow" {
+		return ErrNotDeployable
 	}
 	f, err := e.newFlow(org, slug, id, name, version, createdBy, &sp, false)
 	if err != nil {
@@ -401,6 +435,10 @@ type flow struct {
 }
 
 func (e *Engine) newFlow(org, slug, id, name string, version int, owner string, sp *Spec, temp bool) (*flow, error) {
+	sp, err := Expand(sp, e.loader(org))
+	if err != nil {
+		return nil, err
+	}
 	f := &flow{e: e, org: org, slug: slug, id: id, name: name, version: version, owner: owner, spec: sp, nodes: map[string]*rnode{},
 		outs: map[string][][]string{}, q: make(chan qitem, QueueSize), quit: make(chan struct{}), done: make(chan struct{}), mem: map[string]Value{},
 		temp: temp, ring: e.ringOf(org, slug)}
@@ -439,7 +477,11 @@ func (e *Engine) newFlow(org, slug, id, name string, version int, owner string, 
 			}
 		}
 		f.nodes[n.ID] = rn
-		f.outs[n.ID] = make([][]string, outputsOf(n))
+		outs := outputsOf(n)
+		if n.Type == "sub_out" {
+			outs = 1 // inside an expanded subflow its output leads on to the using flow's nodes
+		}
+		f.outs[n.ID] = make([][]string, outs)
 	}
 	for _, w := range sp.Wires {
 		if o, ok := f.outs[w.From]; ok && w.Port < len(o) {

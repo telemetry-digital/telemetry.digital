@@ -116,6 +116,7 @@ func testEngine(t *testing.T, js string) (*Engine, *flow, *fakeHost, context.Can
 	}
 	h := &fakeHost{}
 	e := New(nil, h, "0123456789abcdef-secret", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	e.LoadSubflow = testLoadSubflow
 	ctx, cancel := context.WithCancel(context.Background())
 	f, err := e.startTest(ctx, &sp, "Cooling")
 	if err != nil {

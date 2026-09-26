@@ -44,6 +44,8 @@ value and `ts` to the measurement time.
 | | Counter, Latch | state that survives restarts |
 | | Time window | inside → output 1, outside → output 2 |
 | | True for | one message when a condition has held for N seconds, one when it stops |
+| | Split | one message per element of a list or JSON object (or part of a text by a separator), with `msg.index`, `msg.count`, `msg.key` |
+| | Subflow | runs a subflow (below); one output per subflow output |
 | Action | Store value | writes a (derived) datastream value |
 | | Device command | a command with the permissions of the flow's owner and the four-eyes policy |
 | | Device attribute | a shared attribute the device receives over MQTT; governed like a command |
@@ -54,6 +56,24 @@ value and `ts` to the measurement time.
 | Other | Comment | a note on the canvas |
 
 `GET /api/v1/flows/catalog` returns the library with the settings schema of every node.
+
+## Subflows
+
+A subflow is a reusable part — for example *notify the shift and open an incident* — built once and used in many flows
+as one **Subflow** node. Create it under Flows → New flow → *Start with: Subflow*: it has one **Subflow input** (where
+messages enter) and **Subflow outputs** numbered 1–4 (each is an output of the Subflow node); triggers do not belong in
+a subflow. Subflows can use other subflows (four levels).
+
+A subflow is not deployed on its own; it runs inside the flows that use it. The Subflow node **pins the subflow
+version** when the flow is saved, so changing a subflow does not change running flows: clear the version in the node
+(or pick the subflow again), save and deploy the flow to take the new version — the deploy is audited and, when the
+subflow sends commands, needs the same four-eyes approval as any commanding flow. In the debug panel, nodes of a
+subflow appear as `<subflow node>.<node>`.
+
+## Groups
+
+Select nodes and choose *Group* to frame them in a named, coloured rectangle. Dragging a group moves the nodes inside
+it; the corner resizes it; *Delete* removes the group, not its nodes. Groups only organize the canvas.
 
 ## Expressions
 
@@ -102,6 +122,5 @@ rule stays as it is: stop it once the flow runs, so the actions do not happen tw
 
 ## Not yet (phase 2)
 
-Triggers on attribute changes and on command acknowledgements, MQTT to and from a foreign broker, a split node,
-sub-flows and groups on the canvas. Connector writes (OPC UA, Modbus) already work through the Device command node,
+Triggers on attribute changes, parameters per subflow instance. Connector writes (OPC UA, Modbus) already work through the Device command node,
 since connector devices take commands like any other device.

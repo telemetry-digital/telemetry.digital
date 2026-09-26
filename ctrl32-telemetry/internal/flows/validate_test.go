@@ -16,13 +16,14 @@ const (
 
 type fakeRefs struct{}
 
-func (fakeRefs) Datastream(id string) bool { return id == dsA }
-func (fakeRefs) Device(id string) bool     { return id == devA }
-func (fakeRefs) Channel(id string) bool    { return id == chA }
-func (fakeRefs) Entity(id string) bool     { return id == entA }
-func (fakeRefs) MQTTSource(id string) bool { return id == srcA }
-func (fakeRefs) Scene(id string) bool      { return id == srcA }
-func (fakeRefs) HostAllowed(h string) bool { return h == "hooks.example.com" }
+func (fakeRefs) Datastream(id string) bool                     { return id == dsA }
+func (fakeRefs) Device(id string) bool                         { return id == devA }
+func (fakeRefs) Channel(id string) bool                        { return id == chA }
+func (fakeRefs) Entity(id string) bool                         { return id == entA }
+func (fakeRefs) MQTTSource(id string) bool                     { return id == srcA }
+func (fakeRefs) Scene(id string) bool                          { return id == srcA }
+func (fakeRefs) Subflow(slug string, v int) (SubflowRef, bool) { return testSubflowRef(slug, v) }
+func (fakeRefs) HostAllowed(h string) bool                     { return h == "hooks.example.com" }
 
 // The US1 example: temperature > 80 for 2 minutes → notify and command.
 const exampleFlow = `{"nodes":[
@@ -105,5 +106,16 @@ func TestValidateRefusesInvalidFlows(t *testing.T) {
 	b.WriteString(`],"wires":[]}`)
 	if p := Validate(parseSpec(t, b.String()), fakeRefs{}); len(p) == 0 {
 		t.Error("too many nodes accepted")
+	}
+}
+
+func TestIntDefaults(t *testing.T) {
+	sp := Spec{Nodes: []NodeSpec{{ID: "s", Type: "schedule", Settings: map[string]any{}}, {ID: "p", Type: "split", Settings: map[string]any{}}},
+		Wires: []Wire{{From: "s", To: "p"}}}
+	if p := Validate(&sp, fakeRefs{}); len(p) != 0 {
+		t.Fatalf("defaults refused: %v", p)
+	}
+	if sp.Nodes[1].Settings["max"] != 100.0 {
+		t.Fatalf("default %v", sp.Nodes[1].Settings["max"])
 	}
 }

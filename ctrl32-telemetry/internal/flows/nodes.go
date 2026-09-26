@@ -154,8 +154,68 @@ func (f *flow) process(n *rnode, m *Message, dry bool) {
 			n.st["last_at"] = time.Now()
 		}
 		f.emit(n, 0, m, dry)
-	case "alarm_event", "device_state", "schedule", "webhook", "entity", "command_result", "mqtt_in":
+	case "alarm_event", "device_state", "schedule", "webhook", "entity", "command_result", "mqtt_in", "sub_in", "sub_out":
 		f.emit(n, 0, m, dry)
+	case "split":
+		v, err := f.eval(n, "list", m)
+		if err != nil {
+			f.fail(n, m, err)
+			return
+		}
+		max := int(num("max"))
+		if max <= 0 {
+			max = 100
+		}
+		type part struct {
+			key string
+			v   Value
+		}
+		var parts []part
+		if sep := str("separator"); sep != "" {
+			for _, p := range strings.Split(Str(v), sep) {
+				parts = append(parts, part{"", strings.TrimSpace(p)})
+			}
+		} else {
+			if sv, ok := v.(string); ok {
+				var j any
+				if json.Unmarshal([]byte(sv), &j) == nil {
+					v = j
+				}
+			}
+			switch x := v.(type) {
+			case []any:
+				for _, e := range x {
+					parts = append(parts, part{"", jsonValue(e)})
+				}
+			case map[string]any:
+				keys := make([]string, 0, len(x))
+				for k := range x {
+					keys = append(keys, k)
+				}
+				sort.Strings(keys)
+				for _, k := range keys {
+					parts = append(parts, part{k, jsonValue(x[k])})
+				}
+			default:
+				parts = append(parts, part{"", v})
+			}
+		}
+		if len(parts) > max {
+			f.info(n.spec.ID, fmt.Sprintf("%d elements, only the first %d are sent", len(parts), max))
+			parts = parts[:max]
+		}
+		for i, p := range parts {
+			c := m.Clone()
+			c.Value = p.v
+			if c.Fields == nil {
+				c.Fields = map[string]Value{}
+			}
+			c.Fields["index"], c.Fields["count"] = float64(i), float64(len(parts))
+			if p.key != "" {
+				c.Fields["key"] = p.key
+			}
+			f.emit(n, 0, c, dry)
+		}
 	case "inject":
 		if m.Value == nil {
 			v, err := f.eval(n, "value", m)

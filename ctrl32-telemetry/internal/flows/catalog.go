@@ -168,6 +168,11 @@ var Catalog = []NodeDef{
 		Help: "Keeps the latest value of each topic; once all expected topics are present, every message carries them all as msg.<topic>.",
 		Settings: []Setting{{Name: "topics", Label: "Topics (comma separated)", Kind: "text", Required: true},
 			{Name: "max_age_s", Label: "Forget values older than (s, 0 = never)", Kind: "number", Default: 0, Min: fp(0)}}},
+	{Type: "split", Group: "logic", Label: "Split", Icon: "list-details", Color: cLogic, Inputs: 1, Outputs: 1,
+		Help: "Sends one message per element of a list or JSON object (or per part of a text split by a separator). The element is the value; msg.index, msg.count and msg.key (objects) come along.",
+		Settings: []Setting{{Name: "list", Label: "List (expression)", Kind: "expr", Default: "value"},
+			{Name: "separator", Label: "Separator for texts (empty = JSON)", Kind: "text"},
+			{Name: "max", Label: "At most", Kind: "number", Default: 100, Min: fp(1), Max: fp(1000)}}},
 	{Type: "counter", Group: "logic", Label: "Counter", Icon: "activity", Color: cLogic, Inputs: 1, Outputs: 1,
 		Help: "Counts messages (or adds an expression); the count becomes the value. Kept across restarts.",
 		Settings: []Setting{{Name: "add", Label: "Add (expression)", Kind: "expr", Default: "1"},
@@ -234,6 +239,16 @@ var Catalog = []NodeDef{
 	{Type: "debug", Group: "action", Label: "Debug", Icon: "info-circle", Color: cOther, Inputs: 1, Outputs: 0,
 		Help:     "Shows the message (or an expression) in the debug panel.",
 		Settings: []Setting{{Name: "expr", Label: "Show (expression, empty = the whole message)", Kind: "expr"}, {Name: "active", Label: "Active", Kind: "bool", Default: true}}},
+	// ---- subflows (spec 009)
+	{Type: "subflow", Group: "logic", Label: "Subflow", Icon: "box", Color: cLogic, Inputs: 1, Outputs: 1,
+		Help: "Runs a subflow: messages enter at its input and leave at its outputs. The subflow version is pinned when the flow is saved; clear it to take the latest.",
+		Settings: []Setting{{Name: "flow", Label: "Subflow", Kind: "subflow", Required: true},
+			{Name: "version", Label: "Version (empty = latest)", Kind: "number", Min: fp(0)}}},
+	{Type: "sub_in", Group: "subflow", Label: "Subflow input", Icon: "arrow-bar-to-down", Color: cOther, Outputs: 1,
+		Help: "Where messages enter the subflow (exactly one per subflow).", Settings: []Setting{}},
+	{Type: "sub_out", Group: "subflow", Label: "Subflow output", Icon: "arrow-bar-to-up", Color: cOther, Inputs: 1,
+		Help:     "Where messages leave the subflow; the number is the output of the subflow node (1–4).",
+		Settings: []Setting{{Name: "port", Label: "Output", Kind: "number", Default: 1, Min: fp(1), Max: fp(4)}}},
 	// ---- other
 	{Type: "comment", Group: "other", Label: "Comment", Icon: "info-circle", Color: cOther,
 		Help: "A note on the canvas; does nothing.", Settings: []Setting{{Name: "text", Label: "Text", Kind: "multiline"}}},
@@ -261,13 +276,31 @@ func outputsOf(n *NodeSpec) int {
 			return len(rules) + 1
 		}
 	}
+	if n.Type == "subflow" {
+		if o, ok := Num(n.Settings["outputs"]); ok && o >= 0 && o <= 4 {
+			return int(o)
+		}
+	}
 	return d.Outputs
 }
 
 // Spec is a flow as stored: nodes and wires.
 type Spec struct {
-	Nodes []NodeSpec `json:"nodes"`
-	Wires []Wire     `json:"wires"`
+	Kind   string     `json:"kind,omitempty"` // "" (flow) | "subflow"
+	Nodes  []NodeSpec `json:"nodes"`
+	Wires  []Wire     `json:"wires"`
+	Groups []Group    `json:"groups,omitempty"` // named frames on the canvas (editor only)
+}
+
+// Group is a named, coloured frame around nodes on the canvas; it does not change what the flow does.
+type Group struct {
+	ID    string  `json:"id"`
+	Name  string  `json:"name"`
+	Color string  `json:"color"`
+	X     float64 `json:"x"`
+	Y     float64 `json:"y"`
+	W     float64 `json:"w"`
+	H     float64 `json:"h"`
 }
 
 // NodeSpec is one node of a flow.

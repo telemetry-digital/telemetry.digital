@@ -38,6 +38,8 @@ type Refs interface {
 	Entity(id string) bool
 	MQTTSource(id string) bool
 	Scene(id string) bool
+	// Subflow returns a subflow version (0 = current) of the organization.
+	Subflow(slug string, version int) (SubflowRef, bool)
 	HostAllowed(host string) bool
 }
 
@@ -92,6 +94,9 @@ func Validate(s *Spec, refs Refs) []Problem {
 			n.Settings = map[string]any{}
 		}
 		for k := range n.Settings {
+			if n.Type == "subflow" && (k == "outputs" || k == "commands") {
+				continue // derived from the subflow
+			}
 			if !hasSetting(d, k) {
 				add(n.ID, "unknown setting %q", k)
 			}
@@ -116,6 +121,24 @@ func Validate(s *Spec, refs Refs) []Problem {
 				continue
 			}
 			n.Settings[st.Name] = nv
+		}
+		if n.Type == "subflow" && refs != nil {
+			slug, _ := n.Settings["flow"].(string)
+			ver := 0
+			if v, ok := Num(n.Settings["version"]); ok {
+				ver = int(v)
+			}
+			if ref, ok := refs.Subflow(slug, ver); !ok {
+				add(n.ID, "subflow %s (version %d) not found", slug, ver)
+			} else {
+				n.Settings["version"], n.Settings["outputs"], n.Settings["commands"] = float64(ref.Version), float64(ref.Outputs), ref.Commands
+			}
+		}
+		if (n.Type == "sub_in" || n.Type == "sub_out") && s.Kind != "subflow" {
+			add(n.ID, "subflow inputs and outputs belong in a subflow")
+		}
+		if s.Kind == "subflow" && d.Group == "trigger" {
+			add(n.ID, "a subflow starts at its input; triggers belong in the flows that use it")
 		}
 		if n.Type == "schedule" {
 			if m, _ := n.Settings["mode"].(string); m == "daily" {
@@ -157,8 +180,28 @@ func Validate(s *Spec, refs Refs) []Problem {
 	if cyc := cycleWithoutBreak(adj, nodes); cyc != "" {
 		add(cyc, "is part of a loop without a delay, debounce, rate limit, aggregate or \"true for\" node")
 	}
-	if triggers == 0 && len(s.Nodes) > 0 {
+	if s.Kind == "subflow" {
+		ins := 0
+		for _, n := range s.Nodes {
+			if n.Type == "sub_in" {
+				ins++
+			}
+		}
+		if ins != 1 {
+			add("", "a subflow needs exactly one subflow input")
+		}
+	} else if s.Kind != "" {
+		add("", "unknown flow kind %q", s.Kind)
+	} else if triggers == 0 && len(s.Nodes) > 0 {
 		add("", "the flow has no trigger (datastream value, alarm, device, schedule, webhook or inject)")
+	}
+	if len(s.Groups) > 50 {
+		add("", "at most 50 groups")
+	}
+	for _, g := range s.Groups {
+		if len(g.Name) > 64 || (g.Color != "" && !hexColorRe.MatchString(g.Color)) || g.W < 0 || g.H < 0 || g.W > 20000 || g.H > 20000 {
+			add("", "group %q: name ≤ 64 characters, colour #rrggbb", g.Name)
+		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Node < out[j].Node })
 	return out
@@ -192,6 +235,12 @@ func checkSetting(st Setting, v any, refs Refs) (any, string) {
 		return strings.TrimSpace(s), ""
 	}
 	switch st.Kind {
+	case "subflow":
+		v, err := str(63)
+		if err == "" && !slugRe.MatchString(v) {
+			return nil, "choose one"
+		}
+		return v, err
 	case "text":
 		return str(500)
 	case "multiline":
@@ -462,6 +511,11 @@ func HasCommands(s *Spec) bool {
 		if d, ok := Def(n.Type); ok && d.Commands && !n.Disabled {
 			return true
 		}
+		if n.Type == "subflow" && !n.Disabled && n.Settings["commands"] == true {
+			return true
+		}
 	}
 	return false
 }
+
+var hexColorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)

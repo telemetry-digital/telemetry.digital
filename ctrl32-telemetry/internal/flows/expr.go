@@ -448,6 +448,10 @@ func Num(v Value) (float64, bool) {
 	switch x := v.(type) {
 	case float64:
 		return x, !math.IsNaN(x)
+	case int: // catalogue defaults
+		return float64(x), true
+	case int64:
+		return float64(x), true
 	case bool:
 		if x {
 			return 1, true

@@ -6,26 +6,31 @@
   const NW = 170, NH = 38, PORT = 6, GRID = 10;
   const icon = (n, sz) => (window.ctrl32Widgets && ctrl32Widgets.icon(n, sz)) || '';
   const snap = (v) => Math.round(v / GRID) * GRID;
-  const GROUPS = [['trigger', 'Triggers'], ['logic', 'Logic'], ['action', 'Actions'], ['other', 'Other']];
+  const GROUPS = [['trigger', 'Triggers'], ['subflow', 'Subflow'], ['logic', 'Logic'], ['action', 'Actions'], ['other', 'Other']];
+  const GCOLORS = ['#94a3b8', '#60a5fa', '#34d399', '#fbbf24', '#f87171', '#c084fc'];
 
   function create(o) {
     const host = o.host, cat = o.catalog, defs = Object.fromEntries(cat.nodes.map((d) => [d.type, d]));
     let spec = JSON.parse(JSON.stringify(o.spec || { nodes: [], wires: [] }));
-    spec.nodes = spec.nodes || []; spec.wires = spec.wires || [];
+    spec.nodes = spec.nodes || []; spec.wires = spec.wires || []; spec.groups = spec.groups || [];
+    const isSub = spec.kind === 'subflow';
+    let selGroup = null;
     let sel = new Set(), selWire = -1, view = { x: 0, y: 0, k: 1 }, problems = {}, status = null, dirty = false;
     const undo = [], redo = [];
     const lists = o.lists || { datastreams: [], devices: [], channels: [] };
 
     host.innerHTML = `<div class="fe">
-      <aside class="fe-pal"><input class="fe-search" type="search" placeholder="Filter nodes…">${GROUPS.map(([g, l]) => `<details open><summary>${esc(l)}</summary><div class="fe-pal-list">${cat.nodes.filter((d) => d.group === g).map((d) => `<div class="fe-pal-item" draggable="true" data-type="${d.type}" title="${esc(d.help)}"><i style="background:${d.color}">${icon(d.icon, 14)}</i><span>${esc(d.label)}</span></div>`).join('')}</div></details>`).join('')}</aside>
+      <aside class="fe-pal"><input class="fe-search" type="search" placeholder="Filter nodes…">${GROUPS.filter(([g]) => isSub ? g !== 'trigger' : g !== 'subflow').map(([g, l]) => `<details open><summary>${esc(l)}</summary><div class="fe-pal-list">${cat.nodes.filter((d) => d.group === g).map((d) => `<div class="fe-pal-item" draggable="true" data-type="${d.type}" title="${esc(d.help)}"><i style="background:${d.color}">${icon(d.icon, 14)}</i><span>${esc(d.label)}</span></div>`).join('')}</div></details>`).join('')}</aside>
       <div class="fe-stage"><svg class="fe-svg" tabindex="0"><defs><pattern id="fe-grid" width="${GRID * 2}" height="${GRID * 2}" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="var(--line)"/></pattern></defs>
-        <rect class="fe-bg" x="-5000" y="-5000" width="10000" height="10000" fill="url(#fe-grid)"/><g class="fe-world"><g class="fe-wires"></g><g class="fe-nodes"></g><path class="fe-drag-wire" fill="none" stroke="var(--primary)" stroke-width="2" stroke-dasharray="5 4" visibility="hidden"/><rect class="fe-band" fill="color-mix(in srgb, var(--primary) 10%, transparent)" stroke="var(--primary)" stroke-dasharray="4 3" visibility="hidden"/></g></svg>
+        <rect class="fe-bg" x="-5000" y="-5000" width="10000" height="10000" fill="url(#fe-grid)"/><g class="fe-world"><g class="fe-groups"></g><g class="fe-wires"></g><g class="fe-nodes"></g><path class="fe-drag-wire" fill="none" stroke="var(--primary)" stroke-width="2" stroke-dasharray="5 4" visibility="hidden"/><rect class="fe-band" fill="color-mix(in srgb, var(--primary) 10%, transparent)" stroke="var(--primary)" stroke-dasharray="4 3" visibility="hidden"/></g></svg>
         <div class="fe-hint muted">Drag nodes from the palette; drag from an output port (right) to an input port (left) to wire; Delete removes; Ctrl+C/V/Z/Y; wheel zooms, drag the background to pan, Shift+drag selects.</div></div>
       <aside class="fe-props"></aside></div>`;
-    const svg = host.querySelector('.fe-svg'), world = host.querySelector('.fe-world'), gN = host.querySelector('.fe-nodes'), gW = host.querySelector('.fe-wires');
+    const svg = host.querySelector('.fe-svg'), world = host.querySelector('.fe-world'), gN = host.querySelector('.fe-nodes'), gW = host.querySelector('.fe-wires'), gG = host.querySelector('.fe-groups');
     const dragWire = host.querySelector('.fe-drag-wire'), band = host.querySelector('.fe-band'), props = host.querySelector('.fe-props');
 
-    const outs = (n) => n.type === 'switch' ? ((n.settings.rules || []).length + 1) : (defs[n.type] || {}).outputs || 0;
+    const subOf = (slug) => (lists.subflows || []).find((x) => x.id === slug) || {};
+    const outs = (n) => n.type === 'switch' ? ((n.settings.rules || []).length + 1)
+      : n.type === 'subflow' ? (n.settings.outputs != null ? n.settings.outputs : (subOf(n.settings.flow).outputs || 0)) : (defs[n.type] || {}).outputs || 0;
     const ins = (n) => (defs[n.type] || {}).inputs || 0;
     const byId = (id) => spec.nodes.find((n) => n.id === id);
     const newId = (t) => { let i = 1; const base = t.replace(/_/g, ''); while (byId(base + i)) i++; return base + i; };
@@ -62,12 +67,17 @@
         case 'deadband': return `± ${s.band ?? ''}${s.percent ? ' %' : ''}`;
         case 'http_out': return (s.method || '') + ' ' + (s.url || '');
         case 'comment': return (s.text || '').split('\n')[0];
+        case 'subflow': return (subOf(s.flow).label || s.flow || '') + (s.version ? ' · v' + s.version : '');
+        case 'sub_out': return tr('output') + ' ' + (s.port || 1);
+        case 'split': return s.separator ? `"${s.separator}"` : (s.list || 'value');
       }
       return '';
     }
 
     function draw() {
       applyView();
+      gG.innerHTML = spec.groups.map((g) => `<g class="fe-group${selGroup === g.id ? ' sel' : ''}" data-group="${esc(g.id)}"><rect class="fe-group-box" x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" rx="8" style="fill:${esc(g.color || GCOLORS[0])};stroke:${esc(g.color || GCOLORS[0])}"/>
+        <text class="fe-group-lbl notranslate" x="${g.x + 10}" y="${g.y + 17}">${esc(g.name || '')}</text><rect class="fe-group-grip" data-grip="${esc(g.id)}" x="${g.x + g.w - 12}" y="${g.y + g.h - 12}" width="12" height="12"/></g>`).join('');
       gW.innerHTML = spec.wires.map((w, i) => { const a = byId(w.from), b = byId(w.to); if (!a || !b) return ''; return `<g class="fe-wire${i === selWire ? ' sel' : ''}" data-w="${i}"><path class="fe-wire-hit" d="${curve(outPos(a, w.port), inPos(b))}"/><path class="fe-wire-line" d="${curve(outPos(a, w.port), inPos(b))}"/></g>`; }).join('');
       gN.innerHTML = spec.nodes.map((n) => {
         const d = defs[n.type] || { color: '#999', label: n.type, icon: '' }; const k = outs(n); const st = status && status.nodes && status.nodes[n.id]; const pr = problems[n.id];
@@ -104,6 +114,8 @@
     svg.addEventListener('pointerdown', (e) => {
       svg.focus();
       const [x, y] = toWorld(e);
+      const grip = e.target.closest('[data-grip]');
+      if (grip) { const g = spec.groups.find((x) => x.id === grip.dataset.grip); commit(); drag = { kind: 'resize', g, x, y, w: g.w, h: g.h }; selGroup = g.id; sel = new Set(); svg.setPointerCapture(e.pointerId); draw(); renderProps(); return; }
       const inj = e.target.closest('[data-inject]');
       if (inj) { o.onInject && o.onInject(inj.dataset.inject); return; }
       const out = e.target.closest('[data-out]');
@@ -112,12 +124,21 @@
       if (g) {
         const id = g.dataset.id;
         if (e.shiftKey || e.ctrlKey || e.metaKey) { sel.has(id) ? sel.delete(id) : sel.add(id); } else if (!sel.has(id)) sel = new Set([id]);
-        selWire = -1;
+        selWire = -1; selGroup = null;
         drag = { kind: 'move', x, y, start: [...sel].map((i) => { const n = byId(i); return [i, n.x, n.y]; }), moved: false };
         svg.setPointerCapture(e.pointerId); draw(); renderProps(); return;
       }
       const w = e.target.closest('[data-w]');
-      if (w) { selWire = +w.dataset.w; sel = new Set(); draw(); renderProps(); return; }
+      if (w) { selWire = +w.dataset.w; sel = new Set(); selGroup = null; draw(); renderProps(); return; }
+      const grp = e.target.closest('[data-group]');
+      if (grp && !e.shiftKey) { // drag a group with the nodes inside it
+        const g = spec.groups.find((x) => x.id === grp.dataset.group);
+        const inside = spec.nodes.filter((n) => n.x >= g.x && n.y >= g.y && n.x + NW <= g.x + g.w + 1 && n.y + NH <= g.y + g.h + 1);
+        selGroup = g.id; sel = new Set(); selWire = -1;
+        drag = { kind: 'group', g, x, y, gx: g.x, gy: g.y, start: inside.map((n) => [n.id, n.x, n.y]), moved: false };
+        svg.setPointerCapture(e.pointerId); draw(); renderProps(); return;
+      }
+      selGroup = null;
       if (e.shiftKey) { drag = { kind: 'band', x, y }; } else { drag = { kind: 'pan', cx: e.clientX, cy: e.clientY, vx: view.x, vy: view.y }; }
       sel = new Set(); selWire = -1; svg.setPointerCapture(e.pointerId); draw(); renderProps();
     });
@@ -129,6 +150,14 @@
         if (!drag.moved && (dx || dy)) { commit(); drag.moved = true; }
         for (const [id, x0, y0] of drag.start) { const n = byId(id); n.x = x0 + dx; n.y = y0 + dy; }
         draw();
+      } else if (drag.kind === 'group') {
+        const dx = snap(x - drag.x), dy = snap(y - drag.y);
+        if (!drag.moved && (dx || dy)) { commit(); drag.moved = true; }
+        drag.g.x = drag.gx + dx; drag.g.y = drag.gy + dy;
+        for (const [id, x0, y0] of drag.start) { const n = byId(id); n.x = x0 + dx; n.y = y0 + dy; }
+        draw();
+      } else if (drag.kind === 'resize') {
+        drag.g.w = Math.max(120, snap(drag.w + x - drag.x)); drag.g.h = Math.max(60, snap(drag.h + y - drag.y)); draw();
       } else if (drag.kind === 'wire') {
         const a = byId(drag.from); dragWire.setAttribute('d', curve(outPos(a, drag.port), [x, y])); dragWire.setAttribute('visibility', 'visible');
       } else if (drag.kind === 'pan') {
@@ -163,7 +192,8 @@
     let clip = null;
     svg.addEventListener('keydown', (e) => {
       const mod = e.ctrlKey || e.metaKey;
-      if ((e.key === 'Delete' || e.key === 'Backspace') && (sel.size || selWire >= 0)) { e.preventDefault(); removeSelection(); }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selGroup && !sel.size) { e.preventDefault(); commit(); spec.groups = spec.groups.filter((g) => g.id !== selGroup); selGroup = null; draw(); renderProps(); }
+      else if ((e.key === 'Delete' || e.key === 'Backspace') && (sel.size || selWire >= 0)) { e.preventDefault(); removeSelection(); }
       else if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? doRedo() : doUndo(); }
       else if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); doRedo(); }
       else if (mod && e.key.toLowerCase() === 'c' && sel.size) { e.preventDefault(); copy(); }
@@ -206,16 +236,38 @@
         case 'scene': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.scenes || [], v)}</select>${help}</label>`;
         case 'mqtt_source': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.sources || [], v)}</select>${help}</label>`;
         case 'channel': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.channels, v)}</select>${help}</label>`;
+        case 'subflow': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.subflows || [], v)}</select>${help}</label>`;
         case 'rules': return `<label>${lab} <textarea rows="3" data-rules="${p.name}" class="fe-mono">${esc((v || []).join('\n'))}</textarea><span class="muted" style="font-size:11px">one condition per line; an extra output takes the rest</span></label>`;
         case 'fields': return `<div class="fe-fields" data-fields="${p.name}"><span>${lab}</span>${(v || []).map((c, i) => `<div class="fe-field-row" data-i="${i}"><select data-f="op">${['set', 'delete', 'rename'].map((x) => `<option ${x === c.op ? 'selected' : ''}>${x}</option>`).join('')}</select><input data-f="name" value="${esc(c.name || '')}" placeholder="value / topic / msg.x" class="fe-mono"><input data-f="${c.op === 'rename' ? 'to' : 'expr'}" value="${esc(c.op === 'rename' ? (c.to || '') : (c.expr || ''))}" placeholder="${c.op === 'rename' ? 'new name' : 'expression'}" class="fe-mono" ${c.op === 'delete' ? 'hidden' : ''}><button type="button" class="btn small ghost" data-fdel="${i}">✕</button></div>`).join('')}<button type="button" class="btn small" data-fadd>Add change</button></div>`;
       }
       return `<label>${lab} <input data-s="${p.name}" value="${esc(v ?? '')}">${help}</label>`;
     }
+    function groupAround(ids) {
+      const ns = spec.nodes.filter((n) => ids.has(n.id)); if (!ns.length) return;
+      commit(); let i = 1; while (spec.groups.some((g) => g.id === 'g' + i)) i++;
+      const x0 = Math.min(...ns.map((n) => n.x)) - 20, y0 = Math.min(...ns.map((n) => n.y)) - 36, x1 = Math.max(...ns.map((n) => n.x)) + NW + 20, y1 = Math.max(...ns.map((n) => n.y)) + NH + 30;
+      const g = { id: 'g' + i, name: tr('Group') + ' ' + i, color: GCOLORS[(i - 1) % GCOLORS.length], x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+      spec.groups.push(g); selGroup = g.id; sel = new Set(); draw(); renderProps();
+    }
     function renderProps() {
+      if (selGroup && !sel.size) {
+        const g = spec.groups.find((x) => x.id === selGroup);
+        if (g) {
+          props.innerHTML = `<h3>${esc(tr('Group'))}</h3><div class="fe-form"><label>${esc(tr('Name'))} <input data-gname maxlength="64" value="${esc(g.name || '')}"></label>
+            <div class="fe-gcolors">${GCOLORS.map((c) => `<button type="button" class="fe-gcol${c === g.color ? ' on' : ''}" data-gcol="${c}" style="background:${c}" aria-label="${c}"></button>`).join('')}</div>
+            <p class="muted" style="font-size:12px">${esc(tr('Drag the group to move it with its nodes; drag the corner to resize.'))}</p>
+            <button class="btn small danger" type="button" data-gdel>${esc(tr('Delete group'))}</button></div>`;
+          props.querySelector('[data-gname]').onchange = (e) => { commit(); g.name = e.target.value.trim(); draw(); };
+          for (const b of props.querySelectorAll('[data-gcol]')) b.onclick = () => { commit(); g.color = b.dataset.gcol; draw(); renderProps(); };
+          props.querySelector('[data-gdel]').onclick = () => { commit(); spec.groups = spec.groups.filter((x) => x.id !== g.id); selGroup = null; draw(); renderProps(); };
+          return;
+        }
+      }
       if (selWire >= 0) { props.innerHTML = `<h3>Wire</h3><p class="muted">${esc(spec.wires[selWire].from)} → ${esc(spec.wires[selWire].to)}</p><button class="btn small danger" type="button" data-del>Delete wire</button>`; props.querySelector('[data-del]').onclick = removeSelection; return; }
       if (sel.size !== 1) {
-        props.innerHTML = sel.size ? `<h3>${sel.size} nodes</h3><button class="btn small danger" type="button" data-del>Delete</button> <button class="btn small" type="button" data-copy>Copy</button>` : `<h3>Flow</h3><p class="muted">Select a node to see its settings.</p>${o.flowInfo ? o.flowInfo() : ''}`;
+        props.innerHTML = sel.size ? `<h3>${sel.size} nodes</h3><button class="btn small danger" type="button" data-del>Delete</button> <button class="btn small" type="button" data-copy>Copy</button> <button class="btn small" type="button" data-group-make>${esc(tr('Group'))}</button>` : `<h3>${esc(tr(isSub ? 'Subflow' : 'Flow'))}</h3><p class="muted">Select a node to see its settings.</p>${o.flowInfo ? o.flowInfo() : ''}`;
         const d = props.querySelector('[data-del]'); if (d) d.onclick = removeSelection; const c = props.querySelector('[data-copy]'); if (c) c.onclick = copy;
+        const gm = props.querySelector('[data-group-make]'); if (gm) gm.onclick = () => groupAround(sel);
         return;
       }
       const n = byId([...sel][0]); const d = defs[n.type]; const pr = problems[n.id];
@@ -225,6 +277,7 @@
         ${d.settings.map((p) => field(p, (n.settings || {})[p.name])).join('')}
         <label class="inline"><input type="checkbox" data-disabled ${n.disabled ? 'checked' : ''}><span>Disabled</span></label>
         ${o.nodeExtra ? o.nodeExtra(n) : ''}</div>`;
+      const prevFlow = (n.settings || {}).flow;
       const change = () => {
         commit();
         n.name = props.querySelector('[data-name]').value.trim() || undefined; n.disabled = props.querySelector('[data-disabled]').checked || undefined;
@@ -233,10 +286,11 @@
         for (const p of d.settings.filter((x) => x.kind === 'multi')) n.settings[p.name] = [...props.querySelectorAll(`[data-m="${p.name}"]:checked`)].map((x) => x.value);
         for (const el of props.querySelectorAll('[data-rules]')) n.settings[el.dataset.rules] = el.value.split('\n').map((x) => x.trim()).filter(Boolean);
         for (const box of props.querySelectorAll('[data-fields]')) n.settings[box.dataset.fields] = [...box.querySelectorAll('.fe-field-row')].map((r) => { const op = r.querySelector('[data-f="op"]').value; const c = { op, name: r.querySelector('[data-f="name"]').value.trim() }; const x = r.querySelector('[data-f="expr"],[data-f="to"]'); if (op === 'set') c.expr = x ? x.value : ''; if (op === 'rename') c.to = x ? x.value.trim() : ''; return c; });
-        if (n.type === 'switch') { const k = outs(n); spec.wires = spec.wires.filter((w) => w.from !== n.id || w.port < k); }
+        if (n.type === 'subflow' && n.settings.flow !== prevFlow) { delete n.settings.version; n.settings.outputs = subOf(n.settings.flow).outputs || 0; delete n.settings.commands; }
+        if (n.type === 'switch' || n.type === 'subflow') { const k = outs(n); spec.wires = spec.wires.filter((w) => w.from !== n.id || w.port < k); }
         draw();
       };
-      props.onchange = (e) => { change(); if (e.target.matches('[data-f="op"]')) renderProps(); };
+      props.onchange = (e) => { change(); if (e.target.matches('[data-f="op"]') || e.target.dataset.s === 'flow') renderProps(); };
       for (const b of props.querySelectorAll('[data-fdel]')) b.onclick = () => { const box = b.closest('[data-fields]'); b.closest('.fe-field-row').remove(); change(); renderProps(); void box; };
       for (const b of props.querySelectorAll('[data-fadd]')) b.onclick = () => { commit(); const k = b.closest('[data-fields]').dataset.fields; (n.settings[k] = n.settings[k] || []).push({ op: 'set', name: 'value', expr: 'value' }); renderProps(); };
     }
