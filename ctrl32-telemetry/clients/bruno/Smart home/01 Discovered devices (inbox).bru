@@ -1,0 +1,21 @@
+meta {
+  name: Discovered devices (inbox)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/discovery
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~status: 
+}
+
+docs {
+  Discovered devices (inbox)
+  
+  Requires permission `device.manage`.
+}

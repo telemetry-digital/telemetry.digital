@@ -1,0 +1,17 @@
+meta {
+  name: MQTT accounts and bridges
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/mqtt-sources
+  body: none
+  auth: inherit
+}
+
+docs {
+  MQTT accounts and bridges
+  
+  Requires permission `device.manage`.
+}

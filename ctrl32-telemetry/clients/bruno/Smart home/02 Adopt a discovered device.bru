@@ -1,0 +1,29 @@
+meta {
+  name: Adopt a discovered device
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/discovery/:id/adopt
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Adopt a discovered device
+  
+  Creates the device, its room (from the suggested area) and its entities.
+  
+  Requires permission `device.manage`.
+}

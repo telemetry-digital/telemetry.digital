@@ -2113,6 +2113,189 @@ export class Ctrl32Client {
   }>('POST', `/api/v1/devices/${encodeURIComponent(id)}/token`, undefined, body, false);
   }
 
+  /** Discovered devices (inbox)
+   *
+   * Requires permission `device.manage`. */
+  getDiscovery(query?: { status?: string; /** pending | adopted | ignored */ }): Promise<(Record<string, unknown>)[]> {
+    return this.request<(Record<string, unknown>)[]>('GET', `/api/v1/discovery`, query, undefined, false);
+  }
+
+  /** Adopt a discovered device
+   *
+   * Creates the device, its room (from the suggested area) and its entities.
+   * 
+   * Requires permission `device.manage`. */
+  postDiscoveryIdAdopt(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    device_id?: string;
+    id?: string;
+    status?: string;
+  }> {
+    return this.request<{
+    device_id?: string;
+    id?: string;
+    status?: string;
+  }>('POST', `/api/v1/discovery/${encodeURIComponent(id)}/adopt`, undefined, body, false);
+  }
+
+  /** Ignore a discovered device
+   *
+   * Requires permission `device.manage`. */
+  postDiscoveryIdIgnore(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    id?: string;
+    status?: string;
+  }> {
+    return this.request<{
+    id?: string;
+    status?: string;
+  }>('POST', `/api/v1/discovery/${encodeURIComponent(id)}/ignore`, undefined, body, false);
+  }
+
+  /** Entities with their state
+   *
+   * Requires permission `data.read`. */
+  getEntities(query?: { room?: string; device?: string; component?: string; }): Promise<({
+    attributes?: Record<string, unknown>;
+    available?: boolean;
+    /** sensor, binary_sensor, switch, light, cover, fan, lock, climate, number, select, button, text, … */
+    component?: string;
+    /** history of the state */
+    datastream_id?: string;
+    device?: string;
+    device_id?: string;
+    error?: string;
+    id?: string;
+    name?: string;
+    room?: string;
+    room_id?: string;
+    services?: string[];
+    state?: string;
+    status?: "active" | "unsupported" | "removed";
+    /** control hints: min, max, step, options, modes, … */
+    ui?: Record<string, unknown>;
+    unit?: string;
+  })[]> {
+    return this.request<({
+    attributes?: Record<string, unknown>;
+    available?: boolean;
+    /** sensor, binary_sensor, switch, light, cover, fan, lock, climate, number, select, button, text, … */
+    component?: string;
+    /** history of the state */
+    datastream_id?: string;
+    device?: string;
+    device_id?: string;
+    error?: string;
+    id?: string;
+    name?: string;
+    room?: string;
+    room_id?: string;
+    services?: string[];
+    state?: string;
+    status?: "active" | "unsupported" | "removed";
+    /** control hints: min, max, step, options, modes, … */
+    ui?: Record<string, unknown>;
+    unit?: string;
+  })[]>('GET', `/api/v1/entities`, query, undefined, false);
+  }
+
+  /** Entity with its discovery config
+   *
+   * Requires permission `data.read`. */
+  getEntitiesId(id: string): Promise<{
+    attributes?: Record<string, unknown>;
+    available?: boolean;
+    /** sensor, binary_sensor, switch, light, cover, fan, lock, climate, number, select, button, text, … */
+    component?: string;
+    /** history of the state */
+    datastream_id?: string;
+    device?: string;
+    device_id?: string;
+    error?: string;
+    id?: string;
+    name?: string;
+    room?: string;
+    room_id?: string;
+    services?: string[];
+    state?: string;
+    status?: "active" | "unsupported" | "removed";
+    /** control hints: min, max, step, options, modes, … */
+    ui?: Record<string, unknown>;
+    unit?: string;
+  }> {
+    return this.request<{
+    attributes?: Record<string, unknown>;
+    available?: boolean;
+    /** sensor, binary_sensor, switch, light, cover, fan, lock, climate, number, select, button, text, … */
+    component?: string;
+    /** history of the state */
+    datastream_id?: string;
+    device?: string;
+    device_id?: string;
+    error?: string;
+    id?: string;
+    name?: string;
+    room?: string;
+    room_id?: string;
+    services?: string[];
+    state?: string;
+    status?: "active" | "unsupported" | "removed";
+    /** control hints: min, max, step, options, modes, … */
+    ui?: Record<string, unknown>;
+    unit?: string;
+  }>('GET', `/api/v1/entities/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Rename, move to a room, hide
+   *
+   * Requires permission `device.manage`. */
+  patchEntitiesId(id: string, body: {
+    hidden?: boolean;
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    room_id?: string;
+    sort?: number;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('PATCH', `/api/v1/entities/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Control an entity
+   *
+   * Becomes a device command (permissions, four eyes, audit): `sent` until the device reports the requested state, then `acked`; optimistic entities and buttons are `acked` at once. The reason defaults to "Home: <service> <entity>".
+   * 
+   * Requires permission `device.command`. */
+  postEntitiesIdCommand(id: string, body: {
+    /** 0–100 % */
+    brightness?: number;
+    /** mireds */
+    color_temp?: number;
+    mode?: string;
+    percentage?: number;
+    /** 0–100 % */
+    position?: number;
+    /** optional */
+    reason?: string;
+    rgb?: number[];
+    /** turn_on, turn_off, toggle, open, close, stop, set_position, lock, unlock, set_temperature, set_hvac_mode, set_value, select_option, press, set_percentage */
+    service: string;
+    temperature?: number;
+    /** number, text or option */
+    value?: Record<string, unknown>;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/entities/${encodeURIComponent(id)}/command`, undefined, body, false);
+  }
+
   /** List escalation policies
    *
    * Requires permission `config.write`. */
@@ -2699,6 +2882,71 @@ export class Ctrl32Client {
     return this.request<Response>('GET', `/api/v1/hmi/objects/${encodeURIComponent(slug)}/svg`, undefined, undefined, true);
   }
 
+  /** Rooms with their entities (Home page)
+   *
+   * Requires permission `data.read`. */
+  getHome(): Promise<{
+    can_control?: boolean;
+    can_manage?: boolean;
+    pending_devices?: number;
+    rooms?: ({
+      entities?: ({
+        attributes?: Record<string, unknown>;
+        available?: boolean;
+        /** sensor, binary_sensor, switch, light, cover, fan, lock, climate, number, select, button, text, … */
+        component?: string;
+        /** history of the state */
+        datastream_id?: string;
+        device?: string;
+        device_id?: string;
+        error?: string;
+        id?: string;
+        name?: string;
+        room?: string;
+        room_id?: string;
+        services?: string[];
+        state?: string;
+        status?: "active" | "unsupported" | "removed";
+        /** control hints: min, max, step, options, modes, … */
+        ui?: Record<string, unknown>;
+        unit?: string;
+      })[];
+      id?: string;
+      name?: string;
+    })[];
+  }> {
+    return this.request<{
+    can_control?: boolean;
+    can_manage?: boolean;
+    pending_devices?: number;
+    rooms?: ({
+      entities?: ({
+        attributes?: Record<string, unknown>;
+        available?: boolean;
+        /** sensor, binary_sensor, switch, light, cover, fan, lock, climate, number, select, button, text, … */
+        component?: string;
+        /** history of the state */
+        datastream_id?: string;
+        device?: string;
+        device_id?: string;
+        error?: string;
+        id?: string;
+        name?: string;
+        room?: string;
+        room_id?: string;
+        services?: string[];
+        state?: string;
+        status?: "active" | "unsupported" | "removed";
+        /** control hints: min, max, step, options, modes, … */
+        ui?: Record<string, unknown>;
+        unit?: string;
+      })[];
+      id?: string;
+      name?: string;
+    })[];
+  }>('GET', `/api/v1/home`, undefined, undefined, false);
+  }
+
   /** Supported and enabled languages */
   getI18nLanguages(): Promise<{
     default?: string;
@@ -2866,6 +3114,164 @@ export class Ctrl32Client {
   }>('POST', `/api/v1/ingest/chirpstack/${encodeURIComponent(id)}`, query, body, false);
   }
 
+  /** MQTT accounts and bridges
+   *
+   * Requires permission `device.manage`. */
+  getMqttSources(): Promise<({
+    id?: string;
+    kind?: "account" | "bridge";
+    name?: string;
+    /** devices waiting in the inbox */
+    pending?: number;
+    /** host, port, tls, username, client_id, discovery_prefix, adopt (auto|inbox), site_id, namespace; never passwords */
+    settings?: Record<string, unknown>;
+    status?: {
+      connected?: boolean;
+      entities?: number;
+      error?: string;
+    };
+  })[]> {
+    return this.request<({
+    id?: string;
+    kind?: "account" | "bridge";
+    name?: string;
+    /** devices waiting in the inbox */
+    pending?: number;
+    /** host, port, tls, username, client_id, discovery_prefix, adopt (auto|inbox), site_id, namespace; never passwords */
+    settings?: Record<string, unknown>;
+    status?: {
+      connected?: boolean;
+      entities?: number;
+      error?: string;
+    };
+  })[]>('GET', `/api/v1/mqtt-sources`, undefined, undefined, false);
+  }
+
+  /** Create an MQTT account or a bridge
+   *
+   * An account gets a generated user name and password (returned once) and its own topic namespace: its devices use any topics (zigbee2mqtt/…, cmnd/…, homeassistant/…) without seeing other accounts. A bridge connects ctrl32 to a foreign broker.
+   * 
+   * Requires permission `device.manage`. */
+  postMqttSources(body: {
+    adopt?: "auto" | "inbox";
+    /** bridge */
+    client_id?: string;
+    /** default homeassistant */
+    discovery_prefix?: string;
+    /** bridge */
+    host?: string;
+    /** bridge, self-signed brokers */
+    insecure_skip_verify?: boolean;
+    kind?: "account" | "bridge";
+    name?: string;
+    /** bridge; stored encrypted */
+    password?: string;
+    /** bridge */
+    port?: number;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    site_id?: string;
+    /** bridge */
+    tls?: boolean;
+    /** bridge */
+    username?: string;
+  }): Promise<{
+    id?: string;
+    kind?: "account" | "bridge";
+    name?: string;
+    /** devices waiting in the inbox */
+    pending?: number;
+    /** host, port, tls, username, client_id, discovery_prefix, adopt (auto|inbox), site_id, namespace; never passwords */
+    settings?: Record<string, unknown>;
+    status?: {
+      connected?: boolean;
+      entities?: number;
+      error?: string;
+    };
+  }> {
+    return this.request<{
+    id?: string;
+    kind?: "account" | "bridge";
+    name?: string;
+    /** devices waiting in the inbox */
+    pending?: number;
+    /** host, port, tls, username, client_id, discovery_prefix, adopt (auto|inbox), site_id, namespace; never passwords */
+    settings?: Record<string, unknown>;
+    status?: {
+      connected?: boolean;
+      entities?: number;
+      error?: string;
+    };
+  }>('POST', `/api/v1/mqtt-sources`, undefined, body, false);
+  }
+
+  /** Change an MQTT source
+   *
+   * Requires permission `device.manage`. */
+  putMqttSourcesId(id: string, body: {
+    adopt?: "auto" | "inbox";
+    /** bridge */
+    client_id?: string;
+    /** default homeassistant */
+    discovery_prefix?: string;
+    /** bridge */
+    host?: string;
+    /** bridge, self-signed brokers */
+    insecure_skip_verify?: boolean;
+    kind?: "account" | "bridge";
+    name?: string;
+    /** bridge; stored encrypted */
+    password?: string;
+    /** bridge */
+    port?: number;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    site_id?: string;
+    /** bridge */
+    tls?: boolean;
+    /** bridge */
+    username?: string;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('PUT', `/api/v1/mqtt-sources/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Delete an MQTT source
+   *
+   * Its entities are marked removed; their history stays.
+   * 
+   * Requires permission `device.manage`. */
+  deleteMqttSourcesId(id: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/mqtt-sources/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** New password for an MQTT account
+   *
+   * Connected clients of the account are disconnected.
+   * 
+   * Requires permission `device.manage`. */
+  postMqttSourcesIdPassword(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    id?: string;
+    /** shown once */
+    password?: string;
+    username?: string;
+  }> {
+    return this.request<{
+    id?: string;
+    /** shown once */
+    password?: string;
+    username?: string;
+  }>('POST', `/api/v1/mqtt-sources/${encodeURIComponent(id)}/password`, undefined, body, false);
+  }
+
   /** List channels
    *
    * Requires permission `config.write`. */
@@ -2945,6 +3351,31 @@ export class Ctrl32Client {
    * Requires permission `data.read`. */
   getObservations(query: { datastream_id: string; from?: string; /** RFC 3339 (default: 24 hours ago) */ to?: string; /** RFC 3339 (default: now) */ bucket?: number; /** aggregation bucket in seconds; omitted = raw rows */ limit?: number; /** max rows per page */ cursor?: string; /** X-Next-Cursor of the previous page */ }): Promise<Observation[] | ObservationBuckets> {
     return this.request<Observation[] | ObservationBuckets>('GET', `/api/v1/observations`, query, undefined, false);
+  }
+
+  /** Connection details for devices
+   *
+   * Requires permission `device.manage`. */
+  getOnboarding(): Promise<{
+    base_url?: string;
+    mqtt?: {
+      host?: string;
+      port?: number;
+      tls_port?: number;
+      ws_port?: number;
+    };
+    provision_url?: string;
+  }> {
+    return this.request<{
+    base_url?: string;
+    mqtt?: {
+      host?: string;
+      port?: number;
+      tls_port?: number;
+      ws_port?: number;
+    };
+    provision_url?: string;
+  }>('GET', `/api/v1/onboarding`, undefined, undefined, false);
   }
 
   /** OpenAPI 3.1 document

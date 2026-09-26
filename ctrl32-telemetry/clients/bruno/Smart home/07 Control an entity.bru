@@ -1,0 +1,40 @@
+meta {
+  name: Control an entity
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/entities/:id/command
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "brightness": 21.5,
+    "color_temp": 21.5,
+    "mode": "string",
+    "percentage": 21.5,
+    "position": 21.5,
+    "reason": "string",
+    "rgb": [
+      21.5
+    ],
+    "service": "string",
+    "temperature": 21.5,
+    "value": {}
+  }
+}
+
+docs {
+  Control an entity
+  
+  Becomes a device command (permissions, four eyes, audit): `sent` until the device reports the requested state, then `acked`; optimistic entities and buttons are `acked` at once. The reason defaults to "Home: <service> <entity>".
+  
+  Requires permission `device.command`.
+}

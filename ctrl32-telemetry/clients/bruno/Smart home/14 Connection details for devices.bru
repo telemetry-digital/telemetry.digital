@@ -1,0 +1,17 @@
+meta {
+  name: Connection details for devices
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/v1/onboarding
+  body: none
+  auth: inherit
+}
+
+docs {
+  Connection details for devices
+  
+  Requires permission `device.manage`.
+}

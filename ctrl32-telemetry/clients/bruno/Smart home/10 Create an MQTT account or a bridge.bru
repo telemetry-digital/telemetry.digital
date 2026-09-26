@@ -1,0 +1,37 @@
+meta {
+  name: Create an MQTT account or a bridge
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/v1/mqtt-sources
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "adopt": "auto",
+    "client_id": "string",
+    "discovery_prefix": "string",
+    "host": "string",
+    "insecure_skip_verify": true,
+    "kind": "account",
+    "name": "string",
+    "password": "string",
+    "port": 1,
+    "reason": "string",
+    "site_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "tls": true,
+    "username": "string"
+  }
+}
+
+docs {
+  Create an MQTT account or a bridge
+  
+  An account gets a generated user name and password (returned once) and its own topic namespace: its devices use any topics (zigbee2mqtt/…, cmnd/…, homeassistant/…) without seeing other accounts. A bridge connects ctrl32 to a foreign broker.
+  
+  Requires permission `device.manage`.
+}
