@@ -470,3 +470,17 @@ dialog.dw-full::backdrop { background: rgba(15, 23, 42, .55); }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg button { border: 0; background: var(--card); color: var(--fg); padding: 4px 10px; cursor: pointer; font: inherit; font-size: 13px; }
 .seg button.on { background: var(--bg2); font-weight: 600; }
+/* ---- Devices and connections (spec 005) ---- */
+.tabs a { padding: 8px 12px; color: var(--muted); border-bottom: 2px solid transparent; white-space: nowrap; text-decoration: none; }
+.tabs a.on { color: var(--fg); border-bottom-color: var(--primary); }
+.sh-paths { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.sh-path { text-align: left; display: flex; flex-direction: column; gap: 6px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--fg); cursor: pointer; font: inherit; text-decoration: none; }
+.sh-path span { color: var(--muted); font-size: 13px; line-height: 1.4; }
+.sh-path:hover, .sh-path.on { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+.sh-code { position: relative; }
+.sh-code pre { background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-x: auto; font-size: 12.5px; margin: 4px 0 10px; }
+.sh-code .btn { position: absolute; top: 6px; right: 6px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 600px) { .row2 { grid-template-columns: 1fr; } }
+.warn-box { background: color-mix(in srgb, #f59e0b 14%, transparent); border: 1px solid color-mix(in srgb, #f59e0b 45%, transparent); padding: 8px 10px; border-radius: 8px; }
+.nowrap { white-space: nowrap; }
