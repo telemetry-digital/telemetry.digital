@@ -115,7 +115,7 @@
         { href: '/settings/export', label: 'Organization export' }, { href: '/settings/notifications', label: 'Notifications' }, { href: '/settings/approvals', label: 'Approvals' }, { href: '/settings/policy', label: 'Security policy' }] },
       { href: '/organizations', label: 'System', icon: ICON.system, show: can('system.admin'), children: [
         { href: '/organizations', label: 'Organizations' }, { href: '/server', label: 'Server' }, { href: '/server/domain', label: 'Domain and TLS' },
-        { href: '/server/wireguard', label: 'WireGuard' }, { href: '/server/backups', label: 'Backups' }, { href: '/server/redundancy', label: 'Redundant database' }, { href: '/server/updates', label: 'Updates' }] },
+        { href: '/server/wireguard', label: 'WireGuard' }, { href: '/server/backups', label: 'Backups' }, { href: '/server/redundancy', label: 'Redundant database' }, { href: '/server/updates', label: 'Updates' }, { href: '/landing/edit', label: 'Front page' }] },
       { href: '/account', label: 'My account', icon: ICON.user, show: !!me, children: [
         { href: '/account', label: 'Profile' }, { href: '/account/security', label: 'Password and MFA' }, { href: '/account/tokens', label: 'API tokens' }, { href: '/account/push', label: 'Notifications' }, { href: '/api/docs', label: 'API documentation' }] },
     ];

@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Front page editor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  main.container { max-width: none; }
+  .le-top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .le { display: grid; grid-template-columns: 250px minmax(0, 1fr) 320px; gap: 12px; align-items: start; }
+  .le-side { position: sticky; top: 8px; max-height: calc(100vh - 24px); overflow: auto; }
+  .le-add { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+  .le-add button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; font-size: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); cursor: pointer; }
+  .le-add button:hover { border-color: var(--primary); }
+  .le-add svg { width: 20px; height: 20px; }
+  .le-list { display: flex; flex-direction: column; gap: 4px; }
+  .le-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); cursor: grab; font-size: 13px; }
+  .le-row.sel { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+  .le-row.drop { border-top: 3px solid var(--primary); }
+  .le-row span.t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .le-row button { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 2px 3px; font-size: 13px; }
+  .le-row button:hover { color: var(--fg); }
+  .le-canvas { background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-height: 70vh; overflow: auto; }
+  .le-frame { margin: 0 auto; background: var(--bg); box-shadow: 0 2px 16px rgba(0,0,0,.12); border-radius: 6px; overflow: hidden; transition: width .2s; }
+  .le-props label { display: flex; flex-direction: column; gap: 3px; font-size: 13px; margin-bottom: 8px; }
+  .le-props .inline { flex-direction: row; align-items: center; gap: 6px; }
+  .le-props textarea { min-height: 90px; font: inherit; }
+  .le-item { border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin-bottom: 8px; }
+  .le-item .row { gap: 4px; }
+  .le-assets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-height: 220px; overflow: auto; margin: 6px 0; }
+  .le-assets button { padding: 2px; border: 2px solid transparent; border-radius: 6px; background: var(--bg2); cursor: pointer; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .le-assets button.on { border-color: var(--primary); }
+  .le-assets img { max-width: 100%; max-height: 100%; }
+  .le-status { font-size: 13px; }
+  .le-color { display: flex; gap: 4px; align-items: center; }
+  .le-color input[type=color] { width: 34px; height: 28px; padding: 0; border: 0; background: none; }
+  @media (max-width: 1100px) { .le { grid-template-columns: 1fr; } .le-side { position: static; max-height: none; } }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+  <div class="le-top">
+    <h1 style="margin:0">Front page</h1>
+    <span class="le-status muted" id="status"></span>
+    <span class="grow"></span>
+    <div class="seg" id="device"><button type="button" data-w="100%" class="on">Computer</button><button type="button" data-w="820px">Tablet</button><button type="button" data-w="390px">Phone</button></div>
+    <button class="btn" type="button" id="undo" title="Undo (Ctrl+Z)">↶</button>
+    <button class="btn" type="button" id="redo" title="Redo (Ctrl+Shift+Z)">↷</button>
+    <button class="btn" type="button" id="versionsBtn">Versions</button>
+    <a class="btn" href="/" target="_blank" rel="noopener">View public page</a>
+    <button class="btn" type="button" id="saveBtn">Save draft</button>
+    <button class="btn primary" type="button" id="publishBtn">Publish</button>
+  </div>
+  <div class="le">
+    <aside class="le-side card">
+      <b style="font-size:13px">Add a block</b>
+      <div class="le-add" id="add"></div>
+      <b style="font-size:13px">Blocks <span class="muted" style="font-weight:400">(drag to reorder)</span></b>
+      <div class="le-list" id="list"></div>
+      <button class="btn small" type="button" id="pageBtn" style="margin-top:10px;width:100%">Page settings</button>
+    </aside>
+    <div class="le-canvas"><div class="le-frame lp-edit-mode" id="frame"></div></div>
+    <aside class="le-side card le-props" id="props"></aside>
+  </div>
+  <p class="muted" style="font-size:12px">Click a block to select it, click a text to write directly in the page. The page is shown to visitors only after Publish; every save is a version you can return to. A sign-in button always stays in the page header.</p>
+
+  <dialog id="verDlg" style="max-width:min(760px,96vw)"><div class="form">
+    <h2 style="margin-top:0">Versions</h2>
+    <div class="table-wrap"><table id="verTable"><thead><tr><th>Version</th><th>Saved</th><th>By</th><th>Reason</th><th>Blocks</th><th></th></tr></thead><tbody></tbody></table></div>
+    <div class="actions"><button class="btn" type="button" id="unpublishBtn">Show the built-in page again</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </div></dialog>
+</main>
+<script src="/app.js"></script>
+<script src="/vendor/tabler-icons.js"></script>
+<script src="/landing.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, api = ctrl32.api, t = ctrl32.t;
+const TYPES = {
+  hero: {label: 'Hero', icon: 'home', make: () => ({title: 'Welcome', text: 'Describe what you offer in one or two sentences.', align: 'center', image: 'logo', buttons: [{label: 'Sign in', href: '/login', style: 'primary'}]})},
+  features: {label: 'Features', icon: 'list-details', make: () => ({title: 'What you get', columns: 3, items: [{icon: 'bolt', title: 'Fast', text: 'Short description.'}, {icon: 'shield-check', title: 'Secure', text: 'Short description.'}, {icon: 'circle-check', title: 'Simple', text: 'Short description.'}]})},
+  text: {label: 'Text', icon: 'info-circle', make: () => ({title: 'Title', text: 'Paragraph of text.\n\n- list item\n- another item'})},
+  image: {label: 'Image', icon: 'eye', make: () => ({title: '', size: 'medium', align: 'center'})},
+  split: {label: 'Text + image', icon: 'window', make: () => ({title: 'Title', text: 'Text next to an image.', image_side: 'right'})},
+  stats: {label: 'Numbers', icon: 'chart-bar', make: () => ({title: '', columns: 3, align: 'center', items: [{value: '24/7', title: 'monitoring'}, {value: '100 %', title: 'your data'}, {value: '0 €', title: 'licence'}]})},
+  cta: {label: 'Call to action', icon: 'bell-ringing', make: () => ({title: 'Ready to start?', text: 'Sign in or contact us.', buttons: [{label: 'Sign in', href: '/login', style: 'primary'}]})},
+  contact: {label: 'Contact', icon: 'map-pin', make: () => ({title: 'Contact', email: 'info@example.com', phone: '+421 900 000 000', address: 'Street 1, City'})},
+  spacer: {label: 'Divider', icon: 'arrow-bar-to-down', make: () => ({size: 'medium'})},
+};
+const icon = (n, sz) => { const d = window.ctrl32Icons[n] || window.ctrl32Icons['box']; return `<svg viewBox="0 0 24 24" width="${sz || 18}" height="${sz || 18}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d || ''}</svg>`; };
+let SPEC = null, SEL = null, VERSION = null, PUBLISHED = null, DIRTY = false, ASSETS = [], HIST = [], FUT = [];
+
+// ---- state and history ------------------------------------------------------------------------------------------
+const snap = () => JSON.stringify(SPEC);
+let lastSnap = '';
+function changed(rerender) {
+  const s = snap();
+  if (s !== lastSnap) { HIST.push(lastSnap); if (HIST.length > 100) HIST.shift(); FUT = []; lastSnap = s; DIRTY = true; }
+  status();
+  if (rerender !== false) preview();
+  list();
+}
+function undo() { if (!HIST.length) return; FUT.push(lastSnap); lastSnap = HIST.pop(); SPEC = JSON.parse(lastSnap); DIRTY = true; all(); }
+function redo() { if (!FUT.length) return; HIST.push(lastSnap); lastSnap = FUT.pop(); SPEC = JSON.parse(lastSnap); DIRTY = true; all(); }
+function status() {
+  const parts = [];
+  parts.push(VERSION ? `${t('draft')} v${VERSION}` : t('not saved yet'));
+  parts.push(PUBLISHED ? `${t('published')} v${PUBLISHED}` : t('the built-in page is shown'));
+  if (DIRTY) parts.push('● ' + t('unsaved changes'));
+  $('#status').textContent = parts.join(' · ');
+}
+const block = (id) => SPEC.blocks.find(b => b.id === id);
+function newID(type) { let i = 1; while (SPEC.blocks.some(b => b.id === type + i)) i++; return type + i; }
+
+// ---- rendering ---------------------------------------------------------------------------------------------------
+function preview() {
+  ctrl32Landing.render($('#frame'), SPEC, {edit: true, selected: SEL,
+    onSelect: (id) => { if (SEL !== id) { SEL = id; props(); list(); for (const s of document.querySelectorAll('#frame .lp-block')) s.classList.toggle('lp-selected', s.dataset.id === id); } },
+    onEdit: (id, path, value) => { setPath(block(id), path, value); changed(false); syncField(id, path, value); }});
+}
+function setPath(obj, path, value) { const p = path.split('.'); let o = obj; for (let i = 0; i < p.length - 1; i++) o = o[/^\d+$/.test(p[i]) ? +p[i] : p[i]]; o[p[p.length - 1]] = value; }
+function getPath(obj, path) { return path.split('.').reduce((o, k) => (o == null ? o : o[/^\d+$/.test(k) ? +k : k]), obj); }
+function syncField(id, path, value) { if (SEL !== id) return; const el = document.querySelector(`#props [data-path="${path}"]`); if (el && el !== document.activeElement) el.value = value; }
+function list() {
+  $('#list').innerHTML = SPEC.blocks.map((b, i) => `<div class="le-row${b.id === SEL ? ' sel' : ''}" draggable="true" data-i="${i}">${icon(TYPES[b.type].icon, 16)}<span class="t">${esc(b.title || t(TYPES[b.type].label))}</span>
+    <button type="button" data-up="${i}" title="${esc(t('Move up'))}">▲</button><button type="button" data-down="${i}" title="${esc(t('Move down'))}">▼</button><button type="button" data-dup="${i}" title="${esc(t('Duplicate'))}">⧉</button><button type="button" data-del="${i}" title="${esc(t('Delete'))}">✕</button></div>`).join('') || `<span class="muted" style="font-size:13px">${esc(t('No blocks yet.'))}</span>`;
+  for (const r of document.querySelectorAll('.le-row')) {
+    r.onclick = (e) => { if (e.target.closest('button')) return; SEL = SPEC.blocks[+r.dataset.i].id; all(); scrollTo(SEL); };
+    r.ondragstart = (e) => { e.dataTransfer.setData('text/plain', r.dataset.i); };
+    r.ondragover = (e) => { e.preventDefault(); r.classList.add('drop'); };
+    r.ondragleave = () => r.classList.remove('drop');
+    r.ondrop = (e) => { e.preventDefault(); const from = +e.dataTransfer.getData('text/plain'), to = +r.dataset.i; move(from, to); };
+  }
+  for (const b of document.querySelectorAll('[data-up]')) b.onclick = () => move(+b.dataset.up, +b.dataset.up - 1);
+  for (const b of document.querySelectorAll('[data-down]')) b.onclick = () => move(+b.dataset.down, +b.dataset.down + 2);
+  for (const b of document.querySelectorAll('[data-dup]')) b.onclick = () => { const src = SPEC.blocks[+b.dataset.dup], c = JSON.parse(JSON.stringify(src)); c.id = newID(src.type); SPEC.blocks.splice(+b.dataset.dup + 1, 0, c); SEL = c.id; changed(); props(); };
+  for (const b of document.querySelectorAll('[data-del]')) b.onclick = () => { const [x] = SPEC.blocks.splice(+b.dataset.del, 1); if (x.id === SEL) SEL = null; changed(); props(); };
+}
+function move(from, to) { if (to < 0 || to > SPEC.blocks.length) return; const [b] = SPEC.blocks.splice(from, 1); SPEC.blocks.splice(to > from ? to - 1 : to, 0, b); changed(); }
+function scrollTo(id) { const s = document.querySelector(`#frame .lp-block[data-id="${id}"]`); if (s) s.scrollIntoView({behavior: 'smooth', block: 'nearest'}); }
+
+// ---- properties -------------------------------------------------------------------------------------------------
+const field = (lab, path, v, type) => type === 'textarea' ? `<label>${esc(t(lab))}<textarea data-path="${path}">${esc(v || '')}</textarea></label>` : `<label>${esc(t(lab))}<input data-path="${path}" value="${esc(v || '')}"${type ? ` type="${type}"` : ''}></label>`;
+const select = (lab, path, v, opts) => `<label>${esc(t(lab))}<select data-path="${path}">${opts.map(([val, l]) => `<option value="${val}"${String(v ?? '') === String(val) ? ' selected' : ''}>${esc(t(l))}</option>`).join('')}</select></label>`;
+const color = (lab, path, v) => `<label>${esc(t(lab))}<span class="le-color"><input type="color" data-cpick="${path}" value="${/^#[0-9a-f]{6}$/i.test(v || '') ? v : '#ffffff'}"><input data-path="${path}" value="${esc(v || '')}" placeholder="${esc(t('default'))}" maxlength="7" style="width:90px;font-family:var(--mono)"><button class="btn small ghost" type="button" data-cclear="${path}">✕</button></span></label>`;
+const iconOpts = (v) => Object.keys(window.ctrl32Icons).sort().map(n => `<option${n === v ? ' selected' : ''}>${n}</option>`).join('');
+function imagePicker(b) {
+  return `<label>${esc(t('Image'))}</label><div class="le-assets"><button type="button" data-img="" class="${!b.image ? 'on' : ''}" title="${esc(t('none'))}">—</button><button type="button" data-img="logo" class="${b.image === 'logo' ? 'on' : ''}" title="${esc(t('Logo'))}"><img src="${esc(ctrl32.brand.logo_custom ? ctrl32.brand.logo_url : '/logo.svg')}" alt=""></button>${ASSETS.map(a => `<button type="button" data-img="${a.id}" class="${b.image === a.id ? 'on' : ''}" title="${esc(a.name)}"><img src="${esc(a.url)}" alt="" loading="lazy"></button>`).join('')}</div>
+    <label class="btn small" style="display:inline-flex;flex-direction:row;cursor:pointer">${esc(t('Upload image'))}<input type="file" id="upload" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden></label>`;
+}
+function props() {
+  const P = $('#props');
+  if (!SEL || !block(SEL)) {
+    P.innerHTML = `<h2 style="margin-top:0">${esc(t('Page settings'))}</h2>` + field('Browser title', 'title', SPEC.title) + field('Description for search engines', 'description', SPEC.description, 'textarea') +
+      color('Background', 'theme.background', SPEC.theme.background) + color('Text colour', 'theme.text', SPEC.theme.text) + color('Accent (buttons, icons)', 'theme.accent', SPEC.theme.accent) +
+      select('Content width', 'theme.width', SPEC.theme.width || 'normal', [['normal', 'normal'], ['wide', 'wide'], ['full', 'full width']]);
+    wire(SPEC); return;
+  }
+  const b = block(SEL), ty = b.type;
+  let hml = `<div class="row" style="margin-bottom:8px">${icon(TYPES[ty].icon)}<b>${esc(t(TYPES[ty].label))}</b><span class="grow"></span><button class="btn small ghost" type="button" id="deselect">${esc(t('Page settings'))}</button></div>`;
+  if (ty !== 'spacer') hml += field('Title', 'title', b.title);
+  if (ty === 'hero') hml += field('Subtitle', 'subtitle', b.subtitle);
+  if (['hero', 'text', 'split', 'cta', 'contact'].includes(ty)) hml += field('Text (blank line = new paragraph, "- " = list, **bold**)', 'text', b.text, 'textarea');
+  if (['hero', 'image', 'split'].includes(ty)) hml += imagePicker(b);
+  if (['hero', 'text', 'features', 'stats', 'image', 'contact', 'cta'].includes(ty)) hml += select('Alignment', 'align', b.align || 'left', [['left', 'left'], ['center', 'centred']]);
+  if (ty === 'split') hml += select('Image on the', 'image_side', b.image_side || 'right', [['right', 'right'], ['left', 'left']]);
+  if (['features', 'stats'].includes(ty)) hml += select('Columns', 'columns', b.columns || 3, [[1, '1'], [2, '2'], [3, '3'], [4, '4']]);
+  hml += select(ty === 'spacer' ? 'Height' : ty === 'image' ? 'Image width' : 'Spacing', 'size', b.size || 'medium', [['small', 'small'], ['medium', 'medium'], ['large', 'large']]);
+  if (ty === 'contact') hml += field('E-mail', 'email', b.email) + field('Phone', 'phone', b.phone) + field('Address', 'address', b.address);
+  if (ty !== 'spacer') hml += color('Background', 'background', b.background) + color('Gradient to (optional)', 'background2', b.background2) + color('Text colour', 'text_color', b.text_color);
+  if (['features', 'stats'].includes(ty)) {
+    hml += `<b style="font-size:13px">${esc(t(ty === 'stats' ? 'Numbers' : 'Features'))}</b>` + (b.items || []).map((it, i) => `<div class="le-item">${ty === 'features' ? `<label>${esc(t('Icon'))}<span class="row" style="flex-wrap:nowrap"><select data-path="items.${i}.icon" style="flex:1">${iconOpts(it.icon)}</select>${icon(it.icon, 22)}</span></label>` : field('Value', `items.${i}.value`, it.value)}
+      ${field(ty === 'stats' ? 'Label' : 'Title', `items.${i}.title`, it.title)}${ty === 'features' ? field('Text', `items.${i}.text`, it.text, 'textarea') : ''}
+      <div class="row"><button class="btn small" type="button" data-iup="${i}">▲</button><button class="btn small" type="button" data-idown="${i}">▼</button><span class="grow"></span><button class="btn small" type="button" data-idel="${i}">${esc(t('Remove'))}</button></div></div>`).join('') +
+      `<button class="btn small" type="button" id="addItem">${esc(t('Add'))}</button>`;
+  }
+  if (['hero', 'split', 'cta'].includes(ty)) {
+    hml += `<b style="font-size:13px;display:block;margin-top:8px">${esc(t('Buttons'))}</b>` + (b.buttons || []).map((bt, i) => `<div class="le-item">${field('Label', `buttons.${i}.label`, bt.label)}${field('Link (/page, https://…, mailto:, tel:)', `buttons.${i}.href`, bt.href)}
+      ${select('Style', `buttons.${i}.style`, bt.style || 'primary', [['primary', 'primary'], ['secondary', 'secondary']])}<button class="btn small" type="button" data-bdel="${i}">${esc(t('Remove'))}</button></div>`).join('') +
+      ((b.buttons || []).length < 3 ? `<button class="btn small" type="button" id="addBtn">${esc(t('Add button'))}</button>` : '');
+  }
+  P.innerHTML = hml;
+  wire(b);
+  const d = $('#deselect'); if (d) d.onclick = () => { SEL = null; all(); };
+  const ai = $('#addItem'); if (ai) ai.onclick = () => { (b.items = b.items || []).push(ty === 'stats' ? {value: '0', title: t('label')} : {icon: 'circle-check', title: t('Title'), text: ''}); changed(); props(); };
+  const ab = $('#addBtn'); if (ab) ab.onclick = () => { (b.buttons = b.buttons || []).push({label: t('More'), href: '/login', style: 'secondary'}); changed(); props(); };
+  for (const x of document.querySelectorAll('[data-idel]')) x.onclick = () => { b.items.splice(+x.dataset.idel, 1); changed(); props(); };
+  for (const x of document.querySelectorAll('[data-iup]')) x.onclick = () => { const i = +x.dataset.iup; if (i > 0) { [b.items[i - 1], b.items[i]] = [b.items[i], b.items[i - 1]]; changed(); props(); } };
+  for (const x of document.querySelectorAll('[data-idown]')) x.onclick = () => { const i = +x.dataset.idown; if (i < b.items.length - 1) { [b.items[i + 1], b.items[i]] = [b.items[i], b.items[i + 1]]; changed(); props(); } };
+  for (const x of document.querySelectorAll('[data-bdel]')) x.onclick = () => { b.buttons.splice(+x.dataset.bdel, 1); changed(); props(); };
+  for (const x of document.querySelectorAll('[data-img]')) x.onclick = () => { b.image = x.dataset.img || undefined; if (!b.image) delete b.image; changed(); props(); };
+  const up = $('#upload'); if (up) up.onchange = () => upload(up.files[0], b);
+}
+// inputs write into the object at their path; numbers stay numbers, empty values are removed
+function wire(obj) {
+  for (const el of document.querySelectorAll('#props [data-path]')) {
+    const ev = el.tagName === 'SELECT' ? 'change' : 'input';
+    el.addEventListener(ev, () => {
+      let v = el.value;
+      if (el.dataset.path === 'columns') v = +v;
+      if (v === '' || v === undefined) { const p = el.dataset.path.split('.'); const parent = p.length > 1 ? getPath(obj, p.slice(0, -1).join('.')) : obj; delete parent[p[p.length - 1]]; }
+      else setPath(obj, el.dataset.path, v);
+      const pick = document.querySelector(`#props [data-cpick="${el.dataset.path}"]`); if (pick && /^#[0-9a-f]{6}$/i.test(v)) pick.value = v;
+      changed(); if (el.dataset.path.endsWith('.icon')) props();
+    });
+  }
+  for (const el of document.querySelectorAll('#props [data-cpick]')) el.addEventListener('input', () => { const inp = document.querySelector(`#props [data-path="${el.dataset.cpick}"]`); inp.value = el.value; inp.dispatchEvent(new Event('input')); });
+  for (const el of document.querySelectorAll('#props [data-cclear]')) el.onclick = () => { const inp = document.querySelector(`#props [data-path="${el.dataset.cclear}"]`); inp.value = ''; inp.dispatchEvent(new Event('input')); };
+}
+async function upload(file, b) {
+  if (!file) return;
+  const reason = ctrl32.ask('Reason (audit trail)', 'front page image'); if (!reason) return;
+  const fd = new FormData(); fd.append('file', file); fd.append('reason', reason);
+  const r = await fetch('/api/v1/landing/assets', {method: 'POST', body: fd, headers: {'X-CSRF-Token': ctrl32.csrf}, credentials: 'same-origin'});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { ctrl32.toast(j.error || 'HTTP ' + r.status, 'bad'); return; }
+  ASSETS.unshift(j); b.image = j.id; changed(); props();
+}
+function all() { status(); preview(); list(); props(); }
+
+// ---- saving, publishing, versions ------------------------------------------------------------------------------
+async function save(publish) {
+  const reason = ctrl32.ask(publish ? 'Reason for publishing (audit trail)' : 'Reason for saving (audit trail)'); if (!reason) return;
+  try {
+    const r = await api('POST', '/api/v1/landing/versions', {spec: SPEC, reason, publish});
+    VERSION = r.version; if (publish) PUBLISHED = r.version; DIRTY = false; status();
+    ctrl32.toast(t(publish ? 'Published — visitors see the new front page' : 'Draft saved'), 'ok');
+  } catch (x) { ctrl32.toast(x.message, 'bad'); }
+}
+async function versions() {
+  const list = await api('GET', '/api/v1/landing/versions');
+  $('#verTable tbody').innerHTML = list.map(v => `<tr><td>v${v.version}${v.published ? ` <span class="badge ok">${esc(t('published'))}</span>` : ''}</td><td>${esc(ctrl32.fmt(v.created_at))}</td><td class="notranslate">${esc(v.created_by)}</td><td class="notranslate">${esc(v.reason)}</td><td>${v.blocks}</td>
+    <td class="actions-cell"><button class="btn small" type="button" data-open="${v.version}">${esc(t('Open'))}</button>${v.published ? '' : `<button class="btn small" type="button" data-pub="${v.version}">${esc(t('Publish'))}</button>`}</td></tr>`).join('') || `<tr><td colspan="6" class="muted">${esc(t('No versions yet.'))}</td></tr>`;
+  for (const b of document.querySelectorAll('[data-open]')) b.onclick = async () => {
+    if (DIRTY && !ctrl32.confirm('Discard unsaved changes?')) return;
+    const r = await api('GET', '/api/v1/landing/versions/' + b.dataset.open); SPEC = r.spec; VERSION = r.version; SEL = null; HIST = []; FUT = []; lastSnap = snap(); DIRTY = false; $('#verDlg').close(); all();
+  };
+  for (const b of document.querySelectorAll('[data-pub]')) b.onclick = async () => {
+    const reason = ctrl32.ask('Reason for publishing (audit trail)'); if (!reason) return;
+    try { await api('POST', `/api/v1/landing/versions/${b.dataset.pub}/publish`, {reason}); PUBLISHED = +b.dataset.pub; status(); versions(); ctrl32.toast(t('Published'), 'ok'); } catch (x) { ctrl32.toast(x.message, 'bad'); }
+  };
+  $('#verDlg').showModal();
+}
+$('#unpublishBtn').onclick = async () => {
+  const reason = ctrl32.ask('Reason (audit trail)'); if (!reason) return;
+  try { await api('POST', '/api/v1/landing/unpublish', {reason}); PUBLISHED = null; status(); versions(); } catch (x) { ctrl32.toast(x.message, 'bad'); }
+};
+$('#saveBtn').onclick = () => save(false);
+$('#publishBtn').onclick = () => save(true);
+$('#versionsBtn').onclick = versions;
+$('#undo').onclick = undo; $('#redo').onclick = redo;
+$('#pageBtn').onclick = () => { SEL = null; all(); };
+for (const b of document.querySelectorAll('#device button')) b.onclick = () => { for (const x of document.querySelectorAll('#device button')) x.classList.toggle('on', x === b); $('#frame').style.width = b.dataset.w; };
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest('input,textarea,select,[contenteditable]')) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
+});
+window.addEventListener('beforeunload', (e) => { if (DIRTY) { e.preventDefault(); e.returnValue = ''; } });
+
+ctrl32.ready({requireAuth: true, requirePerm: 'system.admin'}).then(async () => {
+  $('#add').innerHTML = Object.entries(TYPES).map(([k, v]) => `<button type="button" data-add="${k}">${icon(v.icon)}<span>${esc(t(v.label))}</span></button>`).join('');
+  for (const b of document.querySelectorAll('[data-add]')) b.onclick = () => {
+    const ty = b.dataset.add, nb = Object.assign({id: newID(ty), type: ty}, TYPES[ty].make());
+    const at = SEL ? SPEC.blocks.findIndex(x => x.id === SEL) + 1 : SPEC.blocks.length;
+    SPEC.blocks.splice(at, 0, nb); SEL = nb.id; changed(); props(); setTimeout(() => scrollTo(nb.id), 50);
+  };
+  try {
+    const [d, assets] = await Promise.all([api('GET', '/api/v1/landing/draft'), api('GET', '/api/v1/landing/assets')]);
+    SPEC = d.spec; VERSION = d.version; PUBLISHED = d.published_version; ASSETS = assets;
+    SPEC.theme = SPEC.theme || {}; SPEC.blocks = SPEC.blocks || [];
+  } catch (x) { $('main').innerHTML = `<div class="card">${esc(x.message)}</div>`; return; }
+  lastSnap = snap(); all();
+});
+</script>
+</body>
+</html>

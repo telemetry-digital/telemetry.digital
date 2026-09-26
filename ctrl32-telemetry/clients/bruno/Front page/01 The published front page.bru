@@ -1,0 +1,17 @@
+meta {
+  name: The published front page
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/landing
+  body: none
+  auth: inherit
+}
+
+docs {
+  The published front page
+  
+  Public. `spec` is null while the built-in page is shown.
+}

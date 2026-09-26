@@ -1,0 +1,23 @@
+meta {
+  name: Show the built-in page again
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/landing/unpublish
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Show the built-in page again
+  
+  Requires permission `system.admin`.
+}

@@ -81,6 +81,8 @@ curl -s -H "Authorization: Bearer $RAW" "$BASE/api/v1/export/alarms?format=jsonl
 AUD=$(req "$BASE/api/v1/export/audit?format=csv"); grep -q 'export.read' <<< "$AUD" && pass "export recorded in audit trail" || fail "export not audited"
 
 echo "9. lockout after failed logins, revocation"
+# The per-address login limiter (10 per minute) must not answer first: wait until it has room for the six attempts.
+sleep 40
 : > /tmp/lock.jar
 for i in 1 2 3 4 5; do curl -s -o /dev/null -c /tmp/lock.jar -H 'Content-Type: application/json' -X POST "$BASE/api/v1/auth/login" -d "{\"username\":\"$USER\",\"password\":\"wrong-$i\"}"; done
 LOCKED=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -X POST "$BASE/api/v1/auth/login" -d "{\"username\":\"$USER\",\"password\":\"$NEWPW\"}")

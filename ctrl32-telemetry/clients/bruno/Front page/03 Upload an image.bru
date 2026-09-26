@@ -1,0 +1,24 @@
+meta {
+  name: Upload an image
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/landing/assets
+  body: multipartForm
+  auth: inherit
+}
+
+body:multipart-form {
+  file: @file()
+  reason: 
+}
+
+docs {
+  Upload an image
+  
+  PNG, JPEG or WebP (checked by content) or SVG (sanitised), at most 2 MiB.
+  
+  Requires permission `system.admin`.
+}

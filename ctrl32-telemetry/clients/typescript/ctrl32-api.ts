@@ -461,6 +461,66 @@ export type IncidentEvent = {
   id?: string;
 };
 
+export type LandingBlock = {
+  address?: string;
+  align?: "left" | "center";
+  /** #rrggbb */
+  background?: string;
+  /** #rrggbb gradient end */
+  background2?: string;
+  buttons?: ({
+    /** /path, https://…, mailto:, tel: */
+    href?: string;
+    label?: string;
+    style?: "primary" | "secondary";
+  })[];
+  /** 1–4 */
+  columns?: number;
+  email?: string;
+  /** [a-z0-9_-]{1,24}, unique */
+  id: string;
+  /** "logo" or an asset id */
+  image?: string;
+  image_side?: "left" | "right";
+  items?: ({
+    /** catalogue icon */
+    icon?: string;
+    text?: string;
+    title?: string;
+    value?: string;
+  })[];
+  phone?: string;
+  size?: "small" | "medium" | "large";
+  /** ≤ 300 */
+  subtitle?: string;
+  /** ≤ 4000; blank line = paragraph, "- " = list, **bold** */
+  text?: string;
+  /** #rrggbb */
+  text_color?: string;
+  /** ≤ 160 */
+  title?: string;
+  type: "hero" | "features" | "text" | "image" | "split" | "stats" | "cta" | "contact" | "spacer";
+};
+
+export type LandingSpec = {
+  blocks: LandingBlock[];
+  /** ≤ 200 */
+  description?: string;
+  theme?: {
+    /** #rrggbb */
+    accent?: string;
+    /** #rrggbb */
+    background?: string;
+    /** #rrggbb */
+    text?: string;
+    width?: "normal" | "wide" | "full";
+  };
+  /** ≤ 80 */
+  title?: string;
+  /** 1 */
+  version: number;
+};
+
 export type LatestValue = {
   asset?: string;
   key?: string;
@@ -3347,6 +3407,170 @@ export class Ctrl32Client {
     event?: string;
     note?: string;
   }>('POST', `/api/v1/ingest/chirpstack/${encodeURIComponent(id)}`, query, body, false);
+  }
+
+  /** The published front page
+   *
+   * Public. `spec` is null while the built-in page is shown. */
+  getLanding(): Promise<{
+    spec?: LandingSpec;
+    version?: number;
+  }> {
+    return this.request<{
+    spec?: LandingSpec;
+    version?: number;
+  }>('GET', `/api/v1/landing`, undefined, undefined, false);
+  }
+
+  /** Uploaded images
+   *
+   * Requires permission `system.admin`. */
+  getLandingAssets(): Promise<({
+    bytes?: number;
+    created_at?: string;
+    id?: string;
+    mime?: string;
+    name?: string;
+    url?: string;
+  })[]> {
+    return this.request<({
+    bytes?: number;
+    created_at?: string;
+    id?: string;
+    mime?: string;
+    name?: string;
+    url?: string;
+  })[]>('GET', `/api/v1/landing/assets`, undefined, undefined, false);
+  }
+
+  /** Upload an image
+   *
+   * PNG, JPEG or WebP (checked by content) or SVG (sanitised), at most 2 MiB.
+   * 
+   * Requires permission `system.admin`. */
+  postLandingAssets(body: FormData): Promise<{
+    bytes?: number;
+    id?: string;
+    mime?: string;
+    name?: string;
+    url?: string;
+  }> {
+    return this.request<{
+    bytes?: number;
+    id?: string;
+    mime?: string;
+    name?: string;
+    url?: string;
+  }>('POST', `/api/v1/landing/assets`, undefined, body, false);
+  }
+
+  /** An image of the front page
+   *
+   * Public; served with a sandbox Content-Security-Policy. */
+  getLandingAssetsId(id: string): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/landing/assets/${encodeURIComponent(id)}`, undefined, undefined, true);
+  }
+
+  /** The newest version for the editor
+   *
+   * The built-in page as blocks when nothing was saved yet.
+   * 
+   * Requires permission `system.admin`. */
+  getLandingDraft(): Promise<{
+    published_version?: number;
+    spec?: LandingSpec;
+    /** null when nothing was saved */
+    version?: number;
+  }> {
+    return this.request<{
+    published_version?: number;
+    spec?: LandingSpec;
+    /** null when nothing was saved */
+    version?: number;
+  }>('GET', `/api/v1/landing/draft`, undefined, undefined, false);
+  }
+
+  /** Show the built-in page again
+   *
+   * Requires permission `system.admin`. */
+  postLandingUnpublish(body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    published_version?: number | null;
+  }> {
+    return this.request<{
+    published_version?: number | null;
+  }>('POST', `/api/v1/landing/unpublish`, undefined, body, false);
+  }
+
+  /** Saved versions
+   *
+   * Requires permission `system.admin`. */
+  getLandingVersions(): Promise<({
+    blocks?: number;
+    created_at?: string;
+    created_by?: string;
+    published?: boolean;
+    reason?: string;
+    version?: number;
+  })[]> {
+    return this.request<({
+    blocks?: number;
+    created_at?: string;
+    created_by?: string;
+    published?: boolean;
+    reason?: string;
+    version?: number;
+  })[]>('GET', `/api/v1/landing/versions`, undefined, undefined, false);
+  }
+
+  /** Save a version (and publish it)
+   *
+   * Strict validation: known block types and fields only, #rrggbb colours, catalogue icons, links to a page here, https://, mailto: or tel:, own images.
+   * 
+   * Requires permission `system.admin`. */
+  postLandingVersions(body: {
+    /** publish at once */
+    publish?: boolean;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    spec: LandingSpec;
+  }): Promise<{
+    published?: boolean;
+    version?: number;
+  }> {
+    return this.request<{
+    published?: boolean;
+    version?: number;
+  }>('POST', `/api/v1/landing/versions`, undefined, body, false);
+  }
+
+  /** One version
+   *
+   * Requires permission `system.admin`. */
+  getLandingVersionsV(v: string): Promise<{
+    spec?: LandingSpec;
+    version?: number;
+  }> {
+    return this.request<{
+    spec?: LandingSpec;
+    version?: number;
+  }>('GET', `/api/v1/landing/versions/${encodeURIComponent(v)}`, undefined, undefined, false);
+  }
+
+  /** Publish a version
+   *
+   * Requires permission `system.admin`. */
+  postLandingVersionsVPublish(v: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    published_version?: number;
+  }> {
+    return this.request<{
+    published_version?: number;
+  }>('POST', `/api/v1/landing/versions/${encodeURIComponent(v)}/publish`, undefined, body, false);
   }
 
   /** MQTT accounts and bridges

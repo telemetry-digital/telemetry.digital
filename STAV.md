@@ -14,8 +14,9 @@
 | 0.44.0 | Toky: podtoky (znovupoužiteľné časti, pripnuté verzie), uzol Rozdelenie, farebné skupiny na plátne (spec 009) | e2e 23, unit |
 | 0.45.0 | Kamery: RTSP (H.264/H.265/MJPEG) a HTTP MJPEG, nepretržité nahrávanie s uchovaním a limitom disku, živý obraz a záznamy v prehliadači, časová os, export MP4, videosteny na viac monitorov (2 × 20), audit prezerania (spec 010) | e2e 44, unit |
 | 0.46.0 | Kamery: widget, prehrávač s ovládaním a priblížením, timeshift (nahrávanie nezávislé od prehrávania), vzdialené kamery cez šifrovaný prenášač `camera-relay`, PWA aj pre iPhone, test 128 kamier (spec 011) | e2e 61, unit, záťaž |
+| 0.47.0 | Grafický editor úvodnej stránky pred prihlásením: bloky, úprava textu priamo v náhľade, počítač/tablet/mobil, verzie, zverejnenie, obrázky (SVG sanitizované), prísna validácia, prihlásenie sa nedá odstrániť (spec 012) | e2e 33, unit |
 
-Celá sada testov (`tests/run-all.sh`) prešla pre 0.45.0 bez chyby (0.46.0 beží) (26. 9. 2026).
+Celá sada testov (`tests/run-all.sh`) prešla pre 0.46.0 (26. 9. 2026) okrem e2e `iam`, ktorá zlyhala na časovaní obmedzovača prihlásení (429 namiesto 423) — test doplnený o čakanie (26. 9. 2026).
 
 ## Ďalšie možnosti (fáza 2)
 
@@ -36,9 +37,14 @@ Celá sada testov (`tests/run-all.sh`) prešla pre 0.45.0 bez chyby (0.46.0 bež
 - Všetko ostáva zadarmo, žiadne platené funkcie; pätička ctrl32 je pevná (26. 9. 2026 — platený white labeling bol
   pripravený a na žiadosť vrátený).
 
+## Rozpracované
+
+- spec 013 kamery: pohyb z ONVIF udalostí bez dekódovania, nahrávanie pri udalosti so značkami na osi, PTZ, ONVIF
+  vyhľadanie, udalosti kamier v tokoch a alarmoch (odsúhlasené 26. 9. 2026)
+
 ## Čaká na používateľa
 
-- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.46.0 root@2.29.5.17 -i <kľúč>` alebo
+- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.47.0 root@2.29.5.17 -i <kľúč>` alebo
   GitHub workflow (secrets `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS` a workflow na `main`)
 - zlúčenie vetvy do `main` (pull request na požiadanie)
 - potvrdenie ADR-0015 (SCADA editor v čistom JS nad SVG)
