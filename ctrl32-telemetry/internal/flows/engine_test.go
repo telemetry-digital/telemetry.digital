@@ -281,3 +281,49 @@ func TestFlowAttribute(t *testing.T) {
 		t.Fatalf("attribute: %v", h.attrs)
 	}
 }
+
+// SC-002: a message passes a 10-node flow in well under 50 ms and the engine sustains 1 000 messages per second.
+func TestFlowThroughput(t *testing.T) {
+	js := `{"nodes":[{"id":"t","type":"ds_value","x":0,"y":0,"settings":{"datastream":"` + dsA + `"}},
+		{"id":"m1","type":"math","x":0,"y":0,"settings":{"expr":"value * 2","target":"value"}},
+		{"id":"f1","type":"filter","x":0,"y":0,"settings":{"condition":"value >= 0"}},
+		{"id":"c1","type":"change","x":0,"y":0,"settings":{"fields":[{"op":"set","name":"msg.raw","expr":"value"}]}},
+		{"id":"m2","type":"math","x":0,"y":0,"settings":{"expr":"value / 2","target":"value"}},
+		{"id":"s1","type":"switch","x":0,"y":0,"settings":{"rules":["value < 1e9"],"check":"first"}},
+		{"id":"tp","type":"template","x":0,"y":0,"settings":{"text":"{{ fixed(value, 1) }}","target":"msg.text"}},
+		{"id":"cn","type":"counter","x":0,"y":0,"settings":{"add":"1"}},
+		{"id":"m3","type":"math","x":0,"y":0,"settings":{"expr":"msg.raw / 2","target":"value"}},
+		{"id":"d","type":"derive","x":0,"y":0,"settings":{"datastream":"` + dsA + `","expr":"value"}}],
+		"wires":[{"from":"t","port":0,"to":"m1"},{"from":"m1","port":0,"to":"f1"},{"from":"f1","port":0,"to":"c1"},{"from":"c1","port":0,"to":"m2"},
+		{"from":"m2","port":0,"to":"s1"},{"from":"s1","port":0,"to":"tp"},{"from":"tp","port":0,"to":"cn"},{"from":"cn","port":0,"to":"m3"},{"from":"m3","port":0,"to":"d"}]}`
+	e, _, h, cancel := testEngine(t, js)
+	defer cancel()
+	stored := func() int { h.mu.Lock(); defer h.mu.Unlock(); return len(h.stored) }
+	// latency of a single message through all ten nodes
+	start := time.Now()
+	publish(e, 1)
+	waitFor(t, "first message", func() bool { return stored() == 1 })
+	if d := time.Since(start); d > 50*time.Millisecond {
+		t.Errorf("one message took %v through 10 nodes", d)
+	}
+	// throughput: 2 000 messages in batches that fit the queue
+	const n = 2000
+	start = time.Now()
+	for i := 0; i < n; i += 250 {
+		for j := 0; j < 250; j++ {
+			publish(e, float64(i+j))
+		}
+		for stored() < 1+i+250 && time.Since(start) < 10*time.Second {
+			time.Sleep(time.Millisecond)
+		}
+	}
+	el := time.Since(start)
+	if stored() != n+1 {
+		t.Fatalf("stored %d of %d", stored(), n+1)
+	}
+	rate := float64(n) / el.Seconds()
+	t.Logf("%d messages through 10 nodes in %v (%.0f msg/s)", n, el, rate)
+	if rate < 1000 {
+		t.Errorf("throughput %.0f msg/s, want ≥ 1 000", rate)
+	}
+}

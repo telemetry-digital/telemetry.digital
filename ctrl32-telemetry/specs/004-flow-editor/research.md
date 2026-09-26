@@ -28,13 +28,16 @@
   heavy dependency); extending the numeric rule language (no strings/time/booleans).
 
 ## R4 — Message
-`{topic, value (number|string|bool|null), ts, quality, source {kind, id, name}, fields {name → value}}`, at most 16 KB
-serialized; `msg.<field>` reads `fields`.
+`{topic, value (number|string|bool|null), ts, quality, source {kind, id, name}, fields {name → value}}`;
+`msg.<field>` reads `fields`. Size is bounded without serializing every message: strings ≤ 4 KB (expression limit),
+a webhook body ≤ 64 KB with at most 50 fields, at most 20 field changes per Change node.
 
 ## R5 — Triggers
 Datastream values (the ingest sink the rules engine uses), alarms and device connection (the live hub's events),
 schedules (interval, daily times on weekdays), incoming webhook (`POST /api/v1/flow-hooks/{token}` per trigger node,
-token stored hashed, optional HMAC), manual inject (API, editor). MQTT from a foreign broker: phase 2.
+token derived with HMAC from the server secret, so nothing is stored, optional HMAC signature), manual inject (API,
+editor). Phase 2 (not in this release): MQTT from a foreign broker, attribute-changed and command-acknowledged
+triggers, split, sub-flows and canvas groups.
 
 ## R6 — Actions
 Derived datastream value (the rules engine's deriver), device command (the server's Commander: permissions of the
