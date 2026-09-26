@@ -66,6 +66,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   // test message with the node's own button (a real click on the ▶)
   await ev(`window.__flowEditor.fit()`); await sleep(300);
   const inj = await center(`.fe-node[data-id="${ids[0]}"] [data-inject] rect`);
+  await mouse("mouseMoved", inj.x, inj.y); await mouse("mousePressed", inj.x, inj.y); await mouse("mouseReleased", inj.x, inj.y); await sleep(500);
   expect("test dialog", await ev(`document.querySelector('#injDlg').open`), true);
   await ev(`document.querySelector('#injForm').requestSubmit()`); await sleep(2500);
   expect("debug shows 41", await ev(`[...document.querySelectorAll('#dbgList .fe-dbg.debug .fe-dbg-text')].map(e => e.textContent)`), (a) => Array.isArray(a) && a.includes("41"));

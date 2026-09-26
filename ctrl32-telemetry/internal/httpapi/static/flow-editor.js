@@ -38,7 +38,9 @@
     function applyView() { world.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`); }
     function toWorld(ev) { const r = svg.getBoundingClientRect(); return [(ev.clientX - r.left - view.x) / view.k, (ev.clientY - r.top - view.y) / view.k]; }
 
-    function label(n) { return n.name || (defs[n.type] || {}).label || n.type; }
+    const tr = (x) => (window.ctrl32 && ctrl32.t ? ctrl32.t(x) : x);
+    const clip1 = (x, max) => (x.length > max ? x.slice(0, max - 1) + '…' : x);
+    function label(n) { return n.name || tr((defs[n.type] || {}).label || n.type); }
     function sub(n) {
       const s = n.settings || {}, d = defs[n.type];
       if (!d) return '';
@@ -66,14 +68,14 @@
         const d = defs[n.type] || { color: '#999', label: n.type, icon: '' }; const k = outs(n); const st = status && status.nodes && status.nodes[n.id]; const pr = problems[n.id];
         const isComment = n.type === 'comment';
         let ports = ins(n) ? `<circle class="fe-port in" data-in="${n.id}" cx="0" cy="${NH / 2}" r="${PORT}"/>` : '';
-        for (let p = 0; p < k; p++) { const [, y] = outPos(n, p); const nm = (d.out_names || [])[p] || (n.type === 'switch' ? (p < k - 1 ? String(p + 1) : 'else') : ''); ports += `<circle class="fe-port out" data-out="${n.id}" data-port="${p}" cx="${NW}" cy="${(y - n.y).toFixed(1)}" r="${PORT}"><title>${esc(nm || 'output')}</title></circle>${nm && k > 1 ? `<text class="fe-port-lbl" x="${NW - 9}" y="${(y - n.y + 3).toFixed(1)}" text-anchor="end">${esc(nm)}</text>` : ''}`; }
+        for (let p = 0; p < k; p++) { const [, y] = outPos(n, p); const nm = tr((d.out_names || [])[p] || '') || (n.type === 'switch' ? (p < k - 1 ? String(p + 1) : 'else') : ''); ports += `<circle class="fe-port out" data-out="${n.id}" data-port="${p}" cx="${NW}" cy="${(y - n.y).toFixed(1)}" r="${PORT}"><title>${esc(nm || 'output')}</title></circle>${nm && k > 1 ? `<text class="fe-port-lbl notranslate" x="${NW + 9}" y="${(y - n.y - 3).toFixed(1)}">${esc(nm)}</text>` : ''}`; }
         const trig = d.group === 'trigger' ? `<g class="fe-inject" data-inject="${n.id}" transform="translate(-26,${NH / 2 - 10})"><rect width="20" height="20" rx="4"/><path d="M7,5 L15,10 L7,15 Z"/><title>Send a test message</title></g>` : '';
         const badge = st && (st.in || st.errors) ? `<text class="fe-badge${st.errors ? ' err' : ''}" x="4" y="${NH + 13}">in ${st.in} · out ${st.out}${st.errors ? ' · errors ' + st.errors : ''}</text>` : '';
         const txt = sub(n);
         return `<g class="fe-node${sel.has(n.id) ? ' sel' : ''}${pr ? ' bad' : ''}${n.disabled ? ' off' : ''}${isComment ? ' comment' : ''}" data-id="${n.id}" transform="translate(${n.x},${n.y})">
           ${trig}<rect class="fe-body" width="${NW}" height="${NH}" rx="6"/>${isComment ? '' : `<rect class="fe-bar" width="26" height="${NH}" rx="6" fill="${d.color}"/><rect x="20" width="6" height="${NH}" fill="${d.color}"/>`}
           <g transform="translate(5,${NH / 2 - 8})" class="fe-ico">${isComment ? '' : icon(d.icon, 16)}</g>
-          <text class="fe-lbl" x="${isComment ? 8 : 32}" y="${txt ? 16 : NH / 2 + 4}">${esc(label(n).slice(0, 24))}</text>${txt ? `<text class="fe-sub" x="${isComment ? 8 : 32}" y="30">${esc(txt.slice(0, 28))}</text>` : ''}
+          <text class="fe-lbl notranslate" x="${isComment ? 8 : 32}" y="${txt ? 16 : NH / 2 + 4}">${esc(clip1(label(n), isComment ? 26 : 19))}<title>${esc(label(n))}</title></text>${txt ? `<text class="fe-sub notranslate" x="${isComment ? 8 : 32}" y="30">${esc(clip1(txt, isComment ? 30 : 24))}</text>` : ''}
           ${ports}${badge}${pr ? `<title>${esc(pr.join('\n'))}</title>` : ''}</g>`;
       }).join('');
     }

@@ -193,7 +193,7 @@ var Catalog = []NodeDef{
 			{Name: "severity", Label: "Severity", Kind: "select", Options: []string{"minor", "major", "critical"}, Default: "major"},
 			{Name: "title", Label: "Title", Kind: "template", Default: "{{ topic }}: {{ value }}", Required: true}}},
 	{Type: "http_out", Group: "action", Label: "HTTP request", Icon: "cloud", Color: cAction, Inputs: 1, Outputs: 1,
-		Help: "Calls a URL on a host of the organization's allow-list (Settings → Integrations); the response status and body go to msg.status and msg.body.",
+		Help: "Calls a URL on a host of the organization's allow-list (Flows → Settings); the response status and body go to msg.status and msg.body.",
 		Settings: []Setting{{Name: "method", Label: "Method", Kind: "select", Options: []string{"POST", "PUT", "GET"}, Default: "POST"},
 			{Name: "url", Label: "URL", Kind: "url", Required: true},
 			{Name: "body", Label: "Body (template; empty = the message as JSON)", Kind: "template"}}},

@@ -391,7 +391,8 @@ dialog.dw-full::backdrop { background: rgba(15, 23, 42, .55); }
 .fe-sub { font-size: 10.5px; fill: var(--muted); pointer-events: none; font-family: var(--mono); }
 .fe-port { fill: var(--card); stroke: var(--muted); stroke-width: 1.5; cursor: crosshair; }
 .fe-port:hover { fill: var(--primary); stroke: var(--primary); }
-.fe-port-lbl { font-size: 9.5px; fill: var(--muted); pointer-events: none; }
+.fe-port-lbl { font-size: 9.5px; fill: var(--muted); pointer-events: none; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; opacity: 0; transition: opacity .15s; }
+.fe-node:hover .fe-port-lbl, .fe-node.sel .fe-port-lbl { opacity: 1; }
 .fe-badge { font-size: 10px; fill: #16a34a; pointer-events: none; }
 .fe-badge.err { fill: #dc2626; }
 .fe-inject { cursor: pointer; }

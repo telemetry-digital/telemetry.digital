@@ -116,10 +116,10 @@ $('#newForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $(
   try{
     let spec = f.start.value === 'example' ? exampleSpec() : {nodes: [], wires: []};
     if(f.start.value === 'rule'){ const c = await api('GET', `/api/v1/rules/${encodeURIComponent(f.rule.value)}/as-flow`); spec = c.spec;
-      if(c.notes.length && !confirm('Not everything can be converted:\n- ' + c.notes.join('\n- ') + '\n\nCreate the flow anyway?')) return; }
+      if(c.notes.length && !confirm(ctrl32.t('Not everything can be converted:') + '\n- ' + c.notes.join('\n- ') + '\n\n' + ctrl32.t('Create the flow anyway?'))) return; }
     const r = await api('POST', '/api/v1/flows', {name: f.name.value, reason: f.reason.value, spec}); location.href = '/flows/' + encodeURIComponent(r.flow.slug); }
   catch(x){ $('#newErr').textContent = x.message; } };
-$('#importFile').onchange = async e => { const file = e.target.files[0]; if(!file) return; try{ const j = JSON.parse(await file.text()); const reason = prompt('Reason (audit trail)', 'import ' + (j.name || '')); if(!reason) return; const r = await api('POST', '/api/v1/flows/import', Object.assign({}, j, {reason})); location.href = '/flows/' + encodeURIComponent(r.flow.slug); }catch(x){ ctrl32.toast(x.message, 'bad'); } e.target.value = ''; };
+$('#importFile').onchange = async e => { const file = e.target.files[0]; if(!file) return; try{ const j = JSON.parse(await file.text()); const reason = ctrl32.ask('Reason (audit trail)', 'import ' + (j.name || '')); if(!reason) return; const r = await api('POST', '/api/v1/flows/import', Object.assign({}, j, {reason})); location.href = '/flows/' + encodeURIComponent(r.flow.slug); }catch(x){ ctrl32.toast(x.message, 'bad'); } e.target.value = ''; };
 $('#settingsBtn').onclick = async () => { const s = await api('GET', '/api/v1/flows/settings'); const f = $('#setForm'); f.reset(); f.hosts.value = s.allowed_hosts.join('\n'); $('#setErr').textContent = ''; $('#setDlg').showModal(); };
 $('#setForm').onsubmit = async e => { e.preventDefault(); const f = e.target; try{ await api('PUT', '/api/v1/flows/settings', {allowed_hosts: f.hosts.value.split('\n').map(x => x.trim()).filter(Boolean), reason: f.reason.value}); $('#setDlg').close(); ctrl32.toast('settings saved', 'ok'); }catch(x){ $('#setErr').textContent = x.message; } };
 
@@ -129,7 +129,7 @@ function header(){
   const running = FLOW.status && FLOW.status.running;
   const st = f.deployed_version ? (running ? ['running v' + f.deployed_version, 'ok'] : ['stopped', 'warn']) : ['draft', ''];
   $('#fState').innerHTML = `<span class="badge ${st[1]}">${esc(st[0])}</span>`;
-  $('#fMeta').textContent = `version ${f.version} · ${fmt(f.created_at)} · ${f.created_by}`;
+  $('#fMeta').textContent = `${ctrl32.t('version')} ${f.version} · ${fmt(f.created_at)} · ${f.created_by}`;
   $('#tDisable').hidden = !running; $('#tExport').href = `/api/v1/flows/${encodeURIComponent(SLUG)}/export`;
   $('#fDirty').hidden = !(ED && ED.dirty);
 }
@@ -181,7 +181,7 @@ async function pollDebug(){
       row.onclick = ev => { if(!ev.target.closest('details') && d.node) ED.select([d.node]); };
       box.appendChild(row); }
     while(box.children.length > 500) box.firstChild.remove();
-    if(atEnd) box.scrollTop = box.scrollHeight; filterDbg(); $('#dbgInfo').textContent = box.children.length + ' entries';
+    if(atEnd) box.scrollTop = box.scrollHeight; filterDbg(); $('#dbgInfo').textContent = box.children.length + ' ' + ctrl32.t('entries');
   }catch(_){ }
   dbgTimer = setTimeout(pollDebug, 1500);
 }
@@ -196,7 +196,7 @@ async function loadEdit(){
   ED = ctrl32FlowEditor.create({host: $('#fEditor'), catalog: cat, spec: flow.flow.spec, lists,
     onChange: () => header(), onInject: openInject, onZoom: k => { $('#tZoom').textContent = Math.round(k * 100) + '%'; },
     nodeExtra: n => n.type === 'webhook' ? (FLOW.hooks[n.id] ? `<label>URL (POST JSON) <input readonly class="fe-mono" value="${esc(FLOW.hooks[n.id])}" onclick="this.select()"></label><span class="muted" style="font-size:11px">active while the deployed version contains this node</span>` : '<span class="muted">The URL appears after saving.</span>') : '',
-    flowInfo: () => `<dl class="kv"><dt>Nodes</dt><dd>${ED ? ED.spec.nodes.length : 0}</dd><dt>Running</dt><dd>${FLOW.status && FLOW.status.running ? 'yes, version ' + FLOW.status.version : 'no'}</dd>${FLOW.status && FLOW.status.dropped ? `<dt>Dropped</dt><dd>${FLOW.status.dropped}</dd>` : ''}</dl><p class="muted" style="font-size:12px">Expressions: value, topic, ts, quality, source, msg.&lt;field&gt;, flow.&lt;name&gt;; functions ${esc(cat.functions.sort().join(', '))}.</p>`});
+    flowInfo: () => `<dl class="kv"><dt>Nodes</dt><dd>${ED ? ED.spec.nodes.length : 0}</dd><dt>Running</dt><dd>${FLOW.status && FLOW.status.running ? ctrl32.t('yes, version') + ' ' + FLOW.status.version : ctrl32.t('no')}</dd>${FLOW.status && FLOW.status.dropped ? `<dt>Dropped</dt><dd>${FLOW.status.dropped}</dd>` : ''}</dl><p class="muted" style="font-size:12px">${ctrl32.t('Expressions:')} value, topic, ts, quality, source, msg.&lt;field&gt;, flow.&lt;name&gt;; ${ctrl32.t('functions')} ${esc(cat.functions.sort().join(', '))}.</p>`});
   ED.setProblems(flow.problems); ED.setStatus(flow.status); header();
   window.__flowEditor = ED;
   pollDebug(); pollStatus();
