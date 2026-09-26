@@ -21,7 +21,9 @@ type Fence struct {
 }
 
 // FencePath is the fence file for a configuration file path.
-func FencePath(configPath string) string { return filepath.Join(filepath.Dir(configPath), "fenced.json") }
+func FencePath(configPath string) string {
+	return filepath.Join(filepath.Dir(configPath), "fenced.json")
+}
 
 // ReadFence returns the fence, or nil when this server is not fenced.
 func ReadFence(configPath string) *Fence {

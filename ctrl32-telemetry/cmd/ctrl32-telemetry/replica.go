@@ -48,8 +48,8 @@ func cmdReplica(args []string) error {
 
 type hostFlags struct {
 	container, pgdata, pgbin, pguser string
-	pgport                          int
-	noService                       bool
+	pgport                           int
+	noService                        bool
 }
 
 func (h *hostFlags) register(fs *flag.FlagSet) {

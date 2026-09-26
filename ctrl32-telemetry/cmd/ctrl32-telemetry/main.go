@@ -9,8 +9,8 @@
 package main
 
 import (
-	"encoding/json"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"

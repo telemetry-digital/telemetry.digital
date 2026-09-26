@@ -77,7 +77,9 @@ func DetectHost(ctx context.Context, container, db, superUser, dataDir, binDir s
 // SQL runs one statement as the local superuser without a password (socket trust in the container, peer
 // authentication natively, trust in a manual test cluster) and returns the first column(s) as text.
 // The maintenance database "postgres" is used, which every cluster has; see SQLIn for the application database.
-func (h *Host) SQL(ctx context.Context, sql string) (string, error) { return h.SQLIn(ctx, "postgres", sql) }
+func (h *Host) SQL(ctx context.Context, sql string) (string, error) {
+	return h.SQLIn(ctx, "postgres", sql)
+}
 
 // SQLIn runs the statement in the given database.
 func (h *Host) SQLIn(ctx context.Context, db, sql string) (string, error) {

@@ -163,7 +163,7 @@ func (s *Server) replicationAgentReport(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var in struct {
-		Status map[string]any             `json:"status"`
+		Status map[string]any            `json:"status"`
 		Result *replication.DetachReport `json:"result"`
 	}
 	if err := decodeJSON(r, &in, 256<<10); err != nil {

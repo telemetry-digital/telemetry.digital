@@ -43,7 +43,9 @@ type State struct {
 }
 
 // StatePath is the replica state file for a configuration file path.
-func StatePath(configPath string) string { return filepath.Join(filepath.Dir(configPath), "replica.json") }
+func StatePath(configPath string) string {
+	return filepath.Join(filepath.Dir(configPath), "replica.json")
+}
 
 // ReadState returns the replica state, or nil when this server is not a replica.
 func ReadState(configPath string) (*State, error) {
