@@ -9,6 +9,7 @@
 package main
 
 import (
+	"encoding/json"
 	"context"
 	"errors"
 	"flag"
@@ -47,6 +48,7 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/notify"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/opcua"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/push"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/replication"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/report"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/rules"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/seed"
@@ -79,11 +81,17 @@ func main() {
 		err = cmdAdmin(args)
 	case "agent":
 		err = cmdAgent(args)
+	case "replica":
+		err = cmdReplica(args)
 	case "version":
 		fmt.Println("ctrl32-telemetry", version)
 	default:
 		usage()
 		os.Exit(2)
+	}
+	if errors.Is(err, replication.ErrRestart) {
+		fmt.Fprintln(os.Stderr, "restarting in the new replication role (the service manager starts the server again)")
+		os.Exit(3)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
@@ -92,7 +100,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: ctrl32-telemetry <serve|agent|migrate|audit verify|service <action>|admin bootstrap|admin reset-password|admin seed-dashboard|dev seed|version> [-config path]")
+	fmt.Fprintln(os.Stderr, "usage: ctrl32-telemetry <serve|agent|migrate|audit verify|service <action>|admin bootstrap|admin reset-password|admin seed-dashboard|dev seed|replica attach|status|promote|version> [-config path]")
 }
 
 func loadConfig(args []string) (*config.Config, string, error) {
@@ -128,7 +136,7 @@ func cmdServe(args []string) error {
 		return err
 	}
 	defer closeLog()
-	run := func(ctx context.Context) error { return runServer(ctx, cfg, logger) }
+	run := func(ctx context.Context) error { return runServer(ctx, cfg, path, logger) }
 
 	if svc.Interactive() {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -143,13 +151,34 @@ func cmdServe(args []string) error {
 	return s.Run()
 }
 
-func runServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
+func runServer(ctx context.Context, cfg *config.Config, cfgPath string, logger *slog.Logger) error {
+	// Redundant database (spec 003): a fenced former primary and a replica run restricted; neither writes.
+	if f := replication.ReadFence(cfgPath); f != nil {
+		return runFenced(ctx, cfg, cfgPath, f, logger)
+	}
+	if st, err := replication.ReadState(cfgPath); err != nil {
+		return err
+	} else if st != nil {
+		return runReplica(ctx, cfg, cfgPath, st, logger)
+	}
 	pool, err := db.Connect(ctx, cfg.DB.URL)
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
 	inc := incident.New(pool, logger)
+	repl := &replication.Primary{Pool: pool, AdminURL: cfg.DB.AdminURL, DBURL: cfg.DB.URL, Version: version, Log: logger.With("component", "replication"), Incident: inc}
+	defer repl.Close()
+	// A hot standby promoted while this server was down: stay out of the way (no two primaries).
+	fctx, fcancel := context.WithTimeout(ctx, 20*time.Second)
+	if f, err := repl.CheckFence(fctx, cfgPath); err != nil {
+		logger.Warn("fencing check", "err", err)
+	} else if f != nil {
+		fcancel()
+		pool.Close()
+		return runFenced(ctx, cfg, cfgPath, f, logger)
+	}
+	fcancel()
 
 	if res, err := audit.Verify(ctx, pool); err != nil {
 		logger.Warn("audit chain verification failed at startup", "err", err)
@@ -215,7 +244,7 @@ func runServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) err
 
 	srv := &http.Server{
 		Addr:              cfg.HTTP.Listen,
-		Handler:           httpapi.New(cfg, pool, br, iamSvc, rep, ing, con, agent.NewClient(cfg.Agent.Socket), opc, logger, version, hub, mbm, esc, rulesEngine, pm, tc, inc),
+		Handler:           httpapi.New(cfg, pool, br, iamSvc, rep, ing, con, agent.NewClient(cfg.Agent.Socket), opc, logger, version, hub, mbm, esc, rulesEngine, pm, tc, inc, repl),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
@@ -227,6 +256,21 @@ func runServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) err
 	g.Go(func() error { return br.Serve(gctx) })
 	g.Go(func() error { detector.Run(gctx); return nil })
 	g.Go(func() error { con.Run(gctx); return nil })
+	g.Go(func() error { repl.Run(gctx, 10*time.Second); return nil })
+	g.Go(func() error {
+		t := time.NewTicker(time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-gctx.Done():
+				return nil
+			case <-t.C:
+				if f, err := repl.CheckFence(gctx, cfgPath); err == nil && f != nil {
+					return replication.ErrRestart // restart in fenced mode
+				}
+			}
+		}
+	})
 	g.Go(func() error {
 		logger.Info("http listening", "addr", cfg.HTTP.Listen, "tls", cfg.HTTP.TLSCert != "")
 		var err error
@@ -252,6 +296,75 @@ func runServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) err
 		err = nil
 	}
 	logger.Info("stopped")
+	return err
+}
+
+// runReplica serves a replica (research R7): the tunnel for the local standby, the primary's commands, and a status
+// page; no broker, ingest or background workers — the database is read-only.
+func runReplica(ctx context.Context, cfg *config.Config, cfgPath string, st *replication.State, logger *slog.Logger) error {
+	pool, err := replication.ConnectLocal(ctx, st, cfg.DB.URL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	rs := &replication.ReplicaServer{State: st, ConfigPath: cfgPath, Pool: pool, AppURL: cfg.DB.URL, AdminURL: cfg.DB.AdminURL, Version: version,
+		Log: logger.With("component", "replica")}
+	if ag := agent.NewClient(cfg.Agent.Socket); ag.Configured() {
+		rs.Promote = func(ctx context.Context) (string, error) { return ag.ReplicaPromote(ctx) }
+	}
+	return serveRestricted(ctx, cfg, rs.Handler(), logger, rs.Run)
+}
+
+// runFenced serves a former primary whose hot standby was promoted: read-only notice, no writes, no ingest.
+func runFenced(ctx context.Context, cfg *config.Config, cfgPath string, f *replication.Fence, logger *slog.Logger) error {
+	logger.Error("FENCED: this server is no longer the primary; it accepts no writes until it is re-attached as a replica", "security", true,
+		"new_primary", f.ByNode, "standby", f.StandbyURL, "since", f.At)
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/replication/role" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"node_id": f.OwnNode, "role": "fenced", "new_primary": f.ByNode, "standby_url": f.StandbyURL, "since": f.At})
+			return
+		}
+		if r.URL.Path == "/healthz" {
+			_, _ = w.Write([]byte("fenced\n"))
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		fmt.Fprintf(w, "This ctrl32 telemetry server was the primary until its hot standby %s was promoted (%s).\nIt accepts no data and no changes. Use the new primary, or re-attach this machine as its replica (see the replication runbook), then remove %s.\n",
+			f.StandbyURL, f.At.Format(time.RFC3339), replication.FencePath(cfgPath))
+	})
+	return serveRestricted(ctx, cfg, h, logger, nil)
+}
+
+func serveRestricted(ctx context.Context, cfg *config.Config, h http.Handler, logger *slog.Logger, work func(context.Context) error) error {
+	srv := &http.Server{Addr: cfg.HTTP.Listen, Handler: h, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 60 * time.Second}
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		var err error
+		if cfg.HTTP.TLSCert != "" {
+			err = srv.ListenAndServeTLS(cfg.HTTP.TLSCert, cfg.HTTP.TLSKey)
+		} else {
+			err = srv.ListenAndServe()
+		}
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	})
+	g.Go(func() error {
+		<-gctx.Done()
+		sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return srv.Shutdown(sctx)
+	})
+	if work != nil {
+		g.Go(func() error { return work(gctx) })
+	}
+	err := g.Wait()
+	if errors.Is(err, context.Canceled) {
+		err = nil
+	}
 	return err
 }
 

@@ -19,6 +19,11 @@ integrity), ADR-0008 S5, ADR-0012 (server agent), URS K-01…K-05 (backup/restor
 ### Session 2026-09-25
 
 - Q: Promotion of the hot standby — manual one-click or automatic? → A: Manual one-click by an administrator (with reason); no automatic failover in this feature.
+- Q: "Resume without starting over" during the initial copy? → A (planning, research R5): the catch-up after the base
+  copy resumes from the replication slot without gaps; an interruption during the base copy itself restarts the base
+  copy (PostgreSQL cannot resume a partial base backup). No change is lost in either case.
+- Q: Signing in on a replica for viewing (US2 AS3)? → A (planning, research R7): phase 2 of this feature; phase 1
+  shows the replica's state on its status page and in the CLI, and the replica refuses every write.
 
 ## User Scenarios & Testing *(mandatory)*
 

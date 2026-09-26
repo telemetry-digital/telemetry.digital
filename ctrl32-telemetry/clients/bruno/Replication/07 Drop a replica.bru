@@ -1,0 +1,27 @@
+meta {
+  name: Drop a replica
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/replication/replicas/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Drop a replica
+  
+  Revokes its token and removes its replication role, slot and pg_hba rule; the copy stays as it is and is no longer fed.
+  
+  Requires permission `system.admin`.
+}

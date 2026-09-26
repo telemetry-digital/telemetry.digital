@@ -1,0 +1,17 @@
+meta {
+  name: Pending command for the replica (long poll)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/replication/agent
+  body: none
+  auth: inherit
+}
+
+docs {
+  Pending command for the replica (long poll)
+  
+  Requires permission `replica token`.
+}

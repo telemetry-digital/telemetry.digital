@@ -1,0 +1,28 @@
+meta {
+  name: Create a one-time pairing code
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/replication/pairings
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "lag_limit_s": 1,
+    "mode": "copy",
+    "name": "string",
+    "reason": "string"
+  }
+}
+
+docs {
+  Create a one-time pairing code
+  
+  The code (XXXX-XXXX-XXXX) is shown once and is valid 15 minutes; on the second machine run `ctrl32-telemetry replica attach -primary <this URL> -code <code>`.
+  
+  Requires permission `system.admin`.
+}

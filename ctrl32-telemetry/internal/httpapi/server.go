@@ -33,6 +33,7 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/modbus"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/opcua"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/push"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/replication"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/report"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/rules"
 )
@@ -56,6 +57,8 @@ type Server struct {
 	started          time.Time
 	loginLimiter     *limiter
 	provisionLimiter *limiter
+	pairLimiter      *limiter
+	repl             *replication.Primary
 	live             *live.Hub
 	mb               *modbus.Manager
 	esc              *escalate.Engine
@@ -68,9 +71,9 @@ type Server struct {
 }
 
 // New builds the handler tree.
-func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.Service, rep *report.Engine, ing *ingest.Ingest, con *console.Manager, ag *agent.Client, opc *opcua.Manager, log *slog.Logger, version string, hub *live.Hub, mbm *modbus.Manager, esc *escalate.Engine, eng *rules.Engine, pm *push.Manager, tc *timecheck.Checker, inc *incident.Manager) http.Handler {
-	s := &Server{cfg: cfg, pool: pool, br: br, iam: iamSvc, rep: rep, ing: ing, con: con, agent: ag, opc: opc, started: time.Now(), log: log.With("component", "http"), version: version, live: hub, mb: mbm, esc: esc, rules: eng, push: pm, tc: tc, incidents: inc,
-		loginLimiter: newLimiter(10, 10), provisionLimiter: newLimiter(20, 10)}
+func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.Service, rep *report.Engine, ing *ingest.Ingest, con *console.Manager, ag *agent.Client, opc *opcua.Manager, log *slog.Logger, version string, hub *live.Hub, mbm *modbus.Manager, esc *escalate.Engine, eng *rules.Engine, pm *push.Manager, tc *timecheck.Checker, inc *incident.Manager, rp *replication.Primary) http.Handler {
+	s := &Server{cfg: cfg, pool: pool, br: br, iam: iamSvc, rep: rep, ing: ing, con: con, agent: ag, opc: opc, started: time.Now(), log: log.With("component", "http"), version: version, live: hub, mb: mbm, esc: esc, rules: eng, push: pm, tc: tc, incidents: inc, repl: rp,
+		loginLimiter: newLimiter(10, 10), provisionLimiter: newLimiter(20, 10), pairLimiter: newLimiter(5, 5)}
 	if eng != nil {
 		eng.Commander = s
 	}
@@ -99,6 +102,11 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.HandleFunc("POST /api/v1/d/cmd/{id}/ack", s.devCommandAck)
 	mux.HandleFunc("POST /api/v1/d/fota/status", s.devFotaStatus)
 	mux.HandleFunc("GET /api/v1/branding", s.getBranding)
+	mux.HandleFunc("POST /api/v1/replication/pair", s.pairReplica)
+	mux.HandleFunc("GET /api/v1/replication/tunnel", s.replicationTunnel)
+	mux.HandleFunc("GET /api/v1/replication/agent", s.replicationAgentPoll)
+	mux.HandleFunc("POST /api/v1/replication/agent", s.replicationAgentReport)
+	mux.HandleFunc("GET /api/v1/replication/role", s.replicationRole)
 	mux.HandleFunc("GET /api/v1/openapi.json", s.openapiJSON)
 	mux.HandleFunc("GET /api/v1/branding/logo", s.getBrandingLogo)
 	mux.HandleFunc("GET /api/v1/tiles", s.tilesInfo)
@@ -222,6 +230,12 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("DELETE /api/v1/register-profiles/{id}", s.require("config.write", s.deleteProfile))
 	mux.Handle("POST /api/v1/register-profiles/{id}/apply", s.require("config.write", s.applyProfile))
 	mux.Handle("GET /api/v1/export/organization", s.require("system.admin", s.exportOrganization))
+	mux.Handle("GET /api/v1/replication", s.require("system.admin", s.replicationStatus))
+	mux.Handle("POST /api/v1/replication/pairings", s.require("system.admin", s.createPairing))
+	mux.Handle("PATCH /api/v1/replication/replicas/{id}", s.require("system.admin", s.patchReplica))
+	mux.Handle("POST /api/v1/replication/replicas/{id}/detach", s.require("system.admin", s.detachReplica))
+	mux.Handle("DELETE /api/v1/replication/replicas/{id}", s.require("system.admin", s.dropReplica))
+	mux.Handle("GET /api/v1/replication/replicas/{id}/events", s.require("system.admin", s.replicaEvents))
 	mux.Handle("GET /api/v1/organizations", s.require("system.admin", s.listOrganizations))
 	mux.Handle("POST /api/v1/organizations", s.require("system.admin", s.createOrganization))
 	mux.Handle("PATCH /api/v1/organizations/{id}", s.require("system.admin", s.patchOrganization))

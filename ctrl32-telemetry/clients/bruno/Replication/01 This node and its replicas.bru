@@ -1,0 +1,19 @@
+meta {
+  name: This node and its replicas
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/replication
+  body: none
+  auth: inherit
+}
+
+docs {
+  This node and its replicas
+  
+  Node identity and role (primary, replica, fenced) and every replica with mode, state, lag, copy progress, limits and detachment record.
+  
+  Requires permission `system.admin`.
+}

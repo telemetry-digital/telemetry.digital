@@ -1,0 +1,29 @@
+meta {
+  name: Pair a replica with a one-time code
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/replication/pair
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "code": "string",
+    "ctrl32_version": "string",
+    "hostname": "string",
+    "name": "string",
+    "os": "string",
+    "pg_major": 1,
+    "standby_url": "string"
+  }
+}
+
+docs {
+  Pair a replica with a one-time code
+  
+  Used by `ctrl32-telemetry replica attach`. Rate-limited; a wrong or expired code is a security event (403). Versions of PostgreSQL (major) and ctrl32 must match (400).
+}

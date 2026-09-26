@@ -57,7 +57,7 @@ type Update struct {
 }
 
 var (
-	Kinds      = []string{"alarm_undelivered", "audit_chain", "backup_failed", "manual"}
+	Kinds      = []string{"alarm_undelivered", "audit_chain", "backup_failed", "manual", "replica"}
 	Severities = []string{"minor", "major", "critical"}
 	Statuses   = []string{"open", "investigating", "resolved", "closed"}
 	// allowed transitions
@@ -176,6 +176,44 @@ func (m *Manager) AuditChainBroken(ctx context.Context, firstBadSeq, checked int
 		Detail: map[string]any{"first_bad_seq": firstBadSeq, "checked": checked},
 		Impact: "Audit trail entries after this sequence number cannot be trusted until the cause is known.", DedupKey: fmt.Sprintf("audit_chain:%d", firstBadSeq)}); err != nil {
 		m.log.Error("could not open incident for broken audit chain", "err", err)
+	}
+}
+
+// ReplicaProblem opens (once) an incident for a replica that is disconnected, lagging, lost or failed a detach
+// (spec 003 FR-009).
+func (m *Manager) ReplicaProblem(ctx context.Context, replicaID, name, state, impact string, detail map[string]any) {
+	if m == nil {
+		return
+	}
+	sev := "major"
+	if state == "lost" || state == "failed" {
+		sev = "critical"
+	}
+	if _, _, err := m.Open(ctx, Incident{Kind: "replica", Severity: sev, Title: fmt.Sprintf("Database replica %s: %s", name, state), Detail: detail,
+		Impact: impact, DedupKey: "replica:" + replicaID}); err != nil {
+		m.log.Error("could not open incident for replica", "replica", replicaID, "err", err)
+	}
+}
+
+// ReplicaRecovered resolves the open replica incident, if any, with the recovery as its cause.
+func (m *Manager) ReplicaRecovered(ctx context.Context, replicaID, state string) {
+	if m == nil {
+		return
+	}
+	var id string
+	if err := m.pool.QueryRow(ctx, `SELECT id::text FROM core.incident WHERE dedup_key = $1 AND status IN ('open', 'investigating')`, "replica:"+replicaID).Scan(&id); err != nil {
+		return
+	}
+	in, _, err := m.Get(ctx, "", id, true)
+	if err != nil {
+		return
+	}
+	cause, status := "The replica recovered by itself (state "+state+").", "resolved"
+	if in.Cause != "" {
+		cause = in.Cause
+	}
+	if _, err := m.Apply(ctx, in, Update{Status: &status, Cause: &cause}, "system"); err != nil {
+		m.log.Warn("could not resolve replica incident", "incident", id, "err", err)
 	}
 }
 

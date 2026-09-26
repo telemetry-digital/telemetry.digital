@@ -83,7 +83,8 @@ AUD=$(req "$BASE/api/v1/export/audit?format=csv"); grep -q 'export.read' <<< "$A
 echo "9. lockout after failed logins, revocation"
 : > /tmp/lock.jar
 for i in 1 2 3 4 5; do curl -s -o /dev/null -c /tmp/lock.jar -H 'Content-Type: application/json' -X POST "$BASE/api/v1/auth/login" -d "{\"username\":\"$USER\",\"password\":\"wrong-$i\"}"; done
-[ "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -X POST "$BASE/api/v1/auth/login" -d "{\"username\":\"$USER\",\"password\":\"$NEWPW\"}")" = 423 ] && pass "account locked after 5 failures (423)" || fail "lockout not applied"
+LOCKED=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -X POST "$BASE/api/v1/auth/login" -d "{\"username\":\"$USER\",\"password\":\"$NEWPW\"}")
+[ "$LOCKED" = 423 ] && pass "account locked after 5 failures (423)" || fail "lockout not applied (got $LOCKED)"
 [ "$(code -X POST "$BASE/api/v1/devices/$DEVID/revoke" -H "X-CSRF-Token: $CSRF" -d '{"reason":"e2e cleanup"}')" = 200 ] && pass "device revoked" || fail "revoke"
 [ "$(code -X POST "$BASE/api/v1/auth/logout" -H "X-CSRF-Token: $CSRF")" = 200 ] && pass "logout" || fail "logout"
 [ "$(code "$BASE/api/v1/auth/me")" = 401 ] && pass "session revoked" || fail "session still valid"

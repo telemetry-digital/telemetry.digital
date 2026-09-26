@@ -1,0 +1,30 @@
+meta {
+  name: Detach a replica safely
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/replication/replicas/:id/detach
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "accept_partial": true,
+    "reason": "string"
+  }
+}
+
+docs {
+  Detach a replica safely
+  
+  Counts the record tables in one snapshot, writes the `replica.detach` audit entry, then the replica catches up to it, becomes independent and verifies the audit chain and the counts; the result is in `detach.verification`. Refused (409) when not in sync unless `accept_partial`.
+  
+  Requires permission `system.admin`.
+}

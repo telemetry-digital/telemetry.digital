@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -35,8 +36,13 @@ type Result struct {
 	HeadHash    *string
 }
 
-// Append inserts the entry and returns the assigned sequence and hash.
-func Append(ctx context.Context, pool *pgxpool.Pool, e Entry) (seq int64, hash string, err error) {
+// Querier is a pool, a connection or a transaction.
+type Querier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// Append inserts the entry (through a pool or inside a transaction) and returns the assigned sequence and hash.
+func Append(ctx context.Context, pool Querier, e Entry) (seq int64, hash string, err error) {
 	oldJSON, err := marshalNullable(e.Old)
 	if err != nil {
 		return 0, "", err

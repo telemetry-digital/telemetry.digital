@@ -594,6 +594,35 @@ export type RegisterProfileSpec = {
   registers: ModbusRegister[];
 };
 
+export type Replica = {
+  /** total_bytes, done_bytes, percent, eta_s */
+  copy?: Record<string, unknown>;
+  created_at?: string;
+  created_by?: string;
+  /** detachment record with verification */
+  detach?: Record<string, unknown>;
+  host_info?: Record<string, unknown>;
+  id: string;
+  lag_bytes?: number | null;
+  lag_limit_s?: number;
+  lag_s?: number | null;
+  last_contact?: string | null;
+  max_retained_mb?: number;
+  mode: "copy" | "continuous" | "standby";
+  name: string;
+  replay_lsn?: string;
+  standby_url?: string;
+  state: "pairing" | "copying" | "in_sync" | "lagging" | "disconnected" | "detaching" | "detached" | "failed" | "lost" | "dropped";
+};
+
+export type ReplicationNode = {
+  /** +1 on every promotion */
+  epoch?: number;
+  node_id: string;
+  promoted_from?: string | null;
+  role: "primary" | "replica" | "fenced";
+};
+
 export type Report = {
   created_at?: string;
   created_by?: string;
@@ -2893,6 +2922,190 @@ export class Ctrl32Client {
     id?: string;
     version?: number;
   }>('POST', `/api/v1/register-profiles/${encodeURIComponent(id)}/apply`, undefined, body, false);
+  }
+
+  /** This node and its replicas
+   *
+   * Node identity and role (primary, replica, fenced) and every replica with mode, state, lag, copy progress, limits and detachment record.
+   * 
+   * Requires permission `system.admin`. */
+  getReplication(): Promise<{
+    max_replicas?: number;
+    modes?: string[];
+    node?: ReplicationNode;
+    replicas?: Replica[];
+  }> {
+    return this.request<{
+    max_replicas?: number;
+    modes?: string[];
+    node?: ReplicationNode;
+    replicas?: Replica[];
+  }>('GET', `/api/v1/replication`, undefined, undefined, false);
+  }
+
+  /** Pending command for the replica (long poll)
+   *
+   * Requires permission `replica token`. */
+  getReplicationAgent(): Promise<{
+    /** detach command: lsn, seq, hash, snapshot, counts, partial */
+    command?: Record<string, unknown> | null;
+  }> {
+    return this.request<{
+    /** detach command: lsn, seq, hash, snapshot, counts, partial */
+    command?: Record<string, unknown> | null;
+  }>('GET', `/api/v1/replication/agent`, undefined, undefined, false);
+  }
+
+  /** Report from the replica
+   *
+   * Requires permission `replica token`. */
+  postReplicationAgent(body: {
+    /** detach result: promoted, chain_ok, entry_ok, counts, errors */
+    result?: Record<string, unknown>;
+    /** replica's own view */
+    status?: Record<string, unknown>;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/replication/agent`, undefined, body, false);
+  }
+
+  /** Pair a replica with a one-time code
+   *
+   * Used by `ctrl32-telemetry replica attach`. Rate-limited; a wrong or expired code is a security event (403). Versions of PostgreSQL (major) and ctrl32 must match (400). */
+  postReplicationPair(body: {
+    code: string;
+    ctrl32_version: string;
+    hostname?: string;
+    name?: string;
+    os?: string;
+    pg_major: number;
+    standby_url?: string;
+  }): Promise<{
+    mode?: string;
+    name?: string;
+    /** its password (shown once) */
+    password?: string;
+    pg_major?: number;
+    primary_node?: string;
+    replica_id?: string;
+    /** replication role */
+    role?: string;
+    slot?: string;
+    /** bearer token of the replica (shown once) */
+    token?: string;
+  }> {
+    return this.request<{
+    mode?: string;
+    name?: string;
+    /** its password (shown once) */
+    password?: string;
+    pg_major?: number;
+    primary_node?: string;
+    replica_id?: string;
+    /** replication role */
+    role?: string;
+    slot?: string;
+    /** bearer token of the replica (shown once) */
+    token?: string;
+  }>('POST', `/api/v1/replication/pair`, undefined, body, false);
+  }
+
+  /** Create a one-time pairing code
+   *
+   * The code (XXXX-XXXX-XXXX) is shown once and is valid 15 minutes; on the second machine run `ctrl32-telemetry replica attach -primary <this URL> -code <code>`.
+   * 
+   * Requires permission `system.admin`. */
+  postReplicationPairings(body: {
+    /** alarm when the replica is further behind (default 10) */
+    lag_limit_s?: number;
+    mode: "copy" | "continuous" | "standby";
+    /** ≤ 64 */
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    code?: string;
+    expires_at?: string;
+    mode?: string;
+    name?: string;
+  }> {
+    return this.request<{
+    code?: string;
+    expires_at?: string;
+    mode?: string;
+    name?: string;
+  }>('POST', `/api/v1/replication/pairings`, undefined, body, false);
+  }
+
+  /** Change a replica's mode or limits
+   *
+   * Requires permission `system.admin`. */
+  patchReplicationReplicasId(id: string, body: {
+    lag_limit_s?: number;
+    /** maximum WAL the primary keeps for it (64 MB – 10 TB) */
+    max_retained_mb?: number;
+    mode?: "copy" | "continuous" | "standby";
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** hot standby: its public URL */
+    standby_url?: string;
+  }): Promise<Replica> {
+    return this.request<Replica>('PATCH', `/api/v1/replication/replicas/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Drop a replica
+   *
+   * Revokes its token and removes its replication role, slot and pg_hba rule; the copy stays as it is and is no longer fed.
+   * 
+   * Requires permission `system.admin`. */
+  deleteReplicationReplicasId(id: string, query: { reason: string; }): Promise<Replica> {
+    return this.request<Replica>('DELETE', `/api/v1/replication/replicas/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Detach a replica safely
+   *
+   * Counts the record tables in one snapshot, writes the `replica.detach` audit entry, then the replica catches up to it, becomes independent and verifies the audit chain and the counts; the result is in `detach.verification`. Refused (409) when not in sync unless `accept_partial`.
+   * 
+   * Requires permission `system.admin`. */
+  postReplicationReplicasIdDetach(id: string, body: {
+    /** detach a replica that is not in sync; the copy is marked partial */
+    accept_partial?: boolean;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<Replica> {
+    return this.request<Replica>('POST', `/api/v1/replication/replicas/${encodeURIComponent(id)}/detach`, undefined, body, false);
+  }
+
+  /** History of a replica
+   *
+   * Requires permission `system.admin`. */
+  getReplicationReplicasIdEvents(id: string, query?: { limit?: number; /** default 100 */ }): Promise<({
+    detail?: Record<string, unknown>;
+    /** state, alarm, command, detach, promote, security, config */
+    kind?: string;
+    ts?: string;
+  })[]> {
+    return this.request<({
+    detail?: Record<string, unknown>;
+    /** state, alarm, command, detach, promote, security, config */
+    kind?: string;
+    ts?: string;
+  })[]>('GET', `/api/v1/replication/replicas/${encodeURIComponent(id)}/events`, query, undefined, false);
+  }
+
+  /** Who this node is
+   *
+   * No authentication: a returning primary asks its hot standby whether it was promoted (fencing). */
+  getReplicationRole(): Promise<ReplicationNode> {
+    return this.request<ReplicationNode>('GET', `/api/v1/replication/role`, undefined, undefined, false);
+  }
+
+  /** Replication tunnel (HTTP upgrade)
+   *
+   * With `Connection: Upgrade`, `Upgrade: ctrl32-pgrepl` and the replica token the connection becomes a byte stream to the primary's PostgreSQL (101 Switching Protocols).
+   * 
+   * Requires permission `replica token`. */
+  getReplicationTunnel(): Promise<unknown> {
+    return this.request<unknown>('GET', `/api/v1/replication/tunnel`, undefined, undefined, false);
   }
 
   /** Report kinds, overrides and engine info
