@@ -46,12 +46,14 @@
       mode = 'mse';
       resetMedia();
       canvas.hidden = true; video.hidden = false;
-      if (!window.MediaSource || !MediaSource.isTypeSupported(m.mime)) {
+      const MSImpl = window.MediaSource || window.ManagedMediaSource; // iPhone Safari has only ManagedMediaSource
+      if (!MSImpl || !MSImpl.isTypeSupported(m.mime)) {
         say(m.codec === 'h265' ? 'This browser cannot play H.265 video; use a sub-stream in H.264 or another browser' : 'This browser cannot play this video');
         state('unsupported');
         return;
       }
-      ms = new MediaSource();
+      ms = new MSImpl();
+      if (!window.MediaSource) video.disableRemotePlayback = true; // required by ManagedMediaSource
       video.src = URL.createObjectURL(ms);
       ms.addEventListener('sourceopen', () => {
         try { sb = ms.addSourceBuffer(m.mime); } catch (e) { say('This browser cannot play this video'); return; }

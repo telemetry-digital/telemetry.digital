@@ -83,9 +83,20 @@ export type Camera = {
   id?: string;
   location?: string;
   name?: string;
+  push?: {
+    /** video.push_listen configured */
+    enabled?: boolean;
+    /** sub-stream */
+    sub_url?: string;
+    /** where the relay publishes the main stream */
+    url?: string;
+    /** = camera id */
+    user?: string;
+  };
   record?: "continuous" | "off";
   retention_days?: number;
   sort?: number;
+  source?: "pull" | "push";
   status?: CameraStatus;
   /** video.manage only */
   sub_url?: string;
@@ -2482,6 +2493,8 @@ export class Ctrl32Client {
     reason: string;
     room_id?: string;
     sort?: number;
+    /** pull: the server connects to the camera; push: a relay at a remote site sends the video (secret returned once as push_secret with relay_config) */
+    source?: "pull" | "push";
   }): Promise<{
     /** true on success */
     ok?: boolean;
@@ -4709,6 +4722,8 @@ export class Ctrl32Client {
     reason: string;
     room_id?: string;
     sort?: number;
+    /** pull: the server connects to the camera; push: a relay at a remote site sends the video (secret returned once as push_secret with relay_config) */
+    source?: "pull" | "push";
   }): Promise<Scene> {
     return this.request<Scene>('POST', `/api/v1/scenes`, undefined, body, false);
   }
@@ -4725,6 +4740,8 @@ export class Ctrl32Client {
     reason: string;
     room_id?: string;
     sort?: number;
+    /** pull: the server connects to the camera; push: a relay at a remote site sends the video (secret returned once as push_secret with relay_config) */
+    source?: "pull" | "push";
   }): Promise<Scene> {
     return this.request<Scene>('PUT', `/api/v1/scenes/${encodeURIComponent(id)}`, undefined, body, false);
   }
@@ -5297,6 +5314,8 @@ export class Ctrl32Client {
     /** 1–3650, default 7 */
     retention_days?: number;
     sort?: number;
+    /** pull: the server connects to the camera; push: a relay at a remote site sends the video (secret returned once as push_secret with relay_config) */
+    source?: "pull" | "push";
     /** smaller stream for tiles (optional) */
     sub_url?: string;
     transport?: "auto" | "tcp" | "udp";
@@ -5347,6 +5366,8 @@ export class Ctrl32Client {
     /** 1–3650, default 7 */
     retention_days?: number;
     sort?: number;
+    /** pull: the server connects to the camera; push: a relay at a remote site sends the video (secret returned once as push_secret with relay_config) */
+    source?: "pull" | "push";
     /** smaller stream for tiles (optional) */
     sub_url?: string;
     transport?: "auto" | "tcp" | "udp";
@@ -5397,6 +5418,28 @@ export class Ctrl32Client {
    * Requires permission `video.playback`. */
   getVideoCamerasIdPlayback(id: string, query?: { from?: string; /** RFC 3339, required */ speed?: string; /** 0.25–16, default 1 */ }): Promise<unknown> {
     return this.request<unknown>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/playback`, query, undefined, false);
+  }
+
+  /** New secret of a remote camera
+   *
+   * The relay with the old secret is disconnected at once. The new secret and a relay configuration are returned only in this response. Push cameras only (409 otherwise).
+   * 
+   * Requires permission `video.manage`. */
+  postVideoCamerasIdPushSecret(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** shown once */
+    push_secret?: string;
+    /** relay.toml for camera-relay */
+    relay_config?: string;
+  }> {
+    return this.request<{
+    /** shown once */
+    push_secret?: string;
+    /** relay.toml for camera-relay */
+    relay_config?: string;
+  }>('POST', `/api/v1/video/cameras/${encodeURIComponent(id)}/push-secret`, undefined, body, false);
   }
 
   /** Recorded spans

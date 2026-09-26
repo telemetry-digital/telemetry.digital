@@ -13,12 +13,14 @@
 | 0.43.0 | Energia (spotreba, výroba, náklady po hodinách/dňoch/mesiacoch, podiel meračov, príkon) a scény (zachytenie stavu, spustenie jedným klikom, uzol toku) (spec 008) | e2e 37, unit |
 | 0.44.0 | Toky: podtoky (znovupoužiteľné časti, pripnuté verzie), uzol Rozdelenie, farebné skupiny na plátne (spec 009) | e2e 23, unit |
 | 0.45.0 | Kamery: RTSP (H.264/H.265/MJPEG) a HTTP MJPEG, nepretržité nahrávanie s uchovaním a limitom disku, živý obraz a záznamy v prehliadači, časová os, export MP4, videosteny na viac monitorov (2 × 20), audit prezerania (spec 010) | e2e 44, unit |
+| 0.46.0 | Kamery: widget, prehrávač s ovládaním a priblížením, timeshift (nahrávanie nezávislé od prehrávania), vzdialené kamery cez šifrovaný prenášač `camera-relay`, PWA aj pre iPhone, test 128 kamier (spec 011) | e2e 61, unit, záťaž |
 
-Celá sada testov (`tests/run-all.sh`) prešla pre 0.45.0 bez chyby (26. 9. 2026).
+Celá sada testov (`tests/run-all.sh`) prešla pre 0.45.0 bez chyby (0.46.0 beží) (26. 9. 2026).
 
 ## Ďalšie možnosti (fáza 2)
 
-- kamery: nahrávanie pri pohybe alebo udalosti (vstup z tokov), PTZ ovládanie, ONVIF vyhľadanie kamier, zvuk
+- kamery: nahrávanie pri pohybe alebo udalosti (vstup z tokov), PTZ ovládanie, ONVIF vyhľadanie kamier, zvuk,
+  prenášač ako služba (inštalátor), sťahovanie záznamov z prenášača pri výpadku spojenia
 - smart home: efekty svetiel na karte, Shelly Gen1, skupiny entít, plánovanie scén (časovač),
   energia: porovnanie s minulým obdobím, export CSV
 - toky: parametre inštancie podtoku, spúšťač pri zmene atribútu
@@ -36,7 +38,7 @@ Celá sada testov (`tests/run-all.sh`) prešla pre 0.45.0 bez chyby (26. 9. 2026
 
 ## Čaká na používateľa
 
-- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.45.0 root@2.29.5.17 -i <kľúč>` alebo
+- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.46.0 root@2.29.5.17 -i <kľúč>` alebo
   GitHub workflow (secrets `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS` a workflow na `main`)
 - zlúčenie vetvy do `main` (pull request na požiadanie)
 - potvrdenie ADR-0015 (SCADA editor v čistom JS nad SVG)
