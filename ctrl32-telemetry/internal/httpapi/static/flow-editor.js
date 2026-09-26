@@ -56,6 +56,7 @@
         case 'entity_action': return (s.service || '') + ' · ' + (((lists.entities || []).find((x) => x.id === s.entity) || {}).label || '');
         case 'mqtt_in': return (s.topic || '') + ' · ' + (((lists.sources || []).find((x) => x.id === s.source) || {}).label || '');
         case 'mqtt_out': return (s.topic || '') + ' · ' + (((lists.sources || []).find((x) => x.id === s.source) || {}).label || '');
+        case 'scene': return (((lists.scenes || []).find((x) => x.id === s.scene) || {}).label || '');
         case 'notify': return ((lists.channels.find((x) => x.id === s.channel) || {}).label || '');
         case 'aggregate': return `${s.fn || 'avg'} / ${s.window_s ?? ''} s`;
         case 'deadband': return `± ${s.band ?? ''}${s.percent ? ' %' : ''}`;
@@ -202,6 +203,7 @@
         case 'datastream': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.datastreams, v)}</select>${help}</label>`;
         case 'device': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.devices, v)}</select>${help}</label>`;
         case 'entity': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.entities || [], v)}</select>${help}</label>`;
+        case 'scene': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.scenes || [], v)}</select>${help}</label>`;
         case 'mqtt_source': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.sources || [], v)}</select>${help}</label>`;
         case 'channel': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.channels, v)}</select>${help}</label>`;
         case 'rules': return `<label>${lab} <textarea rows="3" data-rules="${p.name}" class="fe-mono">${esc((v || []).join('\n'))}</textarea><span class="muted" style="font-size:11px">one condition per line; an extra output takes the rest</span></label>`;

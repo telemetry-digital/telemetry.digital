@@ -1,0 +1,24 @@
+meta {
+  name: Energy overview
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/energy
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~period: 
+  ~date: 
+}
+
+docs {
+  Energy overview
+  
+  Consumption and production of energy meters (entities with device_class energy, datastreams in Wh/kWh/MWh) per hour (day), day (week, month) or month (year) in the organization's time zone, with cost.
+  
+  Requires permission `data.read`.
+}

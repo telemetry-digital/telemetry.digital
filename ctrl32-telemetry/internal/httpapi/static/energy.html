@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Energy</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+  <div class="page-head"><h1>Energy</h1><span class="grow"></span>
+    <button class="btn" type="button" id="setBtn" hidden>Settings</button></div>
+  <div class="en-bar">
+    <div class="seg" id="period"><button type="button" data-p="day" class="on">Day</button><button type="button" data-p="week">Week</button><button type="button" data-p="month">Month</button><button type="button" data-p="year">Year</button></div>
+    <button class="btn small" type="button" id="prev" aria-label="previous">‹</button>
+    <b id="label" class="en-label"></b>
+    <button class="btn small" type="button" id="next" aria-label="next">›</button>
+    <button class="btn small" type="button" id="today">Today</button>
+  </div>
+  <div class="en-tiles">
+    <div class="card en-tile"><div class="muted">Consumption</div><b id="tCons">—</b></div>
+    <div class="card en-tile" id="tProdCard"><div class="muted">Production</div><b id="tProd">—</b></div>
+    <div class="card en-tile"><div class="muted">Cost</div><b id="tCost">—</b></div>
+    <div class="card en-tile"><div class="muted">Power now</div><b id="tPower">—</b></div>
+  </div>
+  <div class="card"><div id="chart" class="en-chart"></div></div>
+  <div class="card">
+    <h2 style="margin-top:0">By meter</h2>
+    <div class="table-wrap"><table id="bySrc"><thead><tr><th>Meter</th><th>Device</th><th class="num">kWh</th><th>Share</th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <div class="card muted" id="empty" hidden><p>No energy meters yet. Energy sensors of smart-home devices (Shelly, Tasmota, zigbee2mqtt …) and datastreams in Wh or kWh appear here automatically.</p></div>
+
+  <dialog id="setDlg"><form class="form" id="setForm">
+    <h2 style="margin-top:0">Energy settings</h2>
+    <div class="row2"><label>Price per kWh <input name="price" type="number" min="0" max="100" step="any" value="0"></label>
+      <label>Currency <input name="currency" maxlength="4" value="€"></label></div>
+    <label>Paid for produced energy per kWh (0 = not counted) <input name="feed" type="number" min="0" max="100" step="any" value="0"></label>
+    <div class="muted">Meters: consumption, production (solar panels …) or not counted.</div>
+    <div class="table-wrap"><table id="meters"><thead><tr><th>Meter</th><th>Unit</th><th>Role</th></tr></thead><tbody></tbody></table></div>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="setErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form></dialog>
+</main>
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, api = ctrl32.api, t = ctrl32.t;
+let PERIOD = 'day', DATE = new Date(), DATA = null;
+try { PERIOD = localStorage.getItem('ctrl32.energy.period') || 'day'; } catch (e) { /* private mode */ }
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const nf = (v, d = 2) => new Intl.NumberFormat(document.documentElement.lang || undefined, {maximumFractionDigits: d, minimumFractionDigits: 0}).format(v);
+function shift(n) {
+  const d = new Date(DATE);
+  if (PERIOD === 'day') d.setDate(d.getDate() + n); else if (PERIOD === 'week') d.setDate(d.getDate() + 7 * n);
+  else if (PERIOD === 'month') d.setMonth(d.getMonth() + n); else d.setFullYear(d.getFullYear() + n);
+  DATE = d; load();
+}
+// dates are shown in the organization's time zone (DATA.tz), like the buckets the server computed
+const fmtTz = (d, o) => new Date(d).toLocaleString(document.documentElement.lang || undefined, Object.assign({timeZone: DATA.tz}, o));
+function label(from, to) {
+  if (PERIOD === 'day') return fmtTz(from, {weekday: 'short', day: 'numeric', month: 'long', year: 'numeric'});
+  if (PERIOD === 'week') return fmtTz(from, {day: 'numeric', month: 'short'}) + ' – ' + fmtTz(new Date(new Date(to) - 1), {day: 'numeric', month: 'short', year: 'numeric'});
+  if (PERIOD === 'month') return fmtTz(from, {month: 'long', year: 'numeric'});
+  return fmtTz(from, {year: 'numeric'});
+}
+function tick(b) {
+  if (DATA.bucket === 'hour') return fmtTz(b.start, {hour: 'numeric', hourCycle: 'h23'});
+  if (DATA.bucket === 'day') return PERIOD === 'week' ? fmtTz(b.start, {weekday: 'short'}) : fmtTz(b.start, {day: 'numeric'});
+  return fmtTz(b.start, {month: 'short'});
+}
+function chart() {
+  const bs = DATA.buckets, W = 960, H = 260, L = 44, B = 24, T = 10, n = bs.length;
+  const max = Math.max(0.001, ...bs.map(b => Math.max(b.consumption, b.production)));
+  const step = (W - L) / n, bw = Math.max(2, step * (DATA.total.production > 0 ? 0.38 : 0.7));
+  const y = v => T + (H - T - B) * (1 - v / max);
+  let g = '';
+  for (let i = 0; i <= 4; i++) { const v = max * i / 4, yy = y(v); g += `<line x1="${L}" x2="${W}" y1="${yy}" y2="${yy}" class="en-grid"/><text x="${L - 6}" y="${yy + 4}" text-anchor="end" class="en-ax">${nf(v, v < 10 ? 2 : 0)}</text>`; }
+  bs.forEach((b, i) => {
+    const x = L + i * step + (step - bw * (DATA.total.production > 0 ? 2 : 1)) / 2;
+    const tip = `${tick(b)}: ${nf(b.consumption)} kWh${b.production ? ' / ' + nf(b.production) + ' kWh' : ''}${DATA.price_per_kwh ? ' · ' + nf(b.cost) + ' ' + DATA.currency : ''}`;
+    g += `<rect x="${x}" y="${y(b.consumption)}" width="${bw}" height="${Math.max(0, H - B - y(b.consumption))}" class="en-cons" rx="2"><title>${esc(tip)}</title></rect>`;
+    if (DATA.total.production > 0) g += `<rect x="${x + bw}" y="${y(b.production)}" width="${bw}" height="${Math.max(0, H - B - y(b.production))}" class="en-prod" rx="2"><title>${esc(tip)}</title></rect>`;
+    const every = n > 24 ? 3 : n > 12 ? 2 : 1;
+    if (i % every === 0) g += `<text x="${L + i * step + step / 2}" y="${H - 6}" text-anchor="middle" class="en-ax">${esc(tick(b))}</text>`;
+  });
+  $('#chart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(t('Consumption'))}">${g}</svg>`;
+}
+function render() {
+  const d = DATA, cur = d.currency;
+  $('#label').textContent = label(d.from, d.to);
+  $('#tCons').textContent = nf(d.total.consumption) + ' kWh';
+  $('#tProd').textContent = nf(d.total.production) + ' kWh'; $('#tProdCard').hidden = !d.total.production;
+  $('#tCost').textContent = d.price_per_kwh ? nf(d.total.cost) + ' ' + cur : '—';
+  $('#tPower').textContent = nf(d.power_w, d.power_w < 100 ? 1 : 0) + ' W';
+  chart();
+  $('#bySrc tbody').innerHTML = d.sources.filter(s => s.role !== 'off').map(s => `<tr><td class="notranslate">${esc(s.name)}${s.role === 'production' ? ` <span class="badge ok">${esc(t('production'))}</span>` : ''}</td><td class="notranslate">${esc(s.device)}</td><td class="num">${nf(s.kwh)}</td><td><div class="en-share"><span style="width:${s.share}%"></span></div> ${s.role === 'consumption' ? nf(s.share, 1) + ' %' : ''}</td></tr>`).join('');
+  $('#empty').hidden = !!d.sources.length;
+  for (const b of document.querySelectorAll('#period button')) b.classList.toggle('on', b.dataset.p === PERIOD);
+}
+async function load() {
+  try { DATA = await api('GET', `/api/v1/energy?period=${PERIOD}&date=${iso(DATE)}`); render(); } catch (x) { ctrl32.toast(x.message, 'bad'); }
+}
+for (const b of document.querySelectorAll('#period button')) b.onclick = () => { PERIOD = b.dataset.p; try { localStorage.setItem('ctrl32.energy.period', PERIOD); } catch (e) { /* ignore */ } load(); };
+$('#prev').onclick = () => shift(-1); $('#next').onclick = () => shift(1); $('#today').onclick = () => { DATE = new Date(); load(); };
+$('#setBtn').onclick = async () => {
+  const s = await api('GET', '/api/v1/energy/settings'), f = $('#setForm'); f.reset(); $('#setErr').textContent = '';
+  f.price.value = s.price_per_kwh; f.feed.value = s.feed_in_per_kwh; f.currency.value = s.currency;
+  $('#meters tbody').innerHTML = s.meters.map(m => `<tr><td class="notranslate">${esc(m.name)} <span class="muted">${esc(m.device)}</span></td><td>${esc(m.unit)}</td><td><select data-ds="${m.id || m.datastream_id}">${['consumption', 'production', 'off'].map(r => `<option value="${r}"${r === m.role ? ' selected' : ''}>${esc(t({consumption: 'consumption', production: 'production', off: 'not counted'}[r]))}</option>`).join('')}</select></td></tr>`).join('');
+  $('#setDlg').showModal();
+};
+$('#setForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#setErr').textContent = '';
+  const sources = [...document.querySelectorAll('#meters select')].map(s => ({datastream_id: s.dataset.ds, role: s.value}));
+  try { await api('PUT', '/api/v1/energy/settings', {price_per_kwh: +f.price.value, feed_in_per_kwh: +f.feed.value, currency: f.currency.value, sources, reason: f.reason.value});
+    $('#setDlg').close(); ctrl32.toast(t('energy settings saved'), 'ok'); load(); } catch (x) { $('#setErr').textContent = x.message; } };
+ctrl32.ready({requireAuth: true, requirePerm: 'data.read'}).then(({me}) => {
+  $('#setBtn').hidden = !(me && (me.permissions || []).includes('content.write'));
+  load(); setInterval(() => { if (!document.hidden) load(); }, 60000);
+});
+</script>
+</body>
+</html>

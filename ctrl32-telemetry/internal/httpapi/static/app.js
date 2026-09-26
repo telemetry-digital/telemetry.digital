@@ -3,6 +3,7 @@
 // of the product and is not configurable. Nothing user-specific is rendered before the session state is known.
 (function () {
   const ICON = {
+    bolt: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3l0 7l6 0l-8 11l0 -7l-6 0l8 -11"/></svg>',
     home: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l-2 0l9 -9l9 9l-2 0"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7"/><path d="M10 12h4v4h-4z"/></svg>',
     flow: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="6" height="5" rx="1"/><rect x="15" y="4" width="6" height="5" rx="1"/><rect x="15" y="15" width="6" height="5" rx="1"/><path d="M9 6.5h6"/><path d="M6 9v6.5a1 1 0 0 0 1 1h8"/></svg>',
     github: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5"/></svg>',
@@ -93,6 +94,7 @@
       { href: '/', label: 'Dashboard', icon: ICON.dashboard, show: !!me },
       { href: '/dashboards', label: 'Dashboards', icon: ICON.dashboard, show: can('data.read') },
       { href: '/home', label: 'Home', icon: ICON.home, show: can('data.read') },
+      { href: '/energy', label: 'Energy', icon: ICON.bolt, show: can('data.read') },
       { href: '/flows', label: 'Flows', icon: ICON.flow, show: can('data.read') },
       { href: '/devices', label: 'Devices', icon: ICON.device, show: can('data.read') },
       { href: '/incidents', label: 'Incidents', icon: ICON.alert, show: can('data.read') },

@@ -424,6 +424,12 @@ dialog.dw-full::backdrop { background: rgba(15, 23, 42, .55); }
 @media (max-width: 900px) { .fe { grid-template-columns: 1fr; height: auto; } .fe-stage { height: 60vh; } .fe-pal, .fe-props { max-height: 260px; } }
 
 /* ---- Home (smart home, spec 005) ---- */
+.hm-scenes { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; align-items: center; }
+.hm-scenes:empty { display: none; }
+.hm-scene { display: inline-flex; }
+.hm-scene > .btn:first-child { gap: 6px; }
+.hm-scene .hm-scene-edit { margin-left: -1px; padding: 0 8px; }
+.hm-pick { display: grid; gap: 4px; max-height: 45vh; overflow: auto; border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
 .hm-rooms { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
 .hm-rooms button { border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 999px; padding: 5px 12px; cursor: pointer; font: inherit; font-size: 13px; }
 .hm-rooms button.on { background: var(--primary, #e30613); border-color: var(--primary, #e30613); color: #fff; }
@@ -490,3 +496,15 @@ dialog.dw-full::backdrop { background: rgba(15, 23, 42, .55); }
 @media (max-width: 600px) { .row2 { grid-template-columns: 1fr; } }
 .warn-box { background: color-mix(in srgb, #f59e0b 14%, transparent); border: 1px solid color-mix(in srgb, #f59e0b 45%, transparent); padding: 8px 10px; border-radius: 8px; }
 .nowrap { white-space: nowrap; }
+/* energy (spec 008) */
+.en-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
+.en-label { min-width: 12ch; text-align: center; }
+.en-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.en-tile b { font-size: 24px; display: block; margin-top: 4px; }
+.en-chart svg { width: 100%; height: 260px; display: block; }
+.en-grid { stroke: var(--line); stroke-width: 1; }
+.en-ax { fill: var(--muted, #667085); font-size: 11px; }
+.en-cons { fill: var(--primary, #e30613); }
+.en-prod { fill: #16a34a; }
+.en-share { display: inline-block; width: 90px; height: 8px; border-radius: 4px; background: var(--line); vertical-align: middle; overflow: hidden; }
+.en-share span { display: block; height: 100%; background: var(--primary, #e30613); }

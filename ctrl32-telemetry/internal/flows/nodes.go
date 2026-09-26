@@ -562,6 +562,23 @@ func (f *flow) process(n *rnode, m *Message, dry bool) {
 			}
 			return map[string]Value{"command_id": id, "status": status}, nil
 		}, "entity "+service)
+	case "scene":
+		sc := str("scene")
+		if dry || f.temp {
+			f.dryAction(n, m, "would activate the scene")
+			return
+		}
+		reason := f.origin(n, m)
+		f.act(n, m, func(ctx context.Context) (map[string]Value, error) {
+			ok, failed, err := f.e.host.SceneActivate(ctx, f.org, sc, f.id, "flow:"+f.name, reason)
+			if err != nil {
+				return nil, err
+			}
+			if ok == 0 && failed > 0 {
+				return nil, fmt.Errorf("all %d commands of the scene failed", failed)
+			}
+			return map[string]Value{"ok": float64(ok), "failed": float64(failed)}, nil
+		}, "scene activated")
 	case "notify":
 		subj, err1 := f.render(str("subject"), m)
 		text, err2 := f.render(str("text"), m)

@@ -1,0 +1,35 @@
+meta {
+  name: Set energy price and meter roles
+  type: http
+  seq: 6
+}
+
+put {
+  url: {{baseUrl}}/api/v1/energy/settings
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "currency": "string",
+    "exclude_others": true,
+    "feed_in_per_kwh": 21.5,
+    "price_per_kwh": 21.5,
+    "reason": "string",
+    "sources": [
+      {
+        "datastream_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+        "role": "consumption"
+      }
+    ]
+  }
+}
+
+docs {
+  Set energy price and meter roles
+  
+  Meters without an explicit role count as consumption; a device with several energy sensors counts the one named total.
+  
+  Requires permission `content.write`.
+}

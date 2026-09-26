@@ -26,6 +26,7 @@ type fakeHost struct {
 	entCmds  []string
 	mqttOut  []string
 	mqttSubs map[string]func(string, []byte)
+	scenes   []string
 }
 
 func (h *fakeHost) DatastreamName(_ context.Context, _, id string) (string, string) {
@@ -78,6 +79,12 @@ func (h *fakeHost) MQTTPublish(_ context.Context, _, src, topic string, payload 
 	return nil
 }
 func (h *fakeHost) EntityName(_ context.Context, _, id string) string { return "Hall door" }
+func (h *fakeHost) SceneActivate(_ context.Context, _, scene, _, issuer, reason string) (int, int, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.scenes = append(h.scenes, scene+" | "+issuer+" | "+reason)
+	return 2, 1, nil
+}
 func (h *fakeHost) Incident(_ context.Context, _, action, sev, title, dedup string, _ map[string]any) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -424,4 +431,24 @@ func TestMQTTMessageFields(t *testing.T) {
 	if m := mqttMessage("src", "x", []byte("21.5")); m.Value != 21.5 {
 		t.Fatalf("number %v", m.Value)
 	}
+}
+
+func TestFlowScene(t *testing.T) {
+	e, _, h, cancel := testEngine(t, `{"nodes":[{"id":"i","type":"inject","x":0,"y":0,"settings":{"value":"1"}},
+		{"id":"s","type":"scene","x":200,"y":0,"settings":{"scene":"`+srcA+`"}},
+		{"id":"d","type":"debug","x":400,"y":0,"settings":{"expr":"msg.ok + '/' + msg.failed"}}],
+		"wires":[{"from":"i","port":0,"to":"s"},{"from":"s","port":0,"to":"d"}]}`)
+	defer cancel()
+	if err := e.Inject(context.Background(), "org", "test", "i", 1.0, "", false, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "scene", func() bool { h.mu.Lock(); defer h.mu.Unlock(); return len(h.scenes) == 1 })
+	if !strings.HasPrefix(h.scenes[0], srcA+" | flow:") {
+		t.Fatalf("scene call %v", h.scenes)
+	}
+	waitFor(t, "debug", func() bool { d := debugTexts(e, "debug"); return len(d) == 1 && d[0] == "2/1" })
+	if err := e.Inject(context.Background(), "org", "test", "i", 1.0, "", true, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "dry", func() bool { return len(debugTexts(e, "dry_action")) == 1 })
 }

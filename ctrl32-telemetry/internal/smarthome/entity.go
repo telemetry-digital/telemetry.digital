@@ -486,6 +486,10 @@ func (e *Entity) applyLight(topic string, payload []byte, set func(string), attr
 		}
 		if cm, ok := m["color_mode"].(string); ok {
 			attr("color_mode", cm)
+		} else if _, hasCT := m["color_temp"]; hasCT && m["color"] == nil {
+			attr("color_mode", "color_temp") // devices without color_mode: the one colour field reported decides
+		} else if m["color"] != nil && !hasCT {
+			attr("color_mode", "rgb")
 		}
 		if fx, ok := m["effect"].(string); ok {
 			attr("effect", fx)

@@ -31,6 +31,9 @@ type Host interface {
 	MQTTSubscribe(org, source, filter string, fn func(topic string, payload []byte)) (func(), error)
 	// MQTTPublish publishes a message on an MQTT source.
 	MQTTPublish(ctx context.Context, org, source, topic string, payload []byte, retain bool) error
+	// SceneActivate runs a scene's actions as entity commands with the flow as origin; it returns how many
+	// commands were issued and how many failed.
+	SceneActivate(ctx context.Context, org, sceneID, flowID, issuer, reason string) (ok, failed int, err error)
 	// EntityName is the display name of an entity.
 	EntityName(ctx context.Context, org, id string) string
 	// SetAttribute sets one shared attribute of a device; issuer and reason name the flow as the origin.

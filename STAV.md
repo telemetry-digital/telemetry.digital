@@ -10,13 +10,14 @@
 | 0.40.0 | Toky v štýle Node-RED: vlastný engine v Go, 28 uzlov, editor, ladenie, verzie, štyri oči, prevod pravidiel, metriky, sk/cs (spec 004) | e2e 69 + headless, ~30 000 správ/s |
 | 0.41.0 | Provisioning cez MQTT a smart home ako Home Assistant: profily provisioningu, ThingsBoard API, automatické datastreamy, MQTT účty s oddeleným priestorom tém, mosty, HA discovery, entity, stránky Domov a Zariadenia a pripojenia, uzly tokov, export do HA (spec 005) | e2e 33 + 39, headless, unit |
 | 0.42.0 | Smart home, fáza 2: Shelly Gen2+/Gen3 natívne (RPC), Tasmota s vlastným formátom discovery, výber farby a teploty farby na karte svetla, uzly tokov MQTT vstup/výstup, incident pri výpadku mosta alebo účtu, premenovaná entita si drží meno (spec 006) | e2e 36, headless, unit |
+| 0.43.0 | Energia (spotreba, výroba, náklady po hodinách/dňoch/mesiacoch, podiel meračov, príkon) a scény (zachytenie stavu, spustenie jedným klikom, uzol toku) (spec 008) | e2e 37, unit |
 
-Celá sada testov (`tests/run-all.sh`) prešla pre 0.42.0 bez chyby (26. 9. 2026).
+Celá sada testov (`tests/run-all.sh`) pre 0.43.0: beží (26. 9. 2026).
 
 ## Ďalšie možnosti (fáza 2)
 
-- smart home: kamery a obrázky, efekty svetiel na karte, Shelly Gen1, scény a skupiny entít, energetický prehľad
-  (spotreba po dňoch z entít energie)
+- smart home: kamery a obrázky, efekty svetiel na karte, Shelly Gen1, skupiny entít, plánovanie scén (časovač),
+  energia: porovnanie s minulým obdobím, export CSV
 - toky: rozdelenie správ, podtoky, skupiny na plátne
 - replika: prihlásenie na replike na prezeranie; Windows: test inštalátora na čistom serveri, podpis binárky
 
@@ -32,7 +33,7 @@ Celá sada testov (`tests/run-all.sh`) prešla pre 0.42.0 bez chyby (26. 9. 2026
 
 ## Čaká na používateľa
 
-- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.42.0 root@2.29.5.17 -i <kľúč>` alebo
+- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.43.0 root@2.29.5.17 -i <kľúč>` alebo
   GitHub workflow (secrets `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS` a workflow na `main`)
 - zlúčenie vetvy do `main` (pull request na požiadanie)
 - potvrdenie ADR-0015 (SCADA editor v čistom JS nad SVG)

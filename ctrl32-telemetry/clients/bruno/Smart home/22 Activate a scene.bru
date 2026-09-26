@@ -1,0 +1,29 @@
+meta {
+  name: Activate a scene
+  type: http
+  seq: 22
+}
+
+post {
+  url: {{baseUrl}}/api/v1/scenes/:id/activate
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Activate a scene
+  
+  Each action is an entity command of the signed-in user (four eyes when required, audit with reason "Scene: <name>"). 409 when every command failed.
+  
+  Requires permission `device.command`.
+}

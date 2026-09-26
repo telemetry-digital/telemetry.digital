@@ -800,6 +800,31 @@ export type RuleSpec = {
   match?: "all" | "any";
 };
 
+export type Scene = {
+  actions?: ({
+    component?: string;
+    entity?: string;
+    entity_id?: string;
+    /** brightness, rgb, color_temp, position, temperature, mode, value, percentage */
+    params?: Record<string, unknown>;
+    service?: string;
+  })[];
+  icon?: string;
+  id?: string;
+  name?: string;
+  room?: string | null;
+  room_id?: string | null;
+  sort?: number;
+};
+
+export type SceneAction = {
+  entity_id: string;
+  /** brightness, rgb, color_temp, position, temperature, mode, value, percentage */
+  params?: Record<string, unknown>;
+  /** turn_on, turn_off, set_position, … */
+  service: string;
+};
+
 export type Share = {
   public?: boolean;
   /** data URL of the QR code */
@@ -2154,6 +2179,150 @@ export class Ctrl32Client {
     id?: string;
     status?: string;
   }>('POST', `/api/v1/discovery/${encodeURIComponent(id)}/ignore`, undefined, body, false);
+  }
+
+  /** Energy overview
+   *
+   * Consumption and production of energy meters (entities with device_class energy, datastreams in Wh/kWh/MWh) per hour (day), day (week, month) or month (year) in the organization's time zone, with cost.
+   * 
+   * Requires permission `data.read`. */
+  getEnergy(query?: { period?: string; /** day (default), week, month, year */ date?: string; /** YYYY-MM-DD inside the period (default today) */ }): Promise<{
+    /** hour, day, month */
+    bucket?: string;
+    buckets?: ({
+      consumption?: number;
+      cost?: number;
+      production?: number;
+      start?: string;
+    })[];
+    currency?: string;
+    feed_in_per_kwh?: number;
+    from?: string;
+    period?: string;
+    /** sum of the current states of power entities */
+    power_w?: number;
+    price_per_kwh?: number;
+    sources?: ({
+      datastream_id?: string;
+      device?: string;
+      entity_id?: string;
+      kwh?: number;
+      name?: string;
+      /** consumption, production, off */
+      role?: string;
+      /** % of consumption */
+      share?: number;
+      unit?: string;
+    })[];
+    to?: string;
+    total?: {
+      consumption?: number;
+      cost?: number;
+      production?: number;
+    };
+    tz?: string;
+    /** kWh */
+    unit?: string;
+  }> {
+    return this.request<{
+    /** hour, day, month */
+    bucket?: string;
+    buckets?: ({
+      consumption?: number;
+      cost?: number;
+      production?: number;
+      start?: string;
+    })[];
+    currency?: string;
+    feed_in_per_kwh?: number;
+    from?: string;
+    period?: string;
+    /** sum of the current states of power entities */
+    power_w?: number;
+    price_per_kwh?: number;
+    sources?: ({
+      datastream_id?: string;
+      device?: string;
+      entity_id?: string;
+      kwh?: number;
+      name?: string;
+      /** consumption, production, off */
+      role?: string;
+      /** % of consumption */
+      share?: number;
+      unit?: string;
+    })[];
+    to?: string;
+    total?: {
+      consumption?: number;
+      cost?: number;
+      production?: number;
+    };
+    tz?: string;
+    /** kWh */
+    unit?: string;
+  }>('GET', `/api/v1/energy`, query, undefined, false);
+  }
+
+  /** Energy settings and meters
+   *
+   * Requires permission `data.read`. */
+  getEnergySettings(): Promise<{
+    currency?: string;
+    exclude_others?: boolean;
+    feed_in_per_kwh?: number;
+    meters?: ({
+      datastream_id?: string;
+      device?: string;
+      name?: string;
+      role?: string;
+      unit?: string;
+    })[];
+    price_per_kwh?: number;
+  }> {
+    return this.request<{
+    currency?: string;
+    exclude_others?: boolean;
+    feed_in_per_kwh?: number;
+    meters?: ({
+      datastream_id?: string;
+      device?: string;
+      name?: string;
+      role?: string;
+      unit?: string;
+    })[];
+    price_per_kwh?: number;
+  }>('GET', `/api/v1/energy/settings`, undefined, undefined, false);
+  }
+
+  /** Set energy price and meter roles
+   *
+   * Meters without an explicit role count as consumption; a device with several energy sensors counts the one named total.
+   * 
+   * Requires permission `content.write`. */
+  putEnergySettings(body: {
+    /** ≤ 4 */
+    currency?: string;
+    /** count only the listed meters */
+    exclude_others?: boolean;
+    /** 0–100 */
+    feed_in_per_kwh?: number;
+    /** 0–100 */
+    price_per_kwh?: number;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    sources?: ({
+      datastream_id?: string;
+      role?: "consumption" | "production" | "off";
+    })[];
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('PUT', `/api/v1/energy/settings`, undefined, body, false);
   }
 
   /** Entities with their state
@@ -4462,6 +4631,100 @@ export class Ctrl32Client {
     id?: string;
     status?: string;
   }>('POST', `/api/v1/rules/${encodeURIComponent(id)}/reject`, undefined, body, false);
+  }
+
+  /** Scenes
+   *
+   * Requires permission `data.read`. */
+  getScenes(): Promise<Scene[]> {
+    return this.request<Scene[]>('GET', `/api/v1/scenes`, undefined, undefined, false);
+  }
+
+  /** Create a scene
+   *
+   * Actions explicitly, or capture: entity ids whose current states (on/off, brightness, colour, position, temperature, mode, value) become the actions.
+   * 
+   * Requires permission `device.manage`. */
+  postScenes(body: {
+    actions?: SceneAction[];
+    capture?: string[];
+    /** icon name */
+    icon?: string;
+    /** ≤ 80 */
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    room_id?: string;
+    sort?: number;
+  }): Promise<Scene> {
+    return this.request<Scene>('POST', `/api/v1/scenes`, undefined, body, false);
+  }
+
+  /** Change a scene
+   *
+   * Requires permission `device.manage`. */
+  putScenesId(id: string, body: {
+    actions?: SceneAction[];
+    capture?: string[];
+    icon?: string;
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    room_id?: string;
+    sort?: number;
+  }): Promise<Scene> {
+    return this.request<Scene>('PUT', `/api/v1/scenes/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Delete a scene
+   *
+   * Requires permission `device.manage`. */
+  deleteScenesId(id: string, query?: { reason?: string; /** required */ }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/scenes/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Activate a scene
+   *
+   * Each action is an entity command of the signed-in user (four eyes when required, audit with reason "Scene: <name>"). 409 when every command failed.
+   * 
+   * Requires permission `device.command`. */
+  postScenesIdActivate(id: string, body: {
+    /** optional */
+    reason?: string;
+  }): Promise<{
+    failed?: number;
+    name?: string;
+    results?: ({
+      command_id?: string;
+      entity_id?: string;
+      error?: string;
+      http_status?: number;
+      service?: string;
+      /** sent, acked, pending, failed */
+      status?: string;
+    })[];
+    scene?: string;
+  }> {
+    return this.request<{
+    failed?: number;
+    name?: string;
+    results?: ({
+      command_id?: string;
+      entity_id?: string;
+      error?: string;
+      http_status?: number;
+      service?: string;
+      /** sent, acked, pending, failed */
+      status?: string;
+    })[];
+    scene?: string;
+  }>('POST', `/api/v1/scenes/${encodeURIComponent(id)}/activate`, undefined, body, false);
   }
 
   /** Server status and configuration summary

@@ -21,6 +21,7 @@ func (fakeRefs) Device(id string) bool     { return id == devA }
 func (fakeRefs) Channel(id string) bool    { return id == chA }
 func (fakeRefs) Entity(id string) bool     { return id == entA }
 func (fakeRefs) MQTTSource(id string) bool { return id == srcA }
+func (fakeRefs) Scene(id string) bool      { return id == srcA }
 func (fakeRefs) HostAllowed(h string) bool { return h == "hooks.example.com" }
 
 // The US1 example: temperature > 80 for 2 minutes → notify and command.

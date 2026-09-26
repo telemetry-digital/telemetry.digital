@@ -16,11 +16,23 @@
     <a class="btn" id="inboxBtn" href="/smarthome#inbox" hidden><span class="badge warn" id="inboxCount">0</span> <span>new devices</span></a>
     <a class="btn" id="manageBtn" href="/smarthome" hidden>Devices and connections</a>
   </div>
+  <div class="hm-scenes" id="scenes"></div>
   <div class="hm-rooms" id="roomTabs"></div>
   <div id="rooms"></div>
   <div class="card muted" id="empty" hidden>
     <p><span>No smart-home devices yet. Connect zigbee2mqtt, Tasmota, ESPHome or any device with Home Assistant MQTT discovery.</span> <a href="/smarthome">Devices and connections</a></p>
   </div>
+  <dialog id="sceneDlg"><form class="form" id="sceneForm">
+    <h2 style="margin-top:0" id="sceneTitle">New scene</h2>
+    <div class="row2"><label>Name <input name="name" required maxlength="80" placeholder="Evening"></label>
+      <label>Icon <select name="icon"><option value="bulb">bulb</option><option value="moon">moon</option><option value="sun">sun</option><option value="sofa">sofa</option><option value="bed">bed</option><option value="door-exit">door-exit</option><option value="home">home</option><option value="snowflake">snowflake</option><option value="flame">flame</option></select></label></div>
+    <div class="muted">Choose the devices; the scene remembers their current states (on/off, brightness, colour, position, temperature). Set them first, then save.</div>
+    <div class="hm-pick" id="scenePick"></div>
+    <label class="inline" id="sceneKeepWrap" hidden><input type="checkbox" name="keep" checked> Keep the saved actions (do not capture again)</label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="sceneErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn danger" type="button" id="sceneDel" hidden>Delete</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form></dialog>
   <dialog id="histDlg" class="hm-hist"><div class="form">
     <div class="page-head" style="margin:0"><h2 style="margin:0" id="histTitle" class="notranslate"></h2><span class="grow"></span>
       <div class="seg" id="histRange"><button type="button" data-h="24" class="on">24 h</button><button type="button" data-h="168">7 days</button><button type="button" data-h="720">30 days</button></div></div>
@@ -57,7 +69,7 @@ function entIcon(e) {
   return DC_ICON[dc] || 'activity';
 }
 const isOn = e => ['on', 'open', 'opening', 'unlocked', 'home', 'heat', 'cool', 'auto', 'dry', 'fan_only', 'heat_cool'].includes(e.state);
-const BIN_TEXT = {door: ['Open', 'Closed'], garage_door: ['Open', 'Closed'], window: ['Open', 'Closed'], opening: ['Open', 'Closed'], motion: ['Motion', 'Clear'],
+const BIN_TEXT = {door: ['Opened', 'Closed'], garage_door: ['Opened', 'Closed'], window: ['Opened', 'Closed'], opening: ['Opened', 'Closed'], motion: ['Motion', 'Clear'],
   occupancy: ['Occupied', 'Clear'], presence: ['Home', 'Away'], moisture: ['Wet', 'Dry'], smoke: ['Smoke', 'Clear'], gas: ['Gas', 'Clear'], lock: ['Unlocked', 'Locked'],
   battery: ['Low', 'Normal'], connectivity: ['Connected', 'Disconnected'], plug: ['Plugged in', 'Unplugged'], problem: ['Problem', 'OK'], safety: ['Unsafe', 'Safe']};
 function fmtNum(v, e) {
@@ -266,12 +278,52 @@ function live() {
   window.addEventListener('pagehide', () => es.close(), {once: true});
 }
 
+// ---- scenes (spec 008)
+let SCENE = null;
+function renderScenes() {
+  const sc = HOME.scenes || [];
+  $('#scenes').innerHTML = sc.map(x => `<span class="hm-scene"><button class="btn" type="button" data-scene="${x.id}"${CAN ? '' : ' disabled'} title="${esc(x.actions.map(a => a.entity + ': ' + t(a.service.replace(/_/g, ' '))).join('\n'))}">${icon(x.icon || 'bulb', 18)}<span class="notranslate">${esc(x.name)}</span></button>${HOME.can_manage ? `<button class="btn small hm-scene-edit" type="button" data-scene-edit="${x.id}" title="${esc(t('Edit'))}">⋯</button>` : ''}</span>`).join('')
+    + (HOME.can_manage ? `<button class="btn small" type="button" id="sceneAdd">+ ${esc(t('Scene'))}</button>` : '');
+  $('#scenes').hidden = !sc.length && !HOME.can_manage;
+}
+function openScene(sc) {
+  SCENE = sc; const f = $('#sceneForm'); f.reset(); $('#sceneErr').textContent = '';
+  $('#sceneTitle').textContent = t(sc ? 'Edit scene' : 'New scene'); $('#sceneDel').hidden = !sc; $('#sceneKeepWrap').hidden = !sc;
+  f.name.value = sc ? sc.name : ''; f.icon.value = sc ? (sc.icon || 'bulb') : 'bulb';
+  const chosen = new Set(sc ? sc.actions.map(a => a.entity_id) : []);
+  const ctrl = [...ENT.values()].filter(e => (e.services || []).length && e.component !== 'button' && e.component !== 'scene');
+  $('#scenePick').innerHTML = ctrl.map(e => `<label class="inline"><input type="checkbox" value="${e.id}"${chosen.has(e.id) ? ' checked' : ''}><span><span class="notranslate">${esc(e.name)}</span> <span class="muted notranslate">${esc(e.device || '')}</span> · ${esc(stateText(e))}</span></label>`).join('') || `<div class="muted">${esc(t('No controllable devices.'))}</div>`;
+  $('#sceneDlg').showModal();
+}
+$('#scenes').addEventListener('click', async ev => {
+  const b = ev.target.closest('button'); if (!b) return;
+  if (b.id === 'sceneAdd') return openScene(null);
+  if (b.dataset.sceneEdit) return openScene(HOME.scenes.find(x => x.id === b.dataset.sceneEdit));
+  if (b.dataset.scene) {
+    b.disabled = true;
+    try { const r = await api('POST', `/api/v1/scenes/${b.dataset.scene}/activate`, {});
+      const pending = r.results.filter(x => x.status === 'pending').length;
+      ctrl32.toast(r.failed ? `${t('scene activated with errors')}: ${r.failed}` : pending ? t('waiting for approval by another user (four eyes)') : t('scene activated'), r.failed ? 'bad' : 'ok');
+    } catch (x) { ctrl32.toast(x.message, 'bad'); }
+    b.disabled = false;
+  }
+});
+$('#sceneForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#sceneErr').textContent = '';
+  const ids = [...document.querySelectorAll('#scenePick input:checked')].map(i => i.value);
+  const body = {name: f.name.value, icon: f.icon.value, reason: f.reason.value};
+  if (!SCENE || !f.keep.checked) { if (!ids.length) { $('#sceneErr').textContent = t('choose at least one device'); return; } body.capture = ids; }
+  try { if (SCENE) await api('PUT', `/api/v1/scenes/${SCENE.id}`, body); else await api('POST', '/api/v1/scenes', body);
+    $('#sceneDlg').close(); ctrl32.toast(t('scene saved'), 'ok'); await load(); } catch (x) { $('#sceneErr').textContent = x.message; } };
+$('#sceneDel').onclick = async () => { const f = $('#sceneForm'); if (!f.reason.value.trim()) { $('#sceneErr').textContent = t('reason is required'); return; }
+  try { await api('DELETE', `/api/v1/scenes/${SCENE.id}?reason=${encodeURIComponent(f.reason.value)}`); $('#sceneDlg').close(); await load(); } catch (x) { $('#sceneErr').textContent = x.message; } };
+
 async function load() {
   HOME = await api('GET', '/api/v1/home');
   CAN = HOME.can_control;
   ENT = new Map(); for (const r of HOME.rooms || []) for (const e of r.entities) ENT.set(e.id, e);
   $('#manageBtn').hidden = !HOME.can_manage;
   $('#inboxBtn').hidden = !HOME.can_manage || !HOME.pending_devices; $('#inboxCount').textContent = HOME.pending_devices;
+  renderScenes();
   render();
 }
 ctrl32.ready({requireAuth: true, requirePerm: 'data.read'}).then(async () => {

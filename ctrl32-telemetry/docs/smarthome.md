@@ -2,7 +2,7 @@
 
 ctrl32 can be used like Home Assistant for devices that speak MQTT: they register themselves, appear with their
 rooms and entities, are recorded and controlled from the **Home** page, and take part in flows. Specification:
-`specs/005-mqtt-provisioning-smarthome/` and `specs/006-smarthome-phase2/`; URS A-20…A-29.
+`specs/005-mqtt-provisioning-smarthome/` and `specs/006-smarthome-phase2/`, `specs/008-energy-scenes/`; URS A-20…A-31.
 
 Everything runs inside the ctrl32 server: the MQTT broker, the discovery engine, the bridges. No Home Assistant,
 Mosquitto or Node-RED is needed (an existing installation can keep running next to it).
@@ -123,6 +123,29 @@ requires it, audit (reason "Home: turn on Hall light"), and a status — *sent* 
 state, then *acknowledged*; *failed* when it does not within 15 s, when the entity is unavailable or no device of the
 account is connected.
 
+## Scenes
+
+A scene sets several entities at once — *Evening*: hall light at 30 % warm white, plug on, boiler off. On **Home**,
+*+ Scene* lists the controllable devices: set them the way you want, select them and save; the scene remembers their
+states (on/off, brightness, colour or colour temperature, position, target temperature and mode, value). The scene
+buttons above the rooms activate it with one click; *⋯* renames it, captures the states again or deletes it.
+
+Activating a scene sends one ordinary command per device — your permission, four eyes when the organization requires
+them, the audit trail with the reason *Scene: Evening*, and the device's confirmation. Scenes can also be written as
+explicit actions through the API (`POST /api/v1/scenes`) and activated by flows (node **Scene**).
+
+## Energy
+
+**Energy** shows the consumption of all energy meters — the energy sensors of Shelly, Tasmota, zigbee2mqtt and other
+devices and every datastream in Wh, kWh or MWh — per hour (day), per day (week, month) or per month (year), in the
+organization's time zone, with the cost at your price per kWh, the current power (sum of all power sensors) and each
+meter's share. Meters are cumulative: consumption is the sum of increases between readings; a meter that drops below
+half its previous reading was reset (the new reading counts).
+
+*Settings*: price per kWh and currency, a price paid for produced energy, and each meter's role — consumption,
+production (solar panels; shown in green) or not counted. A device with several energy sensors (Tasmota: Total,
+Today, Yesterday) counts only the one named *total* unless you choose otherwise.
+
 ## Flows
 
 - **Entity** trigger: a state change of an entity, optionally only from/to given states (`msg.from` is the previous
@@ -137,6 +160,7 @@ value `60`).
 - **MQTT in** trigger: every message on a topic filter (`+` and `#` allowed) of an MQTT account or bridge. A JSON
   number, text or boolean is the value; the members of a JSON object become message fields, nested objects joined with
   `_` (`{"ENERGY":{"Power":5}}` → `msg.ENERGY_Power`).
+- **Scene**: activates a scene (every action an audited command with the flow as origin; `msg.ok`, `msg.failed`).
 - **MQTT out**: publishes a message (topic and payload templates, retain) on an MQTT account or bridge — for devices
   without discovery or plain MQTT scenes. Flows with it are commanding flows (four eyes where required).
 

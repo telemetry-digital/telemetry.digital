@@ -309,6 +309,11 @@ func runZ2M(ctx context.Context, addr, user, pass, base, prefix string) error {
 			for k, v := range m {
 				light[k] = v
 			}
+			if _, ok := m["color_temp"]; ok {
+				light["color_mode"] = "color_temp"
+			} else if _, ok := m["color"]; ok {
+				light["color_mode"] = "xy"
+			}
 			cl.pub(ctx, base+"/Hall light", light, false)
 		case base + "/Kitchen plug/set":
 			if s, ok := m["state"].(string); ok {

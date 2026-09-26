@@ -630,7 +630,11 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	var pending int
 	_ = s.pool.QueryRow(r.Context(), `SELECT count(*) FROM core.discovery d JOIN core.connector c ON c.id = d.connector_id WHERE d.org_id = $1::uuid AND d.status = 'pending' AND c.revoked_at IS NULL`, org).Scan(&pending)
 	p := PrincipalFrom(r.Context())
-	writeJSON(w, 200, map[string]any{"rooms": rooms, "pending_devices": pending, "can_control": p != nil && p.Has("device.command"), "can_manage": p != nil && p.Has("device.manage")})
+	scenes, _ := s.scenes(r.Context(), org)
+	if scenes == nil {
+		scenes = []map[string]any{}
+	}
+	writeJSON(w, 200, map[string]any{"rooms": rooms, "scenes": scenes, "pending_devices": pending, "can_control": p != nil && p.Has("device.command"), "can_manage": p != nil && p.Has("device.manage")})
 }
 
 // onboarding returns the connection details devices need, for the "Add device" pages.
