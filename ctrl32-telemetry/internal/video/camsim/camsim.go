@@ -30,6 +30,7 @@ import (
 type Server struct {
 	RTSPAddr string // e.g. ":8554"
 	FPS      int    // default 10
+	Loop     int    // > 0: encode this many frames once and repeat them (load tests measure the server, not the simulator)
 	Log      *slog.Logger
 
 	srv      *gortsplib.Server
@@ -126,6 +127,17 @@ func (s *Server) produce(out *stream, sp spec) {
 	tick := time.NewTicker(period)
 	defer tick.Stop()
 	start := time.Now()
+	var cache [][][]byte
+	cached := func(n int, make func() [][]byte) [][]byte {
+		if s.Loop <= 0 {
+			return make()
+		}
+		if len(cache) < s.Loop {
+			cache = append(cache, make())
+			return cache[len(cache)-1]
+		}
+		return cache[n%s.Loop]
+	}
 	var h264Enc *testsrc.Encoder
 	var send func(pts uint32, n int, now time.Time) error
 	switch f := medi.Formats[0].(type) {
@@ -136,7 +148,7 @@ func (s *Server) produce(out *stream, sp spec) {
 			return
 		}
 		send = func(pts uint32, n int, now time.Time) error {
-			au := h264Enc.Encode(toYCbCr(Picture(sp.label, sp.w, sp.h, now, n)))
+			au := cached(n, func() [][]byte { return h264Enc.Encode(toYCbCr(Picture(sp.label, sp.w, sp.h, now, n))) })
 			pkts, err := rtpEnc.Encode(au)
 			if err != nil {
 				return err
@@ -155,11 +167,12 @@ func (s *Server) produce(out *stream, sp spec) {
 			return
 		}
 		send = func(pts uint32, n int, now time.Time) error {
-			var b bytes.Buffer
-			if err := jpeg.Encode(&b, Picture(sp.label, sp.w, sp.h, now, n), &jpeg.Options{Quality: 75}); err != nil {
-				return err
-			}
-			pkts, err := rtpEnc.Encode(b.Bytes())
+			img := cached(n, func() [][]byte {
+				var b bytes.Buffer
+				_ = jpeg.Encode(&b, Picture(sp.label, sp.w, sp.h, now, n), &jpeg.Options{Quality: 75})
+				return [][]byte{b.Bytes()}
+			})
+			pkts, err := rtpEnc.Encode(img[0])
 			if err != nil {
 				return err
 			}

@@ -19,8 +19,9 @@ func main() {
 	rtsp := flag.String("rtsp", ":8554", "RTSP listen address")
 	httpAddr := flag.String("http", ":8555", "HTTP MJPEG listen address (empty = off)")
 	fps := flag.Int("fps", 10, "frames per second")
+	loop := flag.Int("loop", 0, "encode this many frames once and repeat them (load tests); 0 = draw every frame")
 	flag.Parse()
-	s := &camsim.Server{RTSPAddr: *rtsp, FPS: *fps, Log: slog.Default()}
+	s := &camsim.Server{RTSPAddr: *rtsp, FPS: *fps, Loop: *loop, Log: slog.Default()}
 	if err := s.Start(); err != nil {
 		log.Fatal(err)
 	}

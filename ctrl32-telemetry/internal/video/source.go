@@ -54,6 +54,8 @@ type Source struct {
 	winStart time.Time
 	winN     int
 	winBytes int
+	lastFPS  float64 // over the last complete window
+	lastKbps float64
 }
 
 // Sub receives packets of a source. Close it when done.
@@ -131,7 +133,9 @@ func (s *Source) Status() Status {
 		st.State = "idle"
 	}
 	st.Viewers = len(s.subs)
-	if !s.winStart.IsZero() {
+	if s.lastFPS > 0 {
+		st.FPS, st.Kbps = s.lastFPS, s.lastKbps
+	} else if !s.winStart.IsZero() {
 		if d := time.Since(s.winStart).Seconds(); d > 0.5 {
 			st.FPS = float64(int(float64(s.winN)/d*10)) / 10
 			st.Kbps = float64(int(float64(s.winBytes) * 8 / 1000 / d))
@@ -249,7 +253,7 @@ func (s *Source) publish(ctx context.Context, t *Track, smp *Sample) {
 		s.track = t
 		s.gop, s.gopLen = nil, 0
 		s.status = Status{State: "online", Codec: t.Codec, Width: t.Width, Height: t.Height, Since: time.Now()}
-		s.winStart, s.winN, s.winBytes = time.Now(), 0, 0
+		s.winStart, s.winN, s.winBytes, s.lastFPS, s.lastKbps = time.Now(), 0, 0, 0, 0
 	}
 	if t.Codec == MJPEG {
 		s.last = smp
@@ -262,7 +266,9 @@ func (s *Source) publish(ctx context.Context, t *Track, smp *Sample) {
 		s.gop = append(s.gop, smp)
 		s.gopLen += smp.Size()
 	}
-	if time.Since(s.winStart) > 5*time.Second {
+	if d := time.Since(s.winStart); d > 5*time.Second {
+		s.lastFPS = float64(int(float64(s.winN)/d.Seconds()*10)) / 10
+		s.lastKbps = float64(int(float64(s.winBytes) * 8 / 1000 / d.Seconds()))
 		s.winStart, s.winN, s.winBytes = time.Now(), 0, 0
 	}
 	s.winN++
