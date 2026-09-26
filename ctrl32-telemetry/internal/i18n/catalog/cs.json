@@ -229,6 +229,7 @@
  "Collapse menu to icons": "Sbalit menu na ikony",
  "Collects the values of a time window and sends one message with the result at its end (per topic).": "Sbírá hodnoty časového okna a na jeho konci pošle jednu zprávu s výsledkem (pro každé téma).",
  "Colour": "Barva",
+ "Colour temperature": "Teplota barvy",
  "Coloured bands of states over time (e.g. stopped/running/fault).": "Barevné pásy stavů v čase (např. stojí/běží/porucha).",
  "Column": "Kolona",
  "Columns": "Sloupce",

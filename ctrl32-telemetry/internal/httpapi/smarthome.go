@@ -435,6 +435,9 @@ func (s *Server) scanEntity(row interface{ Scan(...any) error }, withConfig bool
 			ui[k] = v
 		}
 	}
+	if c := smarthome.NewEntity(comp, cfg).Color(); c != nil {
+		ui["color"] = c
+	}
 	m["ui"] = ui
 	if withConfig {
 		m["config"] = cfg

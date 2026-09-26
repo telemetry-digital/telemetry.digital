@@ -275,7 +275,7 @@ func runZ2M(ctx context.Context, addr, user, pass, base, prefix string) error {
 		"value_template": "{{ value_json.contact }}"}, true)
 	cl.pub(ctx, prefix+"/light/0x0017880104e45517/light/config", map[string]any{"availability": avail,
 		"device": dev("0x0017880104e45517", "Hall light", "9290012573A", "Hall"), "name": nil, "schema": "json", "brightness": true, "brightness_scale": 254,
-		"command_topic": base + "/Hall light/set", "state_topic": base + "/Hall light", "supported_color_modes": []string{"color_temp"},
+		"command_topic": base + "/Hall light/set", "state_topic": base + "/Hall light", "supported_color_modes": []string{"color_temp", "xy"}, "min_mireds": 153, "max_mireds": 454,
 		"unique_id": "0x0017880104e45517_light_zigbee2mqtt"}, true)
 	cl.pub(ctx, prefix+"/switch/0x0017880104e45518/switch/config", map[string]any{"availability": avail,
 		"device": dev("0x0017880104e45518", "Kitchen plug", "SP 120", "Kitchen"), "name": nil, "command_topic": base + "/Kitchen plug/set",

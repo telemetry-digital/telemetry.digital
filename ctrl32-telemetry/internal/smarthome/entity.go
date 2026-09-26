@@ -467,7 +467,7 @@ func (e *Entity) applyLight(topic string, payload []byte, set func(string), attr
 			attr("brightness", math.Round(b/scale*255))
 		}
 		if ct, ok := toNum(m["color_temp"]); ok {
-			attr("color_temp", ct)
+			attr("color_temp", e.mireds(ct))
 		}
 		if c, ok := m["color"].(map[string]any); ok {
 			if r, ok := toNum(c["r"]); ok {
@@ -506,6 +506,26 @@ func (e *Entity) applyLight(topic string, payload []byte, set func(string), attr
 					attr("brightness", f)
 				}
 			}
+			if e.s("red_template") != "" && e.s("green_template") != "" && e.s("blue_template") != "" {
+				rgb := make([]any, 0, 3)
+				for _, k := range []string{"red_template", "green_template", "blue_template"} {
+					v, err := e.render(k, payload, nil)
+					keep(err)
+					if f, ok := toNum(v); ok {
+						rgb = append(rgb, f)
+					}
+				}
+				if len(rgb) == 3 {
+					attr("rgb_color", rgb)
+				}
+			}
+			if e.s("color_temp_template") != "" {
+				v, err := e.render("color_temp_template", payload, nil)
+				keep(err)
+				if f, ok := toNum(v); ok {
+					attr("color_temp", e.mireds(f))
+				}
+			}
 		}
 		return
 	}
@@ -530,7 +550,7 @@ func (e *Entity) applyLight(topic string, payload []byte, set func(string), attr
 		v, err := e.render("color_temp_value_template", payload, nil)
 		keep(err)
 		if ct, ok := toNum(v); ok {
-			attr("color_temp", ct)
+			attr("color_temp", e.mireds(ct))
 		}
 	}
 	if topic == e.s("rgb_state_topic") {
@@ -813,7 +833,7 @@ func (e *Entity) lightCommand(service string, p Params, pub func(string, string,
 				m["color"] = map[string]any{"r": p.RGB[0], "g": p.RGB[1], "b": p.RGB[2]}
 			}
 			if p.ColorTemp != nil {
-				m["color_temp"] = *p.ColorTemp
+				m["color_temp"] = e.deviceColorTemp(*p.ColorTemp)
 			}
 		}
 		b, _ := json.Marshal(m)
@@ -841,7 +861,7 @@ func (e *Entity) lightCommand(service string, p Params, pub func(string, string,
 			vars["red"], vars["green"], vars["blue"] = p.RGB[0], p.RGB[1], p.RGB[2]
 		}
 		if p.ColorTemp != nil {
-			vars["color_temp"] = *p.ColorTemp
+			vars["color_temp"] = e.deviceColorTemp(*p.ColorTemp)
 		}
 		m, err := pub("command_topic", key, "", vars)
 		return []Publish{m}, exp, err
@@ -873,7 +893,7 @@ func (e *Entity) lightCommand(service string, p Params, pub func(string, string,
 		extra = append(extra, m)
 	}
 	if p.ColorTemp != nil && e.s("color_temp_command_topic") != "" {
-		m, err := pub("color_temp_command_topic", "color_temp_command_template", *p.ColorTemp, nil)
+		m, err := pub("color_temp_command_topic", "color_temp_command_template", e.deviceColorTemp(*p.ColorTemp), nil)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -892,6 +912,81 @@ func (e *Entity) lightCommand(service string, p Params, pub func(string, string,
 		out = append(extra, on)
 	}
 	return out, onExp, nil
+}
+
+// kelvin reports whether the light's colour temperatures are in kelvin (color_temp_kelvin) rather than mireds.
+func (e *Entity) kelvin() bool { return e.boolean("color_temp_kelvin", false) }
+
+// mireds converts a colour temperature reported by the light to mireds (the unit of the color_temp attribute).
+func (e *Entity) mireds(v float64) float64 {
+	if e.kelvin() && v > 0 {
+		return math.Round(1e6 / v)
+	}
+	return v
+}
+
+// deviceColorTemp converts mireds to the unit the light expects.
+func (e *Entity) deviceColorTemp(m float64) float64 {
+	if e.kelvin() && m > 0 {
+		return math.Round(1e6 / m)
+	}
+	return math.Round(m)
+}
+
+// LightColor describes the colour controls of a light: RGB, colour temperature and its range in mireds.
+type LightColor struct {
+	RGB       bool    `json:"rgb,omitempty"`
+	ColorTemp bool    `json:"color_temp,omitempty"`
+	MinMireds float64 `json:"min_mireds,omitempty"`
+	MaxMireds float64 `json:"max_mireds,omitempty"`
+}
+
+// Color reports the colour controls of a light entity (nil for other components or lights without colour).
+func (e *Entity) Color() *LightColor {
+	if e.Component != "light" {
+		return nil
+	}
+	c := &LightColor{}
+	switch e.s("schema") {
+	case "json":
+		if modes, ok := e.Config["supported_color_modes"].([]any); ok {
+			for _, m := range modes {
+				switch ToString(m) {
+				case "rgb", "rgbw", "rgbww", "hs", "xy":
+					c.RGB = true
+				case "color_temp":
+					c.ColorTemp = true
+				}
+			}
+		}
+		c.RGB = c.RGB || e.boolean("rgb", false) || e.boolean("hs", false) || e.boolean("xy", false)
+		c.ColorTemp = c.ColorTemp || e.boolean("color_temp", false)
+	case "template":
+		on := e.s("command_on_template")
+		c.RGB = e.s("red_template") != "" || strings.Contains(on, "red")
+		c.ColorTemp = e.s("color_temp_template") != "" || strings.Contains(on, "color_temp")
+	default:
+		c.RGB = e.s("rgb_command_topic") != ""
+		c.ColorTemp = e.s("color_temp_command_topic") != ""
+	}
+	if !c.RGB && !c.ColorTemp {
+		return nil
+	}
+	if c.ColorTemp {
+		c.MinMireds, c.MaxMireds = e.num("min_mireds", 153), e.num("max_mireds", 500)
+		if e.kelvin() {
+			if hi := e.num("max_kelvin", 6535); hi > 0 {
+				c.MinMireds = math.Round(1e6 / hi)
+			}
+			if lo := e.num("min_kelvin", 2000); lo > 0 {
+				c.MaxMireds = math.Round(1e6 / lo)
+			}
+		}
+		if c.MinMireds >= c.MaxMireds {
+			c.MinMireds, c.MaxMireds = 153, 500
+		}
+	}
+	return c
 }
 
 // Matches reports whether an entity's state/attributes meet an expectation.

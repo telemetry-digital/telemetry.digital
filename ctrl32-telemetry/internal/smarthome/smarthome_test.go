@@ -311,3 +311,57 @@ func TestTopicFilters(t *testing.T) {
 		t.Error("ValidTopic")
 	}
 }
+
+func TestLightColor(t *testing.T) {
+	list, _, _ := ParseConfig("homeassistant", "homeassistant/light/0x0017880104e45517/light/config", []byte(z2mLight))
+	e := NewEntity(list[0].Component, list[0].Config)
+	c := e.Color()
+	if c == nil || !c.ColorTemp {
+		t.Fatalf("z2m light colour %+v", c)
+	}
+	ct := 250.0
+	msgs, _, err := e.Command("turn_on", Params{RGB: []float64{255, 128, 0}, ColorTemp: &ct}, "off")
+	if err != nil || !strings.Contains(msgs[0].Payload, `"color":{"b":0,"g":128,"r":255}`) || !strings.Contains(msgs[0].Payload, `"color_temp":250`) {
+		t.Fatalf("colour command %v %v", msgs, err)
+	}
+	// default schema in kelvin
+	k := NewEntity("light", map[string]any{"command_topic": "l/set", "state_topic": "l/state", "rgb_command_topic": "l/rgb", "rgb_state_topic": "l/rgb/state",
+		"color_temp_command_topic": "l/ct", "color_temp_state_topic": "l/ct/state", "color_temp_kelvin": true, "min_kelvin": 2700.0, "max_kelvin": 6500.0})
+	c = k.Color()
+	if c == nil || !c.RGB || !c.ColorTemp || c.MinMireds != 154 || c.MaxMireds != 370 {
+		t.Fatalf("kelvin light %+v", c)
+	}
+	msgs, _, _ = k.Command("turn_on", Params{RGB: []float64{1, 2, 3}, ColorTemp: &ct}, "off")
+	got := map[string]string{}
+	for _, m := range msgs {
+		got[m.Topic] = m.Payload
+	}
+	if got["l/rgb"] != "1,2,3" || got["l/ct"] != "4000" || got["l/set"] != "ON" {
+		t.Fatalf("kelvin commands %v", got)
+	}
+	u, _ := k.Apply("l/ct/state", []byte("2500"))
+	if u.Attrs["color_temp"] != 400.0 {
+		t.Fatalf("kelvin state %v", u.Attrs)
+	}
+	// template schema with RGB templates
+	tp := NewEntity("light", map[string]any{"schema": "template", "command_topic": "t/rpc", "state_topic": "t/state",
+		"command_on_template": `{"on":true{% if red is defined %},"rgb":[{{ red }},{{ green }},{{ blue }}]{% endif %}}`, "command_off_template": `{"on":false}`,
+		"state_template": "{{ 'on' if value_json.on else 'off' }}", "red_template": "{{ value_json.rgb[0] }}", "green_template": "{{ value_json.rgb[1] }}", "blue_template": "{{ value_json.rgb[2] }}"})
+	if c := tp.Color(); c == nil || !c.RGB || c.ColorTemp {
+		t.Fatalf("template colour %+v", c)
+	}
+	u, err = tp.Apply("t/state", []byte(`{"on":true,"rgb":[10,20,30]}`))
+	if err != nil || *u.State != "on" || ToString(u.Attrs["rgb_color"]) == "" {
+		t.Fatalf("template state %v %v", u, err)
+	}
+	if rgb := u.Attrs["rgb_color"].([]any); rgb[2] != 30.0 {
+		t.Fatalf("template rgb %v", rgb)
+	}
+	msgs, _, _ = tp.Command("turn_on", Params{RGB: []float64{9, 8, 7}}, "off")
+	if msgs[0].Payload != `{"on":true,"rgb":[9,8,7]}` {
+		t.Fatalf("template command %s", msgs[0].Payload)
+	}
+	if NewEntity("light", map[string]any{"command_topic": "x"}).Color() != nil || NewEntity("switch", nil).Color() != nil {
+		t.Fatal("no colour expected")
+	}
+}
