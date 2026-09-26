@@ -16,7 +16,7 @@
 | PUT | /api/v1/provision-profiles/{id} | device.manage | settings |
 | POST | /api/v1/provision-profiles/{id}/rotate | device.manage | new secret |
 | DELETE | /api/v1/provision-profiles/{id} | device.manage | revoke |
-| GET | /api/v1/devices/approvals | device.manage | devices waiting for approval |
+| GET | /api/v1/device-approvals | device.manage | devices waiting for approval |
 | POST | /api/v1/devices/{id}/approve, /reject | device.manage | |
 | GET | /api/v1/mqtt-sources | device.manage | accounts and bridges with status |
 | POST | /api/v1/mqtt-sources | device.manage | `{kind: account|bridge, name, …}` → account: `username`, `password` (shown once) |

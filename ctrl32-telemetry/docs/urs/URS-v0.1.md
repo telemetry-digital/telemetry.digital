@@ -27,6 +27,13 @@
 | A-17 | Import CSV s kontrolou integrity (počty, rozsahy, duplicity) a protokolom importu. | M | áno | 1 | Annex 11 cl. 4.8 |
 | A-18 | Konektory pre M-Bus/wM-Bus, BACnet, SNMP, S7, Sigfox. | C | — | 3 | kap. 9.3 |
 | A-19 | OPC UA server vystavujúci datastreamy ako uzly (výstup pre SCADA). | C | — | 3 | ADR-0008 |
+| A-20 | Profily provisioningu: kľúč a tajomstvo (hash), stratégia „vytvárať nové“ / „len vopred zaregistrované“, schvaľovanie, vzor názvu, limit zariadení, umiestnenie (lokalita, miestnosť), automatické datastreamy; registrácia zariadení cez MQTT (`provision`, `/provision/request` → odpoveď len žiadateľovi) aj HTTP vo formáte ThingsBoard; limit neúspešných pokusov na adresu a kľúč, bezpečnostné udalosti, audit. | S | áno | 2 | spec 005 · 0.41.0 · e2e `provisioning` · unit `broker` |
+| A-21 | ThingsBoard API zariadenia na brokeri ctrl32: token ako používateľské meno, `v1/devices/me/telemetry|attributes`, požiadavky na atribúty, RPC príkazy s potvrdením; každé zariadenie dostane len svoje správy. | S | — | 2 | spec 005 · 0.41.0 · e2e `provisioning` · unit `broker` |
+| A-22 | Automatické datastreamy z kľúčov telemetrie (číslo → gauge, bool/text → stav), normalizácia kľúčov, limit 64 na zariadenie, audit. | S | áno | 2 | spec 005 · 0.41.0 · e2e `provisioning` |
+| A-23 | MQTT účty na brokeri ctrl32 s oddeleným priestorom tém (mount point): voľné témy v rámci účtu, retained správy a posledná vôľa v priestore účtu, nedostupný `$SYS` a iné účty. | M | áno | 2 | spec 005 · 0.41.0 · unit `broker` · e2e `smarthome` |
+| A-24 | Mosty na cudzí broker (TLS, heslo šifrované kľúčom servera, opätovné pripojenie, stav), inbox objavených zariadení (prijať / ignorovať), zdieľanie vybraných datastreamov do Home Assistant cez discovery. | S | — | 2 | spec 005 · 0.41.0 · e2e `smarthome` |
+| A-25 | Home Assistant MQTT discovery: 19 komponentov, skratky, `~`, dostupnosť, JSON atribúty, discovery celého zariadenia, odstránenie prázdnou konfiguráciou; bezpečná podmnožina Jinja šablón; stavy ako merania datastreamu entity. | S | áno | 2 | spec 005 · 0.41.0 · unit `smarthome` · e2e `smarthome` |
+| A-26 | Stránka Domov (miestnosti, karty, ovládanie, živé stavy, história) a „Zariadenia a pripojenia“ (sprievodca s nastaveniami pre zigbee2mqtt, Tasmotu, ESPHome, ThingsBoard); ovládanie ako príkaz s oprávnením, štyrmi očami, auditom a potvrdením stavom zariadenia; uzly tokov Entita, Akcia s entitou, Výsledok príkazu. Fáza 2: Shelly Gen2 RPC, natívny formát Tasmoty, kamery. | S | áno | 2 | spec 005 · 0.41.0 · headless `home` · e2e `smarthome` |
 
 ## B. Dátový model a integrita
 
