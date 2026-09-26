@@ -125,7 +125,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/auth/totp/setup
 func (s *Server) totpSetup(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFrom(r.Context())
-	setup, err := s.iam.BeginTOTP(r.Context(), p.UserID, p.Username, s.productName(r, p.OrgID))
+	setup, err := s.iam.BeginTOTP(r.Context(), p.UserID, p.Username)
 	if err != nil {
 		writeErr(w, 500, "totp setup failed")
 		return

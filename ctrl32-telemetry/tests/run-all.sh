@@ -96,9 +96,7 @@ fi
 
 mkdir -p "$WORK/bin" "$WORK/reports" "$WORK/firmware"
 BIN=$WORK/bin/ctrl32-telemetry
-# test builds trust the test license key (tests/keys/README.md); release builds do not
-LICKEY=$(grep -v '^#' tests/keys/license-test.pub | tr -d '[:space:]')
-go build -ldflags "-X github.com/telemetry-digital/ctrl32-telemetry/internal/license.extraKey=$LICKEY" -o "$BIN" ./cmd/ctrl32-telemetry || exit 2
+go build -o "$BIN" ./cmd/ctrl32-telemetry || exit 2
 go run ./tools/pmtilesgen -o "$WORK/bin/sample.pmtiles" -maxzoom 4 > /dev/null || exit 2
 CONFIG=$WORK/config.toml
 APP_PW=e2e-app-$RANDOM$RANDOM

@@ -40,10 +40,9 @@ type logoData struct {
 }
 
 type branding struct {
-	Logo       *logoData   `json:"logo,omitempty"`
-	Theme      Theme       `json:"theme"`
-	Map        MapSettings `json:"map"`
-	WhiteLabel *WhiteLabel `json:"white_label,omitempty"` // applied only with a license (spec 007)
+	Logo  *logoData   `json:"logo,omitempty"`
+	Theme Theme       `json:"theme"`
+	Map   MapSettings `json:"map"`
 }
 
 // MapSettings selects the raster tile source for map widgets. Empty tile_url = built-in OpenStreetMap tiles (their policy
@@ -130,7 +129,6 @@ func (s *Server) loadBranding(r *http.Request, orgID string) branding {
 		if stored.Logo != nil && stored.Logo.Data != "" {
 			b.Logo = stored.Logo
 		}
-		b.WhiteLabel = stored.WhiteLabel
 		if hexColor.MatchString(stored.Theme.Primary) {
 			b.Theme.Primary = stored.Theme.Primary
 		}
@@ -180,33 +178,16 @@ func (s *Server) getBranding(w http.ResponseWriter, r *http.Request) {
 		logoURL = "/api/v1/branding/logo?v=" + b.Logo.UpdatedAt.UTC().Format("20060102150405")
 		custom = true
 	}
-	product, icon := productName, "/favicon.svg"
-	footer := map[string]any{"text": "ctrl32 · telemetry", "github": productGitHub, "license": productLicensePath, "fixed": true, "links": []FooterLink{},
-		"show_version": true, "white_label": false}
-	licensed := s.whiteLabelLicensed(r.Context())
-	if wl := s.activeWhiteLabel(r, orgID, b); wl != nil {
-		product = wl.ProductName
-		links := wl.FooterLinks
-		if links == nil {
-			links = []FooterLink{}
-		}
-		footer = map[string]any{"text": wl.FooterText, "github": "", "license": "", "fixed": false, "links": links, "show_version": wl.ShowVersion, "white_label": true, "intro": wl.Intro}
-		if wl.Icon != nil {
-			icon = "/api/v1/branding/icon?v=" + wl.Icon.UpdatedAt.UTC().Format("20060102150405")
-		}
-	}
 	writeJSON(w, 200, map[string]any{
-		"product":     product,
+		"product":     productName,
 		"version":     s.version,
 		"org_name":    name,
 		"logo_url":    logoURL,
 		"logo_custom": custom,
-		"icon_url":    icon,
 		"public_read": s.cfg.HTTP.PublicRead,
 		"theme":       b.Theme,
 		"map":         s.mapOrDefault(b.Map),
-		"footer":      footer,
-		"white_label": map[string]any{"licensed": licensed},
+		"footer":      map[string]any{"text": "ctrl32 · telemetry", "github": productGitHub, "license": productLicensePath, "fixed": true},
 	})
 }
 
@@ -246,16 +227,7 @@ func (s *Server) putBranding(w http.ResponseWriter, r *http.Request) {
 		ClearLogo bool         `json:"clear_logo"`
 		Theme     *Theme       `json:"theme"`
 		Map       *MapSettings `json:"map"`
-		// WhiteLabel replaces the settings (icon: new icon; clear_icon removes it; omitted icon keeps it)
-		WhiteLabel *struct {
-			WhiteLabel
-			Icon *struct {
-				Mime string `json:"mime"`
-				Data string `json:"data"`
-			} `json:"icon"`
-			ClearIcon bool `json:"clear_icon"`
-		} `json:"white_label"`
-		Reason string `json:"reason"`
+		Reason    string       `json:"reason"`
 	}
 	if err := decodeJSON(r, &in, 1<<20); err != nil {
 		writeErr(w, 400, err.Error())
@@ -285,42 +257,6 @@ func (s *Server) putBranding(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		next.Logo = &logoData{Mime: in.Logo.Mime, Data: base64.StdEncoding.EncodeToString(raw), UpdatedAt: time.Now().UTC()}
-	}
-	if in.WhiteLabel != nil {
-		wl := in.WhiteLabel.WhiteLabel
-		if msg := validateWhiteLabel(&wl); msg != "" {
-			writeErr(w, 400, msg)
-			return
-		}
-		if wl.Enabled && !s.whiteLabelLicensed(r.Context()) {
-			writeErr(w, 402, "white labeling needs a license (System → License)")
-			return
-		}
-		if cur.WhiteLabel != nil && !in.WhiteLabel.ClearIcon {
-			wl.Icon = cur.WhiteLabel.Icon
-		}
-		if ic := in.WhiteLabel.Icon; ic != nil {
-			if ic.Mime != "image/png" && ic.Mime != "image/svg+xml" {
-				writeErr(w, 400, "white_label.icon must be image/png or image/svg+xml")
-				return
-			}
-			raw, err := base64.StdEncoding.DecodeString(ic.Data)
-			if err != nil || len(raw) == 0 {
-				writeErr(w, 400, "white_label.icon data must be base64")
-				return
-			}
-			if len(raw) > whiteLabelIconMaxBytes {
-				writeErr(w, 413, "white_label.icon must be at most 64 KiB")
-				return
-			}
-			low := strings.ToLower(string(raw))
-			if ic.Mime == "image/svg+xml" && (strings.Contains(low, "<script") || strings.Contains(low, "onload=") || strings.Contains(low, "javascript:")) {
-				writeErr(w, 400, "SVG icon must not contain scripts")
-				return
-			}
-			wl.Icon = &logoData{Mime: ic.Mime, Data: base64.StdEncoding.EncodeToString(raw), UpdatedAt: time.Now().UTC()}
-		}
-		next.WhiteLabel = &wl
 	}
 	if in.Map != nil {
 		m := *in.Map
@@ -393,12 +329,8 @@ func (s *Server) putBranding(w http.ResponseWriter, r *http.Request) {
 		if b.Logo != nil {
 			m["logo"] = map[string]any{"mime": b.Logo.Mime, "bytes": len(b.Logo.Data) / 4 * 3, "updated_at": b.Logo.UpdatedAt}
 		}
-		if wl := b.WhiteLabel; wl != nil {
-			m["white_label"] = map[string]any{"enabled": wl.Enabled, "product_name": wl.ProductName, "short_name": wl.ShortName,
-				"footer_text": wl.FooterText, "intro": wl.Intro, "footer_links": wl.FooterLinks, "show_version": wl.ShowVersion, "icon": wl.Icon != nil}
-		}
 		return m
 	}
 	s.audit(r, "branding.update", "organization", p.OrgID, summary(cur), summary(next), in.Reason)
-	writeJSON(w, 200, map[string]any{"ok": true, "theme": next.Theme, "logo_custom": next.Logo != nil, "white_label": whiteLabelOut(next.WhiteLabel)})
+	writeJSON(w, 200, map[string]any{"ok": true, "theme": next.Theme, "logo_custom": next.Logo != nil})
 }

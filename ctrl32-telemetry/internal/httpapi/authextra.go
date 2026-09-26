@@ -52,9 +52,8 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	link := s.cfg.HTTP.BaseURL + "/reset?token=" + raw
-	product := s.productName(r, "")
-	body := "Hello " + username + ",\n\nsomeone (probably you) asked for a new password for your " + product + " account.\nOpen this link within one hour to set a new password:\n\n" + link + "\n\nIf you did not ask for it, ignore this message; your password stays unchanged.\n"
-	if err := nf.SendTo(r.Context(), email, product+" — password reset", body); err != nil {
+	body := "Hello " + username + ",\n\nsomeone (probably you) asked for a new password for your ctrl32 telemetry account.\nOpen this link within one hour to set a new password:\n\n" + link + "\n\nIf you did not ask for it, ignore this message; your password stays unchanged.\n"
+	if err := nf.SendTo(r.Context(), email, "ctrl32 telemetry — password reset", body); err != nil {
 		s.log.Warn("password reset mail failed", "err", err)
 	}
 	s.audit(r, "user.password_reset_link", "user", id, nil, map[string]any{"ip": clientIP(r)}, "self-service")
@@ -113,7 +112,7 @@ func (s *Server) registerRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	nf := notify.New(s.cfg.SMTP, s.log)
 	if nf.Configured() {
-		_, _ = nf.Send(r.Context(), s.productName(r, "")+" — account request", "Account request from "+in.FullName+" <"+in.Email+">\n\n"+in.Message+"\n\nHandle it under Users on "+s.cfg.HTTP.BaseURL+"/users\n")
+		_, _ = nf.Send(r.Context(), "ctrl32 telemetry — account request", "Account request from "+in.FullName+" <"+in.Email+">\n\n"+in.Message+"\n\nHandle it under Users on "+s.cfg.HTTP.BaseURL+"/users\n")
 	}
 	s.audit(r, "account.request", "account_request", id, nil, map[string]any{"email": in.Email, "ip": clientIP(r)}, "self-service")
 	writeJSON(w, 201, map[string]any{"ok": true})

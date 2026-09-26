@@ -6,14 +6,13 @@ Developer: telemetry.digital (Palo Krnáč). Revenue comes from implementation s
 
 ## Status
 
-Version **0.43.0** (26 Sep 2026; production runs 0.36.3). Phases 1–2 of the roadmap (`docs/02-navrh-systemu.md`, chapter 13) are functionally covered; the `Zdroj` column of the URS names the version and the test that fulfil each requirement. The production instance runs at `https://telemetry.digital/` (installed with the public installer, updated from the Server page). Every release has an entry in `JOURNAL.md`.
+Version **0.42.0** (26 Sep 2026; production runs 0.36.3). Phases 1–2 of the roadmap (`docs/02-navrh-systemu.md`, chapter 13) are functionally covered; the `Zdroj` column of the URS names the version and the test that fulfil each requirement. The production instance runs at `https://telemetry.digital/` (installed with the public installer, updated from the Server page). Every release has an entry in `JOURNAL.md`.
 
 ## What it does
 
 - **Collection:** MQTT broker in the process (TLS, WebSocket, per-device ACL, ThingsBoard-compatible topics and payloads), a device HTTP API (telemetry, status, attributes, commands by long polling), LoRaWAN through ChirpStack, OPC UA client with write, Modbus TCP and RTU-over-TCP with versioned register profiles, device provisioning with tokens, device positions.
 - **SCADA:** process pictures drawn in a WinCC-style editor (68 industrial symbols, pipes with flow, dynamics, faceplates, commands with reason, object library with SVG import), dashboards of widgets, or both on one screen.
 - **Redundant database:** attach a second PC with a one-time code — one-time copy with a verified safe detach, continuous offsite replica, or hot standby with manual failover and fencing (`docs/runbook-replication.md`).
-- **White labeling (paid):** your own product name, footer, icon and app name on every page, in e-mails, authenticator apps and PDF reports, with an offline-verified license key; everything else stays free (`docs/whitelabel.md`).
 - **Smart home and MQTT provisioning:** zigbee2mqtt, Tasmota, ESPHome and any device with Home Assistant MQTT discovery appear by themselves with rooms and entities, are recorded and controlled from a Home page (switches, dimming, blinds, thermostats, locks) with audited commands confirmed by the device; MQTT accounts with private topic namespaces, bridges to existing brokers, values shared back to Home Assistant; Shelly Gen2+/Gen3 and Tasmota also natively (without Home Assistant discovery); colour pickers on light cards; MQTT in/out flow nodes; an incident when a bridge stays disconnected; fleets provision themselves with a key and secret, ThingsBoard firmware works unchanged (`docs/smarthome.md`).
 - **Flows:** Node-RED-style automation built into the server — a closed library of 28 trigger, logic and action nodes wired on a canvas, typed expressions instead of code, test messages with dry run, a debug panel, versions with deploy and four eyes, every action audited with the flow as origin; automation rules convert into flows (`docs/flows.md`).
 - **Dashboard widgets:** 47 widget types (values, gauges, charts, tables, controls, clock, Markdown, QR…), each with ThingsBoard-level settings — appearance, per-series options, two axes, time window and aggregation, legend values, conditional formatting, click actions, full screen, and filters the viewer can switch on the widget.
@@ -77,7 +76,6 @@ Static files under `internal/httpapi/static` are embedded: rebuild before checki
 | `docs/02-navrh-systemu.md` | System design (the original plan; chapter 15 lists which open decisions were resolved and how) |
 | `docs/adr/` | Architecture decision records 0001–0014 |
 | `docs/smarthome.md` | Smart home and MQTT provisioning: accounts, bridges, provisioning profiles, ThingsBoard API, entities, Home page |
-| `docs/whitelabel.md` | Paid white labeling: what changes, issuing license keys (`tools/licgen`), installing them |
 | `docs/flows.md` | Flows: nodes, expressions, governance, rule conversion, operation |
 | `docs/urs/URS-v0.1.md` | User requirements with IDs, priority, GxP relevance, phase, and the version and test that fulfil them |
 | `docs/threat-model.md` | Threat model |

@@ -113,7 +113,7 @@ func (s *Server) pushTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := PrincipalFrom(r.Context())
-	msg := notify.Message{Event: "test", Subject: s.productName(r, "") + ": test notification", Text: "Notifications reach this browser. Alarms and rule events will arrive the same way."}
+	msg := notify.Message{Event: "test", Subject: "ctrl32 telemetry: test notification", Text: "Notifications reach this browser. Alarms and rule events will arrive the same way."}
 	sent, failed, err := s.push.SendToUser(r.Context(), org, p.UserID, msg)
 	if err != nil {
 		s.log.Error("push test", "err", err)

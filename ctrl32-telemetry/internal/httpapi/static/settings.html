@@ -53,7 +53,7 @@
 <section data-section="branding">
   <div class="page-head"><h1>Branding and theme</h1></div>
   <div class="card">
-  <p class="muted no-rebrand">Logo, colours and font apply to every page and to PDF reports. The product footer (ctrl32 · telemetry, GitHub, license) is fixed; only a licensed white label (below) replaces it.</p>
+  <p class="muted">Logo, colours and font apply to every page and to PDF reports. The product footer (ctrl32 · telemetry, GitHub, license) is fixed and cannot be changed.</p>
   <form id="brand" class="form">
     <div class="row"><img id="logoPreview" class="preview" alt="current logo"> <span class="muted" id="logoState"></span></div>
     <label>Custom logo (PNG, SVG, JPEG, WebP, GIF; max 256 KiB) <input type="file" name="logo" accept="image/png,image/svg+xml,image/jpeg,image/webp,image/gif"></label>
@@ -78,26 +78,6 @@
     <label>Reason for the change (audit trail) <input name="reason" required maxlength="200"></label>
     <div class="err" id="brandErr"></div>
     <div class="row"><button class="btn primary" type="submit">Save branding</button><span class="muted">Users can still switch light/dark for themselves in the menu.</span></div>
-  </form>
-  </div>
-  <div class="card" id="wlCard">
-  <h2>White label</h2>
-  <p class="muted no-rebrand">Your own product name, footer and browser icon instead of ctrl32 telemetry — on every page, the installed app, e-mails, authenticator apps and PDF reports.</p>
-  <div class="warn-box" id="wlUnlicensed" hidden><span>White labeling is a paid feature. Install a license under System → License; until then the settings can be prepared but are not applied.</span></div>
-  <div class="muted" id="wlState"></div>
-  <form id="wl" class="form">
-    <label class="inline"><input type="checkbox" name="enabled"> Use the white label</label>
-    <div class="row"><label>Product name <input name="product_name" maxlength="64" placeholder="Acme Monitoring"></label>
-      <label>App name (short) <input name="short_name" maxlength="24" placeholder="Acme"></label></div>
-    <label>Footer text <input name="footer_text" maxlength="120" placeholder="© Acme s.r.o."></label>
-    <label>Introduction on the start page (empty = the standard text) <textarea name="intro" rows="3" maxlength="400"></textarea></label>
-    <div id="wlLinks"></div>
-    <label class="inline"><input type="checkbox" name="show_version"> Show the version in the footer</label>
-    <div class="row"><img id="wlIcon" class="preview" alt="browser icon" hidden> <label>Browser icon (PNG or SVG, max 64 KiB) <input type="file" name="icon" accept="image/png,image/svg+xml"></label></div>
-    <label class="inline"><input type="checkbox" name="clear_icon"> Remove the icon</label>
-    <label>Reason for the change (audit trail) <input name="reason" required maxlength="200"></label>
-    <div class="err" id="wlErr"></div>
-    <div class="row"><button class="btn primary" type="submit">Save white label</button></div>
   </form>
   </div>
 </section>
@@ -288,7 +268,6 @@
 <script src="/app.js"></script>
 <script>
 const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
-const t = (s) => ctrl32.t(s);
 const TITLES = {policy: 'Security policy', approvals: 'Approvals', notifications: 'Notifications', branding: 'Branding and theme', templates: 'Report templates', reports: 'Stored reports', connectors: 'Connectors', languages: 'Languages', translations: 'Translations', export: 'Organization export'};
 // ---- languages
 let LANGS = null;
@@ -327,19 +306,6 @@ function live(){ const f=$('#brand'); const r=document.documentElement; r.style.
 function fileToB64(file){ return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result.split(',')[1]); fr.onerror=rej; fr.readAsDataURL(file); }); }
 async function loadTiles(){ try{ const t = await api('GET','/api/v1/tiles'); $('#mapLocal').hidden = !(t.configured && t.ok); $('#mapLocalErr').hidden = !(t.configured && !t.ok); if(t.ok){ $('#mapLocalName').textContent = t.name || t.tile_type; $('#mapLocalZoom').textContent = `${t.min_zoom}–${t.max_zoom}`; } else if(t.configured){ $('#mapLocalErrText').textContent = t.error || ''; } }catch(e){} }
 function loadBrand(){ const b = ctrl32.brand, f=$('#brand'); f.primary.value=b.theme.primary; f.font.value=b.theme.font||''; f.mode.value=b.theme.mode; f.radius.value=b.theme.radius; f.font_scale.value=b.theme.font_scale; $('#logoPreview').src=b.logo_url; $('#logoState').textContent = b.logo_custom ? 'custom logo' : 'built-in logo (telemetry.digital)'; const m = b.map || {}; f.map_tile_url.value = (m.builtin || m.local) ? '' : (m.tile_url || ''); f.map_attribution.value = (m.builtin || m.local) ? '' : (m.attribution || ''); f.map_max_zoom.value = m.max_zoom || 19; f.map_center_lat.value = m.center_lat || 48.7; f.map_center_lon.value = m.center_lon || 19.5; f.map_zoom.value = m.zoom || 7; loadTiles(); }
-async function loadWL(){ try{ const w = await api('GET','/api/v1/branding/white-label'), f=$('#wl');
-  $('#wlUnlicensed').hidden = !!w.licensed; f.enabled.checked = !!w.enabled; f.product_name.value = w.product_name || ''; f.short_name.value = w.short_name || '';
-  f.footer_text.value = w.footer_text || ''; f.intro.value = w.intro || ''; f.show_version.checked = !!w.show_version; f.clear_icon.checked = false; f.icon.value = '';
-  $('#wlIcon').hidden = !w.icon; if(w.icon) $('#wlIcon').src = w.icon_url;
-  $('#wlState').textContent = w.active ? t('The white label is active.') : (w.enabled ? t('The white label is enabled but not active (no valid license).') : '');
-  const links = (w.footer_links || []).concat([{},{},{},{}]).slice(0, 4);
-  $('#wlLinks').innerHTML = links.map((l, i) => `<div class="row"><label>${esc(t('Footer link'))} ${i + 1} <input data-ll="${i}" maxlength="40" value="${esc(l.label || '')}" placeholder="${esc(t('Support'))}"></label><label>URL <input data-lu="${i}" maxlength="300" value="${esc(l.url || '')}" placeholder="https://… or mailto:…"></label></div>`).join('');
-  }catch(e){ $('#wlCard').hidden = true; } }
-$('#wl').onsubmit = async e => { e.preventDefault(); const f=e.target; $('#wlErr').textContent='';
-  const links = [0,1,2,3].map(i => ({label: document.querySelector(`[data-ll="${i}"]`).value.trim(), url: document.querySelector(`[data-lu="${i}"]`).value.trim()})).filter(l => l.label || l.url);
-  const wl = {enabled: f.enabled.checked, product_name: f.product_name.value, short_name: f.short_name.value, footer_text: f.footer_text.value, intro: f.intro.value, footer_links: links, show_version: f.show_version.checked, clear_icon: f.clear_icon.checked};
-  if(f.icon.files[0]){ const file = f.icon.files[0]; if(file.size > 64*1024){ $('#wlErr').textContent = t('icon is larger than 64 KiB'); return; } wl.icon = {mime: file.type, data: await fileToB64(file)}; }
-  try{ await api('PUT','/api/v1/branding',{white_label: wl, reason: f.reason.value}); f.reason.value=''; ctrl32.toast(t('white label saved'),'ok'); setTimeout(() => location.reload(), 600); }catch(x){ $('#wlErr').textContent = x.message; } };
 $('#brand').addEventListener('input', live);
 $('#brand').onsubmit = async e => { e.preventDefault(); const f=e.target; $('#brandErr').textContent='';
   const body = { theme: { primary: f.primary.value, font: f.font.value, mode: f.mode.value, radius: f.radius.value, font_scale: f.font_scale.value }, reason: f.reason.value, clear_logo: f.clear_logo.checked, map: { tile_url: f.map_tile_url.value.trim(), attribution: f.map_attribution.value.trim(), max_zoom: parseInt(f.map_max_zoom.value, 10) || 19, center_lat: parseFloat(f.map_center_lat.value) || 0, center_lon: parseFloat(f.map_center_lon.value) || 0, zoom: parseInt(f.map_zoom.value, 10) || 7 } };
@@ -509,7 +475,7 @@ async function approvals(){
   }catch(x){ $('#crTable tbody').innerHTML = `<tr><td colspan="6" class="muted">${esc(x.message)}</td></tr>`; } }
 ctrl32.ready({requireAuth: true, requirePerm: 'content.write'}).then(() => {
   const sec = ctrl32.section('branding', Object.keys(TITLES)); document.title = TITLES[sec] + ' — Settings';
-  ({branding: () => { loadBrand(); loadWL(); }, templates: loadKinds, reports, connectors, languages: loadLangs, translations: loadTrLocales, export: () => {}, policy: loadPolicy, approvals, notifications})[sec]();
+  ({branding: loadBrand, templates: loadKinds, reports, connectors, languages: loadLangs, translations: loadTrLocales, export: () => {}, policy: loadPolicy, approvals, notifications})[sec]();
 });
 </script>
 </body>

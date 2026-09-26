@@ -10,9 +10,8 @@
 | 0.40.0 | Toky v štýle Node-RED: vlastný engine v Go, 28 uzlov, editor, ladenie, verzie, štyri oči, prevod pravidiel, metriky, sk/cs (spec 004) | e2e 69 + headless, ~30 000 správ/s |
 | 0.41.0 | Provisioning cez MQTT a smart home ako Home Assistant: profily provisioningu, ThingsBoard API, automatické datastreamy, MQTT účty s oddeleným priestorom tém, mosty, HA discovery, entity, stránky Domov a Zariadenia a pripojenia, uzly tokov, export do HA (spec 005) | e2e 33 + 39, headless, unit |
 | 0.42.0 | Smart home, fáza 2: Shelly Gen2+/Gen3 natívne (RPC), Tasmota s vlastným formátom discovery, výber farby a teploty farby na karte svetla, uzly tokov MQTT vstup/výstup, incident pri výpadku mosta alebo účtu, premenovaná entita si drží meno (spec 006) | e2e 36, headless, unit |
-| 0.43.0 | Platený white labeling: licenčné kľúče overované offline (Ed25519, nástroj `licgen`), Systém → Licencia, vlastný názov produktu, pätička, ikona, názov aplikácie, úvod, e-maily, 2FA, PDF; bez licencie pevná pätička ctrl32 (spec 007, ADR-0016) | e2e 31, unit |
 
-Celá sada testov (`tests/run-all.sh`) pre 0.43.0: beží (26. 9. 2026).
+Celá sada testov (`tests/run-all.sh`) prešla pre 0.42.0 bez chyby (26. 9. 2026).
 
 ## Ďalšie možnosti (fáza 2)
 
@@ -28,10 +27,7 @@ Celá sada testov (`tests/run-all.sh`) pre 0.43.0: beží (26. 9. 2026).
 
 ## Čaká na používateľa
 
-- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.43.0 root@2.29.5.17 -i <kľúč>` alebo
+- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.42.0 root@2.29.5.17 -i <kľúč>` alebo
   GitHub workflow (secrets `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS` a workflow na `main`)
 - zlúčenie vetvy do `main` (pull request na požiadanie)
-- white labeling: vytvoriť produkčný kľúč (`go run ./tools/licgen keygen -out <bezpečný priečinok>`), súkromný kľúč
-  uložiť offline a zálohovať, verejný `.pub` pridať do `ctrl32-telemetry/internal/license/trusted/` — dovtedy release
-  binárky neprijmú žiadnu licenciu; právna kontrola novej podmienky 2 v `LICENSE`; cenník a spôsob predaja
 - potvrdenie ADR-0015 (SCADA editor v čistom JS nad SVG)

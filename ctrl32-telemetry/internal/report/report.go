@@ -41,8 +41,7 @@ type Data struct {
 	Title       string           `json:"title"`
 	Subtitle    string           `json:"subtitle"`
 	Org         string           `json:"org"`
-	Product     string           `json:"product"` // footer product name; "ctrl32 · telemetry" unless white-labelled
-	Logo        string           `json:"logo"`    // asset file name ("logo.png"/"logo.svg") or ""
+	Logo        string           `json:"logo"` // asset file name ("logo.png"/"logo.svg") or ""
 	Locale      string           `json:"locale"`
 	GeneratedAt string           `json:"generated_at"`
 	GeneratedBy string           `json:"generated_by"`
@@ -120,12 +119,7 @@ type Engine struct {
 	pool    *pgxpool.Pool
 	log     *slog.Logger
 	version string
-
-	// Product names the product in report footers for an organization (white labeling, spec 007); nil = default.
-	Product func(ctx context.Context, orgID string) string
 }
-
-const defaultProduct = "ctrl32 · telemetry"
 
 // New locates the Typst CLI (config path, PATH, or next to the executable) and prepares storage.
 func New(cfg config.ReportConfig, pool *pgxpool.Pool, log *slog.Logger) (*Engine, error) {
@@ -309,12 +303,6 @@ func (e *Engine) Render(ctx context.Context, orgID string, d Data, assets map[st
 	}
 	d.GeneratedAt = time.Now().UTC().Format(time.RFC3339)
 	d.GeneratedBy = generatedBy
-	d.Product = defaultProduct
-	if e.Product != nil {
-		if p := e.Product(ctx, orgID); p != "" {
-			d.Product = p
-		}
-	}
 	dataJSON, err := json.Marshal(d)
 	if err != nil {
 		return nil, err

@@ -76,7 +76,6 @@ type Server struct {
 	prov             *provision.Service
 	smart            *smarthome.Manager
 	notifier         *notify.Notifier
-	lic              licenseCache
 }
 
 // New builds the handler tree.
@@ -98,9 +97,6 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	s.tiles = openTiles(cfg.Map, s.log)
 	sub, _ := fs.Sub(static, "static")
 	files := http.FileServer(http.FS(sub))
-	if rep != nil {
-		rep.Product = s.reportProduct
-	}
 
 	// public
 	mux.HandleFunc("GET /healthz", s.health)
@@ -138,8 +134,11 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.HandleFunc("GET /api/v1/i18n/{locale}", s.getCatalog)
 	mux.HandleFunc("GET /license", s.licensePage)
 	mux.HandleFunc("GET /sw.js", s.serviceWorker)
-	mux.HandleFunc("GET /manifest.webmanifest", s.manifest)
-	mux.HandleFunc("GET /api/v1/branding/icon", s.getBrandingIcon)
+	mux.HandleFunc("GET /manifest.webmanifest", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/manifest+json")
+		r.URL.Path = "/manifest.webmanifest"
+		files.ServeHTTP(w, r)
+	})
 
 	// authenticated (any permission)
 	mux.Handle("GET /api/v1/auth/me", s.require("", s.me))
@@ -299,9 +298,6 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("PATCH /api/v1/organizations/{id}", s.require("system.admin", s.patchOrganization))
 	mux.Handle("POST /api/v1/organizations/{id}/reset-admin", s.require("system.admin", s.resetOrgAdmin))
 	mux.Handle("GET /api/v1/server", s.require("system.admin", s.serverInfo))
-	mux.Handle("GET /api/v1/server/license", s.require("system.admin", s.getLicense))
-	mux.Handle("PUT /api/v1/server/license", s.require("system.admin", s.putLicense))
-	mux.Handle("DELETE /api/v1/server/license", s.require("system.admin", s.deleteLicense))
 	mux.Handle("POST /api/v1/server/restart", s.require("system.admin", s.serverRestart))
 	mux.Handle("PUT /api/v1/server/caddy", s.require("system.admin", s.serverCaddy))
 	mux.Handle("GET /api/v1/server/wireguard", s.require("system.admin", s.serverWireGuard))
@@ -352,7 +348,6 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("POST /api/v1/tokens", s.require("token.manage", s.createToken))
 	mux.Handle("DELETE /api/v1/tokens/{id}", s.require("token.manage", s.revokeToken))
 	mux.Handle("PUT /api/v1/branding", s.require("content.write", s.putBranding))
-	mux.Handle("GET /api/v1/branding/white-label", s.require("content.write", s.getWhiteLabel))
 	mux.Handle("PUT /api/v1/i18n/languages", s.require("content.write", s.putLanguages))
 	mux.Handle("GET /api/v1/i18n/{locale}/edit", s.require("content.write", s.getCatalogEdit))
 	mux.Handle("PUT /api/v1/i18n/{locale}", s.require("content.write", s.putCatalog))
