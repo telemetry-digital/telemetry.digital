@@ -13,33 +13,26 @@ Celá sada testov (`tests/run-all.sh`) prešla pre 0.40.0 bez chyby.
 
 ## Rozpracované: spec 005 — provisioning cez MQTT a smart home (ako Home Assistant)
 
-Hotové (unit testy, bez databázy):
-- špecifikácia, plán, research, dátový model, API, 20 úloh (`ctrl32-telemetry/specs/005-mqtt-provisioning-smarthome/`)
-- migrácia 0024 (profily provisioningu, entity, inbox objavených zariadení, MQTT účty a mosty) — ešte nespustená na DB
-- Home Assistant discovery: skratky, `~`, zariadenie, dostupnosť, discovery celého zariadenia
-- šablóny `value_template` (bezpečná podmnožina Jinja)
-- stavy a príkazy entít: switch, light (aj JSON), cover, fan, lock, climate, number, select, text, button, scene, …
-- broker: MQTT účty s oddeleným priestorom tém, ThingsBoard prihlásenie tokenom, RPC len pre dané zariadenie,
-  MQTT provisioning s odpoveďou len žiadateľovi
+Hotové a overené naživo (simulátory zigbee2mqtt, Tasmota, ThingsBoard zariadenie, cudzí broker):
+- profily provisioningu, registrácia zariadení cez MQTT (`/provision/request`) aj HTTP, schvaľovanie, limity
+- ThingsBoard zariadenia: prihlásenie tokenom, telemetria, atribúty, RPC príkazy s potvrdením
+- automatické datastreamy z kľúčov telemetrie
+- MQTT účty s oddeleným priestorom tém (organizácie sa navzájom nevidia)
+- mosty na existujúci broker (napr. Mosquitto zo zigbee2mqtt), inbox objavených zariadení
+- Home Assistant discovery → zariadenia, miestnosti, entity, stavy s históriou
+- ovládanie entít (vypínače, stmievanie, žalúzie, termostaty, zámky, …) ako auditované príkazy s potvrdením stavu
+- stránka **Domov** a stránka **Zariadenia a pripojenia** (sprievodca, inbox, účty, mosty, provisioning)
+- uzly tokov: Entita, Akcia s entitou, Výsledok príkazu
+- zdieľanie hodnôt ctrl32 do Home Assistant cez most
 
 Zostáva:
-1. profily provisioningu + HTTP/MQTT provisioning + schvaľovanie zariadení (T005, T008)
-2. automatické datastreamy z kľúčov telemetrie, ThingsBoard RPC a atribúty v ingeste (T007)
-3. správca smart home: objavovanie, inbox, prijatie zariadení, miestnosti, entity, ukladanie stavov (T010)
-4. mosty na cudzí broker (napr. Mosquitto zo zigbee2mqtt) (T011)
-5. API pre zdroje, inbox, entity, stránku Domov (T012)
-6. ovládanie entít cez príkazy s auditom a potvrdením stavom (T013)
-7. stránka **Domov**: miestnosti, karty, vypínače, stmievanie, žalúzie, termostaty, živé stavy (T014)
-8. sprievodca pridaním zariadenia (Tasmota, zigbee2mqtt, ESPHome, ThingsBoard, mosty) (T015)
-9. uzly tokov: entita, akcia entity, výsledok príkazu (T016)
-10. zdieľanie hodnôt ctrl32 do Home Assistant (T017)
-11. simulátor `tools/mqttsim`, e2e testy, headless test, preklady, dokumentácia, JOURNAL/URS/README (T018–T020)
+1. e2e testy `provisioning` a `smarthome`, headless test stránky Domov (T018, T019)
+2. preklady sk/cs, `docs/smarthome.md`, URS, JOURNAL, README, celá sada testov (T020)
 
-## Blokované
+## Poznámka k prostrediu
 
-- **Lokálna testovacia databáza**: kontajner sa obnovil a PostgreSQL prišiel o rolu `ctrl32`. Jej vytvorenie
-  (superužívateľ v lokálnej testovacej DB) klasifikátor oprávnení zamietol. Treba povolenie alebo doplniť
-  inicializačný skript prostredia (návod v poslednej správe v chate). Bez toho nejdú e2e testy ani snímky obrazovky.
+- Lokálna testovacia DB: PostgreSQL 16 na porte 5433 (rola `ctrl32`), po reštarte kontajnera ho treba znova spustiť
+  (`pg_ctl … -p 5433 -k /tmp/pgsock`). Povolenie od používateľa: 26. 9. 2026.
 
 ## Čaká na používateľa
 
