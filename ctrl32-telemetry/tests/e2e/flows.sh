@@ -169,4 +169,13 @@ req GET "/api/v1/datastreams/latest?ids=$DSF"; check "converted flow acts like t
 curl -s -o "$TMP/b" "$BASE/metrics"; grep -q '^ctrl32_flows_running [1-9]' "$TMP/b" && grep -q '^ctrl32_flow_messages_total [1-9]' "$TMP/b" && ok "flow metrics" || bad "flow metrics: $(grep ctrl32_flow "$TMP/b")"
 req DELETE "/api/v1/flows/$RSLUG?reason=e2e"; req DELETE "/api/v1/rules/$RULE?reason=e2e"
 
+echo "== device attribute node"
+req POST /api/v1/flows "{\"name\":\"Attr $SUF\",\"reason\":\"e2e\",\"spec\":{\"nodes\":[{\"id\":\"i\",\"type\":\"inject\",\"x\":0,\"y\":0,\"settings\":{\"value\":\"7\"}},{\"id\":\"a\",\"type\":\"attribute\",\"x\":200,\"y\":0,\"settings\":{\"device\":\"$DEV\",\"key\":\"setpoint\",\"value\":\"value * 3\"}}],\"wires\":[{\"from\":\"i\",\"port\":0,\"to\":\"a\"}]}}"; ASLUG=$(jx j.flow.slug)
+check "attribute flow sends to devices" "$(jx j.flow.has_commands)" true
+req POST "/api/v1/flows/$ASLUG/deploy" '{"reason":"e2e"}'; check "attribute flow deployed" "$(st)" 200
+req POST "/api/v1/flows/$ASLUG/inject" '{"node":"i","dry_run":false}'; sleep 1
+req GET "/api/v1/devices/$DEV/attributes"; check "shared attribute set by the flow" "$(jx 'j.shared && j.shared.setpoint')" 21
+req GET "/api/v1/export/audit?format=csv"; grep -q "flow Attr $SUF v1 node a" "$TMP/b" && ok "attribute change audited with the flow origin" || bad "attribute audit"
+req DELETE "/api/v1/flows/$ASLUG?reason=e2e"
+
 echo; echo "passed $pass, failed $fail"; [[ $fail -eq 0 ]]

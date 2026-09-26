@@ -475,6 +475,21 @@ func (f *flow) process(n *rnode, m *Message, dry bool) {
 			}
 			return map[string]Value{"command_id": id, "status": status}, nil
 		}, fmt.Sprintf("command %s %s", method, string(args)))
+	case "attribute":
+		v, err := f.eval(n, "value", m)
+		if err != nil {
+			f.fail(n, m, err)
+			return
+		}
+		dev, key := str("device"), str("key")
+		if dry || f.temp {
+			f.dryAction(n, m, fmt.Sprintf("would set attribute %s = %s", key, Str(v)))
+			return
+		}
+		reason := f.origin(n, m)
+		f.act(n, m, func(ctx context.Context) (map[string]Value, error) {
+			return nil, f.e.host.SetAttribute(ctx, f.org, dev, key, v, "flow:"+f.name, reason)
+		}, fmt.Sprintf("attribute %s = %s", key, Str(v)))
 	case "notify":
 		subj, err1 := f.render(str("subject"), m)
 		text, err2 := f.render(str("text"), m)

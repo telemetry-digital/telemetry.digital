@@ -21,6 +21,7 @@ type fakeHost struct {
 	stored   []float64
 	http     []string
 	incident []string
+	attrs    []string
 }
 
 func (h *fakeHost) DatastreamName(_ context.Context, _, id string) (string, string) {
@@ -43,6 +44,12 @@ func (h *fakeHost) Notify(_ context.Context, _, ch, flowID, subject, text string
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.notes = append(h.notes, subject+" / "+text)
+	return nil
+}
+func (h *fakeHost) SetAttribute(_ context.Context, _, dev, key string, v any, issuer, reason string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.attrs = append(h.attrs, key+"="+Str(v)+" by "+issuer)
 	return nil
 }
 func (h *fakeHost) Incident(_ context.Context, _, action, sev, title, dedup string, _ map[string]any) error {
@@ -260,5 +267,17 @@ func TestFlowWebhookAndQueue(t *testing.T) {
 	}
 	if f.dropped.Load() != 10 {
 		t.Errorf("dropped %d", f.dropped.Load())
+	}
+}
+
+// The attribute node sets a shared attribute with the flow as origin.
+func TestFlowAttribute(t *testing.T) {
+	e, _, h, cancel := testEngine(t, `{"nodes":[{"id":"t","type":"ds_value","x":0,"y":0,"settings":{"datastream":"`+dsA+`"}},
+		{"id":"a","type":"attribute","x":200,"y":0,"settings":{"device":"`+devA+`","key":"setpoint","value":"value * 2"}}],"wires":[{"from":"t","port":0,"to":"a"}]}`)
+	defer cancel()
+	publish(e, 21)
+	waitFor(t, "attribute", func() bool { h.mu.Lock(); defer h.mu.Unlock(); return len(h.attrs) == 1 })
+	if h.attrs[0] != "setpoint=42 by flow:Cooling" {
+		t.Fatalf("attribute: %v", h.attrs)
 	}
 }

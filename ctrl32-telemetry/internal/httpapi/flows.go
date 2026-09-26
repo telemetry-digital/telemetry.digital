@@ -25,6 +25,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/audit"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/flows"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/incident"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/notify"
@@ -803,6 +804,22 @@ func (h *flowHost) RunCommand(ctx context.Context, org, dev, method string, args
 		return "", "", "", err
 	}
 	return res.ID, res.Status, res.Error, nil
+}
+
+func (h *flowHost) SetAttribute(ctx context.Context, org, dev, key string, value any, issuer, reason string) error {
+	if key == "" || len(key) > 64 {
+		return errors.New("attribute keys must be 1–64 characters")
+	}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	old, doc, _, _, err := h.s.setSharedAttributes(ctx, org, dev, map[string]json.RawMessage{key: raw}, nil)
+	if err != nil {
+		return err
+	}
+	_, _, err = audit.Append(ctx, h.s.pool, audit.Entry{OrgID: org, ActorType: "system", ActorName: issuer, Action: "device.attributes", EntityType: "device", EntityID: dev, Old: old, New: doc, Reason: reason})
+	return err
 }
 
 func (h *flowHost) Notify(ctx context.Context, org, channelID, flowID, subject, text string, payload map[string]any) error {

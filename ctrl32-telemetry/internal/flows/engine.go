@@ -25,6 +25,8 @@ type Host interface {
 	StoreDerived(ctx context.Context, org, datastreamID, key string, value float64, at time.Time) error
 	// RunCommand sends a device command; reason and issuer name the flow as the origin (FR-005).
 	RunCommand(ctx context.Context, org, deviceID, method string, args json.RawMessage, flowID, issuer, reason string) (id, status, errText string, err error)
+	// SetAttribute sets one shared attribute of a device; issuer and reason name the flow as the origin.
+	SetAttribute(ctx context.Context, org, deviceID, key string, value any, issuer, reason string) error
 	Notify(ctx context.Context, org, channelID, flowID, subject, text string, payload map[string]any) error
 	Incident(ctx context.Context, org, action, severity, title, dedup string, detail map[string]any) error
 	HTTP(ctx context.Context, org, method, url string, body []byte) (int, string, error)
