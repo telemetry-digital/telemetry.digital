@@ -38,19 +38,32 @@
   <dialog id="camDlg"><form class="form" id="camForm">
     <h2 style="margin-top:0" id="camTitle">Camera</h2>
     <div class="row2"><label>Name <input name="name" required maxlength="80"></label><label>Location <input name="location" maxlength="120"></label></div>
-    <label>Main stream URL <input name="url" required placeholder="rtsp://192.168.1.64:554/Streaming/Channels/101" class="notranslate"></label>
+    <label>Connection <select name="source"><option value="pull">The server connects to the camera (local network or VPN)</option><option value="push">The camera sends its video to the server (remote site with camera-relay)</option></select></label>
+    <div class="muted push-only" style="font-size:13px">A relay at the remote site (<code>ctrl32-telemetry camera-relay</code>) reads the local camera and sends the video over an encrypted connection (RTSPS) that it opens itself — no open port and no VPN at the site. After saving you get the camera's secret and the relay configuration, once.</div>
+    <div class="pull-only">
+    <label>Main stream URL <input name="url" placeholder="rtsp://192.168.1.64:554/Streaming/Channels/101" class="notranslate"></label>
     <label>Sub-stream URL for tiles (optional, smaller picture) <input name="sub_url" placeholder="rtsp://192.168.1.64:554/Streaming/Channels/102" class="notranslate"></label>
     <div class="muted" style="font-size:13px">RTSP with H.264, H.265 or MJPEG, or an HTTP MJPEG address. User name and password may be part of the URL; they are stored separately and the password is encrypted.</div>
     <div class="row2"><label>User name <input name="username" autocomplete="off"></label><label>Password <input name="password" type="password" autocomplete="new-password" placeholder="unchanged"></label></div>
-    <div class="row2"><label>Transport <select name="transport"><option value="auto">automatic</option><option value="tcp">TCP</option><option value="udp">UDP</option></select></label>
+    <label>Transport <select name="transport"><option value="auto">automatic</option><option value="tcp">TCP</option><option value="udp">UDP</option></select></label>
+    <div class="row"><button class="btn" type="button" id="testBtn">Test connection</button><span id="testOut" class="muted"></span></div>
+    </div>
+    <div class="row2">
       <label>Recording <select name="record"><option value="continuous">continuous</option><option value="off">off</option></select></label></div>
     <div class="row2"><label>Keep recordings (days) <input name="retention_days" type="number" min="1" max="3650" value="7"></label><label>Order <input name="sort" type="number" value="0"></label></div>
     <label class="check"><input type="checkbox" name="enabled" checked> Enabled</label>
-    <div class="row"><button class="btn" type="button" id="testBtn">Test connection</button><span id="testOut" class="muted"></span></div>
     <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
     <div class="err" id="camErr"></div>
     <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
   </form></dialog>
+
+  <dialog id="secretDlg" style="max-width:min(760px,96vw)"><div class="form">
+    <h2 style="margin-top:0">Relay for the remote camera</h2>
+    <p class="bad" style="margin:0"><b>The secret is shown only now.</b> Copy the configuration to the relay at the remote site; a lost secret can only be replaced by a new one.</p>
+    <p class="muted" style="margin:6px 0">1. Copy the ctrl32-telemetry program to a computer at the site (Linux, Windows or a Raspberry Pi) that reaches the camera. 2. Save this as <code>relay.toml</code> and fill in the camera's local address. 3. Run <code>ctrl32-telemetry camera-relay -config relay.toml</code> (as a service for permanent use).</p>
+    <textarea id="relayCfg" rows="11" readonly class="notranslate" style="width:100%;font-family:var(--mono);font-size:12px"></textarea>
+    <div class="actions"><button class="btn primary" type="button" id="copyCfg">Copy</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </div></dialog>
 
   <dialog id="wallDlg" style="max-width:min(1100px,96vw)"><form class="form" id="wallForm">
     <h2 style="margin-top:0">Video wall</h2>
@@ -119,11 +132,15 @@ async function openAll(w) {
 }
 function renderManage() {
   $('#cams tbody').innerHTML = CAMS.map(c => `<tr><td class="notranslate">${esc(c.name)}</td><td class="notranslate">${esc(c.location)}</td>
-    <td class="notranslate" style="max-width:280px;overflow:hidden;text-overflow:ellipsis">${esc(c.url || '')}${c.has_sub ? ' <span class="badge">+ sub</span>' : ''}</td>
+    <td class="notranslate" style="max-width:280px;overflow:hidden;text-overflow:ellipsis">${c.source === 'push' ? `<span class="badge primary">${esc(t('remote, sends via relay'))}</span>${c.push && !c.push.enabled ? ` <span class="badge bad" title="${esc(t('video.push_listen is not set in the server configuration'))}">${esc(t('receiving is off'))}</span>` : ''}` : esc(c.url || '') + (c.has_sub ? ' <span class="badge">+ sub</span>' : '')}</td>
     <td>${dot(c.status)} ${esc(t(c.enabled ? (c.status.state === 'idle' ? 'on demand' : c.status.state) : 'disabled'))}${c.status.codec ? ` <span class="muted">${esc(c.status.codec.toUpperCase())} ${c.status.width}×${c.status.height} · ${c.status.fps} fps · ${Math.round(c.status.kbps)} kbit/s</span>` : ''}${c.status.error ? `<br><span class="bad" style="font-size:12px">${esc(c.status.error)}</span>` : ''}</td>
     <td>${c.record === 'continuous' ? esc(t('continuous')) + ', ' + c.retention_days + ' ' + esc(t('days')) : esc(t('off'))}</td><td class="num" data-bytes="${c.id}"></td>
-    <td class="actions-cell"><a class="btn small" href="/video/cameras/${c.id}">Open</a><button class="btn small" data-cedit="${c.id}" type="button">Edit</button><button class="btn small" data-cdel="${c.id}" type="button">Delete</button></td></tr>`).join('');
+    <td class="actions-cell"><a class="btn small" href="/video/cameras/${c.id}">Open</a><button class="btn small" data-cedit="${c.id}" type="button">Edit</button>${c.source === 'push' ? `<button class="btn small" data-secret="${c.id}" type="button">New secret</button>` : ''}<button class="btn small" data-cdel="${c.id}" type="button">Delete</button></td></tr>`).join('');
   for (const b of document.querySelectorAll('[data-cedit]')) b.onclick = () => camDialog(CAMS.find(c => c.id === b.dataset.cedit));
+  for (const b of document.querySelectorAll('[data-secret]')) b.onclick = async () => {
+    const r = ctrl32.ask('Reason for a new secret (the relay with the old one is disconnected at once)'); if (!r) return;
+    try { showSecret(await api('POST', `/api/v1/video/cameras/${b.dataset.secret}/push-secret`, {reason: r})); } catch (x) { ctrl32.toast(x.message, 'bad'); }
+  };
   for (const b of document.querySelectorAll('[data-cdel]')) b.onclick = async () => {
     const r = ctrl32.ask('Reason for removing the camera (recordings stay until their retention ends)'); if (!r) return;
     try { await api('DELETE', `/api/v1/video/cameras/${b.dataset.cdel}?reason=${encodeURIComponent(r)}`); load(); } catch (x) { ctrl32.toast(x.message, 'bad'); }
@@ -136,11 +153,16 @@ function renderManage() {
 }
 
 let EDIT = null;
+function showSecret(c) { $('#relayCfg').value = c.relay_config || ''; $('#secretDlg').showModal(); }
+$('#copyCfg').onclick = async () => { try { await navigator.clipboard.writeText($('#relayCfg').value); ctrl32.toast(t('copied'), 'ok'); } catch (x) { $('#relayCfg').select(); } };
+function sourceMode() { const push = $('#camForm').source.value === 'push'; for (const el of document.querySelectorAll('#camForm .pull-only')) el.hidden = push; for (const el of document.querySelectorAll('#camForm .push-only')) el.hidden = !push; $('#camForm').url.required = !push; }
+$('#camForm').source.onchange = sourceMode;
 function camDialog(c) {
   EDIT = c || null; const f = $('#camForm'); f.reset(); $('#camErr').textContent = ''; $('#testOut').textContent = '';
   $('#camTitle').textContent = t(c ? 'Edit camera' : 'Add camera');
-  if (c) { for (const k of ['name', 'location', 'url', 'sub_url', 'username', 'transport', 'record', 'retention_days', 'sort']) f[k].value = c[k] ?? ''; f.enabled.checked = c.enabled; f.password.placeholder = t(c.has_password ? 'unchanged' : 'none'); }
+  if (c) { for (const k of ['source', 'name', 'location', 'url', 'sub_url', 'username', 'transport', 'record', 'retention_days', 'sort']) f[k].value = c[k] ?? ''; f.enabled.checked = c.enabled; f.password.placeholder = t(c.has_password ? 'unchanged' : 'none'); }
   else f.password.placeholder = '';
+  sourceMode();
   $('#camDlg').showModal();
 }
 $('#testBtn').onclick = async () => {
@@ -153,11 +175,12 @@ $('#testBtn').onclick = async () => {
   } catch (x) { out.textContent = x.message; out.className = 'bad'; }
 };
 $('#camForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#camErr').textContent = '';
-  const body = {name: f.name.value, location: f.location.value, url: f.url.value, sub_url: f.sub_url.value, username: f.username.value, transport: f.transport.value,
+  const body = {source: f.source.value, name: f.name.value, location: f.location.value, url: f.url.value, sub_url: f.sub_url.value, username: f.username.value, transport: f.transport.value,
     record: f.record.value, retention_days: +f.retention_days.value, sort: +f.sort.value, enabled: f.enabled.checked, reason: f.reason.value};
   if (f.password.value) body.password = f.password.value;
-  try { if (EDIT) await api('PUT', '/api/v1/video/cameras/' + EDIT.id, body); else await api('POST', '/api/v1/video/cameras', body);
-    $('#camDlg').close(); ctrl32.toast(t('camera saved'), 'ok'); load(); } catch (x) { $('#camErr').textContent = x.message; } };
+  if (body.source === 'push') { delete body.url; delete body.sub_url; delete body.username; delete body.transport; delete body.password; }
+  try { const r = EDIT ? await api('PUT', '/api/v1/video/cameras/' + EDIT.id, body) : await api('POST', '/api/v1/video/cameras', body);
+    $('#camDlg').close(); ctrl32.toast(t('camera saved'), 'ok'); load(); if (r.push_secret) showSecret(r); } catch (x) { $('#camErr').textContent = x.message; } };
 
 // ---- wall editor
 let WEDIT = null, WSCREENS = [];

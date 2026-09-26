@@ -9,7 +9,8 @@ USER=${USER:-admin}
 PASS=${PASS:-admin1234}
 TMP=$(mktemp -d)
 SIM_PID=""
-trap '[[ -n "$SIM_PID" ]] && kill $SIM_PID 2>/dev/null; rm -rf "$TMP"' EXIT
+RELAY=""
+trap '[[ -n "$SIM_PID" ]] && kill $SIM_PID 2>/dev/null; [[ -n "$RELAY" ]] && kill $RELAY 2>/dev/null; rm -rf "$TMP"' EXIT
 JAR="$TMP/jar"; CSRF=""
 pass=0; fail=0
 st()   { cat "$TMP/s"; }
@@ -55,6 +56,7 @@ req POST /api/v1/auth/login "{\"username\":\"$USER\",\"password\":\"$PASS\"}"; c
 req GET /api/v1/auth/me; CSRF=$(jx j.csrf_token)
 check "admin has the video permissions" "$(jx '["video.view","video.playback","video.manage"].every(p => j.permissions.includes(p))')" true
 go build -o "$TMP/camsim" ./tools/camsim || { echo "camsim build failed"; exit 1; }
+[[ -n "${BIN:-}" ]] || go build -o "$TMP/c32" ./cmd/ctrl32-telemetry || { echo "build failed"; exit 1; }
 RP=$((20000 + RANDOM % 20000))
 "$TMP/camsim" -rtsp 127.0.0.1:$RP -http "" -fps 10 > "$TMP/camsim.log" 2>&1 &
 SIM_PID=$!
@@ -109,6 +111,50 @@ check "export is an MP4 with fragments" "$(node -e 'const b=require("fs").readFi
 req GET "/api/v1/video/cameras/$CAM/export?from=$FROM&to=$(iso '+1 hour')"; check "export limited to one hour" "$(st)" 400
 req GET "/api/v1/export/audit?format=csv"
 check "playback and export audited" "$(grep -c "video.playback\|video.export" "$TMP/b" | awk '{print ($1 >= 2)}')" 1
+
+echo "== timeshift: playback follows the recording while it goes on"
+req GET "/api/v1/video/cameras/$CAM/recordings?from=$FROM"; B0=$(jx j.bytes)
+ws "/api/v1/video/cameras/$CAM/playback?from=$(iso '-4 sec')" 8
+check "playback runs on past the moment it was started (no end)" "$(jx 'j.times.length == 2 && j.times[1] - j.times[0] >= 5000 && !j.types.end')" true
+check "playback reaches the present" "$(jx 'Date.now() - j.times[1] < 6000')" true
+waitfor '(req GET "/api/v1/video/cameras/$CAM/recordings?from=$FROM"; [[ "$(jx "j.bytes > $B0")" == true ]])' 30 && ok "recording went on during playback" || bad "recording stalled: $(cat "$TMP/b")"
+
+echo "== camera widget"
+DW="{\"name\":\"Cams $SUF\",\"reason\":\"e2e\",\"spec\":{\"version\":1,\"kind\":\"dashboard\",\"layout\":{\"type\":\"grid\",\"row_height\":96},\"range\":\"6h\",\"refresh_s\":30,\"widgets\":[{\"id\":\"c\",\"type\":\"camera\",\"geometry\":{\"x\":0,\"y\":0,\"w\":4,\"h\":3},\"bindings\":{},\"params\":{\"camera\":\"CAMID\"}}]}}"
+req POST /api/v1/dashboards "${DW/CAMID/$CAM}"; check "dashboard with a camera widget" "$(st)" 201
+DSLUG=$(jx j.slug)
+req GET "/api/v1/dashboards/$DSLUG"; check "camera widget stored with defaults" "$(jx 'JSON.stringify(j.spec.widgets[0].params)')" "{\"camera\":\"$CAM\",\"quality\":\"sub\",\"show_name\":true,\"open_on_click\":true}"
+req POST /api/v1/dashboards "${DW/CAMID/not-a-camera}"; check "camera id validated" "$(st)" 400
+req DELETE "/api/v1/dashboards/$DSLUG?reason=e2e"
+
+echo "== remote camera (relay sends the video)"
+req POST /api/v1/video/cameras "{\"name\":\"Remote $SUF\",\"source\":\"push\",\"url\":\"rtsp://ignored/x\",\"reason\":\"e2e\"}"
+check "push camera created" "$(st) $(jx 'j.source + " " + j.url')" "201 push "
+PUSH=$(jx j.id); SECRET=$(jx j.push_secret); PUSHON=$(jx j.push.enabled)
+check "secret shown once with a relay configuration" "$(jx "j.push_secret.length >= 30 && j.relay_config.includes('$PUSH') && j.relay_config.includes(j.push_secret)")" true
+req GET /api/v1/video/cameras/$PUSH; check "secret never shown again" "$(jx 'j.push_secret === undefined && j.relay_config === undefined && JSON.stringify(j).includes("secret") === false')" true
+if [[ "$PUSHON" == true ]]; then
+  PURL=$(jx j.push.url)
+  printf 'server = "%s"\n[[camera]]\nid = "%s"\nsecret = "%s"\nsource = "%s"\nsub_source = "%s"\ntransport = "tcp"\n' "${PURL%/*}" "$PUSH" "$SECRET" "$SIM/remote/h264/160x96" "$SIM/remote/mjpeg/160x96" > "$TMP/relay.toml"
+  chmod 600 "$TMP/relay.toml"
+  "${BIN:-$TMP/c32}" camera-relay -config "$TMP/relay.toml" > "$TMP/relay.log" 2>&1 &
+  RELAY=$!
+  waitfor '(req GET /api/v1/video/cameras/$PUSH; [[ "$(jx j.status.state)" == online ]])' 30 && ok "relay connected, camera online" || bad "push status $(cat "$TMP/b"); relay: $(tail -3 "$TMP/relay.log")"
+  check "remote camera records" "$(jx 'j.status.recording + " " + j.status.codec')" "true h264"
+  ws "/api/v1/video/cameras/$PUSH/live" 2; check "tiles use the pushed sub-stream" "$(jx 'j.init && j.init.codec')" mjpeg
+  printf 'server = "%s"\n[[camera]]\nid = "%s"\nsecret = "%s"\nsource = "%s"\n' "${PURL%/*}" "$PUSH" "wrong-secret-wrong-secret-123" "$SIM/remote/h264/160x96" > "$TMP/bad.toml"; chmod 600 "$TMP/bad.toml"
+  "${BIN:-$TMP/c32}" camera-relay -config "$TMP/bad.toml" > "$TMP/bad.log" 2>&1 &
+  BADR=$!; sleep 3; kill $BADR 2>/dev/null
+  check "wrong secret refused" "$(grep -c 'relay forwarding' "$TMP/bad.log")" 0
+  grep -q "wrong-secret-wrong-secret-123" "$TMP/bad.log" && bad "secret written to the relay log" || ok "secret not in the relay log"
+  req POST /api/v1/video/cameras/$PUSH/push-secret '{"reason":"e2e rotate"}'; check "secret rotated" "$(st) $(jx "j.push_secret !== '$SECRET'")" "200 true"
+  sleep 4; req GET /api/v1/video/cameras/$PUSH; check "relay with the old secret is cut off" "$(jx j.status.state)" offline
+  kill $RELAY 2>/dev/null
+else
+  echo "  (video.push_listen not configured: relay checks skipped)"
+fi
+req POST /api/v1/video/cameras/$CAM/push-secret '{"reason":"e2e"}'; check "no secret for a pulled camera" "$(st)" 409
+req DELETE "/api/v1/video/cameras/$PUSH?reason=e2e"
 
 echo "== video walls"
 WALL="{\"name\":\"Control room $SUF\",\"reason\":\"e2e\",\"screens\":[{\"name\":\"Left\",\"cols\":5,\"rows\":4,\"tiles\":[\"$CAM\",null,\"$DOOR\"]},{\"name\":\"Right\",\"cols\":5,\"rows\":4,\"tiles\":[\"$DOOR\"]}]}"

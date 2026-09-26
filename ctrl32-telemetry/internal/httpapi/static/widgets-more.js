@@ -247,6 +247,30 @@
     el.innerHTML = p.target && !WG.isPublic() ? `<a class="dw-nav" href="/dashboards/${encodeURIComponent(p.target)}">${inner}</a>` : `<div class="dw-nav">${inner}</div>`;
   }, { label: 'Navigation card' });
 
+  // ---- camera (spec 010): live picture; the player is kept across refreshes and closed when the widget goes away --
+  function loadPlayer() {
+    if (window.ctrl32Player) return Promise.resolve();
+    if (!loadPlayer.p) loadPlayer.p = new Promise((res, rej) => { const s = document.createElement('script'); s.src = '/videoplayer.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+    return loadPlayer.p;
+  }
+  reg('camera', async (el, p) => {
+    if (WG.isPublic()) { el.innerHTML = '<div class="dw-center muted">Cameras are not shown on public dashboards.</div>'; return; }
+    if (!p.camera) { el.innerHTML = '<div class="dw-center muted">Choose a camera in the widget properties.</div>'; return; }
+    const key = p.camera + '|' + (p.quality || 'sub') + '|' + (p.show_name !== false) + '|' + (p.open_on_click !== false);
+    if (el._cam && el._cam.key === key && el._cam.player.el.isConnected) return; // live already; refreshes do not reconnect
+    if (el._cam) el._cam.player.close();
+    await loadPlayer();
+    let name = '';
+    if (p.show_name !== false) { try { name = (await api('GET', `/api/v1/video/cameras/${encodeURIComponent(p.camera)}`)).name; } catch (e) { el.innerHTML = `<div class="dw-center muted">${esc(e.status === 403 ? 'No permission to watch cameras.' : e.message)}</div>`; el._cam = null; return; } }
+    el.innerHTML = `<div class="cam-widget${p.open_on_click !== false ? ' click' : ''}">${name ? `<div class="cap"><span class="cam-dot"></span><b class="notranslate">${esc(name)}</b></div>` : ''}</div>`;
+    const box = el.firstElementChild, dot = box.querySelector('.cam-dot');
+    const player = window.ctrl32Player(box, { url: `/api/v1/video/cameras/${encodeURIComponent(p.camera)}/live?quality=${p.quality === 'main' ? 'main' : 'sub'}`, live: true,
+      onState: (s) => { if (dot) dot.className = 'cam-dot ' + (s === 'online' ? 'online' : s === 'offline' ? 'offline' : ''); } });
+    box.prepend(player.el);
+    if (p.open_on_click !== false) box.onclick = () => { location.href = '/video/cameras/' + encodeURIComponent(p.camera); };
+    el._cam = { key, player };
+  }, { label: 'Camera' });
+
   // ---- controls: commands with reason, confirmation, permission and audit (FR-009) --------------------------------
   const ctlFoot = () => `<div class="row" style="gap:6px;align-items:center;flex-wrap:wrap">${u.reasonInput()}<button class="btn small primary ctl-send" type="button">Send</button></div><div class="ctl-out" style="font-size:12px;min-height:16px"></div>`;
   const snap = (v, p) => { const lo = p.min ?? 0, hi = p.max ?? 100, st = p.step > 0 ? p.step : 1; return clamp(Math.round((v - lo) / st) * st + lo, lo, hi); };

@@ -155,7 +155,7 @@ func TestShowcaseMoreValid(t *testing.T) {
 	for _, x := range widgets {
 		have[x["type"].(string)] = true
 	}
-	skip := setOf("tank", "pump", "valve", "pipe", "instrument", "setpoint", "switch", "button")
+	skip := setOf("tank", "pump", "valve", "pipe", "instrument", "setpoint", "switch", "button", "camera") // camera: needs a configured camera
 	for _, d := range widgetCatalog {
 		if !have[d.Type] && !skip[d.Type] {
 			t.Errorf("showcase lacks %s", d.Type)

@@ -254,6 +254,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("POST /api/v1/video/cameras/test", s.require("video.manage", s.testCamera))
 	mux.Handle("GET /api/v1/video/cameras/{id}", s.require("video.view", s.getCamera))
 	mux.Handle("PUT /api/v1/video/cameras/{id}", s.require("video.manage", s.updateCamera))
+	mux.Handle("POST /api/v1/video/cameras/{id}/push-secret", s.require("video.manage", s.rotatePushSecret))
 	mux.Handle("DELETE /api/v1/video/cameras/{id}", s.require("video.manage", s.deleteCamera))
 	mux.Handle("GET /api/v1/video/cameras/{id}/live", s.require("video.view", s.cameraLive))
 	mux.Handle("GET /api/v1/video/cameras/{id}/snapshot", s.require("video.view", s.cameraSnapshot))

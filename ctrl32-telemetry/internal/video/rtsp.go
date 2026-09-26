@@ -43,6 +43,23 @@ func (s *Source) rtsp(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	medi, forma, onPacket, err := s.decoder(ctx, desc, c.PacketPTS)
+	if err != nil {
+		return err
+	}
+	if _, err := c.Setup(desc.BaseURL, medi, 0, 0); err != nil {
+		return err
+	}
+	c.OnPacketRTP(medi, forma, onPacket)
+	if _, err := c.Play(nil); err != nil {
+		return err
+	}
+	return c.Wait()
+}
+
+// decoder picks the first video track of a session (H.264, H.265, then MJPEG) and returns the RTP handler that turns
+// its packets into samples. ptsOf gives the presentation time of a packet (client or server session).
+func (s *Source) decoder(ctx context.Context, desc *description.Session, ptsOf func(*description.Media, *rtp.Packet) (int64, bool)) (*description.Media, format.Format, func(*rtp.Packet), error) {
 	var (
 		f264  *format.H264
 		f265  *format.H265
@@ -59,13 +76,13 @@ func (s *Source) rtsp(ctx context.Context) error {
 		medi, forma = desc.FindFormat(&f264), f264
 		dec, err := f264.CreateDecoder()
 		if err != nil {
-			return err
+			return nil, nil, nil, err
 		}
 		t := &Track{Codec: H264, SPS: f264.SPS, PPS: f264.PPS}
 		t.size()
 		var dtsx *h264.DTSExtractor
 		onPacket = func(pkt *rtp.Packet) {
-			pts, ok := c.PacketPTS(medi, pkt)
+			pts, ok := ptsOf(medi, pkt)
 			if !ok {
 				return
 			}
@@ -99,13 +116,13 @@ func (s *Source) rtsp(ctx context.Context) error {
 		medi, forma = desc.FindFormat(&f265), f265
 		dec, err := f265.CreateDecoder()
 		if err != nil {
-			return err
+			return nil, nil, nil, err
 		}
 		t := &Track{Codec: H265, VPS: f265.VPS, SPS: f265.SPS, PPS: f265.PPS}
 		t.size()
 		var dtsx *h265.DTSExtractor
 		onPacket = func(pkt *rtp.Packet) {
-			pts, ok := c.PacketPTS(medi, pkt)
+			pts, ok := ptsOf(medi, pkt)
 			if !ok {
 				return
 			}
@@ -139,11 +156,11 @@ func (s *Source) rtsp(ctx context.Context) error {
 		medi, forma = desc.FindFormat(&fjpeg), fjpeg
 		dec, err := fjpeg.CreateDecoder()
 		if err != nil {
-			return err
+			return nil, nil, nil, err
 		}
 		var t *Track
 		onPacket = func(pkt *rtp.Packet) {
-			pts, ok := c.PacketPTS(medi, pkt)
+			pts, ok := ptsOf(medi, pkt)
 			if !ok {
 				return
 			}
@@ -160,17 +177,9 @@ func (s *Source) rtsp(ctx context.Context) error {
 			s.publish(ctx, t, &Sample{Time: wall(pts), DTS: pts, Key: true, JPEG: img})
 		}
 	default:
-		return errors.New("the camera offers no H.264, H.265 or MJPEG video")
+		return nil, nil, nil, errors.New("the camera offers no H.264, H.265 or MJPEG video")
 	}
-
-	if _, err := c.Setup(desc.BaseURL, medi, 0, 0); err != nil {
-		return err
-	}
-	c.OnPacketRTP(medi, forma, onPacket)
-	if _, err := c.Play(nil); err != nil {
-		return err
-	}
-	return c.Wait()
+	return medi, forma, onPacket, nil
 }
 
 func jpegTrack(img []byte) *Track {

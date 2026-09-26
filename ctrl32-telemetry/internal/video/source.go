@@ -49,6 +49,7 @@ type Source struct {
 	status Status
 	idleT  *time.Timer
 	last   *Sample // last MJPEG picture (snapshot)
+	push   chan *pushConn
 
 	// statistics over the last few seconds
 	winStart time.Time
@@ -226,6 +227,9 @@ func (s *Source) run(ctx context.Context) {
 		case <-time.After(backoff):
 		}
 		backoff = min(backoff*2, 30*time.Second)
+		if s.URL.Scheme == "push" {
+			backoff = 100 * time.Millisecond // the camera connects to us; be ready at once
+		}
 	}
 }
 
@@ -235,6 +239,8 @@ func (s *Source) connect(ctx context.Context) error {
 		return s.rtsp(ctx)
 	case "http", "https":
 		return s.httpMJPEG(ctx)
+	case "push":
+		return s.waitPush(ctx)
 	}
 	return errors.New("unsupported URL scheme " + s.URL.Scheme)
 }

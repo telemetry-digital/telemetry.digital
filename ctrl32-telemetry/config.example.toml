@@ -61,6 +61,11 @@ secret_key = "REPLACE-WITH-RANDOM-32-CHARS"
 # Camera recordings (spec 010): one-minute MP4 files per camera; the oldest are deleted beyond max_disk_gb.
 # storage_dir = "/var/lib/ctrl32-telemetry/video"   # default: next to the reports directory
 # max_disk_gb = 50
+# Remote cameras (spec 011): relays at remote sites (ctrl32-telemetry camera-relay) send video here over RTSPS.
+# push_listen = ":8322"          # open this TCP port in the firewall; empty = off
+# push_tls_cert = ""             # default http.tls_cert; profile "internet" requires TLS
+# push_tls_key = ""
+# push_host = "telemetry.example.com"   # name the relays connect to; default the host of http.base_url
 
 [fota]
 # Uploaded firmware images (records; devices download them with their own token, Range supported).

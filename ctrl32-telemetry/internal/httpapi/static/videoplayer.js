@@ -3,15 +3,17 @@
 // {type:"init", codec, mime, width, height}, {type:"time", t (ms), pos (s in the player's timeline)},
 // {type:"status", state, error}, {type:"end"}.
 //
-//   const p = ctrl32Player(element, {url, live: true, onTime(ms), onState(state, error), onEnd()});
-//   p.close();
+//   const p = ctrl32Player(element, {url, live: true, zoom: true, onTime(ms), onState(state, error), onEnd()});
+//   p.open(url, live);   // another source in the same player (keeps the zoom)
+//   p.pause(); p.resume(); p.zoomBy(1.25); p.zoomReset(); p.close();
+// Digital zoom (opts.zoom): mouse wheel or pinch zooms at the pointer, dragging pans, a double click resets.
 (function () {
   function player(host, opts) {
     const box = document.createElement('div');
     box.className = 'vp';
-    box.innerHTML = '<video muted playsinline autoplay disablepictureinpicture></video><canvas hidden></canvas><div class="vp-msg" hidden></div>';
+    box.innerHTML = '<div class="vp-stage"><video muted playsinline autoplay disablepictureinpicture></video><canvas hidden></canvas></div><div class="vp-msg" hidden></div><div class="vp-zoom" hidden></div>';
     host.appendChild(box);
-    const video = box.querySelector('video'), canvas = box.querySelector('canvas'), msg = box.querySelector('.vp-msg');
+    const video = box.querySelector('video'), canvas = box.querySelector('canvas'), msg = box.querySelector('.vp-msg'), stage = box.querySelector('.vp-stage'), zlabel = box.querySelector('.vp-zoom');
     let ws = null, ms = null, sb = null, queue = [], closed = false, retry = null, mode = '', lastT = null, drawing = false, pendingJpeg = null, stallTimer = null;
     const T = (s) => (window.ctrl32 && ctrl32.t ? ctrl32.t(s) : s);
     function say(text) { msg.textContent = text ? T(text) : ''; msg.hidden = !text; }
@@ -76,14 +78,17 @@
       drawing = false;
       if (pendingJpeg) { const d = pendingJpeg; pendingJpeg = null; drawJPEG(d); }
     }
+    let gen = 0;
     function connect() {
       if (closed) return;
       const u = new URL(opts.url, location.href);
       u.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const my = ++gen;
       ws = new WebSocket(u);
       ws.binaryType = 'arraybuffer';
       state('connecting');
       ws.onmessage = (e) => {
+        if (my !== gen) return;
         if (typeof e.data === 'string') {
           const m = JSON.parse(e.data);
           if (m.type === 'init') { say(''); state('online'); if (m.codec === 'mjpeg') initJPEG(); else initMSE(m); box.dataset.codec = m.codec; box.dataset.size = m.width + 'x' + m.height; }
@@ -96,13 +101,49 @@
         else if (mode === 'mse') { queue.push(e.data); if (queue.length > 200) queue.splice(0, queue.length - 200); pump(); }
       };
       ws.onclose = () => {
+        if (my !== gen) return;
         ws = null;
-        if (closed || box.dataset.state === 'end') return;
+        if (closed || box.dataset.state === 'end' || box.dataset.state === 'paused') return;
         state('reconnecting');
         retry = setTimeout(connect, opts.live ? 1500 : 3000);
       };
     }
     // the recording time of the picture on screen
+    function stop() { gen++; clearTimeout(retry); if (ws) { ws.onclose = null; ws.close(); ws = null; } }
+    // ---- digital zoom
+    let z = 1, zx = 0, zy = 0;
+    function applyZoom() {
+      const w = box.clientWidth, h = box.clientHeight;
+      zx = Math.min(0, Math.max(w - w * z, zx)); zy = Math.min(0, Math.max(h - h * z, zy));
+      if (z <= 1.001) { z = 1; zx = 0; zy = 0; }
+      stage.style.transform = z === 1 ? '' : `translate(${zx}px, ${zy}px) scale(${z})`;
+      box.classList.toggle('zoomed', z > 1);
+      zlabel.hidden = z === 1; zlabel.textContent = z.toFixed(1) + '×';
+      if (opts.onZoom) opts.onZoom(z);
+    }
+    function zoomAt(f, cx, cy) {
+      const nz = Math.min(8, Math.max(1, z * f));
+      if (cx === undefined) { cx = box.clientWidth / 2; cy = box.clientHeight / 2; }
+      zx = cx - (cx - zx) * nz / z; zy = cy - (cy - zy) * nz / z; z = nz; applyZoom();
+    }
+    if (opts.zoom) {
+      box.addEventListener('wheel', (e) => { e.preventDefault(); const r = box.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.2 : 1 / 1.2, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+      let drag = null; const pts = new Map();
+      box.addEventListener('pointerdown', (e) => { pts.set(e.pointerId, e); if (z > 1) { drag = { x: e.clientX, y: e.clientY, zx, zy, moved: false }; try { box.setPointerCapture(e.pointerId); } catch (x) { /* synthetic */ } } });
+      box.addEventListener('pointermove', (e) => {
+        if (pts.size === 2 && pts.has(e.pointerId)) { // pinch
+          const [a, b] = [...pts.values()], d0 = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+          pts.set(e.pointerId, e); const [c, d] = [...pts.values()], d1 = Math.hypot(c.clientX - d.clientX, c.clientY - d.clientY);
+          const r = box.getBoundingClientRect(); if (d0 > 0) zoomAt(d1 / d0, (c.clientX + d.clientX) / 2 - r.left, (c.clientY + d.clientY) / 2 - r.top); return;
+        }
+        if (!drag) return; drag.moved = true; zx = drag.zx + e.clientX - drag.x; zy = drag.zy + e.clientY - drag.y; applyZoom();
+      });
+      const up = (e) => { pts.delete(e.pointerId); if (drag && drag.moved) box._dragged = Date.now(); drag = null; };
+      box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up);
+      box.addEventListener('dblclick', (e) => { e.stopPropagation(); z = 1; applyZoom(); });
+      // a click after panning is not a click on the picture
+      box.addEventListener('click', (e) => { if (box._dragged && Date.now() - box._dragged < 300) e.stopPropagation(); }, true);
+    }
     function now() {
       if (!lastT) return null;
       if (mode === 'mse') return lastT.t + (video.currentTime - lastT.pos) * 1000;
@@ -124,12 +165,20 @@
         c.getContext('2d').drawImage(src, 0, 0);
         return c;
       },
+      get zoom() { return z; },
+      zoomBy(f) { zoomAt(f); },
+      zoomReset() { z = 1; applyZoom(); },
+      // another source in the same player: the picture stays until the new one starts
+      open(url, live) { stop(); opts.url = url; opts.live = !!live; lastT = null; box.dataset.state = ''; connect(); },
+      pause() { stop(); video.pause(); state('paused'); },
       close() {
-        closed = true; clearTimeout(retry); clearInterval(stallTimer);
-        if (ws) { ws.onclose = null; ws.close(); }
+        closed = true; stop(); clearInterval(stallTimer);
         resetMedia(); box.remove();
       },
     };
   }
-  window.ctrl32Player = player;
+  // Players whose element left the page (a re-rendered dashboard, a closed dialog) are closed, so no WebSocket stays open.
+  const all = new Set();
+  setInterval(() => { for (const p of all) if (!p.el.isConnected) { if ((p._gone = (p._gone || 0) + 1) >= 2) { p.close(); all.delete(p); } } else p._gone = 0; }, 2000);
+  window.ctrl32Player = (host, opts) => { const p = player(host, opts); all.add(p); const c = p.close; p.close = () => { all.delete(p); c(); }; return p; };
 })();

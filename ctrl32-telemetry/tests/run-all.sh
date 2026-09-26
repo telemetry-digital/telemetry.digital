@@ -106,6 +106,7 @@ sed -e "s|^url = .*|url = \"$(db_url ctrl32_app "$APP_PW" "$TEST_DB")\"|" \
     -e "s|REPLACE-WITH-RANDOM-32-CHARS|e2e-$RANDOM$RANDOM-not-a-secret-0123456789|" \
     -e "s|^\[report\]$|[report]\nstorage_dir = \"$WORK/reports\"|" \
     -e "s|^\[fota\]$|[fota]\nstorage_dir = \"$WORK/firmware\"|" \
+    -e "s|^\[video\]$|[video]\npush_listen = \"127.0.0.1:18322\"|" \
     -e "s|^\[map\]$|[map]\npmtiles = \"$WORK/bin/sample.pmtiles\"\nattribution = \"sample tiles (e2e)\"|" \
     config.example.toml > "$CONFIG"
 

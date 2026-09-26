@@ -24,6 +24,8 @@ type Camera struct {
 	Transport, Record  string
 	RetentionDays      int
 	Enabled            bool
+	Push               bool   // the camera (its relay) sends the video to the server
+	PushSecret         string // plaintext, only in memory
 }
 
 // Manager runs the cameras of all organizations: recorders for cameras that record, on-demand streams for viewers,
@@ -35,8 +37,10 @@ type Manager struct {
 	box      *iam.SecretBox
 	log      *slog.Logger
 
-	mu   sync.Mutex
-	cams map[string]*cam
+	mu      sync.Mutex
+	cams    map[string]*cam
+	push    *PushServer
+	pushURL string
 }
 
 type cam struct {
@@ -178,14 +182,15 @@ func (c *cam) stop() {
 // load reads one camera's configuration; ok is false when it is removed or missing.
 func (m *Manager) load(ctx context.Context, id string) (Camera, bool) {
 	var c Camera
-	var sealed string
-	err := m.pool.QueryRow(ctx, `SELECT id::text, org_id::text, name, url, sub_url, username, password_sealed, transport, record, retention_days, enabled
+	var sealed, source, pushSealed string
+	err := m.pool.QueryRow(ctx, `SELECT id::text, org_id::text, name, url, sub_url, username, password_sealed, transport, record, retention_days, enabled, source, push_secret_sealed
 		FROM core.camera WHERE id = $1::uuid AND removed_at IS NULL`, id).
-		Scan(&c.ID, &c.OrgID, &c.Name, &c.URL, &c.SubURL, &c.Username, &sealed, &c.Transport, &c.Record, &c.RetentionDays, &c.Enabled)
+		Scan(&c.ID, &c.OrgID, &c.Name, &c.URL, &c.SubURL, &c.Username, &sealed, &c.Transport, &c.Record, &c.RetentionDays, &c.Enabled, &source, &pushSealed)
 	if err != nil {
 		return c, false
 	}
 	c.Password = m.OpenPassword(sealed)
+	c.Push, c.PushSecret = source == "push", m.OpenPassword(pushSealed)
 	return c, true
 }
 
@@ -223,6 +228,20 @@ func (m *Manager) Reload(ctx context.Context, id string) {
 		return
 	}
 	c := &cam{cfg: cfg}
+	if cfg.Push {
+		// the relay publishes main and (optionally) sub; both sources stay ready to accept it
+		c.main = &Source{URL: &url.URL{Scheme: "push"}, Log: m.log.With("camera", cfg.Name), Linger: 30 * time.Second}
+		c.sub = &Source{URL: &url.URL{Scheme: "push"}, Log: m.log.With("camera", cfg.Name+" (sub)"), Linger: 30 * time.Second}
+		c.main.Keep(true)
+		c.sub.Keep(true)
+		if cfg.Record == "continuous" {
+			c.rec = m.startRecorder(id, c.main)
+		}
+		m.mu.Lock()
+		m.cams[id] = c
+		m.mu.Unlock()
+		return
+	}
 	mu, err := StreamURL(cfg.URL, cfg.Username, cfg.Password)
 	if err != nil {
 		m.log.Warn("camera URL invalid", "camera", id, "err", err)
@@ -251,9 +270,26 @@ func (m *Manager) Source(id string, sub bool) *Source {
 		return nil
 	}
 	if sub && c.sub != nil {
+		if c.cfg.Push && c.sub.Status().State != "online" {
+			return c.main // the relay sends no sub-stream
+		}
 		return c.sub
 	}
 	return c.main
+}
+
+// pushTarget is the source a relay publishes to, with the camera's secret.
+func (m *Manager) pushTarget(id string, sub bool) (*Source, string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c := m.cams[id]
+	if c == nil || !c.cfg.Push {
+		return nil, ""
+	}
+	if sub {
+		return c.sub, c.cfg.PushSecret
+	}
+	return c.main, c.cfg.PushSecret
 }
 
 // Status of a camera's main stream (and whether it records); ok is false for disabled or unknown cameras.

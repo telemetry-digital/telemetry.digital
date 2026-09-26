@@ -20,6 +20,7 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/timecheck"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -28,6 +29,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/sync/errgroup"
 
@@ -86,6 +88,8 @@ func main() {
 		err = cmdAgent(args)
 	case "replica":
 		err = cmdReplica(args)
+	case "camera-relay":
+		err = cmdCameraRelay(args)
 	case "version":
 		fmt.Println("ctrl32-telemetry", version)
 	default:
@@ -103,7 +107,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: ctrl32-telemetry <serve|agent|migrate|audit verify|service <action>|admin bootstrap|admin reset-password|admin seed-dashboard|dev seed|replica attach|status|promote|version> [-config path]")
+	fmt.Fprintln(os.Stderr, "usage: ctrl32-telemetry <serve|agent|migrate|audit verify|service <action>|admin bootstrap|admin reset-password|admin seed-dashboard|dev seed|replica attach|status|promote|camera-relay|version> [-config path]")
 }
 
 func loadConfig(args []string) (*config.Config, string, error) {
@@ -238,6 +242,22 @@ func runServer(ctx context.Context, cfg *config.Config, cfgPath string, logger *
 	smart := smarthome.New(pool, br, ing, hub, cfg.Security.SecretKey, logger)
 	smart.Inc = inc
 	vids := video.New(pool, cfg.Video.StorageDir, cfg.Video.MaxDiskGB, cfg.Security.SecretKey, logger)
+	if cfg.Video.PushListen != "" {
+		if ps, err := vids.StartPush(video.PushConfig{Listen: cfg.Video.PushListen, TLSCert: cfg.Video.PushTLSCert, TLSKey: cfg.Video.PushTLSKey}); err != nil {
+			logger.Error("camera push listener not started", "err", err)
+		} else {
+			defer ps.Close()
+			host := cfg.Video.PushHost
+			if host == "" {
+				if u, err := url.Parse(cfg.HTTP.BaseURL); err == nil && u.Hostname() != "" {
+					host = u.Hostname()
+				} else {
+					host = "SERVER"
+				}
+			}
+			vids.SetPushHost(host, cfg.Video.PushListen, ps.TLS())
+		}
+	}
 	ing.AddSink(smart) // values of datastreams exported to Home Assistant through bridges
 	ing.AddSink(flowEngine)
 	hub.Tap(flowEngine.OnEvent)
@@ -674,4 +694,26 @@ func seqOrZero(p *int64) int64 {
 		return 0
 	}
 	return *p
+}
+
+// cmdCameraRelay runs at a remote site: it reads the local cameras and sends their video to the server over RTSPS
+// (spec 011). The site needs no open port; see docs/video.md.
+func cmdCameraRelay(args []string) error {
+	fs := flag.NewFlagSet("camera-relay", flag.ContinueOnError)
+	path := fs.String("config", "relay.toml", "relay configuration (server, cameras with id, secret and source)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fi, err := os.Stat(*path); err == nil && fi.Mode().Perm()&0o077 != 0 && runtime.GOOS != "windows" {
+		fmt.Fprintf(os.Stderr, "warning: %s holds camera secrets and is readable by others; chmod 600 it\n", *path)
+	}
+	var cfg video.RelayConfig
+	if _, err := toml.DecodeFile(*path, &cfg); err != nil {
+		return err
+	}
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil)).With("app", "ctrl32-camera-relay")
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	logger.Info("camera relay", "server", cfg.Server, "cameras", len(cfg.Cameras))
+	return video.RunRelay(ctx, cfg, logger)
 }

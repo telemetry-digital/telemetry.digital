@@ -37,6 +37,11 @@ type Config struct {
 type VideoConfig struct {
 	StorageDir string `toml:"storage_dir"` // recorded segments; empty = <report.storage_dir>/../video
 	MaxDiskGB  int    `toml:"max_disk_gb"` // oldest recordings are deleted beyond this; default 50
+	// Remote cameras send their video here (camera-relay at the site, spec 011). Empty = off.
+	PushListen  string `toml:"push_listen"`   // e.g. ":8322"
+	PushTLSCert string `toml:"push_tls_cert"` // default http.tls_cert; profile "internet" requires TLS
+	PushTLSKey  string `toml:"push_tls_key"`
+	PushHost    string `toml:"push_host"` // host name the relays connect to; default the host of http.base_url
 }
 
 // TimeConfig verifies the server clock against NTP (URS B-06); an unsynchronized clock is a warning on the Server page.
@@ -256,6 +261,12 @@ func (c *Config) Validate() error {
 	}
 	if c.Video.StorageDir == "" {
 		c.Video.StorageDir = filepath.Join(filepath.Dir(c.Report.StorageDir), "video")
+	}
+	if c.Video.PushListen != "" && c.Video.PushTLSCert == "" {
+		c.Video.PushTLSCert, c.Video.PushTLSKey = c.HTTP.TLSCert, c.HTTP.TLSKey
+	}
+	if c.Profile == "internet" && c.Video.PushListen != "" && (c.Video.PushTLSCert == "" || c.Video.PushTLSKey == "") {
+		return errors.New("profile \"internet\" requires TLS for video.push_listen: set video.push_tls_cert and video.push_tls_key (or http.tls_cert/tls_key)")
 	}
 	if c.Video.MaxDiskGB <= 0 {
 		c.Video.MaxDiskGB = 50

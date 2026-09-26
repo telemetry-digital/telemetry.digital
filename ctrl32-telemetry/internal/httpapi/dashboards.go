@@ -364,6 +364,12 @@ func validateParams(i int, def *WidgetDef, src map[string]any) (map[string]any, 
 				return nil, fmt.Errorf("widget %d: %s must be true or false", i+1, d.Name)
 			}
 			p[d.Name] = b
+		case "camera":
+			s, _ := v.(string)
+			if !uuidRe.MatchString(s) {
+				return nil, fmt.Errorf("widget %d: %s must be a camera id", i+1, d.Name)
+			}
+			p[d.Name] = s
 		case "select":
 			s, _ := v.(string)
 			okOpt := false

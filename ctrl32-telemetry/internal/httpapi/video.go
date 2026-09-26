@@ -48,29 +48,38 @@ type cameraIn struct {
 	RetentionDays *int    `json:"retention_days"`
 	Enabled       *bool   `json:"enabled"`
 	Sort          *int    `json:"sort"`
+	Source        *string `json:"source"` // pull (the server connects to the camera) or push (a relay sends the video)
 	Reason        string  `json:"reason"`
 }
 
 type cameraRow struct {
 	id, name, location, url, subURL, username, sealed, transport, record string
+	source, pushSealed                                                   string
 	retention, sort                                                      int
 	enabled                                                              bool
 }
 
 func (s *Server) cameraRow(ctx context.Context, org, id string) (cameraRow, bool) {
 	var c cameraRow
-	err := s.pool.QueryRow(ctx, `SELECT id::text, name, location, url, sub_url, username, password_sealed, transport, record, retention_days, sort, enabled
+	err := s.pool.QueryRow(ctx, `SELECT id::text, name, location, url, sub_url, username, password_sealed, transport, record, retention_days, sort, enabled, source, push_secret_sealed
 		FROM core.camera WHERE id = $1::uuid AND org_id = $2::uuid AND removed_at IS NULL`, id, org).
-		Scan(&c.id, &c.name, &c.location, &c.url, &c.subURL, &c.username, &c.sealed, &c.transport, &c.record, &c.retention, &c.sort, &c.enabled)
+		Scan(&c.id, &c.name, &c.location, &c.url, &c.subURL, &c.username, &c.sealed, &c.transport, &c.record, &c.retention, &c.sort, &c.enabled, &c.source, &c.pushSealed)
 	return c, err == nil
 }
 
 // cameraJSON shows stream addresses only to managers (they reveal the network).
 func (s *Server) cameraJSON(r *http.Request, c cameraRow) map[string]any {
 	out := map[string]any{"id": c.id, "name": c.name, "location": c.location, "record": c.record, "retention_days": c.retention,
-		"sort": c.sort, "enabled": c.enabled, "has_sub": c.subURL != ""}
+		"sort": c.sort, "enabled": c.enabled, "has_sub": c.subURL != "" || c.source == "push", "source": c.source}
 	if p := PrincipalFrom(r.Context()); p.Has("video.manage") {
 		out["url"], out["sub_url"], out["username"], out["transport"], out["has_password"] = c.url, c.subURL, c.username, c.transport, c.sealed != ""
+		if c.source == "push" {
+			base := ""
+			if s.video != nil {
+				base = s.video.PushURL()
+			}
+			out["push"] = map[string]any{"enabled": base != "", "url": base + "/" + c.id, "sub_url": base + "/" + c.id + "/sub", "user": c.id}
+		}
 	}
 	st := video.Status{State: "disabled"}
 	if s.video != nil {
@@ -160,6 +169,18 @@ func (s *Server) applyCamera(in *cameraIn, c *cameraRow, pw **string) string {
 			return "location: at most 120 characters"
 		}
 	}
+	if in.Source != nil {
+		c.source = *in.Source
+	}
+	switch c.source {
+	case "pull":
+	case "push":
+		// the relay at the site knows the camera addresses; the server keeps none
+		c.url, c.subURL, c.username, c.sealed, c.transport = "", "", "", "", "auto"
+		in.URL, in.SubURL, in.Username, in.Password, in.Transport = nil, nil, nil, nil, nil
+	default:
+		return "source: pull or push"
+	}
 	for _, f := range []struct {
 		in  *string
 		dst *string
@@ -180,7 +201,7 @@ func (s *Server) applyCamera(in *cameraIn, c *cameraRow, pw **string) string {
 			}
 		}
 	}
-	if c.url == "" {
+	if c.url == "" && c.source != "push" {
 		return "url is required (rtsp://… or http://… of the camera's stream)"
 	}
 	if in.Username != nil {
@@ -228,11 +249,25 @@ func (s *Server) createCamera(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err.Error())
 		return
 	}
-	c := cameraRow{transport: "auto", record: "continuous", retention: 7, enabled: true}
+	c := cameraRow{transport: "auto", record: "continuous", retention: 7, enabled: true, source: "pull"}
 	var pw *string
 	if msg := s.applyCamera(&in, &c, &pw); msg != "" {
 		writeErr(w, 400, msg)
 		return
+	}
+	var secret string
+	if c.source == "push" {
+		if s.video == nil {
+			writeErr(w, 409, "video is not available")
+			return
+		}
+		secret = video.NewPushSecret()
+		sealed, err := s.video.SealPassword(secret)
+		if err != nil {
+			writeErr(w, 500, "secret not stored: "+err.Error())
+			return
+		}
+		c.pushSealed = sealed
 	}
 	if pw != nil && s.video != nil {
 		sealed, err := s.video.SealPassword(*pw)
@@ -243,9 +278,9 @@ func (s *Server) createCamera(w http.ResponseWriter, r *http.Request) {
 		c.sealed = sealed
 	}
 	by := PrincipalFrom(r.Context()).Username
-	err := s.pool.QueryRow(r.Context(), `INSERT INTO core.camera (org_id, name, location, url, sub_url, username, password_sealed, transport, record, retention_days, enabled, sort, created_by)
-		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id::text`,
-		org, c.name, c.location, c.url, c.subURL, c.username, c.sealed, c.transport, c.record, c.retention, c.enabled, c.sort, by).Scan(&c.id)
+	err := s.pool.QueryRow(r.Context(), `INSERT INTO core.camera (org_id, name, location, url, sub_url, username, password_sealed, transport, record, retention_days, enabled, sort, created_by, source, push_secret_sealed)
+		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id::text`,
+		org, c.name, c.location, c.url, c.subURL, c.username, c.sealed, c.transport, c.record, c.retention, c.enabled, c.sort, by, c.source, c.pushSealed).Scan(&c.id)
 	if err != nil {
 		writeErr(w, 500, "camera not stored")
 		return
@@ -254,11 +289,66 @@ func (s *Server) createCamera(w http.ResponseWriter, r *http.Request) {
 	if s.video != nil {
 		s.video.Reload(context.Background(), c.id)
 	}
-	writeJSON(w, 201, s.cameraJSON(r, c))
+	out := s.cameraJSON(r, c)
+	if secret != "" {
+		s.withSecret(out, c, secret)
+	}
+	writeJSON(w, 201, out)
+}
+
+// withSecret adds the push secret (shown once) and a ready relay configuration for the site.
+func (s *Server) withSecret(out map[string]any, c cameraRow, secret string) {
+	server := s.video.PushURL()
+	if server == "" {
+		server = "rtsps://SERVER:8322"
+	}
+	out["push_secret"] = secret
+	out["relay_config"] = fmt.Sprintf("# relay.toml at the remote site — keep it private (chmod 600)\nserver = %q\n\n[[camera]]\n# %s\nid = %q\nsecret = %q\nsource = \"rtsp://user:password@192.168.1.64:554/stream1\"   # main stream of the local camera\n# sub_source = \"rtsp://user:password@192.168.1.64:554/stream2\"   # optional, for tiles\n",
+		server, strings.ReplaceAll(c.name, "\n", " "), c.id, secret)
+}
+
+// rotatePushSecret issues a new secret for a push camera; the old one stops working at once.
+func (s *Server) rotatePushSecret(w http.ResponseWriter, r *http.Request) {
+	org, ok := s.mustOrg(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		Reason string `json:"reason"`
+	}
+	if err := decodeJSON(r, &in, 4096); err != nil || strings.TrimSpace(in.Reason) == "" {
+		writeErr(w, 400, "reason is required")
+		return
+	}
+	c, ok := s.cameraRow(r.Context(), org, r.PathValue("id"))
+	if !ok || s.video == nil {
+		writeErr(w, 404, "camera not found")
+		return
+	}
+	if c.source != "push" {
+		writeErr(w, 409, "the camera does not send its video (source is pull)")
+		return
+	}
+	secret := video.NewPushSecret()
+	sealed, err := s.video.SealPassword(secret)
+	if err != nil {
+		writeErr(w, 500, "secret not stored")
+		return
+	}
+	if _, err := s.pool.Exec(r.Context(), `UPDATE core.camera SET push_secret_sealed = $2, updated_at = now() WHERE id = $1::uuid`, c.id, sealed); err != nil {
+		writeErr(w, 500, "update failed")
+		return
+	}
+	c.pushSealed = sealed
+	s.audit(r, "camera.push_secret", "camera", c.id, nil, map[string]any{"rotated": true}, in.Reason)
+	s.video.Reload(context.Background(), c.id) // disconnects a relay with the old secret
+	out := s.cameraJSON(r, c)
+	s.withSecret(out, c, secret)
+	writeJSON(w, 200, out)
 }
 
 func cameraAudit(c cameraRow) map[string]any {
-	return map[string]any{"name": c.name, "location": c.location, "url": c.url, "sub_url": c.subURL, "username": c.username,
+	return map[string]any{"name": c.name, "location": c.location, "source": c.source, "url": c.url, "sub_url": c.subURL, "username": c.username,
 		"password_set": c.sealed != "", "transport": c.transport, "record": c.record, "retention_days": c.retention, "enabled": c.enabled}
 }
 
@@ -278,6 +368,7 @@ func (s *Server) updateCamera(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err.Error())
 		return
 	}
+	wasPush := c.source == "push"
 	var pw *string
 	if msg := s.applyCamera(&in, &c, &pw); msg != "" {
 		writeErr(w, 400, msg)
@@ -291,9 +382,17 @@ func (s *Server) updateCamera(w http.ResponseWriter, r *http.Request) {
 		}
 		c.sealed = sealed
 	}
+	var secret string
+	if c.source == "push" && !wasPush && s.video != nil {
+		secret = video.NewPushSecret()
+		c.pushSealed, _ = s.video.SealPassword(secret)
+	}
+	if c.source == "pull" {
+		c.pushSealed = ""
+	}
 	_, err := s.pool.Exec(r.Context(), `UPDATE core.camera SET name = $3, location = $4, url = $5, sub_url = $6, username = $7, password_sealed = $8,
-		transport = $9, record = $10, retention_days = $11, enabled = $12, sort = $13, updated_at = now() WHERE id = $1::uuid AND org_id = $2::uuid`,
-		c.id, org, c.name, c.location, c.url, c.subURL, c.username, c.sealed, c.transport, c.record, c.retention, c.enabled, c.sort)
+		transport = $9, record = $10, retention_days = $11, enabled = $12, sort = $13, source = $14, push_secret_sealed = $15, updated_at = now() WHERE id = $1::uuid AND org_id = $2::uuid`,
+		c.id, org, c.name, c.location, c.url, c.subURL, c.username, c.sealed, c.transport, c.record, c.retention, c.enabled, c.sort, c.source, c.pushSealed)
 	if err != nil {
 		writeErr(w, 500, "update failed")
 		return
@@ -302,7 +401,11 @@ func (s *Server) updateCamera(w http.ResponseWriter, r *http.Request) {
 	if s.video != nil {
 		s.video.Reload(context.Background(), c.id)
 	}
-	writeJSON(w, 200, s.cameraJSON(r, c))
+	out := s.cameraJSON(r, c)
+	if secret != "" {
+		s.withSecret(out, c, secret)
+	}
+	writeJSON(w, 200, out)
 }
 
 func (s *Server) deleteCamera(w http.ResponseWriter, r *http.Request) {
