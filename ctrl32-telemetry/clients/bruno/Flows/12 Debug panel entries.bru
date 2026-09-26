@@ -1,0 +1,27 @@
+meta {
+  name: Debug panel entries
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/v1/flows/:slug/debug
+  body: none
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+params:query {
+  ~after: 
+}
+
+docs {
+  Debug panel entries
+  
+  The last 500 entries: debug nodes, errors, actions, dry-run actions, drops.
+  
+  Requires permission `data.read`.
+}

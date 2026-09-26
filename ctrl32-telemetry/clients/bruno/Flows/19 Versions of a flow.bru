@@ -1,0 +1,21 @@
+meta {
+  name: Versions of a flow
+  type: http
+  seq: 19
+}
+
+get {
+  url: {{baseUrl}}/api/v1/flows/:slug/versions
+  body: none
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+docs {
+  Versions of a flow
+  
+  Requires permission `data.read`.
+}

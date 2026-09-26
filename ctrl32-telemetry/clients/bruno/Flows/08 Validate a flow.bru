@@ -1,0 +1,42 @@
+meta {
+  name: Validate a flow
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/flows/validate
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "spec": {
+      "nodes": [
+        {
+          "disabled": true,
+          "id": "string",
+          "name": "string",
+          "settings": {},
+          "type": "string",
+          "x": 21.5,
+          "y": 21.5
+        }
+      ],
+      "wires": [
+        {
+          "from": "string",
+          "port": 1,
+          "to": "string"
+        }
+      ]
+    }
+  }
+}
+
+docs {
+  Validate a flow
+  
+  Requires permission `data.read`.
+}

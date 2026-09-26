@@ -27,10 +27,12 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/config"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/console"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/escalate"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/flows"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/iam"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/ingest"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/live"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/modbus"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/notify"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/opcua"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/push"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/replication"
@@ -68,14 +70,19 @@ type Server struct {
 	tiles            *tileSource
 	tc               *timecheck.Checker
 	incidents        *incident.Manager
+	flows            *flows.Engine
+	notifier         *notify.Notifier
 }
 
 // New builds the handler tree.
-func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.Service, rep *report.Engine, ing *ingest.Ingest, con *console.Manager, ag *agent.Client, opc *opcua.Manager, log *slog.Logger, version string, hub *live.Hub, mbm *modbus.Manager, esc *escalate.Engine, eng *rules.Engine, pm *push.Manager, tc *timecheck.Checker, inc *incident.Manager, rp *replication.Primary) http.Handler {
-	s := &Server{cfg: cfg, pool: pool, br: br, iam: iamSvc, rep: rep, ing: ing, con: con, agent: ag, opc: opc, started: time.Now(), log: log.With("component", "http"), version: version, live: hub, mb: mbm, esc: esc, rules: eng, push: pm, tc: tc, incidents: inc, repl: rp,
+func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.Service, rep *report.Engine, ing *ingest.Ingest, con *console.Manager, ag *agent.Client, opc *opcua.Manager, log *slog.Logger, version string, hub *live.Hub, mbm *modbus.Manager, esc *escalate.Engine, eng *rules.Engine, pm *push.Manager, tc *timecheck.Checker, inc *incident.Manager, rp *replication.Primary, fl *flows.Engine, nt *notify.Notifier) http.Handler {
+	s := &Server{cfg: cfg, pool: pool, br: br, iam: iamSvc, rep: rep, ing: ing, con: con, agent: ag, opc: opc, started: time.Now(), log: log.With("component", "http"), version: version, live: hub, mb: mbm, esc: esc, rules: eng, push: pm, tc: tc, incidents: inc, repl: rp, flows: fl, notifier: nt,
 		loginLimiter: newLimiter(10, 10), provisionLimiter: newLimiter(20, 10), pairLimiter: newLimiter(5, 5)}
 	if eng != nil {
 		eng.Commander = s
+	}
+	if fl != nil {
+		fl.SetHost(newFlowHost(s))
 	}
 	mux := http.NewServeMux()
 	s.mux = mux
@@ -103,6 +110,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.HandleFunc("POST /api/v1/d/fota/status", s.devFotaStatus)
 	mux.HandleFunc("GET /api/v1/branding", s.getBranding)
 	mux.HandleFunc("POST /api/v1/replication/pair", s.pairReplica)
+	mux.HandleFunc("POST /api/v1/flow-hooks/{token}", s.flowHook)
 	mux.HandleFunc("GET /api/v1/replication/tunnel", s.replicationTunnel)
 	mux.HandleFunc("GET /api/v1/replication/agent", s.replicationAgentPoll)
 	mux.HandleFunc("POST /api/v1/replication/agent", s.replicationAgentReport)
@@ -230,6 +238,24 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("DELETE /api/v1/register-profiles/{id}", s.require("config.write", s.deleteProfile))
 	mux.Handle("POST /api/v1/register-profiles/{id}/apply", s.require("config.write", s.applyProfile))
 	mux.Handle("GET /api/v1/export/organization", s.require("system.admin", s.exportOrganization))
+	mux.Handle("GET /api/v1/flows/catalog", s.require("data.read", s.flowCatalog))
+	mux.Handle("GET /api/v1/flows/settings", s.require("data.read", s.flowSettings))
+	mux.Handle("PUT /api/v1/flows/settings", s.require("config.write", s.flowSettings))
+	mux.Handle("POST /api/v1/flows/validate", s.require("data.read", s.validateFlow))
+	mux.Handle("POST /api/v1/flows/import", s.require("content.write", s.importFlow))
+	mux.Handle("GET /api/v1/flows", s.require("data.read", s.listFlows))
+	mux.Handle("POST /api/v1/flows", s.require("content.write", s.createFlow))
+	mux.Handle("GET /api/v1/flows/{slug}", s.require("data.read", s.getFlow))
+	mux.Handle("PUT /api/v1/flows/{slug}", s.require("content.write", s.updateFlow))
+	mux.Handle("DELETE /api/v1/flows/{slug}", s.require("content.write", s.deleteFlow))
+	mux.Handle("POST /api/v1/flows/{slug}/deploy", s.require("content.write", s.fourEyes("flows", s.deployFlow)))
+	mux.Handle("POST /api/v1/flows/{slug}/disable", s.require("content.write", s.disableFlow))
+	mux.Handle("GET /api/v1/flows/{slug}/versions", s.require("data.read", s.flowVersions))
+	mux.Handle("POST /api/v1/flows/{slug}/restore", s.require("content.write", s.restoreFlow))
+	mux.Handle("POST /api/v1/flows/{slug}/inject", s.require("content.write", s.injectFlow))
+	mux.Handle("GET /api/v1/flows/{slug}/debug", s.require("data.read", s.flowDebug))
+	mux.Handle("GET /api/v1/flows/{slug}/status", s.require("data.read", s.flowStatus))
+	mux.Handle("GET /api/v1/flows/{slug}/export", s.require("data.read", s.exportFlow))
 	mux.Handle("GET /api/v1/replication", s.require("system.admin", s.replicationStatus))
 	mux.Handle("POST /api/v1/replication/pairings", s.require("system.admin", s.createPairing))
 	mux.Handle("PATCH /api/v1/replication/replicas/{id}", s.require("system.admin", s.patchReplica))
@@ -346,6 +372,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.HandleFunc("GET /dashboards/{slug}/{mode}", page("dashboards.html"))
 	mux.HandleFunc("GET /p/{token}", page("public.html"))
 	mux.HandleFunc("GET /api/docs", page("docs.html"))
+	mux.HandleFunc("GET /flows", page("flows.html"))
+	mux.HandleFunc("GET /flows/{slug}", page("flows.html"))
 	mux.HandleFunc("GET /server", page("server.html"))
 	mux.HandleFunc("GET /server/{section}", page("server.html"))
 	mux.HandleFunc("GET /fota/{section}", page("fota.html"))

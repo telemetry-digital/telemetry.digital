@@ -337,6 +337,47 @@ export type Firmware = {
   version?: string;
 };
 
+export type Flow = {
+  checksum?: string;
+  created_at?: string;
+  created_by?: string;
+  deployed_version?: number | null;
+  has_commands?: boolean;
+  /** this version */
+  id?: string;
+  name: string;
+  nodes?: number;
+  reason?: string;
+  slug: string;
+  spec?: FlowSpec;
+  state: "draft" | "deployed" | "disabled";
+  version: number;
+};
+
+export type FlowProblem = {
+  message: string;
+  node?: string;
+};
+
+export type FlowSpec = {
+  nodes: ({
+    disabled?: boolean;
+    id: string;
+    name?: string;
+    settings?: Record<string, unknown>;
+    /** node type from the catalogue */
+    type: string;
+    x?: number;
+    y?: number;
+  })[];
+  wires: ({
+    from: string;
+    /** output index */
+    port: number;
+    to: string;
+  })[];
+};
+
 export type Incident = {
   /** Corrective and preventive action */
   capa?: string;
@@ -2141,6 +2182,310 @@ export class Ctrl32Client {
    * Requires permission `fota.manage`. */
   postFirmware(body: FormData): Promise<Firmware> {
     return this.request<Firmware>('POST', `/api/v1/firmware`, undefined, body, false);
+  }
+
+  /** Incoming webhook of a flow
+   *
+   * The JSON body's value and topic become the message, other fields msg.<name>. With a secret on the node, X-Signature: sha256=<HMAC-SHA256 of the body> is required. */
+  postFlowHooksToken(token: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/flow-hooks/${encodeURIComponent(token)}`, undefined, body, false);
+  }
+
+  /** Flows
+   *
+   * Requires permission `data.read`. */
+  getFlows(): Promise<({
+    dropped?: number;
+    errors?: number;
+    flow?: Flow;
+    running?: boolean;
+  })[]> {
+    return this.request<({
+    dropped?: number;
+    errors?: number;
+    flow?: Flow;
+    running?: boolean;
+  })[]>('GET', `/api/v1/flows`, undefined, undefined, false);
+  }
+
+  /** Create a flow (draft)
+   *
+   * Requires permission `content.write`. */
+  postFlows(body: {
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    spec?: FlowSpec;
+  }): Promise<{
+    flow?: Flow;
+    problems?: FlowProblem[];
+  }> {
+    return this.request<{
+    flow?: Flow;
+    problems?: FlowProblem[];
+  }>('POST', `/api/v1/flows`, undefined, body, false);
+  }
+
+  /** Node library
+   *
+   * Every node type with its group, ports and settings schema, and the expression functions.
+   * 
+   * Requires permission `data.read`. */
+  getFlowsCatalog(): Promise<{
+    functions?: string[];
+    limits?: Record<string, unknown>;
+    nodes?: (Record<string, unknown>)[];
+  }> {
+    return this.request<{
+    functions?: string[];
+    limits?: Record<string, unknown>;
+    nodes?: (Record<string, unknown>)[];
+  }>('GET', `/api/v1/flows/catalog`, undefined, undefined, false);
+  }
+
+  /** Import a flow
+   *
+   * Requires permission `content.write`. */
+  postFlowsImport(body: {
+    /** ctrl32-flow/1 */
+    format: string;
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    slug?: string;
+    spec: FlowSpec;
+  }): Promise<{
+    flow?: Flow;
+    problems?: FlowProblem[];
+  }> {
+    return this.request<{
+    flow?: Flow;
+    problems?: FlowProblem[];
+  }>('POST', `/api/v1/flows/import`, undefined, body, false);
+  }
+
+  /** Flow settings
+   *
+   * Requires permission `data.read`. */
+  getFlowsSettings(): Promise<{
+    allowed_hosts?: string[];
+  }> {
+    return this.request<{
+    allowed_hosts?: string[];
+  }>('GET', `/api/v1/flows/settings`, undefined, undefined, false);
+  }
+
+  /** Change flow settings
+   *
+   * Requires permission `config.write`. */
+  putFlowsSettings(body: {
+    allowed_hosts: string[];
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    allowed_hosts?: string[];
+  }> {
+    return this.request<{
+    allowed_hosts?: string[];
+  }>('PUT', `/api/v1/flows/settings`, undefined, body, false);
+  }
+
+  /** Validate a flow
+   *
+   * Requires permission `data.read`. */
+  postFlowsValidate(body: {
+    spec: FlowSpec;
+  }): Promise<{
+    has_commands?: boolean;
+    ok?: boolean;
+    problems?: FlowProblem[];
+  }> {
+    return this.request<{
+    has_commands?: boolean;
+    ok?: boolean;
+    problems?: FlowProblem[];
+  }>('POST', `/api/v1/flows/validate`, undefined, body, false);
+  }
+
+  /** A flow (current version)
+   *
+   * With validation problems, running status per node and the URLs of its webhook nodes.
+   * 
+   * Requires permission `data.read`. */
+  getFlowsSlug(slug: string): Promise<{
+    flow?: Flow;
+    /** node id → URL */
+    hooks?: Record<string, unknown>;
+    problems?: FlowProblem[];
+    /** running, version, queue, dropped, nodes {in, out, errors, last} */
+    status?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    flow?: Flow;
+    /** node id → URL */
+    hooks?: Record<string, unknown>;
+    problems?: FlowProblem[];
+    /** running, version, queue, dropped, nodes {in, out, errors, last} */
+    status?: Record<string, unknown>;
+  }>('GET', `/api/v1/flows/${encodeURIComponent(slug)}`, undefined, undefined, false);
+  }
+
+  /** Save a new version (draft)
+   *
+   * The deployed version keeps running until the new one is deployed.
+   * 
+   * Requires permission `content.write`. */
+  putFlowsSlug(slug: string, body: {
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    spec: FlowSpec;
+  }): Promise<{
+    flow?: Flow;
+    problems?: FlowProblem[];
+  }> {
+    return this.request<{
+    flow?: Flow;
+    problems?: FlowProblem[];
+  }>('PUT', `/api/v1/flows/${encodeURIComponent(slug)}`, undefined, body, false);
+  }
+
+  /** Delete a flow
+   *
+   * Requires permission `content.write`. */
+  deleteFlowsSlug(slug: string, query: { reason: string; }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('DELETE', `/api/v1/flows/${encodeURIComponent(slug)}`, query, undefined, false);
+  }
+
+  /** Debug panel entries
+   *
+   * The last 500 entries: debug nodes, errors, actions, dry-run actions, drops.
+   * 
+   * Requires permission `data.read`. */
+  getFlowsSlugDebug(slug: string, query?: { after?: number; /** sequence number of the last entry seen */ }): Promise<({
+    dry?: boolean;
+    /** debug, error, action, dry_action, drop, info */
+    kind?: string;
+    msg?: Record<string, unknown>;
+    node?: string;
+    seq?: number;
+    text?: string;
+    ts?: string;
+  })[]> {
+    return this.request<({
+    dry?: boolean;
+    /** debug, error, action, dry_action, drop, info */
+    kind?: string;
+    msg?: Record<string, unknown>;
+    node?: string;
+    seq?: number;
+    text?: string;
+    ts?: string;
+  })[]>('GET', `/api/v1/flows/${encodeURIComponent(slug)}/debug`, query, undefined, false);
+  }
+
+  /** Deploy the current version
+   *
+   * Refused (422) with the problems when the flow is not valid. A flow that sends commands needs device.command and, with the four-eyes policy for commands, becomes a change request (202) that another user approves.
+   * 
+   * Requires permission `content.write`. */
+  postFlowsSlugDeploy(slug: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    flow?: Flow;
+    status?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    flow?: Flow;
+    status?: Record<string, unknown>;
+  }>('POST', `/api/v1/flows/${encodeURIComponent(slug)}/deploy`, undefined, body, false);
+  }
+
+  /** Stop a deployed flow
+   *
+   * Requires permission `content.write`. */
+  postFlowsSlugDisable(slug: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    flow?: Flow;
+  }> {
+    return this.request<{
+    flow?: Flow;
+  }>('POST', `/api/v1/flows/${encodeURIComponent(slug)}/disable`, undefined, body, false);
+  }
+
+  /** Export a flow (JSON)
+   *
+   * Requires permission `data.read`. */
+  getFlowsSlugExport(slug: string): Promise<{
+    checksum?: string;
+    /** ctrl32-flow/1 */
+    format?: string;
+    name?: string;
+    slug?: string;
+    spec?: FlowSpec;
+    version?: number;
+  }> {
+    return this.request<{
+    checksum?: string;
+    /** ctrl32-flow/1 */
+    format?: string;
+    name?: string;
+    slug?: string;
+    spec?: FlowSpec;
+    version?: number;
+  }>('GET', `/api/v1/flows/${encodeURIComponent(slug)}/export`, undefined, undefined, false);
+  }
+
+  /** Send a test message
+   *
+   * Into a node of the deployed flow (dry_run: actions are shown, not executed), or with `spec` into the edited flow (always a dry run).
+   * 
+   * Requires permission `content.write`. */
+  postFlowsSlugInject(slug: string, body: {
+    dry_run?: boolean;
+    node: string;
+    spec?: FlowSpec;
+    topic?: string;
+    /** number, text, bool or null */
+    value?: Record<string, unknown>;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/flows/${encodeURIComponent(slug)}/inject`, undefined, body, false);
+  }
+
+  /** Restore a version
+   *
+   * Saves the old content as a new version (deploy it separately).
+   * 
+   * Requires permission `content.write`. */
+  postFlowsSlugRestore(slug: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    version: number;
+  }): Promise<{
+    flow?: Flow;
+    problems?: FlowProblem[];
+  }> {
+    return this.request<{
+    flow?: Flow;
+    problems?: FlowProblem[];
+  }>('POST', `/api/v1/flows/${encodeURIComponent(slug)}/restore`, undefined, body, false);
+  }
+
+  /** Counters of a running flow
+   *
+   * Requires permission `data.read`. */
+  getFlowsSlugStatus(slug: string): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('GET', `/api/v1/flows/${encodeURIComponent(slug)}/status`, undefined, undefined, false);
+  }
+
+  /** Versions of a flow
+   *
+   * Requires permission `data.read`. */
+  getFlowsSlugVersions(slug: string): Promise<Flow[]> {
+    return this.request<Flow[]>('GET', `/api/v1/flows/${encodeURIComponent(slug)}/versions`, undefined, undefined, false);
   }
 
   /** List update campaigns

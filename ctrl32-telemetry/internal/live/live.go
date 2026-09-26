@@ -76,6 +76,15 @@ func (s *Sub) wants(e Event) bool {
 type Hub struct {
 	mu   sync.RWMutex
 	subs map[*Sub]struct{}
+	taps []func(Event)
+}
+
+// Tap registers a function that sees every event of every organization (the flow engine's triggers); it must not
+// block.
+func (h *Hub) Tap(fn func(Event)) {
+	h.mu.Lock()
+	h.taps = append(h.taps, fn)
+	h.mu.Unlock()
 }
 
 // NewHub creates an empty hub.
@@ -111,6 +120,9 @@ func (h *Hub) Publish(e Event) {
 	}
 	h.mu.RLock()
 	defer h.mu.RUnlock()
+	for _, t := range h.taps {
+		t(e)
+	}
 	for s := range h.subs {
 		if !s.wants(e) {
 			continue

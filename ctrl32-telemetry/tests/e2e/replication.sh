@@ -69,7 +69,7 @@ mkcfg() { # dir http-port mqtt-port pg-port
       -e "s|^listen = \":8080\"|listen = \"127.0.0.1:$2\"|" -e "s|^base_url = .*|base_url = \"http://127.0.0.1:$2\"|" \
       -e "s|^listen = \":1883\".*|listen = \"127.0.0.1:$3\"|" -e "s|^ws_listen = .*|ws_listen = \"127.0.0.1:$(( $3 + 1 ))\"|" \
       -e "s|^socket = .*|# no agent|" -e "s|REPLACE-WITH-RANDOM-32-CHARS|repl-$RANDOM$RANDOM-not-a-secret-0123456789|" \
-      -e "/^storage_dir = /d" -e "s|^\[report\]$|[report]\nstorage_dir = \"$1/reports\"|" -e "s|^\[fota\]$|[fota]\nstorage_dir = \"$1/firmware\"|" \
+      -e "/^storage_dir = /d" -e "/^pmtiles = /d" -e "/^attribution = /d" -e "s|^\[report\]$|[report]\nstorage_dir = \"$1/reports\"|" -e "s|^\[fota\]$|[fota]\nstorage_dir = \"$1/firmware\"|" \
       "$CONFIG" > "$1/config.toml"
   chmod 644 "$1/config.toml"
 }

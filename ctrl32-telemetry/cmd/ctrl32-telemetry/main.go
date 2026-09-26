@@ -14,6 +14,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/flows"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/incident"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/metrics"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/timecheck"
@@ -231,6 +232,9 @@ func runServer(ctx context.Context, cfg *config.Config, cfgPath string, logger *
 	rulesEngine.Deriver = ing
 	ing.AddSink(rulesEngine)
 	rulesEngine.Start(ctx)
+	flowEngine := flows.New(pool, nil, cfg.Security.SecretKey, logger)
+	ing.AddSink(flowEngine)
+	hub.Tap(flowEngine.OnEvent)
 	detector := gap.New(pool, logger, cfg.Gap.CheckInterval)
 	con := console.New(pool, br, logger)
 	ing.SetConsole(con)
@@ -244,7 +248,7 @@ func runServer(ctx context.Context, cfg *config.Config, cfgPath string, logger *
 
 	srv := &http.Server{
 		Addr:              cfg.HTTP.Listen,
-		Handler:           httpapi.New(cfg, pool, br, iamSvc, rep, ing, con, agent.NewClient(cfg.Agent.Socket), opc, logger, version, hub, mbm, esc, rulesEngine, pm, tc, inc, repl),
+		Handler:           httpapi.New(cfg, pool, br, iamSvc, rep, ing, con, agent.NewClient(cfg.Agent.Socket), opc, logger, version, hub, mbm, esc, rulesEngine, pm, tc, inc, repl, flowEngine, notifier),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
@@ -257,6 +261,7 @@ func runServer(ctx context.Context, cfg *config.Config, cfgPath string, logger *
 	g.Go(func() error { detector.Run(gctx); return nil })
 	g.Go(func() error { con.Run(gctx); return nil })
 	g.Go(func() error { repl.Run(gctx, 10*time.Second); return nil })
+	g.Go(func() error { flowEngine.Start(gctx); return nil })
 	g.Go(func() error {
 		t := time.NewTicker(time.Minute)
 		defer t.Stop()

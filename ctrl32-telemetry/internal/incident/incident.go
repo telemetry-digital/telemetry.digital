@@ -57,7 +57,7 @@ type Update struct {
 }
 
 var (
-	Kinds      = []string{"alarm_undelivered", "audit_chain", "backup_failed", "manual", "replica"}
+	Kinds      = []string{"alarm_undelivered", "audit_chain", "backup_failed", "manual", "replica", "flow"}
 	Severities = []string{"minor", "major", "critical"}
 	Statuses   = []string{"open", "investigating", "resolved", "closed"}
 	// allowed transitions

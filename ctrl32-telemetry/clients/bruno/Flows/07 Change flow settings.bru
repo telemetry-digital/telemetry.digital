@@ -1,0 +1,26 @@
+meta {
+  name: Change flow settings
+  type: http
+  seq: 7
+}
+
+put {
+  url: {{baseUrl}}/api/v1/flows/settings
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "allowed_hosts": [
+      "string"
+    ],
+    "reason": "string"
+  }
+}
+
+docs {
+  Change flow settings
+  
+  Requires permission `config.write`.
+}

@@ -376,17 +376,20 @@ func (s *Server) RunCommand(ctx context.Context, c rules.CommandRequest) (rules.
 		return rules.CommandResult{}, err
 	}
 	exp := time.Now().Add(5 * time.Minute).UTC()
-	issuer := "rule:" + c.RuleName
+	issuer, reason := "rule:"+c.RuleName, "automation rule "+c.RuleName
+	if c.Issuer != "" {
+		issuer, reason = c.Issuer, c.Reason
+	}
 	var cid string
-	if err := s.pool.QueryRow(ctx, `INSERT INTO core.device_command (org_id, device_id, method, args, expires_at, issued_by_name, reason, status, rule_id)
-		VALUES ($1::uuid, $2::uuid, $3, $4::jsonb, $5, $6, $7, 'queued', $8::uuid) RETURNING id::text`, c.OrgID, c.DeviceID, c.Method, string(c.Args), exp, issuer, "automation rule "+c.RuleName, c.RuleID).Scan(&cid); err != nil {
+	if err := s.pool.QueryRow(ctx, `INSERT INTO core.device_command (org_id, device_id, method, args, expires_at, issued_by_name, reason, status, rule_id, flow_id)
+		VALUES ($1::uuid, $2::uuid, $3, $4::jsonb, $5, $6, $7, 'queued', NULLIF($8, '')::uuid, NULLIF($9, '')::uuid) RETURNING id::text`, c.OrgID, c.DeviceID, c.Method, string(c.Args), exp, issuer, reason, c.RuleID, c.FlowID).Scan(&cid); err != nil {
 		return rules.CommandResult{}, errors.New("command could not be recorded")
 	}
 	status, result, cmdErr := s.dispatchCommand(ctx, cmdExec{org: c.OrgID, deviceID: c.DeviceID, ext: ext, transport: transport, cid: cid, method: c.Method, args: c.Args, exp: exp, mbOp: mbOp, opcOp: opcOp})
 	msg, _ := json.Marshal(map[string]any{"id": cid, "m": c.Method, "a": c.Args, "exp": exp.Unix()})
 	_, _ = s.pool.Exec(ctx, `INSERT INTO core.raw_message (org_id, device_id, connector, direction, topic, payload, payload_json, decode_status) VALUES ($1::uuid, $2::uuid, 'mqtt', 'out', $3, $4, $4::jsonb, 'ok')`, c.OrgID, c.DeviceID, "d/"+ext+"/cmd", msg)
 	e := audit.Entry{OrgID: c.OrgID, ActorType: "system", ActorName: issuer, Action: "device.command", EntityType: "device", EntityID: c.DeviceID,
-		New: map[string]any{"command_id": cid, "method": c.Method, "args": c.Args, "status": status, "rule_id": c.RuleID}, Reason: "automation rule " + c.RuleName}
+		New: map[string]any{"command_id": cid, "method": c.Method, "args": c.Args, "status": status, "rule_id": c.RuleID, "flow_id": c.FlowID}, Reason: reason}
 	if _, _, err := audit.Append(ctx, s.pool, e); err != nil {
 		s.log.Error("audit append failed", "security", true, "action", "device.command", "err", err)
 	}

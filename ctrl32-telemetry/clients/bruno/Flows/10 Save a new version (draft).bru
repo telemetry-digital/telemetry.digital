@@ -1,0 +1,50 @@
+meta {
+  name: Save a new version (draft)
+  type: http
+  seq: 10
+}
+
+put {
+  url: {{baseUrl}}/api/v1/flows/:slug
+  body: json
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+body:json {
+  {
+    "name": "string",
+    "reason": "string",
+    "spec": {
+      "nodes": [
+        {
+          "disabled": true,
+          "id": "string",
+          "name": "string",
+          "settings": {},
+          "type": "string",
+          "x": 21.5,
+          "y": 21.5
+        }
+      ],
+      "wires": [
+        {
+          "from": "string",
+          "port": 1,
+          "to": "string"
+        }
+      ]
+    }
+  }
+}
+
+docs {
+  Save a new version (draft)
+  
+  The deployed version keeps running until the new one is deployed.
+  
+  Requires permission `content.write`.
+}

@@ -1,0 +1,25 @@
+meta {
+  name: Incoming webhook of a flow
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/flow-hooks/:token
+  body: json
+  auth: inherit
+}
+
+params:path {
+  token: 
+}
+
+body:json {
+  {}
+}
+
+docs {
+  Incoming webhook of a flow
+  
+  The JSON body's value and topic become the message, other fields msg.<name>. With a secret on the node, X-Signature: sha256=<HMAC-SHA256 of the body> is required.
+}

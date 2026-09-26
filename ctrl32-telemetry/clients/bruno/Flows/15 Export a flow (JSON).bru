@@ -1,0 +1,21 @@
+meta {
+  name: Export a flow (JSON)
+  type: http
+  seq: 15
+}
+
+get {
+  url: {{baseUrl}}/api/v1/flows/:slug/export
+  body: none
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+docs {
+  Export a flow (JSON)
+  
+  Requires permission `data.read`.
+}

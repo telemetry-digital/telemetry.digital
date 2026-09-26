@@ -1,0 +1,17 @@
+meta {
+  name: Flow settings
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/flows/settings
+  body: none
+  auth: inherit
+}
+
+docs {
+  Flow settings
+  
+  Requires permission `data.read`.
+}
