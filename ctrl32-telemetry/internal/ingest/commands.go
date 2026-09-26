@@ -3,6 +3,10 @@ package ingest
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/mochi-mqtt/server/v2/packets"
 
@@ -92,4 +96,105 @@ func (in *Ingest) InvalidateDevice(deviceID string) {
 	delete(in.dsMap, deviceID)
 	delete(in.dsTime, deviceID)
 	in.dsMu.Unlock()
+}
+
+// ---- ThingsBoard device API (spec 005 research R2) --------------------------------------------------------------
+
+type rpcRef struct {
+	command string
+	at      time.Time
+}
+
+// RegisterRPC assigns the ThingsBoard request number of a command sent to d/{ext}/tb/rpc/request/{n}.
+func (in *Ingest) RegisterRPC(deviceID, commandID string) int64 {
+	n := in.rpcSeq.Add(1)
+	in.rpcMu.Lock()
+	defer in.rpcMu.Unlock()
+	if in.rpc == nil {
+		in.rpc = map[string]rpcRef{}
+	}
+	if len(in.rpc) > 10000 {
+		for k, v := range in.rpc {
+			if time.Since(v.at) > 24*time.Hour {
+				delete(in.rpc, k)
+			}
+		}
+	}
+	in.rpc[deviceID+":"+strconv.FormatInt(n, 10)] = rpcRef{commandID, time.Now()}
+	return n
+}
+
+// handleTBRPCResponse: v1/devices/me/rpc/response/{n} (rewritten to d/{ext}/tb/rpc/response/{n}) acknowledges the
+// command; any JSON is the result, {"error": "..."} marks it failed.
+func (in *Ingest) handleTBRPCResponse(ctx context.Context, dev *broker.Device, rest string, pk packets.Packet) {
+	n := strings.TrimPrefix(rest, "tb/rpc/response/")
+	in.rpcMu.Lock()
+	ref, ok := in.rpc[dev.ID+":"+n]
+	delete(in.rpc, dev.ID+":"+n)
+	in.rpcMu.Unlock()
+	if !ok {
+		in.storeRejected(ctx, dev, pk, "unknown rpc request id")
+		return
+	}
+	ack := map[string]any{"id": ref.command, "ok": true}
+	var m map[string]any
+	if json.Unmarshal(pk.Payload, &m) == nil {
+		if e, ok := m["error"]; ok {
+			ack["ok"] = false
+			ack["err"] = fmt.Sprint(e)
+		}
+	}
+	if json.Valid(pk.Payload) {
+		ack["r"] = json.RawMessage(pk.Payload)
+	} else {
+		ack["r"] = string(pk.Payload)
+	}
+	b, _ := json.Marshal(ack)
+	pk.Payload = b
+	in.handleCmdAck(ctx, dev, "", pk)
+}
+
+// handleTBAttrRequest: v1/devices/me/attributes/request/{n} {"clientKeys":"a,b","sharedKeys":"c"} → response on
+// v1/devices/me/attributes/response/{n} {"client":{…},"shared":{…}}.
+func (in *Ingest) handleTBAttrRequest(ctx context.Context, dev *broker.Device, rest string, pk packets.Packet) {
+	n := strings.TrimPrefix(rest, "tb/attributes/request/")
+	var req struct {
+		ClientKeys string `json:"clientKeys"`
+		SharedKeys string `json:"sharedKeys"`
+	}
+	if len(pk.Payload) > 0 && json.Unmarshal(pk.Payload, &req) != nil {
+		in.storeRejected(ctx, dev, pk, "invalid request json")
+		return
+	}
+	var shared, client []byte
+	if err := in.pool.QueryRow(ctx, `SELECT shared_attributes, coalesce(status->'attributes', '{}'::jsonb) FROM core.device WHERE id = $1::uuid`, dev.ID).Scan(&shared, &client); err != nil {
+		in.log.Error("attributes lookup failed", "err", err)
+		return
+	}
+	pick := func(raw []byte, keys string) map[string]json.RawMessage {
+		var all map[string]json.RawMessage
+		_ = json.Unmarshal(raw, &all)
+		if strings.TrimSpace(keys) == "" {
+			return all
+		}
+		sub := map[string]json.RawMessage{}
+		for _, k := range strings.Split(keys, ",") {
+			if v, ok := all[strings.TrimSpace(k)]; ok {
+				sub[strings.TrimSpace(k)] = v
+			}
+		}
+		return sub
+	}
+	out := map[string]any{}
+	if req.ClientKeys != "" || req.SharedKeys == "" {
+		out["client"] = pick(client, req.ClientKeys)
+	}
+	if req.SharedKeys != "" || req.ClientKeys == "" {
+		out["shared"] = pick(shared, req.SharedKeys)
+	}
+	b, _ := json.Marshal(out)
+	if err := in.br.Publish("d/"+dev.ExternalID+"/tb/attributes/response/"+n, b, false); err != nil {
+		in.log.Error("attributes response publish failed", "err", err)
+	}
+	in.storeRaw(ctx, dev, pk, "ok", nil)
 }

@@ -210,6 +210,7 @@ func (s *Server) setSharedAttributes(ctx context.Context, org, id string, set ma
 		return nil, nil, false, 500, errors.New("update failed")
 	}
 	if s.br != nil {
+		_ = s.br.Publish("d/"+ext+"/tb/attributes", doc, false) // ThingsBoard devices: v1/devices/me/attributes
 		if err := s.br.Publish("d/"+ext+"/attributes/shared", doc, true); err == nil {
 			published = true
 			_, _ = s.pool.Exec(ctx, `INSERT INTO core.raw_message (org_id, device_id, connector, direction, topic, payload, payload_json, decode_status) VALUES ($1::uuid, $2::uuid, 'mqtt', 'out', $3, $4, $4::jsonb, 'ok')`, org, id, "d/"+ext+"/attributes/shared", doc)

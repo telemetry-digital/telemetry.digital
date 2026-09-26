@@ -169,9 +169,17 @@ func (s *Server) provision(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusTooManyRequests, "too many attempts")
 		return
 	}
+	body, ok := readProvisionBody(w, r)
+	if !ok {
+		return
+	}
+	if strings.Contains(string(body), "provisionDeviceKey") {
+		s.provisionByKey(w, r, body)
+		return
+	}
 	var in struct{ Claim, HW, FW string }
-	if err := decodeJSON(r, &in, 2048); err != nil {
-		writeErr(w, 400, err.Error())
+	if err := json.Unmarshal(body, &in); err != nil {
+		writeErr(w, 400, "request is not JSON")
 		return
 	}
 	var deviceID, ext, credID string

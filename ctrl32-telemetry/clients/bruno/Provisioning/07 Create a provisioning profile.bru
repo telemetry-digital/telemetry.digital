@@ -1,0 +1,34 @@
+meta {
+  name: Create a provisioning profile
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/provision-profiles
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "approval": true,
+    "auto_datastreams": true,
+    "max_devices": 1,
+    "name": "string",
+    "name_pattern": "string",
+    "reason": "string",
+    "room_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "site_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "strategy": "create",
+    "transport": "mqtt"
+  }
+}
+
+docs {
+  Create a provisioning profile
+  
+  The response carries the `secret` once; devices use key and secret to register themselves.
+  
+  Requires permission `device.manage`.
+}

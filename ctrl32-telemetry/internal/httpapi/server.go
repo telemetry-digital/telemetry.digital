@@ -28,6 +28,7 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/console"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/escalate"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/flows"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/provision"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/iam"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/ingest"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/live"
@@ -71,6 +72,7 @@ type Server struct {
 	tc               *timecheck.Checker
 	incidents        *incident.Manager
 	flows            *flows.Engine
+	prov             *provision.Service
 	notifier         *notify.Notifier
 }
 
@@ -83,6 +85,10 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	}
 	if fl != nil {
 		fl.SetHost(newFlowHost(s))
+	}
+	s.prov = provision.New(pool, s.log)
+	if br != nil {
+		br.OnProvision = s.prov.HandleMQTT
 	}
 	mux := http.NewServeMux()
 	s.mux = mux
@@ -214,6 +220,14 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("GET /api/v1/rule-runs", s.require("config.write", s.listRuleRuns))
 	mux.Handle("PUT /api/v1/settings/policy", s.require("user.admin", s.putPolicy))
 	mux.Handle("GET /api/v1/devices/{id}/attributes", s.require("data.read", s.getAttributes))
+	mux.Handle("GET /api/v1/provision-profiles", s.require("device.manage", s.listProvProfiles))
+	mux.Handle("POST /api/v1/provision-profiles", s.require("device.manage", s.createProvProfile))
+	mux.Handle("PUT /api/v1/provision-profiles/{id}", s.require("device.manage", s.updateProvProfile))
+	mux.Handle("POST /api/v1/provision-profiles/{id}/rotate", s.require("device.manage", s.rotateProvProfile))
+	mux.Handle("DELETE /api/v1/provision-profiles/{id}", s.require("device.manage", s.revokeProvProfile))
+	mux.Handle("GET /api/v1/device-approvals", s.require("device.manage", s.listApprovals))
+	mux.Handle("POST /api/v1/devices/{id}/approve", s.require("device.manage", s.decideDevice(true)))
+	mux.Handle("POST /api/v1/devices/{id}/reject", s.require("device.manage", s.decideDevice(false)))
 	mux.Handle("PUT /api/v1/devices/{id}/attributes", s.require("device.manage", s.putAttributes))
 	mux.Handle("GET /api/v1/devices/{id}/console", s.require("device.console", s.consoleStatus))
 	mux.Handle("POST /api/v1/devices/{id}/console", s.require("device.console", s.consoleOpen))

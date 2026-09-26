@@ -30,4 +30,5 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/rs/xid v1.4.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

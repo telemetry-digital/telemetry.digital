@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/modbus"
@@ -58,6 +59,12 @@ func (s *Server) dispatchCommand(ctx context.Context, e cmdExec) (status string,
 	status = "queued"
 	if e.transport == "mqtt" && s.br != nil {
 		msg, _ := json.Marshal(map[string]any{"id": e.cid, "m": e.method, "a": e.args, "exp": e.exp.Unix()})
+		// ThingsBoard-style devices receive the same command as an RPC request (only the subscribed dialect arrives)
+		if s.ing != nil {
+			n := s.ing.RegisterRPC(e.deviceID, e.cid)
+			rpc, _ := json.Marshal(map[string]any{"method": e.method, "params": e.args})
+			_ = s.br.Publish("d/"+e.ext+"/tb/rpc/request/"+strconv.FormatInt(n, 10), rpc, false)
+		}
 		if err := s.br.Publish("d/"+e.ext+"/cmd", msg, false); err == nil {
 			status = "sent"
 			_, _ = s.pool.Exec(ctx, `UPDATE core.device_command SET status = 'sent', sent_at = now() WHERE id = $1::uuid`, e.cid)

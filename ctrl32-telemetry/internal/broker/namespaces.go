@@ -68,7 +68,7 @@ func (h *authHook) OnPublish(cl *mqtt.Client, pk packets.Packet) (packets.Packet
 	}
 	if _, ok := h.b.provs.Load(cl.ID); ok {
 		h.provision(cl, pk)
-		return pk, packets.ErrRejectPacket
+		return pk, packets.CodeSuccessIgnore // acknowledged, never delivered
 	}
 	if a, ok := h.b.AccountOf(cl.ID); ok {
 		pk.TopicName = a.Namespace + "/" + pk.TopicName

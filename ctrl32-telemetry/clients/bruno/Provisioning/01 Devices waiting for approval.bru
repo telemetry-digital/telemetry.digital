@@ -1,0 +1,17 @@
+meta {
+  name: Devices waiting for approval
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/device-approvals
+  body: none
+  auth: inherit
+}
+
+docs {
+  Devices waiting for approval
+  
+  Requires permission `device.manage`.
+}

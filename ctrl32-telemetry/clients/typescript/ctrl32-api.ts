@@ -1743,6 +1743,13 @@ export class Ctrl32Client {
     return this.request<Datastream>('PATCH', `/api/v1/datastreams/${encodeURIComponent(id)}`, undefined, body, false);
   }
 
+  /** Devices waiting for approval
+   *
+   * Requires permission `device.manage`. */
+  getDeviceApprovals(): Promise<(Record<string, unknown>)[]> {
+    return this.request<(Record<string, unknown>)[]>('GET', `/api/v1/device-approvals`, undefined, undefined, false);
+  }
+
   /** List devices
    *
    * Requires permission `data.read`. */
@@ -1812,6 +1819,24 @@ export class Ctrl32Client {
     reason: string;
   }): Promise<Device> {
     return this.request<Device>('PATCH', `/api/v1/devices/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Approve a self-provisioned device
+   *
+   * Its token works from now on.
+   * 
+   * Requires permission `device.manage`. */
+  postDevicesIdApprove(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    approval?: string;
+    id?: string;
+  }> {
+    return this.request<{
+    approval?: string;
+    id?: string;
+  }>('POST', `/api/v1/devices/${encodeURIComponent(id)}/approve`, undefined, body, false);
   }
 
   /** Shared and client attributes
@@ -2030,6 +2055,24 @@ export class Ctrl32Client {
    * Requires permission `data.read`. */
   getDevicesIdMessages(id: string, query?: { limit?: number; }): Promise<Message[]> {
     return this.request<Message[]>('GET', `/api/v1/devices/${encodeURIComponent(id)}/messages`, query, undefined, false);
+  }
+
+  /** Reject a self-provisioned device
+   *
+   * The device and its token are revoked.
+   * 
+   * Requires permission `device.manage`. */
+  postDevicesIdReject(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    approval?: string;
+    id?: string;
+  }> {
+    return this.request<{
+    approval?: string;
+    id?: string;
+  }>('POST', `/api/v1/devices/${encodeURIComponent(id)}/reject`, undefined, body, false);
   }
 
   /** Revoke a device
@@ -2990,16 +3033,20 @@ export class Ctrl32Client {
     return this.request<Permission[]>('GET', `/api/v1/permissions`, undefined, undefined, false);
   }
 
-  /** Device self-provisioning with a claim code
+  /** Device self-provisioning with a claim code or a provisioning key
    *
-   * The device presents the claim code from device registration and receives its token and MQTT connection details. Rate limited per IP. */
+   * Either the claim code from device registration (response: token and MQTT connection details), or ThingsBoard-compatible `{deviceName, provisionDeviceKey, provisionDeviceSecret}` of a provisioning profile (response: `{status, credentialsType: ACCESS_TOKEN, credentialsValue}`; the same works over MQTT: user name `provision`, publish `/provision/request`, answer on `/provision/response`). Rate limited per IP and key. */
   postProvision(body: {
     /** claim code */
-    claim: string;
+    claim?: string;
+    /** provisioning profile variant */
+    deviceName?: string;
     /** firmware version */
     fw?: string;
     /** hardware id */
     hw?: string;
+    provisionDeviceKey?: string;
+    provisionDeviceSecret?: string;
   }): Promise<{
     device_id?: string;
     external_id?: string;
@@ -3024,6 +3071,188 @@ export class Ctrl32Client {
     /** device token, shown once */
     token?: string;
   }>('POST', `/api/v1/provision`, undefined, body, false);
+  }
+
+  /** Provisioning profiles
+   *
+   * Requires permission `device.manage`. */
+  getProvisionProfiles(): Promise<({
+    /** created devices wait for approval */
+    approval?: boolean;
+    auto_datastreams?: boolean;
+    devices?: number;
+    id?: string;
+    /** pk_…, identifies the profile */
+    key?: string;
+    /** 0 = unlimited */
+    max_devices?: number;
+    name?: string;
+    /** regular expression */
+    name_pattern?: string;
+    room_id?: string;
+    site_id?: string;
+    strategy?: "create" | "preprovisioned";
+    transport?: "mqtt" | "http";
+  })[]> {
+    return this.request<({
+    /** created devices wait for approval */
+    approval?: boolean;
+    auto_datastreams?: boolean;
+    devices?: number;
+    id?: string;
+    /** pk_…, identifies the profile */
+    key?: string;
+    /** 0 = unlimited */
+    max_devices?: number;
+    name?: string;
+    /** regular expression */
+    name_pattern?: string;
+    room_id?: string;
+    site_id?: string;
+    strategy?: "create" | "preprovisioned";
+    transport?: "mqtt" | "http";
+  })[]>('GET', `/api/v1/provision-profiles`, undefined, undefined, false);
+  }
+
+  /** Create a provisioning profile
+   *
+   * The response carries the `secret` once; devices use key and secret to register themselves.
+   * 
+   * Requires permission `device.manage`. */
+  postProvisionProfiles(body: {
+    approval?: boolean;
+    auto_datastreams?: boolean;
+    max_devices?: number;
+    name?: string;
+    name_pattern?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    room_id?: string;
+    site_id?: string;
+    strategy?: "create" | "preprovisioned";
+    transport?: "mqtt" | "http";
+  }): Promise<{
+    /** created devices wait for approval */
+    approval?: boolean;
+    auto_datastreams?: boolean;
+    devices?: number;
+    id?: string;
+    /** pk_…, identifies the profile */
+    key?: string;
+    /** 0 = unlimited */
+    max_devices?: number;
+    name?: string;
+    /** regular expression */
+    name_pattern?: string;
+    room_id?: string;
+    site_id?: string;
+    strategy?: "create" | "preprovisioned";
+    transport?: "mqtt" | "http";
+  }> {
+    return this.request<{
+    /** created devices wait for approval */
+    approval?: boolean;
+    auto_datastreams?: boolean;
+    devices?: number;
+    id?: string;
+    /** pk_…, identifies the profile */
+    key?: string;
+    /** 0 = unlimited */
+    max_devices?: number;
+    name?: string;
+    /** regular expression */
+    name_pattern?: string;
+    room_id?: string;
+    site_id?: string;
+    strategy?: "create" | "preprovisioned";
+    transport?: "mqtt" | "http";
+  }>('POST', `/api/v1/provision-profiles`, undefined, body, false);
+  }
+
+  /** Change a provisioning profile
+   *
+   * Requires permission `device.manage`. */
+  putProvisionProfilesId(id: string, body: {
+    approval?: boolean;
+    auto_datastreams?: boolean;
+    max_devices?: number;
+    name?: string;
+    name_pattern?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    room_id?: string;
+    site_id?: string;
+    strategy?: "create" | "preprovisioned";
+    transport?: "mqtt" | "http";
+  }): Promise<{
+    /** created devices wait for approval */
+    approval?: boolean;
+    auto_datastreams?: boolean;
+    devices?: number;
+    id?: string;
+    /** pk_…, identifies the profile */
+    key?: string;
+    /** 0 = unlimited */
+    max_devices?: number;
+    name?: string;
+    /** regular expression */
+    name_pattern?: string;
+    room_id?: string;
+    site_id?: string;
+    strategy?: "create" | "preprovisioned";
+    transport?: "mqtt" | "http";
+  }> {
+    return this.request<{
+    /** created devices wait for approval */
+    approval?: boolean;
+    auto_datastreams?: boolean;
+    devices?: number;
+    id?: string;
+    /** pk_…, identifies the profile */
+    key?: string;
+    /** 0 = unlimited */
+    max_devices?: number;
+    name?: string;
+    /** regular expression */
+    name_pattern?: string;
+    room_id?: string;
+    site_id?: string;
+    strategy?: "create" | "preprovisioned";
+    transport?: "mqtt" | "http";
+  }>('PUT', `/api/v1/provision-profiles/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Revoke a provisioning profile
+   *
+   * Requires permission `device.manage`. */
+  deleteProvisionProfilesId(id: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/provision-profiles/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** New secret for a profile
+   *
+   * Devices already provisioned keep their tokens.
+   * 
+   * Requires permission `device.manage`. */
+  postProvisionProfilesIdRotate(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    id?: string;
+    /** shown once */
+    secret?: string;
+  }> {
+    return this.request<{
+    id?: string;
+    /** shown once */
+    secret?: string;
+  }>('POST', `/api/v1/provision-profiles/${encodeURIComponent(id)}/rotate`, undefined, body, false);
   }
 
   /** Shared dashboard */
