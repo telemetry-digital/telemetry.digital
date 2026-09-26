@@ -422,3 +422,51 @@ dialog.dw-full::backdrop { background: rgba(15, 23, 42, .55); }
 .fe-dbg details { grid-column: 1 / -1; }
 .fe-dbg pre { margin: 2px 0; font-size: 11px; max-height: 160px; overflow: auto; }
 @media (max-width: 900px) { .fe { grid-template-columns: 1fr; height: auto; } .fe-stage { height: 60vh; } .fe-pal, .fe-props { max-height: 260px; } }
+
+/* ---- Home (smart home, spec 005) ---- */
+.hm-rooms { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.hm-rooms button { border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 999px; padding: 5px 12px; cursor: pointer; font: inherit; font-size: 13px; }
+.hm-rooms button.on { background: var(--primary, #e30613); border-color: var(--primary, #e30613); color: #fff; }
+.hm-rooms small { opacity: .7; }
+.hm-room h2 { font-size: 15px; margin: 18px 0 8px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.hm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.hm-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 118px; transition: border-color .2s, box-shadow .2s; }
+.hm-card.on { border-color: color-mix(in srgb, #f59e0b 55%, var(--line)); box-shadow: 0 0 0 1px color-mix(in srgb, #f59e0b 25%, transparent); }
+.hm-card.on .hm-ico { color: #f59e0b; background: color-mix(in srgb, #f59e0b 16%, transparent); }
+.hm-card.off { opacity: .55; }
+.hm-card.bad { border-color: #dc2626; }
+.hm-top { display: flex; align-items: center; gap: 10px; }
+.hm-ico { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--bg2); color: var(--muted); flex: none; }
+.hm-name { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
+.hm-name b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-name small { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-histbtn { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: 6px; }
+.hm-histbtn:hover { background: var(--bg2); color: var(--fg); }
+.hm-state { font-size: 14px; color: var(--muted); }
+.hm-state.big { font-size: 24px; font-weight: 600; color: var(--fg); }
+.hm-spark { width: 100%; height: 26px; }
+.hm-line { fill: none; stroke: var(--primary, #e30613); stroke-width: 1.6; }
+.hm-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: auto; }
+.hm-ctl select, .hm-ctl input[type=text], .hm-ctl input[type=number] { flex: 1; min-width: 0; }
+.hm-btns { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.hm-btns .btn { display: inline-flex; align-items: center; gap: 4px; }
+.hm-climate .hm-target { min-width: 64px; text-align: center; font-size: 18px; }
+.hm-slider { flex: 1; min-width: 90px; accent-color: #f59e0b; }
+.hm-switch { position: relative; width: 44px; height: 24px; flex: none; }
+.hm-switch input { opacity: 0; width: 0; height: 0; }
+.hm-switch span { position: absolute; inset: 0; background: var(--line); border-radius: 24px; cursor: pointer; transition: background .2s; }
+.hm-switch span::before { content: ""; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform .2s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.hm-switch input:checked + span { background: #f59e0b; }
+.hm-switch input:checked + span::before { transform: translateX(20px); }
+.hm-switch input:disabled + span { cursor: not-allowed; opacity: .6; }
+.hm-msg { font-size: 12px; color: var(--muted); }
+.hm-msg.bad, .hm-err { color: #dc2626; font-size: 12px; }
+.hm-msg.ok { color: #16a34a; }
+.hm-msg.warn { color: #d97706; }
+.hm-hist { width: min(800px, 96vw); }
+.hm-hist-body { margin: 10px 0; max-height: 60vh; overflow: auto; }
+.hm-chart { width: 100%; height: auto; font-size: 11px; fill: var(--muted); }
+.hm-grid-line { stroke: var(--line); stroke-width: 1; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--card); color: var(--fg); padding: 4px 10px; cursor: pointer; font: inherit; font-size: 13px; }
+.seg button.on { background: var(--bg2); font-weight: 600; }

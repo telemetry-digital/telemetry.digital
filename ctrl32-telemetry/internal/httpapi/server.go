@@ -403,6 +403,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.HandleFunc("GET /dashboards/{slug}/{mode}", page("dashboards.html"))
 	mux.HandleFunc("GET /p/{token}", page("public.html"))
 	mux.HandleFunc("GET /api/docs", page("docs.html"))
+	mux.HandleFunc("GET /home", page("home.html"))
+	mux.HandleFunc("GET /smarthome", page("smarthome.html"))
 	mux.HandleFunc("GET /flows", page("flows.html"))
 	mux.HandleFunc("GET /flows/{slug}", page("flows.html"))
 	mux.HandleFunc("GET /server", page("server.html"))
