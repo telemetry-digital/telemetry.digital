@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image"
 	"image/jpeg"
 	"log/slog"
 	"mime/multipart"
@@ -32,6 +33,7 @@ type Server struct {
 	FPS      int    // default 10
 	Loop     int    // > 0: encode this many frames once and repeat them (load tests measure the server, not the simulator)
 	Log      *slog.Logger
+	ONVIF    *ONVIF // PTZ positions shape the picture
 
 	srv      *gortsplib.Server
 	mu       sync.Mutex
@@ -148,7 +150,7 @@ func (s *Server) produce(out *stream, sp spec) {
 			return
 		}
 		send = func(pts uint32, n int, now time.Time) error {
-			au := cached(n, func() [][]byte { return h264Enc.Encode(toYCbCr(Picture(sp.label, sp.w, sp.h, now, n))) })
+			au := cached(n, func() [][]byte { return h264Enc.Encode(toYCbCr(s.picture(sp, now, n))) })
 			pkts, err := rtpEnc.Encode(au)
 			if err != nil {
 				return err
@@ -169,7 +171,7 @@ func (s *Server) produce(out *stream, sp spec) {
 		send = func(pts uint32, n int, now time.Time) error {
 			img := cached(n, func() [][]byte {
 				var b bytes.Buffer
-				_ = jpeg.Encode(&b, Picture(sp.label, sp.w, sp.h, now, n), &jpeg.Options{Quality: 75})
+				_ = jpeg.Encode(&b, s.picture(sp, now, n), &jpeg.Options{Quality: 75})
 				return [][]byte{b.Bytes()}
 			})
 			pkts, err := rtpEnc.Encode(img[0])
@@ -200,6 +202,11 @@ func (s *Server) produce(out *stream, sp spec) {
 			}
 		}
 	}
+}
+
+func (s *Server) picture(sp spec, now time.Time, n int) *image.RGBA {
+	pan, tilt, zoom := s.ONVIF.View(sp.label)
+	return PictureView(sp.label, sp.w, sp.h, now, n, pan, tilt, zoom)
 }
 
 // OnDescribe implements gortsplib.ServerHandlerOnDescribe.

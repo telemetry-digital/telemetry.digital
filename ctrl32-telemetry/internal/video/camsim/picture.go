@@ -1,6 +1,7 @@
 package camsim
 
 import (
+	"fmt"
 	"hash/fnv"
 	"image"
 	"image/color"
@@ -29,13 +30,23 @@ var font5x7 = map[rune][7]byte{
 	'W': {0x11, 0x11, 0x11, 0x15, 0x15, 0x15, 0x0A}, 'X': {0x11, 0x11, 0x0A, 0x04, 0x0A, 0x11, 0x11},
 	'Y': {0x11, 0x11, 0x11, 0x0A, 0x04, 0x04, 0x04}, 'Z': {0x1F, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1F},
 	':': {0x00, 0x0C, 0x0C, 0x00, 0x0C, 0x0C, 0x00}, '-': {0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00},
-	'.': {0x00, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x0C}, '/': {0x01, 0x01, 0x02, 0x04, 0x08, 0x10, 0x10},
+	'.': {0x00, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x0C}, '+': {0x00, 0x04, 0x04, 0x1F, 0x04, 0x04, 0x00}, '/': {0x01, 0x01, 0x02, 0x04, 0x08, 0x10, 0x10},
 }
 
 // Picture draws a test scene: a background in the camera's own colour, a moving bar and a ball, the camera label
 // and a clock, so a viewer can tell cameras apart and see that the picture is live.
 func Picture(label string, w, h int, t time.Time, frame int) *image.RGBA {
+	return PictureView(label, w, h, t, frame, 0, 0, 0)
+}
+
+// PictureView draws the scene as seen by a PTZ camera: pan and tilt (-1…1) shift the scene, zoom (0…1) enlarges it.
+func PictureView(label string, w, h int, t time.Time, frame int, pan, tilt, zoom float64) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	sc := 1 + 2*zoom
+	// maps a scene point (x, y) to the picture
+	px := func(x int) int { return int(float64(w)/2 + (float64(x)-float64(w)/2-pan*float64(w)/2)*sc) }
+	py := func(y int) int { return int(float64(h)/2 + (float64(y)-float64(h)/2+tilt*float64(h)/2)*sc) }
+	ps := func(n int) int { return int(float64(n) * sc) }
 	hs := fnv.New32a()
 	hs.Write([]byte(label))
 	hue := float64(hs.Sum32()%360) / 360
@@ -46,13 +57,16 @@ func Picture(label string, w, h int, t time.Time, frame int) *image.RGBA {
 		}
 	}
 	// a floor line and a moving bar
-	fill(img, 0, h*3/4, w, 2, color.RGBA{255, 255, 255, 80})
+	fill(img, 0, py(h*3/4), w, 2, color.RGBA{255, 255, 255, 80})
 	bx := (frame * 4) % (w + w/8)
-	fill(img, bx-w/8, h/2, w/10, h/4, hsv(hue+0.5, 0.7, 0.9))
+	fill(img, px(bx-w/8), py(h/2), ps(w/10), ps(h/4), hsv(hue+0.5, 0.7, 0.9))
+	// a fixed landmark (a house) so that pan and tilt are visible
+	fill(img, px(w/8), py(h/2-h/16), ps(w/8), ps(h/4+h/16), color.RGBA{200, 200, 210, 255})
+	fill(img, px(w/8+w/32), py(h/2+h/16), ps(w/24), ps(h/6), color.RGBA{90, 60, 40, 255})
 	// the ball
-	bxx := w/2 + int(float64(w/3)*sinTri(float64(frame)/40))
-	byy := h/3 + int(float64(h/8)*sinTri(float64(frame)/13))
-	r := max(3, h/20)
+	bxx := px(w/2 + int(float64(w/3)*sinTri(float64(frame)/40)))
+	byy := py(h/3 + int(float64(h/8)*sinTri(float64(frame)/13)))
+	r := max(3, ps(h/20))
 	for y := -r; y <= r; y++ {
 		for x := -r; x <= r; x++ {
 			if x*x+y*y <= r*r {
@@ -62,6 +76,10 @@ func Picture(label string, w, h int, t time.Time, frame int) *image.RGBA {
 	}
 	scale := max(1, h/60)
 	text(img, 6, 6, scale, strings.ToUpper(label), color.RGBA{255, 255, 255, 255})
+	if pan != 0 || tilt != 0 || zoom != 0 {
+		ptz := fmt.Sprintf("P%+.1f T%+.1f Z%.1f", pan, tilt, zoom)
+		text(img, 6, 6+9*scale, max(1, scale/2+1), strings.ToUpper(ptz), color.RGBA{250, 240, 90, 255})
+	}
 	ts := t.Format("15:04:05")
 	text(img, w-6-len(ts)*6*scale, h-6-7*scale, scale, ts, color.RGBA{255, 255, 255, 255})
 	return img
