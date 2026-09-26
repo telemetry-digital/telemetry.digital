@@ -32,12 +32,19 @@ type Device struct {
 
 // Broker wraps the mochi server and the device registry cache.
 type Broker struct {
-	Server  *mqtt.Server
-	pool    *pgxpool.Pool
-	log     *slog.Logger
-	clients sync.Map // client id -> *Device
+	Server   *mqtt.Server
+	pool     *pgxpool.Pool
+	log      *slog.Logger
+	auth     Authenticator
+	clients  sync.Map // client id -> *Device
+	accounts sync.Map // client id -> *Account (MQTT accounts with a topic namespace)
+	provs    sync.Map // client id -> struct{} (provisioning sessions)
 	// OnDeviceState is called when an authenticated device connects or disconnects (live data hook).
 	OnDeviceState func(d *Device, connected bool)
+	// OnAccountState is called when an MQTT account client connects or disconnects.
+	OnAccountState func(a *Account, clientID string, connected bool)
+	// OnProvision answers a provisioning request (ThingsBoard format); nil disables MQTT provisioning.
+	OnProvision func(ctx context.Context, payload []byte, remote string) []byte
 }
 
 // New creates the broker with the configured listeners. It does not start serving.
@@ -46,7 +53,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log *slog.Logger) (*Broker, err
 	// mochi's own logger is chatty; route it through slog at debug level.
 	srv.Log = log.With("component", "mqtt")
 
-	b := &Broker{Server: srv, pool: pool, log: log}
+	b := &Broker{Server: srv, pool: pool, log: log, auth: dbAuth{pool}}
 	if err := srv.AddHook(&authHook{b: b}, nil); err != nil {
 		return nil, err
 	}
@@ -152,7 +159,8 @@ type authHook struct {
 func (h *authHook) ID() string { return "ctrl32-device-auth" }
 
 func (h *authHook) Provides(bt byte) bool {
-	return bytes.Contains([]byte{mqtt.OnConnectAuthenticate, mqtt.OnACLCheck, mqtt.OnDisconnect}, []byte{bt})
+	return bytes.Contains([]byte{mqtt.OnConnectAuthenticate, mqtt.OnACLCheck, mqtt.OnDisconnect, mqtt.OnPublish, mqtt.OnSubscribe,
+		mqtt.OnUnsubscribe, mqtt.OnPacketEncode, mqtt.OnWill}, []byte{bt})
 }
 
 func (h *authHook) OnConnectAuthenticate(cl *mqtt.Client, pk packets.Packet) bool {
@@ -161,45 +169,97 @@ func (h *authHook) OnConnectAuthenticate(cl *mqtt.Client, pk packets.Packet) boo
 	}
 	username := string(pk.Connect.Username)
 	password := string(pk.Connect.Password)
-	if username == "" || password == "" {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	switch {
+	case username == ProvisionUser:
+		if h.b.OnProvision == nil {
+			h.b.log.Warn("mqtt provisioning refused: not enabled", "security", true, "client", cl.ID, "remote", cl.Net.Remote)
+			return false
+		}
+		h.b.provs.Store(cl.ID, struct{}{})
+		// a provisioning session is short: close it after a minute whatever happens
+		time.AfterFunc(time.Minute, func() {
+			if _, ok := h.b.provs.Load(cl.ID); ok {
+				h.b.Server.DisconnectClient(cl, packets.ErrMaxConnectTime)
+			}
+		})
+		return true
+	case strings.HasPrefix(username, AccountPrefix):
+		a, err := h.b.auth.Account(ctx, username, password)
+		if err != nil {
+			h.b.log.Warn("mqtt account auth rejected", "security", true, "client", cl.ID, "username", username, "remote", cl.Net.Remote)
+			return false
+		}
+		h.b.accounts.Store(cl.ID, a)
+		h.b.log.Info("mqtt account connected", "account", username, "client", cl.ID, "remote", cl.Net.Remote)
+		if h.b.OnAccountState != nil {
+			h.b.OnAccountState(a, cl.ID, true)
+		}
+		return true
+	}
+	if username == "" {
 		h.b.log.Warn("mqtt auth rejected: missing credentials", "security", true, "client", cl.ID, "remote", cl.Net.Remote)
 		return false
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	var d Device
-	err := h.b.pool.QueryRow(ctx, `
-		SELECT d.id::text, d.org_id::text, d.external_id, d.transport
-		FROM core.device d
-		JOIN core.organization o ON o.id = d.org_id
-		JOIN core.device_credential c ON c.device_id = d.id
-		WHERE d.external_id = $1 AND d.revoked_at IS NULL AND o.disabled_at IS NULL
-		  AND c.kind = 'token' AND c.secret_hash = $2 AND c.revoked_at IS NULL
-		  AND (c.valid_to IS NULL OR c.valid_to > now())
-		LIMIT 1`, username, TokenHash(password)).Scan(&d.ID, &d.OrgID, &d.ExternalID, &d.Transport)
+	var d *Device
+	var err error
+	if password == "" {
+		d, err = h.b.auth.DeviceByToken(ctx, username) // ThingsBoard style: the token is the user name
+	} else {
+		d, err = h.b.auth.Device(ctx, username, password)
+	}
 	if err != nil {
-		h.b.log.Warn("mqtt auth rejected", "security", true, "client", cl.ID, "username", username, "remote", cl.Net.Remote)
+		h.b.log.Warn("mqtt auth rejected", "security", true, "client", cl.ID, "username", safeName(username, password), "remote", cl.Net.Remote)
 		return false
 	}
-	h.b.clients.Store(cl.ID, &d)
+	h.b.clients.Store(cl.ID, d)
 	h.b.log.Info("mqtt device connected", "device", d.ExternalID, "client", cl.ID, "remote", cl.Net.Remote)
 	if h.b.OnDeviceState != nil {
-		h.b.OnDeviceState(&d, true)
+		h.b.OnDeviceState(d, true)
 	}
 	return true
 }
 
-// OnACLCheck: a device may only use topics under d/{its external id}/ and only in the documented direction.
+// safeName keeps tokens out of the log when the token is the user name.
+func safeName(username, password string) string {
+	if password == "" && len(username) > 8 {
+		return username[:4] + "…(token)"
+	}
+	return username
+}
+
+// OnACLCheck: a device may only use topics under d/{its external id}/ and only in the documented direction; an MQTT
+// account may use any topic inside its namespace; a provisioning session only the provisioning topics.
+// Subscription filters arrive here already rewritten by OnSubscribe; publish topics before OnPublish rewrites them.
 func (h *authHook) OnACLCheck(cl *mqtt.Client, topic string, write bool) bool {
 	if cl.Net.Inline {
 		return true
+	}
+	if _, ok := h.b.provs.Load(cl.ID); ok {
+		if write {
+			return topic == "/provision/request" || topic == "provision/request"
+		}
+		return topic == "/provision/response" || topic == "provision/response"
+	}
+	if a, ok := h.b.AccountOf(cl.ID); ok {
+		if write {
+			return !strings.HasPrefix(topic, "$")
+		}
+		if rest, ok := strings.CutPrefix(topic, "$share/"); ok {
+			if _, f, ok := strings.Cut(rest, "/"); ok {
+				topic = f
+			}
+		}
+		return strings.HasPrefix(topic, a.Namespace+"/")
 	}
 	dev, ok := h.b.DeviceOf(cl.ID)
 	if !ok {
 		return false
 	}
-	// ThingsBoard-style alias: v1/devices/me/telemetry|attributes (write only) — remapped by the ingest layer.
-	if write && (topic == "v1/devices/me/telemetry" || topic == "v1/devices/me/attributes") {
+	// ThingsBoard-style aliases (write) — remapped by the ingest layer or rewritten into the device's own topics.
+	if write && (topic == "v1/devices/me/telemetry" || topic == "v1/devices/me/attributes" ||
+		strings.HasPrefix(topic, "v1/devices/me/attributes/request/") || strings.HasPrefix(topic, "v1/devices/me/rpc/response/")) {
 		return true
 	}
 	extID, rest, ok := DeviceIDFromTopic(topic)
@@ -217,12 +277,23 @@ func (h *authHook) OnACLCheck(cl *mqtt.Client, topic string, write bool) bool {
 		case "attributes/shared", "attributes/response", "cmd", "console/in", "fota/target", "fota/chunk":
 			return true
 		}
+		if strings.HasPrefix(rest, "tb/") {
+			return true // ThingsBoard subscriptions, rewritten from v1/devices/me/…
+		}
 	}
 	h.b.log.Warn("mqtt acl denied", "security", true, "device", dev.ExternalID, "topic", topic, "write", write)
 	return false
 }
 
 func (h *authHook) OnDisconnect(cl *mqtt.Client, err error, expire bool) {
+	h.b.provs.Delete(cl.ID)
+	if v, ok := h.b.accounts.LoadAndDelete(cl.ID); ok {
+		a := v.(*Account)
+		h.b.log.Info("mqtt account disconnected", "account", a.Username, "client", cl.ID, "err", err)
+		if h.b.OnAccountState != nil {
+			h.b.OnAccountState(a, cl.ID, false)
+		}
+	}
 	if v, ok := h.b.clients.LoadAndDelete(cl.ID); ok {
 		d := v.(*Device)
 		h.b.log.Info("mqtt device disconnected", "device", d.ExternalID, "client", cl.ID, "err", err)
