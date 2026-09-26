@@ -235,6 +235,7 @@ func runServer(ctx context.Context, cfg *config.Config, cfgPath string, logger *
 	rulesEngine.Start(ctx)
 	flowEngine := flows.New(pool, nil, cfg.Security.SecretKey, logger)
 	smart := smarthome.New(pool, br, ing, hub, cfg.Security.SecretKey, logger)
+	ing.AddSink(smart) // values of datastreams exported to Home Assistant through bridges
 	ing.AddSink(flowEngine)
 	hub.Tap(flowEngine.OnEvent)
 	detector := gap.New(pool, logger, cfg.Gap.CheckInterval)

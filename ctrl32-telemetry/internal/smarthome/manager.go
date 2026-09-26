@@ -185,6 +185,14 @@ func (m *Manager) Reload(ctx context.Context) error {
 		}
 		if old != nil {
 			old.stop()
+			if old.kind == "mqtt_bridge" && old.bridge != nil { // exports that were dropped: remove their configs
+				nu := (&source{settings: r.settings}).exports()
+				for id := range old.exports() {
+					if !nu[id] {
+						m.unpublish(ctx, old, id)
+					}
+				}
+			}
 		}
 		sctx, cancel := context.WithCancel(m.ctx)
 		src := &source{id: r.id, org: r.org, kind: r.kind, name: r.name, ns: str(r.settings, "namespace"), prefix: prefix, adopt: adopt,
@@ -663,7 +671,7 @@ func (m *Manager) apply(ctx context.Context, src *source, x *ent, u Update, appl
 	x.err = errText
 	state, attrs, avail := x.state, cloneMap(x.attrs), x.available
 	var acked []pendingCmd
-	if changed {
+	if changed || u.State != nil || len(u.Attrs) > 0 { // a device reporting the requested state again also confirms
 		kept := x.pending[:0]
 		for _, p := range x.pending {
 			if p.exp.Matches(state, attrs) {

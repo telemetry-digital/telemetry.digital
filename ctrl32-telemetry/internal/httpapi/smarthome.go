@@ -68,19 +68,20 @@ func (s *Server) listMQTTSources(w http.ResponseWriter, r *http.Request) {
 }
 
 type mqttSourceIn struct {
-	Kind               string  `json:"kind"`
-	Name               *string `json:"name"`
-	Host               *string `json:"host"`
-	Port               *int    `json:"port"`
-	TLS                *bool   `json:"tls"`
-	InsecureSkipVerify *bool   `json:"insecure_skip_verify"`
-	Username           *string `json:"username"`
-	Password           *string `json:"password"`
-	ClientID           *string `json:"client_id"`
-	DiscoveryPrefix    *string `json:"discovery_prefix"`
-	Adopt              *string `json:"adopt"`
-	SiteID             *string `json:"site_id"`
-	Reason             string  `json:"reason"`
+	Kind               string    `json:"kind"`
+	Name               *string   `json:"name"`
+	Host               *string   `json:"host"`
+	Port               *int      `json:"port"`
+	TLS                *bool     `json:"tls"`
+	InsecureSkipVerify *bool     `json:"insecure_skip_verify"`
+	Username           *string   `json:"username"`
+	Password           *string   `json:"password"`
+	ClientID           *string   `json:"client_id"`
+	DiscoveryPrefix    *string   `json:"discovery_prefix"`
+	Adopt              *string   `json:"adopt"`
+	SiteID             *string   `json:"site_id"`
+	PublishDatastreams *[]string `json:"publish_datastreams"`
+	Reason             string    `json:"reason"`
 }
 
 // applySourceSettings merges the request into the settings; it returns an error message or "".
@@ -110,6 +111,21 @@ func (s *Server) applySourceSettings(r *http.Request, org, kind string, in *mqtt
 	}
 	if kind != "mqtt_bridge" {
 		return ""
+	}
+	if in.PublishDatastreams != nil {
+		if len(*in.PublishDatastreams) > 200 {
+			return "at most 200 datastreams can be published"
+		}
+		ids := []any{}
+		for _, id := range *in.PublishDatastreams {
+			var n int
+			_ = s.pool.QueryRow(r.Context(), `SELECT count(*) FROM core.datastream WHERE id = $1::uuid AND org_id = $2::uuid`, id, org).Scan(&n)
+			if n == 0 {
+				return "datastream " + id + " not found"
+			}
+			ids = append(ids, id)
+		}
+		st["publish_datastreams"] = ids
 	}
 	if in.Host != nil {
 		h := strings.TrimSpace(*in.Host)

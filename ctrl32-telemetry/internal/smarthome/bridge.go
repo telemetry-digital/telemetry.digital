@@ -102,6 +102,7 @@ func (m *Manager) startBridge(ctx context.Context, src *source) *bridge {
 			b.mu.Unlock()
 			m.log.Info("bridge connected", "source", src.name, "broker", u.Host)
 			go b.subscribe(src.topicsToSubscribe())
+			go m.publishConfigs(ctx, src)
 		},
 		OnConnectionDown: func() bool {
 			b.connected.Store(false)

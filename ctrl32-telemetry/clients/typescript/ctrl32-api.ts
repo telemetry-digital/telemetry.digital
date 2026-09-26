@@ -3168,6 +3168,7 @@ export class Ctrl32Client {
     password?: string;
     /** bridge */
     port?: number;
+    publish_datastreams?: string[];
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
     site_id?: string;
@@ -3224,6 +3225,7 @@ export class Ctrl32Client {
     password?: string;
     /** bridge */
     port?: number;
+    publish_datastreams?: string[];
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
     site_id?: string;

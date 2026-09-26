@@ -63,6 +63,7 @@
       <label class="inline"><input type="checkbox" name="insecure"><span>Accept a self-signed certificate</span></label>
       <div class="row2"><label>User name <input name="username" autocomplete="off"></label><label>Password <input name="password" type="password" autocomplete="new-password" placeholder="unchanged when empty"></label></div>
       <label>Client id <input name="client_id" placeholder="generated when empty"></label>
+      <label>Share these values with Home Assistant (published with discovery; Ctrl/Cmd for several) <select name="publish" multiple size="6"></select></label>
     </div>
     <div class="row2"><label>Discovery prefix <input name="prefix" value="homeassistant"></label>
       <label>New devices <select name="adopt"><option value="auto">add automatically</option><option value="inbox">ask first (inbox)</option></select></label></div>
@@ -173,6 +174,10 @@ function editSource(kind, s) {
   EDIT = s; KIND = kind; const f = $('#srcForm'); f.reset(); $('#srcErr').textContent = '';
   $('#srcTitle').textContent = t(s ? 'Edit' : kind === 'account' ? 'New MQTT account' : 'New bridge');
   $('#bridgeFields').hidden = kind !== 'bridge';
+  if (kind === 'bridge') {
+    const pub = new Set((s && s.settings.publish_datastreams) || []);
+    api('GET', '/api/v1/datastreams').then(ds => { f.publish.innerHTML = ds.map(d => `<option value="${d.id}"${pub.has(d.id) ? ' selected' : ''}>${esc(d.asset + ' / ' + d.key + (d.unit ? ' [' + d.unit + ']' : ''))}</option>`).join(''); }).catch(() => {});
+  }
   f.host.required = kind === 'bridge';
   f.adopt.value = kind === 'account' ? 'auto' : 'inbox';
   if (s) { const st = s.settings; f.name.value = s.name; f.prefix.value = st.discovery_prefix || 'homeassistant'; f.adopt.value = st.adopt || f.adopt.value;
@@ -182,7 +187,7 @@ function editSource(kind, s) {
 $('#srcForm').onsubmit = async e => {
   e.preventDefault(); const f = e.target;
   const body = {name: f.name.value, discovery_prefix: f.prefix.value, adopt: f.adopt.value, reason: f.reason.value};
-  if (KIND === 'bridge') Object.assign(body, {host: f.host.value, port: +f.port.value, tls: f.tls.checked, insecure_skip_verify: f.insecure.checked, username: f.username.value, client_id: f.client_id.value}, f.password.value ? {password: f.password.value} : {});
+  if (KIND === 'bridge') Object.assign(body, {publish_datastreams: [...f.publish.selectedOptions].map(o => o.value), host: f.host.value, port: +f.port.value, tls: f.tls.checked, insecure_skip_verify: f.insecure.checked, username: f.username.value, client_id: f.client_id.value}, f.password.value ? {password: f.password.value} : {});
   try {
     if (EDIT) await api('PUT', '/api/v1/mqtt-sources/' + EDIT.id, body);
     else { body.kind = KIND; const r = await api('POST', '/api/v1/mqtt-sources', body); if (r.password) { LAST[r.id] = r.password; showSecret(t('MQTT account') + ' ' + r.name, [['User name', r.username], ['Password', r.password]]); } }
