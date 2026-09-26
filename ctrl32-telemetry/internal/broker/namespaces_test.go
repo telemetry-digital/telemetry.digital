@@ -86,7 +86,11 @@ func (r *rec) add(topic, payload string) {
 	r.msgs = append(r.msgs, topic+"="+payload)
 	r.mu.Unlock()
 }
-func (r *rec) all() []string { r.mu.Lock(); defer r.mu.Unlock(); return append([]string(nil), r.msgs...) }
+func (r *rec) all() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.msgs...)
+}
 func (r *rec) has(s string) bool {
 	for _, m := range r.all() {
 		if m == s {
@@ -104,7 +108,10 @@ func dial(t *testing.T, addr, id, user, pass string, will *paho.WillMessage) (*p
 	}
 	r := &rec{}
 	c := paho.NewClient(paho.ClientConfig{Conn: conn, ClientID: id, OnPublishReceived: []func(paho.PublishReceived) (bool, error){
-		func(p paho.PublishReceived) (bool, error) { r.add(p.Packet.Topic, string(p.Packet.Payload)); return true, nil },
+		func(p paho.PublishReceived) (bool, error) {
+			r.add(p.Packet.Topic, string(p.Packet.Payload))
+			return true, nil
+		},
 	}})
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -153,7 +160,9 @@ func eventually(t *testing.T, what string, cond func() bool) {
 func TestAccountNamespaces(t *testing.T) {
 	b, addr := testBroker(t)
 	inline := &rec{}
-	if err := b.Server.Subscribe("h/+/#", 1, func(_ *mqttClient, _ packets.Subscription, pk packets.Packet) { inline.add(pk.TopicName, string(pk.Payload)) }); err != nil {
+	if err := b.Server.Subscribe("h/+/#", 1, func(_ *mqttClient, _ packets.Subscription, pk packets.Packet) {
+		inline.add(pk.TopicName, string(pk.Payload))
+	}); err != nil {
 		t.Fatal(err)
 	}
 	a, ra, _, err := dial(t, addr, "a1", "hs_a", "pa", nil)
@@ -209,7 +218,9 @@ func TestAccountNamespaces(t *testing.T) {
 func TestAccountWill(t *testing.T) {
 	b, addr := testBroker(t)
 	inline := &rec{}
-	_ = b.Server.Subscribe("h/+/#", 2, func(_ *mqttClient, _ packets.Subscription, pk packets.Packet) { inline.add(pk.TopicName, string(pk.Payload)) })
+	_ = b.Server.Subscribe("h/+/#", 2, func(_ *mqttClient, _ packets.Subscription, pk packets.Packet) {
+		inline.add(pk.TopicName, string(pk.Payload))
+	})
 	_, _, conn, err := dial(t, addr, "tas", "hs_a", "pa", &paho.WillMessage{Topic: "tele/tasmota_1/LWT", Payload: []byte("Offline")})
 	if err != nil {
 		t.Fatal(err)
@@ -221,7 +232,9 @@ func TestAccountWill(t *testing.T) {
 func TestThingsBoardRPCAndProvisioning(t *testing.T) {
 	b, addr := testBroker(t)
 	inline := &rec{}
-	_ = b.Server.Subscribe("d/+/tb/#", 3, func(_ *mqttClient, _ packets.Subscription, pk packets.Packet) { inline.add(pk.TopicName, string(pk.Payload)) })
+	_ = b.Server.Subscribe("d/+/tb/#", 3, func(_ *mqttClient, _ packets.Subscription, pk packets.Packet) {
+		inline.add(pk.TopicName, string(pk.Payload))
+	})
 	d1, r1, _, err := dial(t, addr, "tb1", "TBTOKEN1", "", nil)
 	if err != nil {
 		t.Fatal(err)
