@@ -11,7 +11,7 @@
 | 0.41.0 | Provisioning cez MQTT a smart home ako Home Assistant: profily provisioningu, ThingsBoard API, automatické datastreamy, MQTT účty s oddeleným priestorom tém, mosty, HA discovery, entity, stránky Domov a Zariadenia a pripojenia, uzly tokov, export do HA (spec 005) | e2e 33 + 39, headless, unit |
 | 0.42.0 | Smart home, fáza 2: Shelly Gen2+/Gen3 natívne (RPC), Tasmota s vlastným formátom discovery, výber farby a teploty farby na karte svetla, uzly tokov MQTT vstup/výstup, incident pri výpadku mosta alebo účtu, premenovaná entita si drží meno (spec 006) | e2e 36, headless, unit |
 
-Celá sada testov (`tests/run-all.sh`) pre 0.42.0: beží (26. 9. 2026).
+Celá sada testov (`tests/run-all.sh`) prešla pre 0.42.0 bez chyby (26. 9. 2026).
 
 ## Ďalšie možnosti (fáza 2)
 
