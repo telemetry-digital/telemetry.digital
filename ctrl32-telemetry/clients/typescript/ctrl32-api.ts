@@ -75,6 +75,42 @@ export type Branding = {
   version?: string;
 };
 
+export type Camera = {
+  enabled?: boolean;
+  /** video.manage only */
+  has_password?: boolean;
+  has_sub?: boolean;
+  id?: string;
+  location?: string;
+  name?: string;
+  record?: "continuous" | "off";
+  retention_days?: number;
+  sort?: number;
+  status?: CameraStatus;
+  /** video.manage only */
+  sub_url?: string;
+  /** video.manage only */
+  transport?: string;
+  /** video.manage only */
+  url?: string;
+  /** video.manage only */
+  username?: string;
+};
+
+export type CameraStatus = {
+  codec?: "h264" | "h265" | "mjpeg";
+  /** password removed */
+  error?: string;
+  fps?: number;
+  height?: number;
+  kbps?: number;
+  recording?: boolean;
+  since?: string;
+  state?: "idle" | "connecting" | "online" | "offline" | "disabled";
+  viewers?: number;
+  width?: number;
+};
+
 export type Campaign = {
   close_reason?: string | null;
   closed_at?: string | null;
@@ -889,6 +925,23 @@ export type User = {
   must_change_password?: boolean;
   roles?: string[];
   username?: string;
+};
+
+export type VideoWall = {
+  id?: string;
+  name?: string;
+  screens?: WallScreen[];
+  updated_at?: string;
+};
+
+export type WallScreen = {
+  /** 1–8 */
+  cols: number;
+  /** ≤ 40 */
+  name?: string;
+  /** 1–8 */
+  rows: number;
+  tiles?: (string | null)[];
 };
 
 export interface Ctrl32Options {
@@ -5216,5 +5269,257 @@ export class Ctrl32Client {
     by?: string;
     username?: string;
   }>('POST', `/api/v1/users/${encodeURIComponent(id)}/unlock`, undefined, body, false);
+  }
+
+  /** Cameras
+   *
+   * Stream addresses, user name and transport only for video.manage.
+   * 
+   * Requires permission `video.view`. */
+  getVideoCameras(): Promise<Camera[]> {
+    return this.request<Camera[]>('GET', `/api/v1/video/cameras`, undefined, undefined, false);
+  }
+
+  /** Add a camera
+   *
+   * Requires permission `video.manage`. */
+  postVideoCameras(body: {
+    enabled?: boolean;
+    /** ≤ 120 */
+    location?: string;
+    /** ≤ 80 */
+    name: string;
+    /** stored encrypted; omit to keep, "" to clear */
+    password?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    record?: "continuous" | "off";
+    /** 1–3650, default 7 */
+    retention_days?: number;
+    sort?: number;
+    /** smaller stream for tiles (optional) */
+    sub_url?: string;
+    transport?: "auto" | "tcp" | "udp";
+    /** rtsp://, rtsps://, http:// or https:// main stream; user:password in the URL are moved to username/password */
+    url: string;
+    username?: string;
+  }): Promise<Camera> {
+    return this.request<Camera>('POST', `/api/v1/video/cameras`, undefined, body, false);
+  }
+
+  /** Test a stream
+   *
+   * Connects once (at most 8 s) and reports codec and picture size or the error. With id and no password the stored password is used.
+   * 
+   * Requires permission `video.manage`. */
+  postVideoCamerasTest(body: {
+    /** camera whose stored password to use */
+    id?: string;
+    password?: string;
+    transport?: "auto" | "tcp" | "udp";
+    url: string;
+    username?: string;
+  }): Promise<CameraStatus> {
+    return this.request<CameraStatus>('POST', `/api/v1/video/cameras/test`, undefined, body, false);
+  }
+
+  /** A camera
+   *
+   * Requires permission `video.view`. */
+  getVideoCamerasId(id: string): Promise<Camera> {
+    return this.request<Camera>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Change a camera
+   *
+   * Requires permission `video.manage`. */
+  putVideoCamerasId(id: string, body: {
+    enabled?: boolean;
+    /** ≤ 120 */
+    location?: string;
+    /** ≤ 80 */
+    name?: string;
+    /** stored encrypted; omit to keep, "" to clear */
+    password?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    record?: "continuous" | "off";
+    /** 1–3650, default 7 */
+    retention_days?: number;
+    sort?: number;
+    /** smaller stream for tiles (optional) */
+    sub_url?: string;
+    transport?: "auto" | "tcp" | "udp";
+    /** rtsp://, rtsps://, http:// or https:// main stream; user:password in the URL are moved to username/password */
+    url?: string;
+    username?: string;
+  }): Promise<Camera> {
+    return this.request<Camera>('PUT', `/api/v1/video/cameras/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Remove a camera
+   *
+   * Recordings stay until the camera's retention ends.
+   * 
+   * Requires permission `video.manage`. */
+  deleteVideoCamerasId(id: string, query?: { reason?: string; /** required */ }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/video/cameras/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Download recorded video
+   *
+   * One MP4 file (fragmented) of at most one hour; a change of resolution or codec ends it early. Written to the audit trail (video.export).
+   * 
+   * Requires permission `video.playback`. */
+  getVideoCamerasIdExport(id: string, query?: { from?: string; /** RFC 3339, required */ to?: string; /** RFC 3339, required */ }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/export`, query, undefined, true);
+  }
+
+  /** Live video (WebSocket)
+   *
+   * Upgrade to a WebSocket. Text messages: `{type:"init", codec, mime, width, height}`, `{type:"time", t (ms), pos (s)}` at key frames, `{type:"status", state, error}`. Binary messages: for H.264/H.265 the MP4 initialization, then one fragment (moof+mdat) per frame, for Media Source Extensions; for MJPEG one JPEG picture each.
+   * 
+   * Requires permission `video.view`. */
+  getVideoCamerasIdLive(id: string, query?: { quality?: string; /** sub (default; falls back to main) or main */ }): Promise<unknown> {
+    return this.request<unknown>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/live`, query, undefined, false);
+  }
+
+  /** Recorded video (WebSocket)
+   *
+   * Same messages as live, paced by the recording from the key frame before `from`; periods without recording are skipped; `{type:"end"}` after the newest recording. Written to the audit trail (video.playback).
+   * 
+   * Requires permission `video.playback`. */
+  getVideoCamerasIdPlayback(id: string, query?: { from?: string; /** RFC 3339, required */ speed?: string; /** 0.25–16, default 1 */ }): Promise<unknown> {
+    return this.request<unknown>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/playback`, query, undefined, false);
+  }
+
+  /** Recorded spans
+   *
+   * Adjacent files are merged into spans for a timeline. Range at most 32 days.
+   * 
+   * Requires permission `video.playback`. */
+  getVideoCamerasIdRecordings(id: string, query?: { from?: string; /** RFC 3339, required */ to?: string; /** RFC 3339, default now */ }): Promise<{
+    bytes?: number;
+    camera?: string;
+    files?: number;
+    from?: string;
+    spans?: ({
+      from?: string;
+      to?: string;
+    })[];
+    to?: string;
+  }> {
+    return this.request<{
+    bytes?: number;
+    camera?: string;
+    files?: number;
+    from?: string;
+    spans?: ({
+      from?: string;
+      to?: string;
+    })[];
+    to?: string;
+  }>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/recordings`, query, undefined, false);
+  }
+
+  /** The current picture
+   *
+   * MJPEG streams only (the server does not decode H.264/H.265).
+   * 
+   * Requires permission `video.view`. */
+  getVideoCamerasIdSnapshot(id: string, query?: { quality?: string; /** sub or main */ }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/snapshot`, query, undefined, true);
+  }
+
+  /** Space used by recordings
+   *
+   * Requires permission `video.manage`. */
+  getVideoStorage(): Promise<{
+    cameras?: ({
+      bytes?: number;
+      files?: number;
+      id?: string;
+      name?: string;
+      oldest?: string | null;
+      removed?: boolean;
+    })[];
+    /** video.max_disk_gb */
+    max_bytes?: number;
+    /** all organizations */
+    used_bytes?: number;
+  }> {
+    return this.request<{
+    cameras?: ({
+      bytes?: number;
+      files?: number;
+      id?: string;
+      name?: string;
+      oldest?: string | null;
+      removed?: boolean;
+    })[];
+    /** video.max_disk_gb */
+    max_bytes?: number;
+    /** all organizations */
+    used_bytes?: number;
+  }>('GET', `/api/v1/video/storage`, undefined, undefined, false);
+  }
+
+  /** Video walls
+   *
+   * Requires permission `video.view`. */
+  getVideoWalls(): Promise<VideoWall[]> {
+    return this.request<VideoWall[]>('GET', `/api/v1/video/walls`, undefined, undefined, false);
+  }
+
+  /** Create a video wall
+   *
+   * Requires permission `video.manage`. */
+  postVideoWalls(body: {
+    /** ≤ 80 */
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    screens: WallScreen[];
+  }): Promise<VideoWall> {
+    return this.request<VideoWall>('POST', `/api/v1/video/walls`, undefined, body, false);
+  }
+
+  /** A video wall
+   *
+   * Requires permission `video.view`. */
+  getVideoWallsId(id: string): Promise<VideoWall> {
+    return this.request<VideoWall>('GET', `/api/v1/video/walls/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Change a video wall
+   *
+   * Requires permission `video.manage`. */
+  putVideoWallsId(id: string, body: {
+    /** ≤ 80 */
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    screens?: WallScreen[];
+  }): Promise<VideoWall> {
+    return this.request<VideoWall>('PUT', `/api/v1/video/walls/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Delete a video wall
+   *
+   * Requires permission `video.manage`. */
+  deleteVideoWallsId(id: string, query?: { reason?: string; /** required */ }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/video/walls/${encodeURIComponent(id)}`, query, undefined, false);
   }
 }

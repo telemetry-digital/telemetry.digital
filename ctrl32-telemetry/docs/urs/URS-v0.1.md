@@ -294,3 +294,14 @@
 | O-03 | Zakázanie organizácie: prihlásenie je odmietnuté, relácie jej používateľov sú ukončené, zariadenia sú odmietnuté pri ďalšom pripojení; dáta zostávajú a organizáciu možno znova povoliť. Vlastnú organizáciu zakázať nemožno. | M | áno | 1 | 0.9.0 · e2e |
 | O-04 | Používateľské meno a e-mail sú jedinečné na celom serveri (prihlásenie neuvádza organizáciu). | M | — | 1 | 0.9.0 · migrácia 0010 |
 | O-05 | Systémový administrátor môže administrátorovi inej organizácie vygenerovať nové jednorazové heslo (audit, ukončenie relácií). | S | — | 1 | 0.9.0 · e2e |
+
+## P. Kamery a videostena
+
+| ID | Požiadavka | P | Overenie | Fáza | Pozn. |
+|---|---|---|---|---|---|
+| P-01 | Príjem IP kamier bez externých programov: RTSP (H.264, H.265, MJPEG; prenos automaticky/TCP/UDP) a HTTP MJPEG; hlavný prúd a voliteľný menší podprúd pre dlaždice; opätovné pripojenie s narastajúcim odstupom; stav (online/offline s chybou, kodek, rozlíšenie, snímky/s, kbit/s). Meno a heslo z adresy sa uložia oddelene, heslo šifrované, v chybách ani v audite sa heslo neobjaví. | S | — | 2 | spec 010 · 0.45.0 · unit `internal/video` · e2e `video` |
+| P-02 | Nepretržité nahrávanie do jednominútových súborov MP4 (fragmentovaných, každý začína kľúčovým snímkom) s indexom v databáze; doba uchovania v dňoch pre každú kameru a limit miesta na disku pre všetky záznamy (najstaršie sa mažú prvé); po páde servera sa index opraví podľa súborov. | S | áno | 2 | spec 010 · 0.45.0 · e2e `video` |
+| P-03 | Živý obraz v prehliadači cez WebSocket bez zásuvných modulov (H.264/H.265 ako fMP4 pre Media Source Extensions, MJPEG ako obrázky), pomalý divák preskočí na ďalší kľúčový snímok bez spomalenia ostatných; kamera sa pripája len pri sledovaní, ak nenahráva. | S | — | 2 | spec 010 · 0.45.0 · e2e `video` · ručne v prehliadači |
+| P-04 | Prehrávanie záznamov s časovou osou dňa a detailom hodiny, rýchlosť 0,25–16×, preskočenie úsekov bez záznamu; stiahnutie výberu (najviac 1 h) ako MP4; prezeranie a sťahovanie záznamov vyžaduje oprávnenie `video.playback` a zapisuje sa do auditnej stopy (GDPR). | S | áno | 2 | spec 010 · 0.45.0 · e2e `video` |
+| P-05 | Videosteny: uložené rozloženia dlaždíc (1×1 až 8×8) na 1–8 obrazoviek (monitorov), napr. 2 × 20 kamier; otvorenie všetkých obrazoviek naraz na svojich monitoroch (Window Management API, inak po oknách), celá plocha, zväčšenie dlaždice kliknutím; dlaždice používajú podprúd. | S | — | 2 | spec 010 · 0.45.0 · e2e `video` · ručne |
+| P-06 | Oprávnenia `video.view` (živý obraz, videosteny), `video.playback` (záznamy, export), `video.manage` (kamery, videosteny); zmeny kamier a stien s dôvodom v audite. | S | áno | 2 | spec 010 · 0.45.0 · e2e `video` |

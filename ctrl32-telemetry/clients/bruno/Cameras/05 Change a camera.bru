@@ -1,0 +1,38 @@
+meta {
+  name: Change a camera
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{baseUrl}}/api/v1/video/cameras/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "enabled": true,
+    "location": "string",
+    "name": "string",
+    "password": "string",
+    "reason": "string",
+    "record": "continuous",
+    "retention_days": 1,
+    "sort": 1,
+    "sub_url": "string",
+    "transport": "auto",
+    "url": "string",
+    "username": "string"
+  }
+}
+
+docs {
+  Change a camera
+  
+  Requires permission `video.manage`.
+}

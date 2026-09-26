@@ -24,6 +24,7 @@
     system: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/></svg>',
     device: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10"/><path d="M9 16v4"/><path d="M15 16v4"/><path d="M7 8h2"/><path d="M7 12h6"/></svg>',
     assets: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21v-14l8 -4v18"/><path d="M19 21v-10l-6 -4"/><path d="M9 9v0"/><path d="M9 12v0"/><path d="M9 15v0"/><path d="M9 18v0"/></svg>',
+    camera: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.553 -2.276a1 1 0 0 1 1.447 .894v6.764a1 1 0 0 1 -1.447 .894l-4.553 -2.276v-4z"/><rect x="3" y="6" width="12" height="12" rx="2"/></svg>',
     file: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z"/></svg>',
   };
   const $ = (s) => document.querySelector(s);
@@ -95,6 +96,8 @@
       { href: '/dashboards', label: 'Dashboards', icon: ICON.dashboard, show: can('data.read') },
       { href: '/home', label: 'Home', icon: ICON.home, show: can('data.read') },
       { href: '/energy', label: 'Energy', icon: ICON.bolt, show: can('data.read') },
+      { href: '/video', label: 'Cameras', icon: ICON.camera, show: can('video.view'), children: [
+        { href: '/video', label: 'Live view' }, { href: '/video/walls', label: 'Video walls' }, { href: '/video/manage', label: 'Camera management', show: can('video.manage') }] },
       { href: '/flows', label: 'Flows', icon: ICON.flow, show: can('data.read') },
       { href: '/devices', label: 'Devices', icon: ICON.device, show: can('data.read') },
       { href: '/incidents', label: 'Incidents', icon: ICON.alert, show: can('data.read') },

@@ -1,0 +1,27 @@
+meta {
+  name: Live video (WebSocket)
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/video/cameras/:id/live
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~quality: 
+}
+
+docs {
+  Live video (WebSocket)
+  
+  Upgrade to a WebSocket. Text messages: `{type:"init", codec, mime, width, height}`, `{type:"time", t (ms), pos (s)}` at key frames, `{type:"status", state, error}`. Binary messages: for H.264/H.265 the MP4 initialization, then one fragment (moof+mdat) per frame, for Media Source Extensions; for MJPEG one JPEG picture each.
+  
+  Requires permission `video.view`.
+}

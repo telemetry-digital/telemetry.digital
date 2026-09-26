@@ -57,6 +57,11 @@ secret_key = "REPLACE-WITH-RANDOM-32-CHARS"
 # typst_path = "/usr/local/bin/typst"
 # storage_dir = "/var/lib/ctrl32-telemetry/reports"   # generated PDFs are records (hash verified on download)
 
+[video]
+# Camera recordings (spec 010): one-minute MP4 files per camera; the oldest are deleted beyond max_disk_gb.
+# storage_dir = "/var/lib/ctrl32-telemetry/video"   # default: next to the reports directory
+# max_disk_gb = 50
+
 [fota]
 # Uploaded firmware images (records; devices download them with their own token, Range supported).
 # storage_dir = "/var/lib/ctrl32-telemetry/firmware"

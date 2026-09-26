@@ -517,3 +517,41 @@ dialog.dw-full::backdrop { background: rgba(15, 23, 42, .55); }
 .fe-gcolors { display: flex; gap: 6px; margin: 4px 0 8px; }
 .fe-gcol { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
 .fe-gcol.on { border-color: var(--fg); }
+
+/* ---- cameras and video walls (spec 010) ---- */
+.vp { position: relative; width: 100%; height: 100%; background: #000; overflow: hidden; }
+.vp video, .vp canvas { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; object-fit: contain; display: block; }
+.vp video[hidden], .vp canvas[hidden] { display: none; }
+.vp-msg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #cbd5e1; font-size: 13px; text-align: center; padding: 4px 10px; background: rgba(0,0,0,.55); border-radius: 4px; max-width: 90%; }
+.vp-msg[hidden] { display: none; }
+.cam-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.cam-tile { position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); cursor: pointer; }
+.cam-tile .cap { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 6px; align-items: center; padding: 4px 8px; font-size: 12px; color: #fff;
+  background: linear-gradient(transparent, rgba(0,0,0,.75)); pointer-events: none; }
+.cam-tile .cap b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cam-dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; flex: none; }
+.cam-dot.online { background: #22c55e; } .cam-dot.offline { background: #ef4444; } .cam-dot.rec { background: #ef4444; box-shadow: 0 0 0 2px rgba(239,68,68,.35); }
+.cam-live { height: min(58vh, 50vw); width: 100%; background: #000; border-radius: var(--radius); overflow: hidden; position: relative; }
+.cam-live .clock { position: absolute; right: 8px; top: 8px; color: #fff; background: rgba(0,0,0,.55); padding: 2px 8px; border-radius: 4px; font: 13px var(--mono); pointer-events: none; z-index: 2; }
+.tl { position: relative; height: 44px; background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; user-select: none; touch-action: none; }
+.tl .span { position: absolute; top: 12px; bottom: 12px; background: color-mix(in srgb, var(--primary) 70%, transparent); border-radius: 2px; }
+.tl .cur { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--fg); }
+.tl .sel { position: absolute; top: 4px; bottom: 4px; background: color-mix(in srgb, var(--ok) 25%, transparent); border: 1px solid var(--ok); }
+.tl-ax { position: relative; height: 16px; font-size: 11px; color: var(--muted); }
+.tl-ax span { position: absolute; transform: translateX(-50%); }
+.wall-edit-grid { display: grid; gap: 4px; }
+.wall-edit-grid select { width: 100%; min-width: 0; font-size: 12px; padding: 2px; }
+.wall-preview { display: inline-grid; gap: 2px; width: 120px; aspect-ratio: 16 / 9; vertical-align: middle; }
+.wall-preview i { background: var(--line); border-radius: 1px; } .wall-preview i.on { background: color-mix(in srgb, var(--primary) 55%, transparent); }
+/* the wall page: every pixel for video */
+body.wall { background: #000; color: #e5e7eb; overflow: hidden; }
+body.wall main { padding: 0; }
+.wall-grid { position: fixed; inset: 0; display: grid; gap: 2px; background: #111; }
+.wall-grid .cell { position: relative; background: #000; overflow: hidden; min-width: 0; min-height: 0; }
+.wall-grid .cell .cap { position: absolute; left: 6px; bottom: 4px; font-size: 12px; color: #fff; text-shadow: 0 1px 2px #000; pointer-events: none; display: flex; gap: 6px; align-items: center; }
+.wall-grid .cell.max { position: fixed; inset: 0; z-index: 5; }
+.wall-bar { position: fixed; left: 50%; top: 8px; transform: translateX(-50%); z-index: 10; display: flex; gap: 8px; align-items: center; padding: 6px 10px; background: rgba(15,18,22,.9);
+  border: 1px solid #2a313a; border-radius: 8px; color: #e5e7eb; transition: opacity .3s; }
+.wall-bar.idle { opacity: 0; pointer-events: none; }
+.wall-bar .btn { color: #e5e7eb; }
+body.wall .footer { display: none; }

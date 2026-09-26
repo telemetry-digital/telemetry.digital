@@ -1,0 +1,17 @@
+meta {
+  name: Video walls
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/api/v1/video/walls
+  body: none
+  auth: inherit
+}
+
+docs {
+  Video walls
+  
+  Requires permission `video.view`.
+}

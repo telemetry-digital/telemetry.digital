@@ -1,0 +1,19 @@
+meta {
+  name: Cameras
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/video/cameras
+  body: none
+  auth: inherit
+}
+
+docs {
+  Cameras
+  
+  Stream addresses, user name and transport only for video.manage.
+  
+  Requires permission `video.view`.
+}

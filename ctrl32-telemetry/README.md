@@ -6,7 +6,7 @@ Developer: telemetry.digital (Palo Krnáč). Revenue comes from implementation s
 
 ## Status
 
-Version **0.44.0** (26 Sep 2026; production runs 0.36.3). Phases 1–2 of the roadmap (`docs/02-navrh-systemu.md`, chapter 13) are functionally covered; the `Zdroj` column of the URS names the version and the test that fulfil each requirement. The production instance runs at `https://telemetry.digital/` (installed with the public installer, updated from the Server page). Every release has an entry in `JOURNAL.md`.
+Version **0.45.0** (26 Sep 2026; production runs 0.36.3). Phases 1–2 of the roadmap (`docs/02-navrh-systemu.md`, chapter 13) are functionally covered; the `Zdroj` column of the URS names the version and the test that fulfil each requirement. The production instance runs at `https://telemetry.digital/` (installed with the public installer, updated from the Server page). Every release has an entry in `JOURNAL.md`.
 
 ## What it does
 
@@ -14,6 +14,7 @@ Version **0.44.0** (26 Sep 2026; production runs 0.36.3). Phases 1–2 of the ro
 - **SCADA:** process pictures drawn in a WinCC-style editor (68 industrial symbols, pipes with flow, dynamics, faceplates, commands with reason, object library with SVG import), dashboards of widgets, or both on one screen.
 - **Redundant database:** attach a second PC with a one-time code — one-time copy with a verified safe detach, continuous offsite replica, or hot standby with manual failover and fencing (`docs/runbook-replication.md`).
 - **Smart home and MQTT provisioning:** zigbee2mqtt, Tasmota, ESPHome, Shelly and any device that announces itself over MQTT are recognized automatically with rooms and entities, are recorded and controlled from a Home page (switches, dimming, blinds, thermostats, locks) with audited commands confirmed by the device; MQTT accounts with private topic namespaces, bridges to existing brokers, values published back to the broker for other systems; Shelly Gen2+/Gen3 and Tasmota also with their own native protocols; colour pickers on light cards; scenes; an energy overview with consumption, production and cost per hour, day and month; MQTT in/out flow nodes; an incident when a bridge stays disconnected; fleets provision themselves with a key and secret, ThingsBoard firmware works unchanged (`docs/smarthome.md`).
+- **Cameras:** IP cameras over RTSP (H.264, H.265, MJPEG) or HTTP MJPEG recorded continuously into one-minute MP4 files with retention per camera and a disk limit, live and recorded video in the browser without plug-ins or ffmpeg, a timeline with playback at up to 16× and MP4 export (audited), video walls over several monitors such as 2 × 20 cameras (`docs/video.md`).
 - **Flows:** Node-RED-style automation built into the server — a closed library of 28 trigger, logic and action nodes wired on a canvas, typed expressions instead of code, test messages with dry run, a debug panel, versions with deploy and four eyes, every action audited with the flow as origin; automation rules convert into flows (`docs/flows.md`).
 - **Dashboard widgets:** 47 widget types (values, gauges, charts, tables, controls, clock, Markdown, QR…), each with ThingsBoard-level settings — appearance, per-series options, two axes, time window and aggregation, legend values, conditional formatting, click actions, full screen, and filters the viewer can switch on the widget.
 - **Records:** append-only observations with two timestamps, gaps and quality, hash-chained audit trail with `audit verify`, versioned objects (assets, datastreams, screens, rules, profiles) with a reason on every change, CSV exports of audit and access logs, cursor pagination.
@@ -77,6 +78,7 @@ Static files under `internal/httpapi/static` are embedded: rebuild before checki
 | `docs/adr/` | Architecture decision records 0001–0014 |
 | `docs/smarthome.md` | Smart home and MQTT provisioning: accounts, bridges, provisioning profiles, ThingsBoard API, entities, Home page |
 | `docs/flows.md` | Flows: nodes, expressions, governance, rule conversion, operation |
+| `docs/video.md` | Cameras: adding cameras, recording and storage, playback and export, video walls on several monitors |
 | `docs/urs/URS-v0.1.md` | User requirements with IDs, priority, GxP relevance, phase, and the version and test that fulfil them |
 | `docs/threat-model.md` | Threat model |
 | `docs/protocol/device-protocol-v0.1.md` | Device protocol (MQTT/HTTP), normative |

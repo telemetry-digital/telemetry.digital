@@ -55,6 +55,7 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/seed"
 	svc "github.com/telemetry-digital/ctrl32-telemetry/internal/service"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/smarthome"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/video"
 )
 
 // version is set at build time: -ldflags "-X main.version=1.2.3"
@@ -236,6 +237,7 @@ func runServer(ctx context.Context, cfg *config.Config, cfgPath string, logger *
 	flowEngine := flows.New(pool, nil, cfg.Security.SecretKey, logger)
 	smart := smarthome.New(pool, br, ing, hub, cfg.Security.SecretKey, logger)
 	smart.Inc = inc
+	vids := video.New(pool, cfg.Video.StorageDir, cfg.Video.MaxDiskGB, cfg.Security.SecretKey, logger)
 	ing.AddSink(smart) // values of datastreams exported to Home Assistant through bridges
 	ing.AddSink(flowEngine)
 	hub.Tap(flowEngine.OnEvent)
@@ -252,7 +254,7 @@ func runServer(ctx context.Context, cfg *config.Config, cfgPath string, logger *
 
 	srv := &http.Server{
 		Addr:              cfg.HTTP.Listen,
-		Handler:           httpapi.New(cfg, pool, br, iamSvc, rep, ing, con, agent.NewClient(cfg.Agent.Socket), opc, logger, version, hub, mbm, esc, rulesEngine, pm, tc, inc, repl, flowEngine, notifier, smart),
+		Handler:           httpapi.New(cfg, pool, br, iamSvc, rep, ing, con, agent.NewClient(cfg.Agent.Socket), opc, logger, version, hub, mbm, esc, rulesEngine, pm, tc, inc, repl, flowEngine, notifier, smart, vids),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
@@ -266,6 +268,12 @@ func runServer(ctx context.Context, cfg *config.Config, cfgPath string, logger *
 	g.Go(func() error { con.Run(gctx); return nil })
 	g.Go(func() error { repl.Run(gctx, 10*time.Second); return nil })
 	g.Go(func() error { flowEngine.Start(gctx); return nil })
+	g.Go(func() error {
+		if err := vids.Run(gctx); err != nil {
+			logger.Error("cameras not started", "err", err)
+		}
+		return nil
+	})
 	g.Go(func() error {
 		if err := smart.Start(gctx); err != nil {
 			logger.Error("smart home not started", "err", err)

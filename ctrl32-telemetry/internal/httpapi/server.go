@@ -40,6 +40,7 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/report"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/rules"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/smarthome"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/video"
 )
 
 //go:embed static/*
@@ -76,11 +77,12 @@ type Server struct {
 	prov             *provision.Service
 	smart            *smarthome.Manager
 	notifier         *notify.Notifier
+	video            *video.Manager
 }
 
 // New builds the handler tree.
-func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.Service, rep *report.Engine, ing *ingest.Ingest, con *console.Manager, ag *agent.Client, opc *opcua.Manager, log *slog.Logger, version string, hub *live.Hub, mbm *modbus.Manager, esc *escalate.Engine, eng *rules.Engine, pm *push.Manager, tc *timecheck.Checker, inc *incident.Manager, rp *replication.Primary, fl *flows.Engine, nt *notify.Notifier, sh *smarthome.Manager) http.Handler {
-	s := &Server{cfg: cfg, pool: pool, br: br, iam: iamSvc, rep: rep, ing: ing, con: con, agent: ag, opc: opc, started: time.Now(), log: log.With("component", "http"), version: version, live: hub, mb: mbm, esc: esc, rules: eng, push: pm, tc: tc, incidents: inc, repl: rp, flows: fl, notifier: nt, smart: sh,
+func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.Service, rep *report.Engine, ing *ingest.Ingest, con *console.Manager, ag *agent.Client, opc *opcua.Manager, log *slog.Logger, version string, hub *live.Hub, mbm *modbus.Manager, esc *escalate.Engine, eng *rules.Engine, pm *push.Manager, tc *timecheck.Checker, inc *incident.Manager, rp *replication.Primary, fl *flows.Engine, nt *notify.Notifier, sh *smarthome.Manager, vm *video.Manager) http.Handler {
+	s := &Server{cfg: cfg, pool: pool, br: br, iam: iamSvc, rep: rep, ing: ing, con: con, agent: ag, opc: opc, started: time.Now(), log: log.With("component", "http"), version: version, live: hub, mb: mbm, esc: esc, rules: eng, push: pm, tc: tc, incidents: inc, repl: rp, flows: fl, notifier: nt, smart: sh, video: vm,
 		loginLimiter: newLimiter(10, 10), provisionLimiter: newLimiter(20, 10), pairLimiter: newLimiter(5, 5)}
 	if eng != nil {
 		eng.Commander = s
@@ -246,6 +248,24 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("PUT /api/v1/scenes/{id}", s.require("device.manage", s.updateScene))
 	mux.Handle("DELETE /api/v1/scenes/{id}", s.require("device.manage", s.deleteScene))
 	mux.Handle("POST /api/v1/scenes/{id}/activate", s.require("device.command", s.activateScene))
+	// cameras, recordings and video walls (video.go)
+	mux.Handle("GET /api/v1/video/cameras", s.require("video.view", s.listCameras))
+	mux.Handle("POST /api/v1/video/cameras", s.require("video.manage", s.createCamera))
+	mux.Handle("POST /api/v1/video/cameras/test", s.require("video.manage", s.testCamera))
+	mux.Handle("GET /api/v1/video/cameras/{id}", s.require("video.view", s.getCamera))
+	mux.Handle("PUT /api/v1/video/cameras/{id}", s.require("video.manage", s.updateCamera))
+	mux.Handle("DELETE /api/v1/video/cameras/{id}", s.require("video.manage", s.deleteCamera))
+	mux.Handle("GET /api/v1/video/cameras/{id}/live", s.require("video.view", s.cameraLive))
+	mux.Handle("GET /api/v1/video/cameras/{id}/snapshot", s.require("video.view", s.cameraSnapshot))
+	mux.Handle("GET /api/v1/video/cameras/{id}/recordings", s.require("video.playback", s.cameraRecordings))
+	mux.Handle("GET /api/v1/video/cameras/{id}/playback", s.require("video.playback", s.cameraPlayback))
+	mux.Handle("GET /api/v1/video/cameras/{id}/export", s.require("video.playback", s.cameraExport))
+	mux.Handle("GET /api/v1/video/storage", s.require("video.manage", s.videoStorage))
+	mux.Handle("GET /api/v1/video/walls", s.require("video.view", s.listWalls))
+	mux.Handle("POST /api/v1/video/walls", s.require("video.manage", s.saveWall))
+	mux.Handle("GET /api/v1/video/walls/{id}", s.require("video.view", s.getWall))
+	mux.Handle("PUT /api/v1/video/walls/{id}", s.require("video.manage", s.saveWall))
+	mux.Handle("DELETE /api/v1/video/walls/{id}", s.require("video.manage", s.deleteWall))
 	mux.Handle("GET /api/v1/energy", s.require("data.read", s.energy))
 	mux.Handle("GET /api/v1/energy/settings", s.require("data.read", s.getEnergySettings))
 	mux.Handle("PUT /api/v1/energy/settings", s.require("content.write", s.putEnergySettings))
@@ -413,6 +433,10 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.HandleFunc("GET /api/docs", page("docs.html"))
 	mux.HandleFunc("GET /home", page("home.html"))
 	mux.HandleFunc("GET /energy", page("energy.html"))
+	mux.HandleFunc("GET /video", page("video.html"))
+	mux.HandleFunc("GET /video/{section}", page("video.html"))
+	mux.HandleFunc("GET /video/cameras/{id}", page("camera.html"))
+	mux.HandleFunc("GET /video/walls/{id}", page("wall.html"))
 	mux.HandleFunc("GET /smarthome", page("smarthome.html"))
 	mux.HandleFunc("GET /flows", page("flows.html"))
 	mux.HandleFunc("GET /flows/{slug}", page("flows.html"))
@@ -435,7 +459,7 @@ func (s *Server) secureHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		h.Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http:; connect-src 'self'; frame-ancestors 'none'")
+		h.Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'")
 		h.Set("Cache-Control", "no-store")
 		if s.isSecure(r) {
 			h.Set("Strict-Transport-Security", "max-age=31536000")

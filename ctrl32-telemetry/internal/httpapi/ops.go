@@ -1,8 +1,11 @@
 package httpapi
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"runtime"
 	"strings"
@@ -70,6 +73,16 @@ func (c *countingWriter) Flush() {
 }
 
 func (c *countingWriter) Unwrap() http.ResponseWriter { return c.ResponseWriter }
+
+// Hijack lets WebSockets (camera video) take over the connection.
+func (c *countingWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := c.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("connection cannot be taken over")
+	}
+	c.status, c.wrote = http.StatusSwitchingProtocols, true
+	return h.Hijack()
+}
 
 // metricsHandler exposes operational numbers in the Prometheus text format (URS K-12). Counts only, never records.
 func (s *Server) metricsHandler(w http.ResponseWriter, r *http.Request) {

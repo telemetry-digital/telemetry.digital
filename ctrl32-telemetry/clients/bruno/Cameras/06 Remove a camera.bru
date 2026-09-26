@@ -1,0 +1,27 @@
+meta {
+  name: Remove a camera
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/video/cameras/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~reason: 
+}
+
+docs {
+  Remove a camera
+  
+  Recordings stay until the camera's retention ends.
+  
+  Requires permission `video.manage`.
+}

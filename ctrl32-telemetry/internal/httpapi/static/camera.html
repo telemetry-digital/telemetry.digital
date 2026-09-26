@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Camera</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+  <div class="page-head"><a class="btn small" href="/video">‹ Cameras</a><h1 class="notranslate" id="name">…</h1><span class="muted notranslate" id="loc"></span><span class="grow"></span>
+    <div class="seg" id="mode"><button type="button" data-m="live" class="on">Live</button><button type="button" data-m="rec" id="recBtn">Recordings</button></div></div>
+  <div class="cam-live" id="stage"><span class="clock" id="clock"></span></div>
+  <div class="row" style="margin:8px 0"><span id="info" class="muted"></span><span class="grow"></span>
+    <label class="muted" id="qualWrap">Quality <select id="quality"><option value="main">main stream</option><option value="sub">sub-stream</option></select></label>
+    <button class="btn small" type="button" id="snap">Save picture</button>
+    <button class="btn small" type="button" id="full">Full screen</button></div>
+
+  <div class="card" id="recPanel" hidden>
+    <div class="row" style="margin-bottom:8px">
+      <button class="btn small" type="button" id="dPrev" aria-label="previous day">‹</button>
+      <input type="date" id="day"> <button class="btn small" type="button" id="dNext" aria-label="next day">›</button>
+      <span class="grow"></span>
+      <label class="muted">Speed <select id="speed"><option>0.5</option><option selected>1</option><option>2</option><option>4</option><option>8</option><option>16</option></select></label>
+      <button class="btn small" type="button" id="toLive">Back to live</button>
+    </div>
+    <div class="tl" id="tl" title="Click to play from that time"></div>
+    <div class="tl-ax" id="ax"></div>
+    <div class="row" style="margin-top:6px"><button class="btn small" type="button" id="hPrev" aria-label="previous hour">‹</button><b id="hLabel"></b><button class="btn small" type="button" id="hNext" aria-label="next hour">›</button>
+      <span class="muted" style="font-size:12px">Detail of one hour: click to play, drag to select a part for download</span></div>
+    <div class="tl" id="tl2" style="margin-top:6px"></div>
+    <div class="tl-ax" id="ax2"></div>
+    <div class="row" style="margin-top:8px"><span class="muted" id="recInfo"></span><span class="grow"></span>
+      <span class="muted" id="selInfo"></span><button class="btn small" type="button" id="export" disabled>Download selection (MP4)</button></div>
+    <p class="muted" style="font-size:12px;margin-bottom:0">Viewing and downloading recordings is written to the audit trail.</p>
+  </div>
+</main>
+<script src="/app.js"></script>
+<script src="/videoplayer.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, api = ctrl32.api, t = ctrl32.t;
+const ID = location.pathname.split('/').pop();
+let CAM = null, P = null, MODE = 'live', DAY = new Date(), SPANS = [], CUR = null, SEL = null, ME = null;
+const can = p => !!(ME && (ME.permissions || []).includes(p));
+const dayStart = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const hm = ms => new Date(ms).toLocaleTimeString(document.documentElement.lang || undefined, {hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'});
+
+function play(url, live) {
+  if (P) P.close();
+  $('#clock').textContent = '';
+  P = ctrl32Player($('#stage'), {url, live, onTime: ms => { CUR = ms; $('#clock').textContent = (live ? '● ' : '▶ ') + hm(ms); drawCursor(); },
+    onState: (s, e) => { $('#info').textContent = s === 'online' ? '' : t(s) + (e ? ': ' + e : ''); },
+    onEnd: () => { $('#info').textContent = t('End of the recording'); }});
+}
+function live() {
+  MODE = 'live'; $('#recPanel').hidden = true; $('#qualWrap').hidden = !CAM.has_sub;
+  for (const b of document.querySelectorAll('#mode button')) b.classList.toggle('on', b.dataset.m === 'live');
+  play(`/api/v1/video/cameras/${ID}/live?quality=${$('#quality').value}`, true);
+}
+function playFrom(ms) {
+  play(`/api/v1/video/cameras/${ID}/playback?from=${new Date(ms).toISOString()}&speed=${$('#speed').value}`, false);
+  CUR = ms; drawCursor();
+}
+async function recordings() {
+  MODE = 'rec'; $('#recPanel').hidden = false; $('#qualWrap').hidden = true;
+  for (const b of document.querySelectorAll('#mode button')) b.classList.toggle('on', b.dataset.m === 'rec');
+  $('#day').value = iso(DAY);
+  const from = dayStart(DAY), to = new Date(from.getTime() + 86400000);
+  try {
+    const r = await api('GET', `/api/v1/video/cameras/${ID}/recordings?from=${from.toISOString()}&to=${to.toISOString()}`);
+    SPANS = r.spans.map(s => [Date.parse(s.from), Date.parse(s.to)]);
+    const mins = Math.round(SPANS.reduce((a, s) => a + (s[1] - s[0]), 0) / 60000);
+    $('#recInfo').textContent = SPANS.length ? `${t('Recorded')}: ${Math.floor(mins / 60)} h ${mins % 60} min · ${r.files} ${t('files')}` : t('No recording on this day');
+  } catch (x) { SPANS = []; $('#recInfo').textContent = x.message; }
+  drawTimeline();
+}
+const DAYMS = 86400000, HOURMS = 3600000;
+let HOUR = null; // start of the detail hour
+function win(id) { const d = dayStart(DAY).getTime(); return id === 'tl' ? [d, d + DAYMS] : [HOUR, HOUR + HOURMS]; }
+function frac(ms, w) { return Math.min(1, Math.max(0, (ms - w[0]) / (w[1] - w[0]))); }
+function drawBar(id) {
+  const w = win(id), el = $('#' + id);
+  el.innerHTML = SPANS.filter(([a, b]) => b > w[0] && a < w[1]).map(([a, b]) => `<div class="span" style="left:${frac(a, w) * 100}%;width:${Math.max(0.15, (frac(b, w) - frac(a, w)) * 100)}%"></div>`).join('') +
+    (id === 'tl' ? `<div class="sel" style="left:${frac(HOUR, w) * 100}%;width:${100 / 24}%;background:transparent;border-color:var(--muted)"></div>` : '') +
+    (id === 'tl2' && SEL ? `<div class="sel" style="left:${frac(Math.min(...SEL), w) * 100}%;width:${Math.abs(frac(SEL[1], w) - frac(SEL[0], w)) * 100}%"></div>` : '') + '<div class="cur" hidden></div>';
+}
+function drawTimeline() {
+  if (HOUR === null || HOUR < dayStart(DAY).getTime() || HOUR >= dayStart(DAY).getTime() + DAYMS) {
+    const last = SPANS.length ? SPANS[SPANS.length - 1][1] - 1 : dayStart(DAY).getTime() + 12 * HOURMS;
+    HOUR = new Date(last).setMinutes(0, 0, 0);
+  }
+  drawBar('tl'); drawBar('tl2');
+  $('#ax').innerHTML = [0, 3, 6, 9, 12, 15, 18, 21, 24].map(h => `<span style="left:${h / 24 * 100}%">${String(h).padStart(2, '0')}:00</span>`).join('');
+  $('#ax2').innerHTML = [0, 10, 20, 30, 40, 50, 60].map(m => `<span style="left:${m / 60 * 100}%">${hm(HOUR + m * 60000).slice(0, 5)}</span>`).join('');
+  $('#hLabel').textContent = `${hm(HOUR).slice(0, 5)} – ${hm(HOUR + HOURMS).slice(0, 5)}`;
+  drawCursor();
+}
+function drawCursor() {
+  for (const id of ['tl', 'tl2']) {
+    const c = document.querySelector(`#${id} .cur`); if (!c) continue;
+    const w = win(id);
+    if (MODE !== 'rec' || CUR === null || CUR < w[0] || CUR > w[1]) { c.hidden = true; continue; }
+    c.hidden = false; c.style.left = (frac(CUR, w) * 100) + '%';
+  }
+}
+function atX(e, id) { const r = $('#' + id).getBoundingClientRect(), w = win(id); return w[0] + Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * (w[1] - w[0]); }
+$('#tl').onclick = e => { const x = atX(e, 'tl'); HOUR = new Date(x).setMinutes(0, 0, 0); SEL = null; updateSel(); drawTimeline(); playFrom(x); };
+$('#hPrev').onclick = () => { HOUR -= HOURMS; if (HOUR < dayStart(DAY).getTime()) { DAY = new Date(HOUR); recordings(); } else drawTimeline(); };
+$('#hNext').onclick = () => { HOUR += HOURMS; if (HOUR >= dayStart(DAY).getTime() + DAYMS) { DAY = new Date(HOUR); recordings(); } else drawTimeline(); };
+let down = null;
+$('#tl2').onpointerdown = e => { down = atX(e, 'tl2'); try { $('#tl2').setPointerCapture(e.pointerId); } catch (x) { /* synthetic */ } };
+$('#tl2').onpointermove = e => { if (down === null) return; const x = atX(e, 'tl2'); if (Math.abs(x - down) > 5000) { SEL = [down, x]; drawBar('tl2'); updateSel(); } };
+$('#tl2').onpointerup = e => {
+  const x = atX(e, 'tl2');
+  if (down !== null && Math.abs(x - down) <= 5000) { SEL = null; drawBar('tl2'); updateSel(); playFrom(x); }
+  down = null;
+};
+function updateSel() {
+  const ok = SEL && Math.abs(SEL[1] - SEL[0]) <= 3600000;
+  $('#export').disabled = !ok;
+  $('#selInfo').textContent = SEL ? `${hm(Math.min(...SEL))} – ${hm(Math.max(...SEL))}${ok ? '' : ' (' + t('at most one hour') + ')'}` : '';
+}
+$('#export').onclick = () => {
+  const a = document.createElement('a');
+  a.href = `/api/v1/video/cameras/${ID}/export?from=${new Date(Math.min(...SEL)).toISOString()}&to=${new Date(Math.max(...SEL)).toISOString()}`;
+  a.click();
+};
+$('#dPrev').onclick = () => { DAY = new Date(DAY.getTime() - 86400000); SEL = null; updateSel(); recordings(); };
+$('#dNext').onclick = () => { DAY = new Date(DAY.getTime() + 86400000); SEL = null; updateSel(); recordings(); };
+$('#day').onchange = e => { if (e.target.value) { DAY = new Date(e.target.value + 'T12:00:00'); SEL = null; updateSel(); recordings(); } };
+$('#speed').onchange = () => { if (MODE === 'rec' && CUR) playFrom(CUR); };
+$('#toLive').onclick = live;
+$('#quality').onchange = live;
+for (const b of document.querySelectorAll('#mode button')) b.onclick = () => {
+  if (b.dataset.m === 'live') live();
+  else { recordings().then(() => { const last = SPANS.length ? SPANS[SPANS.length - 1] : null; if (last) playFrom(Math.max(last[0], last[1] - 60000)); }); }
+};
+$('#snap').onclick = () => {
+  const c = P && P.snapshot(); if (!c) return;
+  const a = document.createElement('a'); a.download = `${CAM.name}-${new Date(CUR || Date.now()).toISOString().replace(/[:.]/g, '-')}.png`; a.href = c.toDataURL('image/png'); a.click();
+};
+$('#full').onclick = () => { const s = $('#stage'); if (document.fullscreenElement) document.exitFullscreen(); else s.requestFullscreen().catch(() => {}); };
+ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(async ({me}) => {
+  ME = me;
+  try { CAM = await api('GET', '/api/v1/video/cameras/' + ID); } catch (x) { $('main').innerHTML = `<div class="card">${esc(x.message)}</div>`; return; }
+  $('#name').textContent = CAM.name; $('#loc').textContent = CAM.location; document.title = CAM.name;
+  $('#recBtn').hidden = !can('video.playback');
+  if (!CAM.enabled) { $('#info').textContent = t('The camera is disabled.'); }
+  const q = new URLSearchParams(location.search);
+  if (q.get('t') && can('video.playback')) { DAY = new Date(+q.get('t')); await recordings(); playFrom(+q.get('t')); } else live();
+});
+</script>
+</body>
+</html>

@@ -30,6 +30,13 @@ type Config struct {
 	Agent    AgentConfig    `toml:"agent"`
 	Map      MapConfig      `toml:"map"`
 	Time     TimeConfig     `toml:"time"`
+	Video    VideoConfig    `toml:"video"`
+}
+
+// VideoConfig locates camera recordings (spec 010).
+type VideoConfig struct {
+	StorageDir string `toml:"storage_dir"` // recorded segments; empty = <report.storage_dir>/../video
+	MaxDiskGB  int    `toml:"max_disk_gb"` // oldest recordings are deleted beyond this; default 50
 }
 
 // TimeConfig verifies the server clock against NTP (URS B-06); an unsynchronized clock is a warning on the Server page.
@@ -246,6 +253,12 @@ func (c *Config) Validate() error {
 	}
 	if c.FOTA.StorageDir == "" {
 		c.FOTA.StorageDir = filepath.Join(filepath.Dir(c.Report.StorageDir), "firmware")
+	}
+	if c.Video.StorageDir == "" {
+		c.Video.StorageDir = filepath.Join(filepath.Dir(c.Report.StorageDir), "video")
+	}
+	if c.Video.MaxDiskGB <= 0 {
+		c.Video.MaxDiskGB = 50
 	}
 	if c.FOTA.MaxSizeMB <= 0 {
 		c.FOTA.MaxSizeMB = 16
