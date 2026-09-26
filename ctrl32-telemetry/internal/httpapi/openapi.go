@@ -334,6 +334,7 @@ var apiOps = []apiOp{
 	{M: "POST /api/v1/rules/{id}/approve", T: tagRules, S: "Approve a pending rule (four eyes)", P: "device.command", B: reasonBody, R: obj(S{"id": uuid(""), "status": str("")})},
 	{M: "POST /api/v1/rules/{id}/reject", T: tagRules, S: "Reject a pending rule", P: "device.command", B: reasonBody, R: obj(S{"id": uuid(""), "status": str("")})},
 	{M: "POST /api/v1/rules/test", T: tagRules, S: "Dry run a rule spec", D: "Evaluates the condition against the current values; no action runs.", P: "config.write", B: obj(S{"spec": ref("RuleSpec"), "rule_id": str("optional: include the live state of this rule")}, "spec"), R: ref("RuleEvaluation")},
+	{M: "GET /api/v1/rules/{id}/as-flow", T: tagRules, S: "Convert a rule into a flow spec", D: "Returns an equivalent flow (datastream triggers → join → \"true for\" → actions) to create as a draft with `POST /api/v1/flows`; parts without a flow equivalent (staleness, webhook secrets, custom RPC arguments) are listed in `notes` and in a comment node. The rule itself is not changed.", P: "config.write", R: obj(S{"name": str(""), "spec": ref("FlowSpec"), "notes": arr(str("")), "problems": arr(ref("FlowProblem"))})},
 	{M: "GET /api/v1/rule-runs", T: tagRules, S: "Rule transitions with their action results", P: "config.write", Q: []apiParam{q("rule_id", ""), qi("limit", "default 50, max 500")}, R: arr(ref("RuleRun"))},
 
 	// ---- dashboards

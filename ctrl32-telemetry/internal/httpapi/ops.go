@@ -133,6 +133,16 @@ func (s *Server) metricsHandler(w http.ResponseWriter, r *http.Request) {
 			g("ctrl32_data_completeness_ratio_24h", "Share of the last 24 hours covered by data across datastreams with an expected interval (1 = no gaps)", c)
 		}
 	}
+	if s.flows != nil {
+		running, processed, errs, dropped := s.flows.Totals()
+		c := func(name, help string, v int64) {
+			samples = append(samples, metrics.Sample{Name: name, Help: help, Type: "counter", Value: float64(v)})
+		}
+		g("ctrl32_flows_running", "Flows deployed and running", float64(running))
+		c("ctrl32_flow_messages_total", "Messages processed by flow nodes since start", processed)
+		c("ctrl32_flow_errors_total", "Flow node errors since start", errs)
+		c("ctrl32_flow_dropped_total", "Flow messages dropped (full queue, rate limit) since start", dropped)
+	}
 	g("ctrl32_incidents_open", "Incidents open or under investigation", float64(s.incidents.OpenCount(ctx, "")))
 	ts := s.tc.State()
 	if ts.Enabled {

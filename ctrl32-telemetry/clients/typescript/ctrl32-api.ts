@@ -3763,6 +3763,25 @@ export class Ctrl32Client {
   }>('POST', `/api/v1/rules/${encodeURIComponent(id)}/approve`, undefined, body, false);
   }
 
+  /** Convert a rule into a flow spec
+   *
+   * Returns an equivalent flow (datastream triggers → join → "true for" → actions) to create as a draft with `POST /api/v1/flows`; parts without a flow equivalent (staleness, webhook secrets, custom RPC arguments) are listed in `notes` and in a comment node. The rule itself is not changed.
+   * 
+   * Requires permission `config.write`. */
+  getRulesIdAsFlow(id: string): Promise<{
+    name?: string;
+    notes?: string[];
+    problems?: FlowProblem[];
+    spec?: FlowSpec;
+  }> {
+    return this.request<{
+    name?: string;
+    notes?: string[];
+    problems?: FlowProblem[];
+    spec?: FlowSpec;
+  }>('GET', `/api/v1/rules/${encodeURIComponent(id)}/as-flow`, undefined, undefined, false);
+  }
+
   /** Reject a pending rule
    *
    * Requires permission `device.command`. */

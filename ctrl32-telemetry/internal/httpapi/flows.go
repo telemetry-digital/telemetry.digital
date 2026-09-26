@@ -908,3 +908,32 @@ func (h *flowHost) Location(ctx context.Context, org string) *time.Location {
 	h.mu.Unlock()
 	return loc
 }
+
+// ruleAsFlow converts an automation rule into a flow spec (FR-010); the client creates it as a draft.
+func (s *Server) ruleAsFlow(w http.ResponseWriter, r *http.Request) {
+	org, ok := s.mustOrg(w, r)
+	if !ok {
+		return
+	}
+	var name string
+	var raw json.RawMessage
+	err := s.pool.QueryRow(r.Context(), `SELECT name, spec FROM core.rule WHERE id = $1::uuid AND org_id = $2::uuid AND revoked_at IS NULL`, r.PathValue("id"), org).Scan(&name, &raw)
+	if err != nil {
+		writeErr(w, 404, "rule not found")
+		return
+	}
+	var rs rules.Spec
+	if json.Unmarshal(raw, &rs) != nil {
+		writeErr(w, 500, "stored rule spec is unreadable")
+		return
+	}
+	sp, notes := flows.FromRule(name, rs)
+	if notes == nil {
+		notes = []string{}
+	}
+	problems := flows.Validate(&sp, flowRefs{s, r.Context(), org})
+	if problems == nil {
+		problems = []flows.Problem{}
+	}
+	writeJSON(w, 200, map[string]any{"name": name, "spec": sp, "notes": notes, "problems": problems})
+}

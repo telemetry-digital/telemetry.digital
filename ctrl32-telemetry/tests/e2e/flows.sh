@@ -153,4 +153,20 @@ publish 95 >/dev/null; sleep 2.2; req GET "/api/v1/devices/$DEV/commands"; check
 for s in "$SLUG" "$HSLUG" "$BROKEN"; do req DELETE "/api/v1/flows/$s?reason=e2e"; done; check "delete" "$(st)" 200
 req GET /api/v1/flows; [[ "$(jx "j.some(x => x.flow.slug === '$SLUG')")" == false ]] && ok "deleted flow gone" || bad "list"
 
+echo "== automation rule → flow"
+req POST /api/v1/rules "{\"name\":\"Rule to flow $SUF\",\"spec\":{\"inputs\":[{\"name\":\"t\",\"datastream_id\":\"$DS\"}],\"conditions\":[{\"input\":\"t\",\"op\":\">\",\"value\":50},{\"input\":\"t\",\"op\":\"stale\",\"value\":600}],\"match\":\"any\",\"for_s\":0,\"actions\":[{\"type\":\"derive\",\"datastream_id\":\"$DSF\",\"expr\":\"t * 10\"}]},\"reason\":\"e2e\"}"; RULE=$(jx j.id)
+req PUT "/api/v1/rules/$RULE" '{"enabled":false,"reason":"e2e: the flow takes over"}'; check "rule created and stopped" "$(st)" 200
+req GET "/api/v1/rules/$RULE/as-flow"; check "rule converted" "$(st)" 200
+check "converted nodes" "$(jx 'j.spec.nodes.map(n => n.type).sort().join(",")')" "change,comment,derive,ds_value,join,stable_for"
+check "condition rewritten" "$(jx 'j.spec.nodes.find(n => n.type === "stable_for").settings.condition')" "msg.t > 50"
+check "staleness reported" "$(jx 'j.notes.length + ":" + j.problems.length')" "1:0"
+CONV=$(cat "$TMP/b")
+req POST /api/v1/flows "$(node -e 'const c=JSON.parse(process.argv[1]); console.log(JSON.stringify({name: c.name, spec: c.spec, reason: "e2e convert"}))' "$CONV")"; check "flow created from the rule" "$(st)" 201
+RSLUG=$(jx j.flow.slug)
+req POST "/api/v1/flows/$RSLUG/deploy" '{"reason":"e2e"}'; check "converted flow deployed" "$(st)" 200
+publish 61 >/dev/null; sleep 1.5
+req GET "/api/v1/datastreams/latest?ids=$DSF"; check "converted flow acts like the rule" "$(jx "j['$DSF'] && j['$DSF'].value")" 610
+curl -s -o "$TMP/b" "$BASE/metrics"; grep -q '^ctrl32_flows_running [1-9]' "$TMP/b" && grep -q '^ctrl32_flow_messages_total [1-9]' "$TMP/b" && ok "flow metrics" || bad "flow metrics: $(grep ctrl32_flow "$TMP/b")"
+req DELETE "/api/v1/flows/$RSLUG?reason=e2e"; req DELETE "/api/v1/rules/$RULE?reason=e2e"
+
 echo; echo "passed $pass, failed $fail"; [[ $fail -eq 0 ]]

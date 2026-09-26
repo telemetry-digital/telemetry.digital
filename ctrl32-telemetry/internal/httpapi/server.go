@@ -208,6 +208,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("POST /api/v1/rules/test", s.require("config.write", s.testRule))
 	mux.Handle("PUT /api/v1/rules/{id}", s.require("config.write", s.updateRule))
 	mux.Handle("DELETE /api/v1/rules/{id}", s.require("config.write", s.deleteRule))
+	mux.Handle("GET /api/v1/rules/{id}/as-flow", s.require("config.write", s.ruleAsFlow))
 	mux.Handle("POST /api/v1/rules/{id}/approve", s.require("device.command", s.approveRule))
 	mux.Handle("POST /api/v1/rules/{id}/reject", s.require("device.command", s.rejectRule))
 	mux.Handle("GET /api/v1/rule-runs", s.require("config.write", s.listRuleRuns))

@@ -25,7 +25,8 @@
   <dialog id="newDlg"><form id="newForm" class="form" method="dialog">
     <h2 style="margin-top:0">New flow</h2>
     <label>Name <input name="name" required maxlength="128" placeholder="Cooling of the mixer"></label>
-    <label>Start with <select name="start"><option value="empty">Empty</option><option value="example">Example: value above a limit for a while → notify</option></select></label>
+    <label>Start with <select name="start"><option value="empty">Empty</option><option value="example">Example: value above a limit for a while → notify</option><option value="rule" hidden>Converted automation rule</option></select></label>
+    <label id="ruleRow" hidden>Automation rule <select name="rule"></select><span class="muted" style="font-size:12px">The rule stays as it is; stop it once the flow runs, so the actions do not happen twice.</span></label>
     <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
     <div class="err" id="newErr"></div>
     <div class="actions"><button class="btn primary" type="submit">Create</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
@@ -103,9 +104,20 @@ function exampleSpec(){
     {id: 'comment1', type: 'comment', x: 60, y: 200, settings: {text: 'Choose the datastream and the channel, then deploy.'}}],
     wires: [{from: 'value1', port: 0, to: 'truefor1'}, {from: 'truefor1', port: 0, to: 'notify1'}, {from: 'truefor1', port: 0, to: 'debug1'}, {from: 'truefor1', port: 1, to: 'debug1'}]};
 }
-$('#newBtn').onclick = () => { $('#newForm').reset(); $('#newErr').textContent = ''; $('#newDlg').showModal(); };
+$('#newBtn').onclick = async () => { const f = $('#newForm'); f.reset(); $('#newErr').textContent = ''; $('#ruleRow').hidden = true; $('#newDlg').showModal();
+  let rules = [];
+  try{ rules = (await api('GET', '/api/v1/rules')).filter(r => !r.revoked_at); }catch(x){ /* no config.write: no conversion */ }
+  f.start.querySelector('[value=rule]').hidden = !rules.length;
+  f.rule.innerHTML = rules.map(r => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join(''); };
+$('#newForm').start.onchange = e => { const f = e.target.form, rule = e.target.value === 'rule'; $('#ruleRow').hidden = !rule;
+  if(rule && !f.name.value) f.name.value = f.rule.selectedOptions[0]?.textContent || ''; };
+$('#newForm').rule.onchange = e => { const f = e.target.form; f.name.value = e.target.selectedOptions[0]?.textContent || f.name.value; };
 $('#newForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#newErr').textContent = '';
-  try{ const r = await api('POST', '/api/v1/flows', {name: f.name.value, reason: f.reason.value, spec: f.start.value === 'example' ? exampleSpec() : {nodes: [], wires: []}}); location.href = '/flows/' + encodeURIComponent(r.flow.slug); }
+  try{
+    let spec = f.start.value === 'example' ? exampleSpec() : {nodes: [], wires: []};
+    if(f.start.value === 'rule'){ const c = await api('GET', `/api/v1/rules/${encodeURIComponent(f.rule.value)}/as-flow`); spec = c.spec;
+      if(c.notes.length && !confirm('Not everything can be converted:\n- ' + c.notes.join('\n- ') + '\n\nCreate the flow anyway?')) return; }
+    const r = await api('POST', '/api/v1/flows', {name: f.name.value, reason: f.reason.value, spec}); location.href = '/flows/' + encodeURIComponent(r.flow.slug); }
   catch(x){ $('#newErr').textContent = x.message; } };
 $('#importFile').onchange = async e => { const file = e.target.files[0]; if(!file) return; try{ const j = JSON.parse(await file.text()); const reason = prompt('Reason (audit trail)', 'import ' + (j.name || '')); if(!reason) return; const r = await api('POST', '/api/v1/flows/import', Object.assign({}, j, {reason})); location.href = '/flows/' + encodeURIComponent(r.flow.slug); }catch(x){ ctrl32.toast(x.message, 'bad'); } e.target.value = ''; };
 $('#settingsBtn').onclick = async () => { const s = await api('GET', '/api/v1/flows/settings'); const f = $('#setForm'); f.reset(); f.hosts.value = s.allowed_hosts.join('\n'); $('#setErr').textContent = ''; $('#setDlg').showModal(); };
