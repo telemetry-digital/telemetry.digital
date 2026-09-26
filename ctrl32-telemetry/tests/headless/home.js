@@ -1,6 +1,6 @@
 // Headless Chrome: the Home page (spec 005). The probe creates an MQTT account, runs the zigbee2mqtt simulator
 // (tools/mqttsim) against it, opens /home and checks the rooms and cards, switches the plug with a real mouse click,
-// dims the light, follows the live states reported back by the device, opens the history dialog and filters by room.
+// dims the light, sets its colour (spec 006), follows the live states reported back by the device, opens the history dialog and filters by room.
 const { spawn, execFileSync } = require("child_process");
 const fs = require("fs");
 const http = require("http");
@@ -62,6 +62,12 @@ const done = (code) => { if (simProc) simProc.kill(); proc.kill(); process.exit(
   await ev(`(() => { const s = document.querySelector('.hm-card[data-id="${light}"] [data-bright]'); s.value = 40; s.dispatchEvent(new Event('change', {bubbles: true})); })()`);
   expect("light on at 40 %", await until(`/40 %/.test(document.querySelector('.hm-card[data-id="${light}"] .hm-state').textContent)`), true);
   expect("light payload", /Hall light\/set \{"brightness":102,"state":"ON"\}/.test(simLog), true);
+  // colour picker and colour temperature (spec 006)
+  expect("colour controls on the light card", await ev(`!!document.querySelector('.hm-card[data-id="${light}"] input[type=color][data-rgb]') && !!document.querySelector('.hm-card[data-id="${light}"] [data-ct]')`), true);
+  await ev(`(() => { const c = document.querySelector('.hm-card[data-id="${light}"] [data-rgb]'); c.value = '#00ff00'; c.dispatchEvent(new Event('change', {bubbles: true})); })()`);
+  for (let i = 0; i < 40 && !/"color":\{"b":0,"g":255,"r":0\}/.test(simLog); i++) await sleep(250);
+  expect("colour payload", /"color":\{"b":0,"g":255,"r":0\}/.test(simLog), true);
+  expect("colour shown after the device reports it", await until(`document.querySelector('.hm-card[data-id="${light}"] [data-rgb]').value === '#00ff00'`), true);
   // history dialog
   await click(`.hm-card[data-id="${temp}"] [data-hist]`);
   expect("history chart", await until(`document.querySelector('#histDlg').open && !!document.querySelector('#histBody svg path.hm-line')`), true);

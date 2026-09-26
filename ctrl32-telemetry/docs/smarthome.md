@@ -2,7 +2,7 @@
 
 ctrl32 can be used like Home Assistant for devices that speak MQTT: they register themselves, appear with their
 rooms and entities, are recorded and controlled from the **Home** page, and take part in flows. Specification:
-`specs/005-mqtt-provisioning-smarthome/`; URS A-20…A-26.
+`specs/005-mqtt-provisioning-smarthome/` and `specs/006-smarthome-phase2/`; URS A-20…A-29.
 
 Everything runs inside the ctrl32 server: the MQTT broker, the discovery engine, the bridges. No Home Assistant,
 Mosquitto or Node-RED is needed (an existing installation can keep running next to it).
@@ -14,6 +14,7 @@ Mosquitto or Node-RED is needed (an existing installation can keep running next 
 | Device | Path |
 |---|---|
 | zigbee2mqtt, Tasmota, ESPHome, Z-Wave JS UI, OpenMQTTGateway, any device with Home Assistant MQTT discovery | an **MQTT account** on the ctrl32 broker |
+| Shelly Gen2+/Gen3 (Plus, Pro, Mini, Gen3, Gen4), Tasmota with default settings | an **MQTT account** (native support, see below) |
 | Devices already on your own broker (Mosquitto of zigbee2mqtt or Home Assistant) | a **bridge** |
 | Many identical devices, ThingsBoard firmware | a **provisioning profile** (key and secret) |
 | A single ctrl32 device | a claim code (Devices) |
@@ -36,12 +37,30 @@ Ready-to-paste settings:
 New devices are added automatically (setting *New devices: add automatically*); set *ask first* to collect them in the
 inbox instead.
 
+### Shelly and Tasmota without Home Assistant discovery
+
+- **Shelly Gen2 and later**: in the device's web page, *Settings → MQTT*: enable, server `host:1883`, the account's user
+  and password, keep *RPC status notifications* on. ctrl32 recognizes the device by its notifications, asks it for its
+  device info and status over MQTT RPC and adds switches, covers, lights (also RGB/RGBW), inputs and the power, energy,
+  voltage, current, temperature, humidity and battery values it reports. Control actions are RPC calls
+  (`Switch.Set`, `Cover.GoToPosition`, `Light.Set`, …) on `<device>/rpc`; the answer comes to `ctrl32-…/rpc`.
+- **Tasmota with default settings** (`SetOption19 0`, Tasmota's own discovery on `tasmota/discovery/…`): relays
+  (as lights with `SetOption30 1`), lights with dimmer, colour temperature and colour, and every numeric value of
+  `tele/<topic>/SENSOR` (temperature, humidity, power, energy, …) with units. After a device appears ctrl32 asks it for
+  its state (`cmnd/<topic>/STATE`). `SetOption19 1` (Home Assistant discovery) keeps working as before.
+
+Both appear like any other device (automatically or in the inbox) with entities, history, control and flows.
+
 ### Bridges
 
 ctrl32 connects to your broker as a client (host, port, TLS, optionally accepting a self-signed certificate, user,
 password — stored encrypted with the server's secret key). It subscribes to the discovery prefix and the entities'
 topics and publishes commands there. Discovered devices wait in **Discovered devices** until you adopt or ignore them.
 The connection is re-established with backoff; its state and last error are shown on the sources page.
+
+**Outages**: when a bridge — or an account whose devices have entities — stays disconnected longer than *Incident when
+disconnected longer than* (default 10 minutes, 0 = never), an incident *MQTT connection* opens and the administrators
+are notified; it is resolved automatically when the connection is back.
 
 **Sharing values with Home Assistant**: select datastreams in the bridge dialog; ctrl32 publishes a retained Home
 Assistant discovery config (`homeassistant/sensor/ctrl32_…/config`) and every new value to
@@ -85,15 +104,17 @@ climate, number, select, text, button, scene, siren, humidifier, event, device t
 availability (topics, templates, payloads), JSON attributes and device-based discovery are understood; an empty config
 removes the entity (its history stays).
 
-Templates (`value_template` and friends) are a safe Jinja subset: `value`, `value_json` with members and indexes,
-arithmetic, comparisons, `and/or/not`, `x if c else y`, `{% if %}`, filters `float int round default lower upper string
-trim replace length min max tojson iif` and tests `is defined`, `is number`. A config with a template ctrl32 cannot
+Templates (`value_template` and friends) are a safe Jinja subset: `value`, `value_json` with members, indexes and
+slices (`value[0:2]`), arithmetic, comparisons, `and/or/not`, `x if c else y`, `{% if %}`, filters `float int round
+default lower upper string trim replace length min max join tojson iif` (`int(0, 16)` parses hexadecimal), string
+methods `split strip lower upper replace startswith endswith` and tests `is defined`, `is number`. A config with a template ctrl32 cannot
 evaluate is kept as *unsupported* with the reason.
 
 Every state is recorded as an observation of the entity's datastream — numbers every report, other states when they
 change — so charts, reports, alarm rules and flows work with them like with any telemetry.
 
-**Home** shows the rooms and cards: values with units and a 24-hour trend, switches, brightness, blinds with
+**Home** shows the rooms and cards: values with units and a 24-hour trend, switches, brightness, colour and colour
+temperature (lights that announce them), blinds with
 open/stop/close and position, locks, thermostats with target temperature and mode, numbers, selects, texts, buttons.
 Changes appear live. A card's chart button opens the history (24 h, 7 or 30 days).
 
@@ -113,8 +134,15 @@ account is connected.
 Example: *door opened → hall light on at 60 %* is an Entity trigger (to `on`) wired to an Entity action (`turn_on`,
 value `60`).
 
-## Not yet (phase 2)
+- **MQTT in** trigger: every message on a topic filter (`+` and `#` allowed) of an MQTT account or bridge. A JSON
+  number, text or boolean is the value; the members of a JSON object become message fields, nested objects joined with
+  `_` (`{"ENERGY":{"Power":5}}` → `msg.ENERGY_Power`).
+- **MQTT out**: publishes a message (topic and payload templates, retain) on an MQTT account or bridge — for devices
+  without discovery or plain MQTT scenes. Flows with it are commanding flows (four eyes where required).
 
-Shelly Gen2 native RPC and the Tasmota native discovery format (Tasmota with `SetOption19 1` works), camera and image
-entities, colour pickers on the cards (colour can be set through the API), an incident when a bridge stays
-disconnected, X.509 and MQTT-basic credentials in provisioning.
+Renaming an entity keeps the new name even when the device announces its configuration again.
+
+## Not yet
+
+Shelly Gen1 (`shellies/…`), camera and image entities, effects on the cards, X.509 and MQTT-basic credentials in
+provisioning.
