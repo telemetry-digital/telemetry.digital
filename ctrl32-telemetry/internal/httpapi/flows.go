@@ -30,6 +30,7 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/incident"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/notify"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/rules"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/smarthome"
 )
 
 // ---- references for validation ------------------------------------------------------------------------------------
@@ -53,6 +54,9 @@ func (f flowRefs) Device(id string) bool {
 }
 func (f flowRefs) Channel(id string) bool {
 	return f.exists(`SELECT EXISTS (SELECT 1 FROM core.notification_channel WHERE id = $1::uuid AND org_id = $2::uuid AND revoked_at IS NULL)`, id)
+}
+func (f flowRefs) Entity(id string) bool {
+	return f.exists(`SELECT EXISTS (SELECT 1 FROM core.entity WHERE id = $1::uuid AND org_id = $2::uuid AND status <> 'removed')`, id)
 }
 func (f flowRefs) HostAllowed(host string) bool {
 	for _, h := range f.s.flowHosts(f.ctx, f.org) {
@@ -800,6 +804,35 @@ func (h *flowHost) RunCommand(ctx context.Context, org, dev, method string, args
 		method = "write"
 	}
 	res, err := h.s.RunCommand(ctx, rules.CommandRequest{OrgID: org, DeviceID: dev, Method: method, Args: args, FlowID: flowID, Issuer: issuer, Reason: reason})
+	if err != nil {
+		return "", "", "", err
+	}
+	return res.ID, res.Status, res.Error, nil
+}
+
+func (h *flowHost) EntityName(ctx context.Context, org, id string) string {
+	var name string
+	if err := h.s.pool.QueryRow(ctx, `SELECT name FROM core.entity WHERE id = $1::uuid`, id).Scan(&name); err != nil {
+		return id
+	}
+	return name
+}
+
+func (h *flowHost) EntityCommand(ctx context.Context, org, entityID, service string, params map[string]any, flowID, issuer, reason string) (string, string, string, error) {
+	if h.s.smart == nil {
+		return "", "", "", errors.New("smart home is not available")
+	}
+	b, _ := json.Marshal(params)
+	var p smarthome.Params
+	if err := json.Unmarshal(b, &p); err != nil {
+		return "", "", "", err
+	}
+	dev, err := h.s.smart.Check(entityID, service, p)
+	if err != nil {
+		return "", "", "", err
+	}
+	args, _ := json.Marshal(smarthome.CommandArgs{Entity: entityID, Params: p})
+	res, err := h.s.RunCommand(ctx, rules.CommandRequest{OrgID: org, DeviceID: dev, Method: service, Args: args, FlowID: flowID, Issuer: issuer, Reason: reason})
 	if err != nil {
 		return "", "", "", err
 	}

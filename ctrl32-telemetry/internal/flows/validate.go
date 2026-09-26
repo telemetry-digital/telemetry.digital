@@ -35,6 +35,7 @@ type Refs interface {
 	Datastream(id string) bool
 	Device(id string) bool
 	Channel(id string) bool
+	Entity(id string) bool
 	HostAllowed(host string) bool
 }
 
@@ -248,7 +249,7 @@ func checkSetting(st Setting, v any, refs Refs) (any, string) {
 			return nil, err
 		}
 		return s, ""
-	case "datastream", "device", "channel":
+	case "datastream", "device", "channel", "entity":
 		s, _ := v.(string)
 		if !uuidRe.MatchString(s) {
 			return nil, "choose one"
@@ -262,6 +263,8 @@ func checkSetting(st Setting, v any, refs Refs) (any, string) {
 				ok = refs.Device(s)
 			case "channel":
 				ok = refs.Channel(s)
+			case "entity":
+				ok = refs.Entity(s)
 			}
 		}
 		if !ok {

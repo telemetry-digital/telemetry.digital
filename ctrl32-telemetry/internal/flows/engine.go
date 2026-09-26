@@ -25,6 +25,10 @@ type Host interface {
 	StoreDerived(ctx context.Context, org, datastreamID, key string, value float64, at time.Time) error
 	// RunCommand sends a device command; reason and issuer name the flow as the origin (FR-005).
 	RunCommand(ctx context.Context, org, deviceID, method string, args json.RawMessage, flowID, issuer, reason string) (id, status, errText string, err error)
+	// EntityCommand controls a smart-home entity; issuer and reason name the flow as the origin.
+	EntityCommand(ctx context.Context, org, entityID, service string, params map[string]any, flowID, issuer, reason string) (id, status, errText string, err error)
+	// EntityName is the display name of an entity.
+	EntityName(ctx context.Context, org, id string) string
 	// SetAttribute sets one shared attribute of a device; issuer and reason name the flow as the origin.
 	SetAttribute(ctx context.Context, org, deviceID, key string, value any, issuer, reason string) error
 	Notify(ctx context.Context, org, channelID, flowID, subject, text string, payload map[string]any) error
@@ -95,6 +99,7 @@ type Engine struct {
 	flows map[string]*flow // org/slug
 	byDS  map[string][]trigRef
 	hooks map[string]trigRef // token → webhook node
+	ents  sync.Map           // entity id → last state (for the entity trigger's from/to)
 	debug map[string]*ring
 
 	queued, dropped, processed, errored atomic.Int64

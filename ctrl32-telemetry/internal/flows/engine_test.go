@@ -1,6 +1,7 @@
 package flows
 
 import (
+	"fmt"
 	"context"
 	"encoding/json"
 	"io"
@@ -22,6 +23,7 @@ type fakeHost struct {
 	http     []string
 	incident []string
 	attrs    []string
+	entCmds  []string
 }
 
 func (h *fakeHost) DatastreamName(_ context.Context, _, id string) (string, string) {
@@ -52,6 +54,13 @@ func (h *fakeHost) SetAttribute(_ context.Context, _, dev, key string, v any, is
 	h.attrs = append(h.attrs, key+"="+Str(v)+" by "+issuer)
 	return nil
 }
+func (h *fakeHost) EntityCommand(_ context.Context, _, ent, service string, params map[string]any, _, issuer, reason string) (string, string, string, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.entCmds = append(h.entCmds, fmt.Sprintf("%s %s %v | %s | %s", ent, service, params, issuer, reason))
+	return "cmd1", "sent", "", nil
+}
+func (h *fakeHost) EntityName(_ context.Context, _, id string) string { return "Hall door" }
 func (h *fakeHost) Incident(_ context.Context, _, action, sev, title, dedup string, _ map[string]any) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -325,5 +334,33 @@ func TestFlowThroughput(t *testing.T) {
 	t.Logf("%d messages through 10 nodes in %v (%.0f msg/s)", n, el, rate)
 	if rate < 1000 {
 		t.Errorf("throughput %.0f msg/s, want ≥ 1 000", rate)
+	}
+}
+
+// Entity trigger with from/to and an entity action: "door opened → hall light on at 60 %".
+func TestFlowEntities(t *testing.T) {
+	e, _, h, cancel := testEngine(t, `{"nodes":[{"id":"door","type":"entity","x":0,"y":0,"settings":{"entity":"`+entA+`","to":"on"}},
+		{"id":"light","type":"entity_action","x":200,"y":0,"settings":{"entity":"`+entA+`","service":"turn_on","value":"60"}},
+		{"id":"res","type":"command_result","x":0,"y":100,"settings":{"statuses":["failed"]}},
+		{"id":"dbg","type":"debug","x":200,"y":100,"settings":{"active":true,"expr":"value + ' ' + msg.error"}}],
+		"wires":[{"from":"door","port":0,"to":"light"},{"from":"res","port":0,"to":"dbg"}]}`)
+	defer cancel()
+	on := true
+	e.OnEvent(live.Event{Type: "entity", Org: "org", EntityID: entA, State: "off", Connected: &on})
+	e.OnEvent(live.Event{Type: "entity", Org: "org", EntityID: entA, State: "on", Connected: &on, Detail: map[string]any{"battery": 90.0}})
+	e.OnEvent(live.Event{Type: "entity", Org: "org", EntityID: entA, State: "on", Connected: &on, Detail: map[string]any{"battery": 89.0}}) // same state: nothing
+	waitFor(t, "entity action", func() bool { h.mu.Lock(); defer h.mu.Unlock(); return len(h.entCmds) == 1 })
+	time.Sleep(100 * time.Millisecond)
+	h.mu.Lock()
+	got := append([]string(nil), h.entCmds...)
+	h.mu.Unlock()
+	if len(got) != 1 || !strings.Contains(got[0], "turn_on map[brightness:60]") || !strings.Contains(got[0], "flow:Cooling") || !strings.Contains(got[0], "Hall door off→on") {
+		t.Fatalf("entity commands: %v", got)
+	}
+	e.OnEvent(live.Event{Type: "command", Org: "org", DeviceID: devA, CommandID: "c1", Method: "turn_on", Status: "acked"})
+	e.OnEvent(live.Event{Type: "command", Org: "org", DeviceID: devA, CommandID: "c2", Method: "turn_on", Status: "failed", Detail: map[string]any{"error": "no answer"}})
+	waitFor(t, "command result", func() bool { return len(debugTexts(e, "debug")) == 1 })
+	if d := debugTexts(e, "debug")[0]; d != "failed no answer" {
+		t.Fatalf("debug %q", d)
 	}
 }

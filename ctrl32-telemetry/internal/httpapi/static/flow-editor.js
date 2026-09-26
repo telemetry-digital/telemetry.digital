@@ -52,6 +52,8 @@
         case 'delay': case 'debounce': return (s.seconds ?? '') + ' s';
         case 'schedule': return s.mode === 'daily' ? (s.times || '') : `every ${s.every_s ?? ''} s`;
         case 'command': return ((lists.devices.find((x) => x.id === s.device) || {}).label || '') + (s.key ? ' · ' + s.key : '');
+        case 'entity': return ((lists.entities || []).find((x) => x.id === s.entity) || {}).label || '' ;
+        case 'entity_action': return (s.service || '') + ' · ' + (((lists.entities || []).find((x) => x.id === s.entity) || {}).label || '');
         case 'notify': return ((lists.channels.find((x) => x.id === s.channel) || {}).label || '');
         case 'aggregate': return `${s.fn || 'avg'} / ${s.window_s ?? ''} s`;
         case 'deadband': return `± ${s.band ?? ''}${s.percent ? ' %' : ''}`;
@@ -197,6 +199,7 @@
         case 'time': return `<label>${lab} <input type="time" data-s="${p.name}" value="${esc(v ?? '')}"></label>`;
         case 'datastream': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.datastreams, v)}</select>${help}</label>`;
         case 'device': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.devices, v)}</select>${help}</label>`;
+        case 'entity': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.entities || [], v)}</select>${help}</label>`;
         case 'channel': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.channels, v)}</select>${help}</label>`;
         case 'rules': return `<label>${lab} <textarea rows="3" data-rules="${p.name}" class="fe-mono">${esc((v || []).join('\n'))}</textarea><span class="muted" style="font-size:11px">one condition per line; an extra output takes the rest</span></label>`;
         case 'fields': return `<div class="fe-fields" data-fields="${p.name}"><span>${lab}</span>${(v || []).map((c, i) => `<div class="fe-field-row" data-i="${i}"><select data-f="op">${['set', 'delete', 'rename'].map((x) => `<option ${x === c.op ? 'selected' : ''}>${x}</option>`).join('')}</select><input data-f="name" value="${esc(c.name || '')}" placeholder="value / topic / msg.x" class="fe-mono"><input data-f="${c.op === 'rename' ? 'to' : 'expr'}" value="${esc(c.op === 'rename' ? (c.to || '') : (c.expr || ''))}" placeholder="${c.op === 'rename' ? 'new name' : 'expression'}" class="fe-mono" ${c.op === 'delete' ? 'hidden' : ''}><button type="button" class="btn small ghost" data-fdel="${i}">✕</button></div>`).join('')}<button type="button" class="btn small" data-fadd>Add change</button></div>`;

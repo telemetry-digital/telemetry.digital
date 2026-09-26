@@ -10,6 +10,7 @@ const (
 	dsA  = "11111111-1111-4111-8111-111111111111"
 	devA = "22222222-2222-4222-8222-222222222222"
 	chA  = "33333333-3333-4333-8333-333333333333"
+	entA = "55555555-5555-4555-8555-555555555555"
 )
 
 type fakeRefs struct{}
@@ -17,6 +18,7 @@ type fakeRefs struct{}
 func (fakeRefs) Datastream(id string) bool { return id == dsA }
 func (fakeRefs) Device(id string) bool     { return id == devA }
 func (fakeRefs) Channel(id string) bool    { return id == chA }
+func (fakeRefs) Entity(id string) bool     { return id == entA }
 func (fakeRefs) HostAllowed(h string) bool { return h == "hooks.example.com" }
 
 // The US1 example: temperature > 80 for 2 minutes → notify and command.

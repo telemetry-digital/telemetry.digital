@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -152,7 +153,7 @@ func (f *flow) process(n *rnode, m *Message, dry bool) {
 			n.st["last_at"] = time.Now()
 		}
 		f.emit(n, 0, m, dry)
-	case "alarm_event", "device_state", "schedule", "webhook":
+	case "alarm_event", "device_state", "schedule", "webhook", "entity", "command_result":
 		f.emit(n, 0, m, dry)
 	case "inject":
 		if m.Value == nil {
@@ -490,6 +491,52 @@ func (f *flow) process(n *rnode, m *Message, dry bool) {
 		f.act(n, m, func(ctx context.Context) (map[string]Value, error) {
 			return nil, f.e.host.SetAttribute(ctx, f.org, dev, key, v, "flow:"+f.name, reason)
 		}, fmt.Sprintf("attribute %s = %s", key, Str(v)))
+	case "entity_action":
+		service, ent := str("service"), str("entity")
+		params := map[string]any{}
+		if n.exprs["value"] != nil {
+			v, err := f.eval(n, "value", m)
+			if err != nil {
+				f.fail(n, m, err)
+				return
+			}
+			num, isNum := Num(v)
+			switch service {
+			case "set_position":
+				params["position"] = num
+			case "set_temperature":
+				params["temperature"] = num
+			case "set_percentage":
+				params["percentage"] = num
+			case "set_hvac_mode":
+				params["mode"] = Str(v)
+			case "set_value", "select_option":
+				params["value"] = v
+			case "turn_on":
+				if isNum {
+					params["brightness"] = num
+				}
+			}
+			if (service == "set_position" || service == "set_temperature" || service == "set_percentage") && !isNum {
+				f.fail(n, m, fmt.Errorf("value %v is not a number", Str(v)))
+				return
+			}
+		}
+		if dry || f.temp {
+			f.dryAction(n, m, fmt.Sprintf("would %s the entity %v", strings.ReplaceAll(service, "_", " "), params))
+			return
+		}
+		reason := f.origin(n, m)
+		f.act(n, m, func(ctx context.Context) (map[string]Value, error) {
+			id, status, errText, err := f.e.host.EntityCommand(ctx, f.org, ent, service, params, f.id, "flow:"+f.name, reason)
+			if err != nil {
+				return nil, err
+			}
+			if status == "failed" {
+				return nil, errors.New("command failed: " + errText)
+			}
+			return map[string]Value{"command_id": id, "status": status}, nil
+		}, "entity "+service)
 	case "notify":
 		subj, err1 := f.render(str("subject"), m)
 		text, err2 := f.render(str("text"), m)
@@ -823,8 +870,18 @@ func (e *Engine) OnObservations(ctx context.Context, obs []ingest.Observation) {
 
 // OnEvent receives alarm and device events from the live hub (tap).
 func (e *Engine) OnEvent(ev live.Event) {
-	if ev.Type != "alarm" && ev.Type != "device" {
+	if ev.Type != "alarm" && ev.Type != "device" && ev.Type != "entity" && ev.Type != "command" {
 		return
+	}
+	if ev.Type == "command" && ev.Status != "acked" && ev.Status != "failed" && ev.Status != "expired" && ev.Status != "rejected" {
+		return
+	}
+	prevState := ""
+	if ev.Type == "entity" {
+		if p, ok := e.ents.Load(ev.EntityID); ok {
+			prevState = p.(string)
+		}
+		e.ents.Store(ev.EntityID, ev.State)
 	}
 	e.mu.RLock()
 	var targets []trigRef
@@ -836,7 +893,8 @@ func (e *Engine) OnEvent(ev live.Event) {
 			if n.spec.Disabled {
 				continue
 			}
-			if (ev.Type == "alarm" && n.spec.Type == "alarm_event") || (ev.Type == "device" && n.spec.Type == "device_state") {
+			if (ev.Type == "alarm" && n.spec.Type == "alarm_event") || (ev.Type == "device" && n.spec.Type == "device_state") ||
+				(ev.Type == "entity" && n.spec.Type == "entity") || (ev.Type == "command" && n.spec.Type == "command_result") {
 				targets = append(targets, trigRef{f, id})
 			}
 		}
@@ -888,6 +946,61 @@ func (e *Engine) OnEvent(ev live.Event) {
 			}
 			m = &Message{Topic: name, Value: state == "connected", TS: time.Now().UTC(), Source: &Source{Kind: "device", ID: ev.DeviceID, Name: name},
 				Fields: map[string]Value{"event": state}, Trigger: "device " + name + " " + state}
+		case "entity":
+			if id, _ := s["entity"].(string); id != ev.EntityID {
+				continue
+			}
+			changed := prevState != ev.State
+			if !changed && s["attributes"] != true {
+				continue
+			}
+			if from, _ := s["from"].(string); from != "" && (from != prevState || !changed) {
+				continue
+			}
+			if to, _ := s["to"].(string); to != "" && (to != ev.State || !changed) {
+				continue
+			}
+			name := ev.EntityID
+			if e.host != nil {
+				name = e.host.EntityName(context.Background(), ev.Org, ev.EntityID)
+			}
+			var v Value = ev.State
+			if f, err := strconv.ParseFloat(ev.State, 64); err == nil {
+				v = f
+			}
+			fields := map[string]Value{"from": prevState, "entity_id": ev.EntityID, "available": ev.Connected == nil || *ev.Connected}
+			if attrs, ok := ev.Detail.(map[string]any); ok {
+				for k, a := range attrs {
+					if len(fields) >= 40 {
+						break
+					}
+					switch a.(type) {
+					case float64, string, bool, nil:
+						fields[fieldName(k)] = a
+					}
+				}
+			}
+			m = &Message{Topic: name, Value: v, TS: time.Now().UTC(), Source: &Source{Kind: "entity", ID: ev.EntityID, Name: name},
+				Fields: fields, Trigger: "entity " + name + " " + prevState + "→" + ev.State}
+		case "command":
+			if dev, _ := s["device"].(string); dev != "" && dev != ev.DeviceID {
+				continue
+			}
+			if sts, _ := toStrings(s["statuses"]); !contains(sts, ev.Status) {
+				continue
+			}
+			name := ev.DeviceID
+			if e.host != nil {
+				name = e.host.DeviceName(context.Background(), ev.Org, ev.DeviceID)
+			}
+			errText := ""
+			if d, ok := ev.Detail.(map[string]any); ok {
+				if s, ok := d["error"].(string); ok {
+					errText = s
+				}
+			}
+			m = &Message{Topic: name, Value: ev.Status, TS: time.Now().UTC(), Source: &Source{Kind: "command", ID: ev.CommandID, Name: name},
+				Fields: map[string]Value{"command_id": ev.CommandID, "method": ev.Method, "error": errText, "device_id": ev.DeviceID}, Trigger: "command " + ev.Method + " " + ev.Status + " on " + name}
 		}
 		t.f.enqueue(qitem{node: t.node, msg: m})
 	}
