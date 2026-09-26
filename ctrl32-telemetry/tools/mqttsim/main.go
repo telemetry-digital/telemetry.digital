@@ -352,7 +352,9 @@ func runTasmota(ctx context.Context, addr, user, pass, id, prefix string) error 
 		"uniq_id": id + "_energy_power", "dev": map[string]any{"ids": []string{id}}}, true)
 	var mu sync.Mutex
 	power := "OFF"
-	state := func() { cl.pub(ctx, "tele/"+topic+"/STATE", map[string]any{"Time": time.Now().Format("2006-01-02T15:04:05"), "POWER": power}, false) }
+	state := func() {
+		cl.pub(ctx, "tele/"+topic+"/STATE", map[string]any{"Time": time.Now().Format("2006-01-02T15:04:05"), "POWER": power}, false)
+	}
 	cl.on(func(t string, payload []byte) {
 		if t != "cmnd/"+topic+"/POWER" {
 			return
