@@ -54,7 +54,12 @@ func (s *Server) replicationStatus(w http.ResponseWriter, r *http.Request) {
 		s.replErr(w, err)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"node": node, "replicas": list, "modes": replication.Modes, "max_replicas": replication.MaxReplicas})
+	pending, err := s.repl.Pending(r.Context())
+	if err != nil {
+		s.replErr(w, err)
+		return
+	}
+	writeJSON(w, 200, map[string]any{"node": node, "replicas": list, "pending": pending, "modes": replication.Modes, "max_replicas": replication.MaxReplicas})
 }
 
 // POST /api/v1/replication/pairings {mode, name, lag_limit_s, reason}

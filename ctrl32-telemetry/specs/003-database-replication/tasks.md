@@ -19,7 +19,7 @@ description: "Tasks for the redundant database"
 
 ## Phase 3: US2 continuous replica (P1)
 - [x] T008 [US2] Monitor loop (pg_stat_replication, slots, states, events, max_slot_wal_keep_size) and incidents in internal/replication/monitor.go
-- [ ] T009 [US2] Server page: Redundancy section (node role, replicas, progress, lag, events, attach dialog with code) in internal/httpapi/static/server.html
+- [x] T009 [US2] Server page: Redundancy section (node role, replicas, progress, lag, events, attach dialog with code) in internal/httpapi/static/server.html
 
 ## Phase 4: US1 safe detach
 - [x] T010 [US1] Detach: snapshot counts + audit entry on the primary, command to the replica, promote + verify + report, cleanup, partial detach, purge advisory lock in internal/replication/detach.go
@@ -30,12 +30,12 @@ description: "Tasks for the redundant database"
 - [x] T013 [US3] e2e: promote the standby, write to it, start the old primary → fenced in tests/e2e/replication.sh
 
 ## Phase 6: US4 settings (P2)
-- [ ] T014 [US4] Change mode/limits/standby URL with reason (audit old/new), drop replica; UI controls
-- [ ] T015 [P] [US4] Headless: Redundancy section renders, attach dialog shows a code, detach needs a reason in tests/headless/replication.js
+- [x] T014 [US4] Change mode/limits/standby URL with reason (audit old/new), drop replica; UI controls
+- [x] T015 [P] [US4] Headless: Redundancy section renders, attach dialog shows a code, detach needs a reason in tests/headless/replication.js
 
 ## Phase 7: Polish
-- [ ] T016 [P] Runbook docs/runbook-replication.md (attach, detach, move a copy, failover, re-attach a demoted primary, "a replica is not a backup")
-- [ ] T017 [P] URS K-15…K-20, JOURNAL, README; sk/cs translations
+- [x] T016 [P] Runbook docs/runbook-replication.md (attach, detach, move a copy, failover, re-attach a demoted primary, "a replica is not a backup")
+- [x] T017 [P] URS K-15…K-20, JOURNAL, README; sk/cs translations
 - [ ] T018 run-all green, commit, push
 
 ## Later (phase 2 of the feature)

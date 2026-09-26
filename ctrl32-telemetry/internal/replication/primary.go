@@ -438,6 +438,25 @@ func has(list []string, v string) bool {
 	return false
 }
 
+// Pending lists pairing codes not used yet and not expired (the second PC has not connected yet).
+func (p *Primary) Pending(ctx context.Context) ([]map[string]any, error) {
+	rows, err := p.Pool.Query(ctx, `SELECT id::text, name, mode, created_at, expires_at FROM core.replica_pairing WHERE used_at IS NULL AND expires_at > now() ORDER BY created_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	for rows.Next() {
+		var id, name, mode string
+		var created, exp time.Time
+		if err := rows.Scan(&id, &name, &mode, &created, &exp); err != nil {
+			return nil, err
+		}
+		out = append(out, map[string]any{"id": id, "name": name, "mode": mode, "created_at": created, "expires_at": exp})
+	}
+	return out, rows.Err()
+}
+
 // ReplicaByToken authenticates a replica; detached and dropped replicas are refused.
 func (p *Primary) ReplicaByToken(ctx context.Context, token string) (*Replica, error) {
 	if !strings.HasPrefix(token, "c32r_") {

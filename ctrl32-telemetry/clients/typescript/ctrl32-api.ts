@@ -2933,12 +2933,14 @@ export class Ctrl32Client {
     max_replicas?: number;
     modes?: string[];
     node?: ReplicationNode;
+    pending?: (Record<string, unknown>)[];
     replicas?: Replica[];
   }> {
     return this.request<{
     max_replicas?: number;
     modes?: string[];
     node?: ReplicationNode;
+    pending?: (Record<string, unknown>)[];
     replicas?: Replica[];
   }>('GET', `/api/v1/replication`, undefined, undefined, false);
   }

@@ -155,6 +155,66 @@
   </dialog>
 </section>
 
+<section data-section="redundancy">
+  <div class="page-head"><h1>Redundant database</h1><span class="grow"></span><button class="btn primary" id="replAttachBtn" type="button">Attach a replica</button></div>
+  <div class="grid">
+    <div class="card"><h2>This server</h2><dl class="kv" id="kvNode"></dl></div>
+    <div class="card"><h2>Functions</h2>
+      <dl class="kv">
+        <dt>One-time copy</dt><dd>Copy the live database to another PC, then detach it safely: verified, complete, independent (archive, move, test system).</dd>
+        <dt>Continuous replica</dt><dd>A read-only copy at another site that follows every change within seconds; incident when it falls behind or disconnects.</dd>
+        <dt>Hot standby</dt><dd>A complete server ready to take over; promoted manually on the standby when the primary fails; the old primary then refuses writes.</dd>
+      </dl>
+      <p class="muted" style="margin-bottom:0">A replica is not a backup: deleted or damaged data is copied too. Keep the backups.</p>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px"><h2>Replicas</h2>
+    <div class="table-wrap"><table id="replicas"><thead><tr><th>Name</th><th>Function</th><th>State</th><th>Lag</th><th>Last contact</th><th>Machine</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <div class="card" style="margin-top:16px" id="replDetail" hidden></div>
+  <dialog id="replDlg">
+    <form id="replForm" class="form" method="dialog">
+      <h2 style="margin-top:0">Attach a replica</h2>
+      <label>Function <select name="mode"><option value="copy">One-time copy (then detach safely)</option><option value="continuous" selected>Continuous replica (offsite)</option><option value="standby">Hot standby (failover)</option></select></label>
+      <label>Name <input name="name" required maxlength="64" placeholder="Backup PC, site B"></label>
+      <label>Lag limit (seconds) <input name="lag_limit_s" type="number" min="1" max="86400" value="10"></label>
+      <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+      <div class="err" id="replErr"></div>
+      <div id="replCode" hidden>
+        <p>Pairing code, valid 15 minutes, shown once:</p>
+        <p style="font:600 28px var(--mono);letter-spacing:.08em;margin:4px 0" id="replCodeVal" class="notranslate"></p>
+        <p class="muted" id="replExp"></p>
+        <p>On the second PC (ctrl32 telemetry installed, same release and PostgreSQL version), as root:</p>
+        <pre class="conf notranslate" id="replCmd"></pre>
+        <p class="muted">The local database of that PC is replaced by the copy (its old data directory is kept aside). This page shows the progress.</p>
+      </div>
+      <div class="actions"><button class="btn primary" type="submit" id="replSubmit">Create pairing code</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+    </form>
+  </dialog>
+  <dialog id="replEditDlg">
+    <form id="replEditForm" class="form" method="dialog">
+      <h2 style="margin-top:0">Replica settings</h2>
+      <label>Function <select name="mode"><option value="copy">One-time copy</option><option value="continuous">Continuous replica</option><option value="standby">Hot standby</option></select></label>
+      <label>Lag limit (seconds) <input name="lag_limit_s" type="number" min="1" max="86400"></label>
+      <label>Maximum kept for it on this server (MB) <input name="max_retained_mb" type="number" min="64" max="10485760"></label>
+      <label>Standby public URL (hot standby) <input name="standby_url" placeholder="https://standby.example.com"></label>
+      <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+      <div class="err" id="replEditErr"></div>
+      <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+    </form>
+  </dialog>
+  <dialog id="replDetachDlg">
+    <form id="replDetachForm" class="form" method="dialog">
+      <h2 style="margin-top:0">Detach safely</h2>
+      <p class="muted">The primary counts its records and writes a detachment entry; the replica catches up to it, becomes an independent database and verifies the audit chain and the counts. The primary keeps collecting data.</p>
+      <label class="inline" id="replPartialRow" hidden><input type="checkbox" name="accept_partial"><span>The replica is not in sync — accept a partial copy (marked partial)</span></label>
+      <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+      <div class="err" id="replDetachErr"></div>
+      <div class="actions"><button class="btn danger" type="submit">Detach</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+    </form>
+  </dialog>
+</section>
+
 <section data-section="updates">
   <div class="page-head"><h1>Updates</h1></div>
   <div class="card agent-off" id="agentNoteUpd" hidden></div>
@@ -184,7 +244,7 @@
 <script src="/app.js"></script>
 <script>
 const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
-const TITLES = {overview: 'Server', domain: 'Domain and TLS', wireguard: 'WireGuard', backups: 'Backups', updates: 'Updates'};
+const TITLES = {overview: 'Server', domain: 'Domain and TLS', wireguard: 'WireGuard', backups: 'Backups', redundancy: 'Redundant database', updates: 'Updates'};
 let INFO = null;
 function kv(el, rows){ el.innerHTML = rows.filter(r => r).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v == null || v === '' ? '<span class="muted">—</span>' : v}</dd>`).join(''); }
 function dur(s){ if(!s && s !== 0) return ''; const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60); return (d ? d + ' d ' : '') + (h ? h + ' h ' : '') + m + ' min'; }
@@ -273,8 +333,51 @@ $('#bkNow').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#
   try{ await api('POST','/api/v1/server/backups',{passphrase: f.passphrase.value, reason: f.reason.value}); $('#bkDlg').close(); ctrl32.toast('backup started','ok'); renderBackups(); }catch(x){ $('#bkNowErr').textContent = x.message; } };
 $('#bkForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#bkErr').textContent=''; const [h, m] = f.time.value.split(':').map(x => parseInt(x, 10));
   try{ await api('PUT','/api/v1/server/backups/schedule',{enabled: f.enabled.checked, hour: h, minute: m, keep: parseInt(f.keep.value, 10) || 14, passphrase: f.passphrase.value, clear_passphrase: f.clear_passphrase.checked, reason: f.reason.value}); f.passphrase.value=''; f.clear_passphrase.checked=false; f.reason.value=''; f.dataset.filled=''; ctrl32.toast('schedule saved','ok'); renderBackups(); }catch(x){ $('#bkErr').textContent = x.message; } };
+// ---- redundant database (spec 003) ----------------------------------------------------------------
+const MODE_LABEL = {copy: 'One-time copy', continuous: 'Continuous replica', standby: 'Hot standby'};
+const STATE_BADGE = {in_sync: 'ok', detached: 'ok', copying: 'warn', pairing: '', lagging: 'warn', disconnected: 'bad', lost: 'bad', failed: 'bad', detaching: 'warn', dropped: ''};
+const STATE_LABEL = {pairing: 'waiting for the replica', copying: 'copying', in_sync: 'in sync', lagging: 'lagging', disconnected: 'disconnected', detaching: 'detaching', detached: 'detached', failed: 'detach failed', lost: 'lost (re-attach)', dropped: 'dropped'};
+let REPL = null, replTimer = null, replSel = null;
+function lagText(r){ if(r.state === 'copying' && r.copy) return `${r.copy.percent.toFixed(1)} % of ${bytes(r.copy.total_bytes)}` + (r.copy.eta_s != null ? ` · ${dur(Math.round(r.copy.eta_s)) || '< 1 min'} left` : ''); if(r.lag_s == null) return '<span class="muted">—</span>'; return `${r.lag_s.toFixed(1)} s · ${bytes(r.lag_bytes || 0)}`; }
+async function renderRedundancy(){
+  REPL = await api('GET','/api/v1/replication'); const n = REPL.node;
+  kv($('#kvNode'), [['Role', `<span class="badge ${n.role === 'primary' ? 'ok' : 'warn'}">${esc(n.role)}</span>`], ['Node', `<code>${esc(n.node_id)}</code>`], ['Epoch', esc(String(n.epoch))], n.promoted_from ? ['Promoted from', `<code>${esc(n.promoted_from)}</code>`] : null,
+    ['Replicas', `${REPL.replicas.filter(r => !['detached','dropped','failed'].includes(r.state)).length} of ${REPL.max_replicas}`]]);
+  $('#replicas tbody').innerHTML = REPL.replicas.slice().reverse().map(r => `<tr data-rid="${esc(r.id)}" style="cursor:pointer"><td><b class="notranslate">${esc(r.name)}</b></td><td>${esc(MODE_LABEL[r.mode] || r.mode)}</td><td><span class="badge ${STATE_BADGE[r.state] || ''}">${esc(STATE_LABEL[r.state] || r.state)}</span></td><td>${lagText(r)}</td><td>${r.last_contact ? fmt(r.last_contact) : '<span class="muted">never</span>'}</td><td class="notranslate">${esc((r.host_info && r.host_info.hostname) || '')}</td>
+    <td style="white-space:nowrap">${['detached','dropped','failed'].includes(r.state) ? '' : `<button class="btn small" type="button" data-redit="${esc(r.id)}">Settings</button> <button class="btn small" type="button" data-rdetach="${esc(r.id)}">Detach safely</button> <button class="btn small danger" type="button" data-rdrop="${esc(r.id)}">Drop</button>`}</td></tr>`).join('') || (REPL.pending.length ? '' : '<tr><td colspan="7" class="muted">no replica attached</td></tr>');
+  $('#replicas tbody').insertAdjacentHTML('afterbegin', REPL.pending.map(p => `<tr><td><b class="notranslate">${esc(p.name)}</b></td><td>${esc(MODE_LABEL[p.mode] || p.mode)}</td><td><span class="badge">waiting for the second PC</span></td><td colspan="4" class="muted">pairing code valid until ${fmt(p.expires_at)}</td></tr>`).join(''));
+  for(const tr of document.querySelectorAll('[data-rid]')) tr.onclick = e => { if(e.target.closest('button')) return; replSel = tr.dataset.rid; renderReplDetail(); };
+  for(const b of document.querySelectorAll('[data-redit]')) b.onclick = () => { const r = REPL.replicas.find(x => x.id === b.dataset.redit); const f = $('#replEditForm'); f.reset(); f.dataset.id = r.id; f.mode.value = r.mode; f.lag_limit_s.value = r.lag_limit_s; f.max_retained_mb.value = r.max_retained_mb; f.standby_url.value = r.standby_url || ''; $('#replEditErr').textContent=''; $('#replEditDlg').showModal(); };
+  for(const b of document.querySelectorAll('[data-rdetach]')) b.onclick = () => { const r = REPL.replicas.find(x => x.id === b.dataset.rdetach); const f = $('#replDetachForm'); f.reset(); f.dataset.id = r.id; $('#replPartialRow').hidden = r.state === 'in_sync'; $('#replDetachErr').textContent=''; $('#replDetachDlg').showModal(); };
+  for(const b of document.querySelectorAll('[data-rdrop]')) b.onclick = () => askReason('Drop the replica', 'Its access (token, replication role, slot) is removed; its copy stays as it is and is no longer fed. Use "Detach safely" for a verified copy.', async reason => { await api('DELETE',`/api/v1/replication/replicas/${b.dataset.rdrop}?reason=${encodeURIComponent(reason)}`); ctrl32.toast('replica dropped','ok'); renderRedundancy(); });
+  if(replSel) renderReplDetail();
+  clearTimeout(replTimer); if(SEC === 'redundancy') replTimer = setTimeout(() => renderRedundancy().catch(() => {}), 5000);
+}
+async function renderReplDetail(){
+  const r = REPL.replicas.find(x => x.id === replSel); const box = $('#replDetail'); if(!r){ box.hidden = true; return; }
+  const ev = await api('GET',`/api/v1/replication/replicas/${r.id}/events?limit=30`); const d = r.detach || null; const v = d && d.verification;
+  box.hidden = false;
+  box.innerHTML = `<h2 class="notranslate">${esc(r.name)}</h2><dl class="kv">${[['Function', esc(MODE_LABEL[r.mode])], ['State', `<span class="badge ${STATE_BADGE[r.state] || ''}">${esc(STATE_LABEL[r.state] || r.state)}</span>`], ['Replayed up to', `<code>${esc(r.replay_lsn || '—')}</code>`], ['Lag limit', r.lag_limit_s + ' s'], ['Kept for it at most', bytes(r.max_retained_mb * 1048576)],
+    ['Machine', esc([r.host_info.hostname, r.host_info.os, r.host_info.pg_major ? 'PostgreSQL ' + r.host_info.pg_major : ''].filter(Boolean).join(' · '))], r.standby_url ? ['Standby URL', esc(r.standby_url)] : null, ['Attached', fmt(r.created_at)]].filter(Boolean).map(([k, x]) => `<dt>${esc(k)}</dt><dd>${x}</dd>`).join('')}</dl>
+    ${d ? `<h3>Detachment</h3><dl class="kv"><dt>Audit entry</dt><dd><code>#${esc(String(d.seq))} ${esc(String(d.hash || '').slice(0, 16))}…</code>${d.partial ? ' <span class="badge warn">partial</span>' : ''}</dd><dt>Started</dt><dd>${fmt(d.started_at)} · ${esc(d.started_by || '')} · ${esc(d.reason || '')}</dd>
+      ${v ? `<dt>Verification</dt><dd>${v.ok ? '<span class="badge ok">verified</span> audit chain, detach entry and record counts match' : '<span class="badge bad">failed</span> ' + esc((v.problems || []).join('; '))}</dd>` : '<dt>Verification</dt><dd class="muted">waiting for the replica…</dd>'}</dl>` : ''}
+    <h3>History</h3><div class="table-wrap"><table><thead><tr><th>Time</th><th>Event</th><th>Detail</th></tr></thead><tbody>${ev.map(e => `<tr><td>${fmt(e.ts)}</td><td>${esc(e.kind)}</td><td class="notranslate" style="font-size:12px">${esc(e.kind === 'state' ? (e.detail.from ? e.detail.from + ' → ' : '') + e.detail.state : JSON.stringify(e.detail).slice(0, 200))}</td></tr>`).join('')}</tbody></table></div>`;
+}
+$('#replAttachBtn').onclick = () => { const f = $('#replForm'); f.reset(); $('#replErr').textContent=''; $('#replCode').hidden = true; $('#replSubmit').hidden = false; $('#replDlg').showModal(); };
+$('#replForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#replErr').textContent='';
+  try{ const r = await api('POST','/api/v1/replication/pairings',{mode: f.mode.value, name: f.name.value, lag_limit_s: parseInt(f.lag_limit_s.value, 10) || 10, reason: f.reason.value});
+    $('#replCodeVal').textContent = r.code; $('#replExp').textContent = 'valid until ' + fmt(r.expires_at);
+    $('#replCmd').textContent = `sudo ctrl32-telemetry replica attach -primary ${location.origin} -code ${r.code}` + (f.mode.value === 'standby' ? ' -standby-url https://<this standby>' : '');
+    $('#replCode').hidden = false; $('#replSubmit').hidden = true; renderRedundancy(); }
+  catch(x){ $('#replErr').textContent = x.message; } };
+$('#replEditForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#replEditErr').textContent='';
+  try{ await api('PATCH',`/api/v1/replication/replicas/${f.dataset.id}`,{mode: f.mode.value, lag_limit_s: parseInt(f.lag_limit_s.value, 10), max_retained_mb: parseInt(f.max_retained_mb.value, 10), standby_url: f.standby_url.value.trim(), reason: f.reason.value}); $('#replEditDlg').close(); ctrl32.toast('replica settings saved','ok'); renderRedundancy(); }
+  catch(x){ $('#replEditErr').textContent = x.message; } };
+$('#replDetachForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#replDetachErr').textContent='';
+  try{ await api('POST',`/api/v1/replication/replicas/${f.dataset.id}/detach`,{reason: f.reason.value, accept_partial: f.accept_partial.checked}); $('#replDetachDlg').close(); replSel = f.dataset.id; ctrl32.toast('detach started','ok'); renderRedundancy(); }
+  catch(x){ $('#replDetachErr').textContent = x.message; } };
 let SEC = 'overview';
-async function load(){ INFO = await api('GET','/api/v1/server'); agentNote(); ({overview: renderOverview, domain: renderDomain, wireguard: renderWg, backups: renderBackups, updates: renderUpdates})[SEC](); }
+async function load(){ INFO = await api('GET','/api/v1/server'); agentNote(); ({overview: renderOverview, domain: renderDomain, wireguard: renderWg, backups: renderBackups, redundancy: renderRedundancy, updates: renderUpdates})[SEC](); }
 ctrl32.ready({requireAuth: true, requirePerm: 'system.admin'}).then(() => { SEC = ctrl32.section('overview', Object.keys(TITLES)); document.title = TITLES[SEC] + ' — Server'; load().catch(x => ctrl32.toast(x.message,'bad')); });
 </script>
 </body>

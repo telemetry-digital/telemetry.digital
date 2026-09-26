@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-25
 
-**Status**: Draft
+**Status**: Implemented (0.39.0; phase 2 open: read-only sign-in on replicas, bandwidth limit, Windows host test)
 
 **Input**: User description: "Redundant database. Example: one database is running, I connect a second one on another
 PC, the data from the first one is poured into it, and the second one disconnects safely." Follow-up answer: all of
