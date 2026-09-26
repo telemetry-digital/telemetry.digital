@@ -25,6 +25,11 @@ Celá sada testov (`tests/run-all.sh`) prešla pre 0.42.0 bez chyby (26. 9. 2026
 - Lokálna testovacia DB: PostgreSQL 16 na porte 5433 (rola `ctrl32`), po reštarte kontajnera ho treba znova spustiť
   (`pg_ctl … -p 5433 -k /tmp/pgsock`). Povolenie od používateľa: 26. 9. 2026.
 
+## Rozhodnutia
+
+- Všetko ostáva zadarmo, žiadne platené funkcie; pätička ctrl32 je pevná (26. 9. 2026 — platený white labeling bol
+  pripravený a na žiadosť vrátený).
+
 ## Čaká na používateľa
 
 - nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.42.0 root@2.29.5.17 -i <kľúč>` alebo

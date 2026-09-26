@@ -2,6 +2,8 @@
 
 **Stav:** rozhodnuté 23. 9. 2026 (používateľ: „stále zdarma, zdrojáky potom, keď to bude 100 % funkčné"); **doplnené 23. 9. 2026 popoludní** (používateľ: „odkaz na licenciu Apache so zákazom ďalšieho predaja, iba zadarmo"; „footer bude nemenný a nebude sa dať nijako zmeniť")
 
+> **Potvrdené 26. 9. 2026:** zvažoval sa platený white labeling (licenčné kľúče); používateľ rozhodol „zostaneme pri free verzii, nič platené“ — žiadne platené funkcie, pätička ostáva pevná (ADR-0011). Pripravená implementácia bola vrátená (commit „Revert … white labeling“).
+
 ## Doplnenie: konkrétna licencia (23. 9. 2026)
 
 - Súbor `LICENSE` v koreni repozitára = **Apache License 2.0 + dodatočné podmienky**: (1) zákaz predaja softvéru, jeho kópií, upravených verzií a plateného hostovania (SaaS), pričom vlastné implementačné, integračné, školiace a podporné služby dovolené sú; (2) pätička produktu („ctrl32 · telemetry", GitHub, licencia) musí ostať viditeľná a nezmenená; (3) upozornenie, že pre podmienku (1) nejde o OSI open-source licenciu. Ide o vzor „Apache-2.0 + Commons Clause", zúžený tak, aby nezakazoval služby tretích strán.
