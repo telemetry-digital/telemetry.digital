@@ -50,6 +50,17 @@ jobs:
           typst --version
       - name: All checks
         run: bash tests/run-all.sh
+      - name: Failed checks
+        if: failure()
+        # the artifact is not reachable from every environment: print what failed straight into the job log
+        run: |
+          for f in test-results/*.log; do
+            if grep -qE '^\s*FAIL|DATA RACE|^--- FAIL|panic:' "$f"; then
+              echo "::group::$f"
+              grep -nE -B2 -A12 '^\s*FAIL|DATA RACE|^--- FAIL|panic:' "$f" | head -300
+              echo "::endgroup::"
+            fi
+          done
       - name: Logs and screenshots
         if: always()
         uses: actions/upload-artifact@v4
