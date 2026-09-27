@@ -141,9 +141,19 @@ func (s *Server) camerasVisible(ctx context.Context, org string, ids []string) s
 // specCameras lists the cameras of the camera widgets of a dashboard spec.
 func specCameras(spec map[string]any) []string {
 	var ids []string
-	widgets, _ := spec["widgets"].([]any)
-	for _, x := range widgets {
-		w, _ := x.(map[string]any)
+	// a validated spec holds []map[string]any, a stored one (decoded JSON) []any
+	var widgets []map[string]any
+	switch ws := spec["widgets"].(type) {
+	case []map[string]any:
+		widgets = ws
+	case []any:
+		for _, x := range ws {
+			if w, ok := x.(map[string]any); ok {
+				widgets = append(widgets, w)
+			}
+		}
+	}
+	for _, w := range widgets {
 		if t, _ := w["type"].(string); t != "camera" {
 			continue
 		}

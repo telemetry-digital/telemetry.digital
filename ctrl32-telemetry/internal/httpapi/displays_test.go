@@ -48,3 +48,14 @@ func TestCameraGroups(t *testing.T) {
 		t.Fatal("system calls without a principal are not limited")
 	}
 }
+
+func TestSpecCameras(t *testing.T) {
+	validated := map[string]any{"widgets": []map[string]any{{"type": "camera", "params": map[string]any{"camera": "a"}}, {"type": "chart"}}}
+	stored := map[string]any{"widgets": []any{map[string]any{"type": "camera", "params": map[string]any{"camera": "b"}}}}
+	if got := specCameras(validated); len(got) != 1 || got[0] != "a" {
+		t.Fatalf("validated spec: %v", got)
+	}
+	if got := specCameras(stored); len(got) != 1 || got[0] != "b" {
+		t.Fatalf("stored spec: %v", got)
+	}
+}

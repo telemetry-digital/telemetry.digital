@@ -118,7 +118,7 @@ req3 POST /api/v1/auth/login "{\"username\":\"eng_$SUF\",\"password\":\"$PW3\"}"
 req3 POST /api/v1/auth/password "{\"current\":\"$PW3\",\"new\":\"Limited-Engineer-Passw0rd-$SUF\"}"
 req3 POST /api/v1/auth/login "{\"username\":\"eng_$SUF\",\"password\":\"Limited-Engineer-Passw0rd-$SUF\"}"; req3 GET /api/v1/auth/me; CSRF3=$(jx j.csrf_token)
 req3 POST /api/v1/video/walls "{\"name\":\"Sneak $SUF\",\"reason\":\"e2e\",\"screens\":[{\"cols\":1,\"rows\":1,\"tiles\":[\"$YARD\"]}]}"; check "limited: wall with another group's camera refused" "$(st)" 400
-req3 POST /api/v1/dashboards "${DW/CAMID/$YARD}"; check "limited: camera widget of another group refused" "$(st)" 403
+D3="${DW/CAMID/$YARD}"; req3 POST /api/v1/dashboards "${D3/Kiosk /Sneak }"; check "limited: camera widget of another group refused" "$(st)" 403
 req3 POST /api/v1/displays/pair "{\"code\":\"ABCD-EFGH\",\"name\":\"x\",\"content\":{\"items\":[{\"kind\":\"wall\",\"wall\":\"$WALL\",\"screen\":0}],\"popup\":\"none\"},\"reason\":\"e2e\"}"; check "limited: display with another group's wall refused" "$(st) $(jx 'j.error.includes("outside your camera groups")')" "400 true"
 req3 POST /api/v1/displays/pair "{\"code\":\"ABCD-EFGH\",\"name\":\"x\",\"content\":{\"items\":[{\"kind\":\"dashboard\",\"slug\":\"$OTHER\"}],\"popup\":\"all\"},\"reason\":\"e2e\"}"; check "limited: popups of all cameras refused" "$(st)" 400
 req3 GET /api/v1/video/storage; check "limited: storage lists only own cameras" "$(jx "j.cameras.filter(c => c.name.endsWith(' $SUF')).map(c => c.id).join()")" "$GATE"
