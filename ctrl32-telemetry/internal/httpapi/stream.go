@@ -48,7 +48,7 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "datastreams: "+err.Error())
 		return
 	}
-	f := live.Filter{Org: org, Datastreams: ds, Alarms: q.Get("alarms") == "1", Commands: true}
+	f := live.Filter{Org: org, Datastreams: ds, Alarms: q.Get("alarms") == "1", Commands: true, Entities: q.Get("entities") == "1"}
 	if q.Get("devices") == "all" {
 		f.AllDevices = true
 	} else if f.Devices, err = idSet(q.Get("devices")); err != nil {

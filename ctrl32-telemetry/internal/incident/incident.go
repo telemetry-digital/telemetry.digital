@@ -57,7 +57,7 @@ type Update struct {
 }
 
 var (
-	Kinds      = []string{"alarm_undelivered", "audit_chain", "backup_failed", "manual"}
+	Kinds      = []string{"alarm_undelivered", "audit_chain", "backup_failed", "manual", "replica", "flow", "mqtt_source", "camera", "display", "storage"}
 	Severities = []string{"minor", "major", "critical"}
 	Statuses   = []string{"open", "investigating", "resolved", "closed"}
 	// allowed transitions
@@ -176,6 +176,109 @@ func (m *Manager) AuditChainBroken(ctx context.Context, firstBadSeq, checked int
 		Detail: map[string]any{"first_bad_seq": firstBadSeq, "checked": checked},
 		Impact: "Audit trail entries after this sequence number cannot be trusted until the cause is known.", DedupKey: fmt.Sprintf("audit_chain:%d", firstBadSeq)}); err != nil {
 		m.log.Error("could not open incident for broken audit chain", "err", err)
+	}
+}
+
+// ReplicaProblem opens (once) an incident for a replica that is disconnected, lagging, lost or failed a detach
+// (spec 003 FR-009).
+func (m *Manager) ReplicaProblem(ctx context.Context, replicaID, name, state, impact string, detail map[string]any) {
+	if m == nil {
+		return
+	}
+	sev := "major"
+	if state == "lost" || state == "failed" {
+		sev = "critical"
+	}
+	if _, _, err := m.Open(ctx, Incident{Kind: "replica", Severity: sev, Title: fmt.Sprintf("Database replica %s: %s", name, state), Detail: detail,
+		Impact: impact, DedupKey: "replica:" + replicaID}); err != nil {
+		m.log.Error("could not open incident for replica", "replica", replicaID, "err", err)
+	}
+}
+
+// SourceDown opens (once) an incident for an MQTT source (bridge or account) that has been disconnected longer than
+// its limit (spec 006).
+func (m *Manager) SourceDown(ctx context.Context, org, sourceID, title, impact string, detail map[string]any) {
+	if m == nil {
+		return
+	}
+	if _, _, err := m.Open(ctx, Incident{OrgID: org, Kind: "mqtt_source", Severity: "major", Title: title, Detail: detail, Impact: impact,
+		DedupKey: "mqtt_source:" + sourceID}); err != nil {
+		m.log.Error("could not open incident for MQTT source", "source", sourceID, "err", err)
+	}
+}
+
+// Raise opens (once per key) a system incident, e.g. a camera that stopped recording (spec 014).
+func (m *Manager) Raise(ctx context.Context, org, kind, key, severity, title, impact string, detail map[string]any) error {
+	if m == nil {
+		return errors.New("incident manager not configured")
+	}
+	if _, _, err := m.Open(ctx, Incident{OrgID: org, Kind: kind, Severity: severity, Title: title, Detail: detail, Impact: impact, DedupKey: key}); err != nil {
+		m.log.Error("could not open incident", "key", key, "err", err)
+		return err
+	}
+	return nil
+}
+
+// IsOpen reports whether an incident with the key is open or being investigated.
+func (m *Manager) IsOpen(ctx context.Context, key string) bool {
+	if m == nil {
+		return false
+	}
+	var n int
+	if err := m.pool.QueryRow(ctx, `SELECT count(*) FROM core.incident WHERE dedup_key = $1 AND status IN ('open', 'investigating')`, key).Scan(&n); err != nil {
+		return true // unknown: do not open a duplicate
+	}
+	return n > 0
+}
+
+// Resolve resolves the open incident with the key, if any, with the cause.
+func (m *Manager) Resolve(ctx context.Context, key, cause string) { m.resolveByKey(ctx, key, cause) }
+
+// SourceRecovered resolves the open incident of an MQTT source, if any.
+func (m *Manager) SourceRecovered(ctx context.Context, sourceID string) {
+	m.resolveByKey(ctx, "mqtt_source:"+sourceID, "The connection was re-established.")
+}
+
+func (m *Manager) resolveByKey(ctx context.Context, key, cause string) {
+	if m == nil {
+		return
+	}
+	var id string
+	if err := m.pool.QueryRow(ctx, `SELECT id::text FROM core.incident WHERE dedup_key = $1 AND status IN ('open', 'investigating')`, key).Scan(&id); err != nil {
+		return
+	}
+	in, _, err := m.Get(ctx, "", id, true)
+	if err != nil {
+		return
+	}
+	status := "resolved"
+	if in.Cause != "" {
+		cause = in.Cause
+	}
+	if _, err := m.Apply(ctx, in, Update{Status: &status, Cause: &cause}, "system"); err != nil {
+		m.log.Warn("could not resolve incident", "incident", id, "err", err)
+	}
+}
+
+// ReplicaRecovered resolves the open replica incident, if any, with the recovery as its cause.
+func (m *Manager) ReplicaRecovered(ctx context.Context, replicaID, state string) {
+	if m == nil {
+		return
+	}
+	var id string
+	if err := m.pool.QueryRow(ctx, `SELECT id::text FROM core.incident WHERE dedup_key = $1 AND status IN ('open', 'investigating')`, "replica:"+replicaID).Scan(&id); err != nil {
+		return
+	}
+	in, _, err := m.Get(ctx, "", id, true)
+	if err != nil {
+		return
+	}
+	cause, status := "The replica recovered by itself (state "+state+").", "resolved"
+	if in.Cause != "" {
+		cause = in.Cause
+	}
+	if _, err := m.Apply(ctx, in, Update{Status: &status, Cause: &cause}, "system"); err != nil {
+		m.log.Warn("could not resolve replica incident", "incident", id, "err", err)
 	}
 }
 

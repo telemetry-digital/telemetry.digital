@@ -25,6 +25,8 @@ type CommandRequest struct {
 	OrgID, DeviceID, Method string
 	Args                    json.RawMessage
 	RuleID, RuleName        string
+	// Flows (spec 004): the flow version as origin; Issuer and Reason replace the rule's.
+	FlowID, Issuer, Reason string
 }
 
 // CommandResult is what the command layer reports back.

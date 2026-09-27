@@ -1,0 +1,28 @@
+meta {
+  name: Download recorded video
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/v1/video/cameras/:id/export
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~from: 
+  ~to: 
+}
+
+docs {
+  Download recorded video
+  
+  One MP4 file (fragmented) of at most one hour; a change of resolution or codec ends it early. The recorded sound is the second track only for people with video.audio. Written to the audit trail (video.export).
+  
+  Requires permission `video.playback`.
+}

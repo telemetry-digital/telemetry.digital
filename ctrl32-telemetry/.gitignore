@@ -31,9 +31,10 @@ Thumbs.db
 /seed.out
 /server.log
 /bootstrap.out
-reports/
+/reports/
 
 # runtime data of the local dev instance (OPC UA client identity, uploaded firmware, e2e logs)
 /opcua/
 /firmware/
 /e2e-*.log
+test-results/

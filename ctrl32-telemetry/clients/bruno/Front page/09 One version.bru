@@ -1,0 +1,21 @@
+meta {
+  name: One version
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/landing/versions/:v
+  body: none
+  auth: inherit
+}
+
+params:path {
+  v: 
+}
+
+docs {
+  One version
+  
+  Requires permission `system.admin`.
+}

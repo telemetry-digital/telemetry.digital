@@ -1,0 +1,27 @@
+meta {
+  name: Stop a deployed flow
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{baseUrl}}/api/v1/flows/:slug/disable
+  body: json
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Stop a deployed flow
+  
+  Requires permission `content.write`.
+}

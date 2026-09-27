@@ -32,17 +32,26 @@ type shareInfo struct {
 	Devs            map[string]bool
 	AllDevs         bool
 	HasAlarms       bool
+	Cams            map[string]bool // camera widgets; only a paired display ever plays them
 }
 
 func (s *Server) resolveShare(ctx context.Context, token string) (*shareInfo, bool) {
 	if !shareTokenRe.MatchString(token) {
 		return nil, false
 	}
-	si := &shareInfo{DS: map[string]bool{}, Devs: map[string]bool{}}
+	var org, slug string
+	if err := s.pool.QueryRow(ctx, `SELECT org_id::text, slug FROM core.dashboard_share WHERE token = $1 AND revoked_at IS NULL`, token).Scan(&org, &slug); err != nil {
+		return nil, false
+	}
+	return s.shareOf(ctx, org, slug)
+}
+
+// shareOf reads the current version of a dashboard and what its widgets may read (public links and displays).
+func (s *Server) shareOf(ctx context.Context, org, slug string) (*shareInfo, bool) {
+	si := &shareInfo{DS: map[string]bool{}, Devs: map[string]bool{}, Cams: map[string]bool{}}
 	var raw []byte
-	err := s.pool.QueryRow(ctx, `SELECT d.org_id::text, d.slug, d.name, d.spec FROM core.dashboard_share sh
-		JOIN core.dashboard d ON d.org_id = sh.org_id AND d.slug = sh.slug AND d.valid_to IS NULL
-		WHERE sh.token = $1 AND sh.revoked_at IS NULL`, token).Scan(&si.Org, &si.Slug, &si.Name, &raw)
+	err := s.pool.QueryRow(ctx, `SELECT org_id::text, slug, name, spec FROM core.dashboard WHERE org_id = $1::uuid AND slug = $2 AND valid_to IS NULL`, org, slug).
+		Scan(&si.Org, &si.Slug, &si.Name, &raw)
 	if err != nil {
 		return nil, false
 	}
@@ -73,6 +82,27 @@ func (s *Server) resolveShare(ctx context.Context, token string) (*shareInfo, bo
 		}
 		if typ == "alarms" {
 			si.HasAlarms = true
+		}
+		if typ == "camera" || typ == "camera_pin" {
+			params, _ := w["params"].(map[string]any)
+			if id, ok := params["camera"].(string); ok && id != "" {
+				si.Cams[id] = true
+			}
+		}
+	}
+	// Drawing elements of a process picture: their tags and the tags of their dynamics are readable too.
+	elems, _ := si.Spec["elements"].([]any)
+	for _, x := range elems {
+		e, _ := x.(map[string]any)
+		if t, ok := e["tag"].(string); ok && t != "" {
+			si.DS[t] = true
+		}
+		dyn, _ := e["dyn"].([]any)
+		for _, y := range dyn {
+			d, _ := y.(map[string]any)
+			if t, ok := d["tag"].(string); ok && t != "" {
+				si.DS[t] = true
+			}
 		}
 	}
 	return si, true
@@ -110,7 +140,15 @@ func (s *Server) delegateFiltered(w http.ResponseWriter, r *http.Request, si *sh
 
 func (s *Server) publicShare(w http.ResponseWriter, r *http.Request) (*shareInfo, bool) {
 	w.Header().Set("Cache-Control", "no-store")
-	si, ok := s.resolveShare(r.Context(), r.PathValue("token"))
+	token := r.PathValue("token")
+	var si *shareInfo
+	var ok bool
+	if slug, isDisplay := strings.CutPrefix(token, "~"); isDisplay {
+		// a paired display (its cookie) reads the dashboards it was given, like a public link (displays.go)
+		si, ok = s.displayShare(r, slug)
+	} else {
+		si, ok = s.resolveShare(r.Context(), token)
+	}
 	if !ok {
 		writeErr(w, 404, "this link is no longer valid")
 	}

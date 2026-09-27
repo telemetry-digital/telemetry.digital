@@ -1,0 +1,29 @@
+meta {
+  name: Approve a self-provisioned device
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/devices/:id/approve
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Approve a self-provisioned device
+  
+  Its token works from now on.
+  
+  Requires permission `device.manage`.
+}

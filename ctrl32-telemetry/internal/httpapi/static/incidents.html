@@ -25,7 +25,7 @@
   <button class="btn primary" id="newBtn" type="button">New incident</button></div>
 <div class="card">
   <p class="muted">Something went wrong operationally: an alarm nobody received, a broken audit chain, a failed backup, or anything an operator records by hand. Each incident carries its impact, the cause found and the corrective and preventive action (CAPA); it cannot be closed without them. The system opens its own incidents and tells administrators by e-mail and browser notification.</p>
-  <div class="table-wrap"><table id="list"><thead><tr><th>Opened</th><th>Kind</th><th>Severity</th><th>Status</th><th>Title</th><th>Organization</th></tr></thead><tbody></tbody></table></div>
+  <div class="table-wrap"><table id="list"><thead><tr><th>Opened at</th><th>Kind</th><th>Severity</th><th>Status</th><th>Title</th><th>Organization</th></tr></thead><tbody></tbody></table></div>
 </div>
 
 <dialog id="dlg">
@@ -62,7 +62,7 @@
 <script src="/app.js"></script>
 <script>
 const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
-const KIND = { alarm_undelivered: 'Alarm not delivered', audit_chain: 'Audit chain broken', backup_failed: 'Backup failed', manual: 'Manual' };
+const KIND = { alarm_undelivered: 'Alarm not delivered', audit_chain: 'Audit chain broken', backup_failed: 'Backup failed', manual: 'Manual', replica: 'Database replica', flow: 'Flow', mqtt_source: 'MQTT connection', camera: 'Camera', display: 'Display', storage: 'Video storage' };
 const SEV = { minor: '', major: 'warn', critical: 'bad' }, STAT = { open: 'bad', investigating: 'warn', resolved: 'ok', closed: '' };
 const NEXT = { open: ['investigating', 'resolved', 'closed'], investigating: ['open', 'resolved', 'closed'], resolved: ['investigating', 'closed'], closed: ['investigating'] };
 const LABEL = { investigating: 'Start investigating', resolved: 'Mark resolved', closed: 'Close', open: 'Back to open' };

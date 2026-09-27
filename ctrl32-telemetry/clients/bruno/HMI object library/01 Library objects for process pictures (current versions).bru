@@ -1,0 +1,21 @@
+meta {
+  name: Library objects for process pictures (current versions)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/hmi/objects
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~kind: 
+}
+
+docs {
+  Library objects for process pictures (current versions)
+  
+  Requires permission `data.read`.
+}

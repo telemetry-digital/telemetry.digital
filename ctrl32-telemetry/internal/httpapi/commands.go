@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -177,36 +179,42 @@ func (s *Server) putAttributes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	var ext string
-	var old json.RawMessage
-	if err := s.pool.QueryRow(r.Context(), `SELECT external_id, shared_attributes FROM core.device WHERE id = $1::uuid AND org_id = $2::uuid AND revoked_at IS NULL`, id, org).Scan(&ext, &old); err != nil {
-		writeErr(w, 404, "device not found")
+	old, doc, published, code, err := s.setSharedAttributes(r.Context(), org, id, in.Attributes, in.Remove)
+	if err != nil {
+		writeErr(w, code, err.Error())
 		return
+	}
+	s.audit(r, "device.attributes", "device", id, old, doc, in.Reason)
+	writeJSON(w, 200, map[string]any{"shared": doc, "published": published})
+}
+
+// setSharedAttributes merges shared attributes of a device, stores them and publishes them to the device (retained).
+func (s *Server) setSharedAttributes(ctx context.Context, org, id string, set map[string]json.RawMessage, remove []string) (old, doc json.RawMessage, published bool, code int, err error) {
+	var ext string
+	if err := s.pool.QueryRow(ctx, `SELECT external_id, shared_attributes FROM core.device WHERE id = $1::uuid AND org_id = $2::uuid AND revoked_at IS NULL`, id, org).Scan(&ext, &old); err != nil {
+		return nil, nil, false, 404, errors.New("device not found")
 	}
 	merged := map[string]json.RawMessage{}
 	_ = json.Unmarshal(old, &merged)
-	for k, v := range in.Attributes {
+	for k, v := range set {
 		merged[k] = v
 	}
-	for _, k := range in.Remove {
+	for _, k := range remove {
 		delete(merged, k)
 	}
-	doc, _ := json.Marshal(merged)
+	doc, _ = json.Marshal(merged)
 	if len(doc) > 16384 {
-		writeErr(w, 413, "shared attributes exceed 16 KiB")
-		return
+		return nil, nil, false, 413, errors.New("shared attributes exceed 16 KiB")
 	}
-	if _, err := s.pool.Exec(r.Context(), `UPDATE core.device SET shared_attributes = $2::jsonb WHERE id = $1::uuid`, id, string(doc)); err != nil {
-		writeErr(w, 500, "update failed")
-		return
+	if _, err := s.pool.Exec(ctx, `UPDATE core.device SET shared_attributes = $2::jsonb WHERE id = $1::uuid`, id, string(doc)); err != nil {
+		return nil, nil, false, 500, errors.New("update failed")
 	}
-	published := false
 	if s.br != nil {
+		_ = s.br.Publish("d/"+ext+"/tb/attributes", doc, false) // ThingsBoard devices: v1/devices/me/attributes
 		if err := s.br.Publish("d/"+ext+"/attributes/shared", doc, true); err == nil {
 			published = true
-			_, _ = s.pool.Exec(r.Context(), `INSERT INTO core.raw_message (org_id, device_id, connector, direction, topic, payload, payload_json, decode_status) VALUES ($1::uuid, $2::uuid, 'mqtt', 'out', $3, $4, $4::jsonb, 'ok')`, org, id, "d/"+ext+"/attributes/shared", doc)
+			_, _ = s.pool.Exec(ctx, `INSERT INTO core.raw_message (org_id, device_id, connector, direction, topic, payload, payload_json, decode_status) VALUES ($1::uuid, $2::uuid, 'mqtt', 'out', $3, $4, $4::jsonb, 'ok')`, org, id, "d/"+ext+"/attributes/shared", doc)
 		}
 	}
-	s.audit(r, "device.attributes", "device", id, old, json.RawMessage(doc), in.Reason)
-	writeJSON(w, 200, map[string]any{"shared": json.RawMessage(doc), "published": published})
+	return old, doc, published, 200, nil
 }

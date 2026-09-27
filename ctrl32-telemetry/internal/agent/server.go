@@ -103,6 +103,7 @@ func (a *Server) Serve(ctx context.Context) error {
 	mux.HandleFunc("POST /backups", a.hCreateBackup)
 	mux.HandleFunc("DELETE /backups/{name}", a.hDeleteBackup)
 	mux.HandleFunc("PUT /backups/schedule", a.hBackupSchedule)
+	mux.HandleFunc("POST /replica/promote", a.hReplicaPromote)
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() { <-ctx.Done(); _ = srv.Close(); _ = os.Remove(a.socket) }()
 	a.log.Info("agent listening", "socket", a.socket, "version", a.version)

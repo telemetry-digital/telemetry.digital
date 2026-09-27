@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -47,7 +48,8 @@ func (s *Server) fourEyes(kind string, fn http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		pol := s.iam.Policy(r.Context(), p.OrgID)
-		on := (kind == "limits" && pol.FourEyesLimits) || (kind == "assignments" && pol.FourEyesAssignments)
+		on := (kind == "limits" && pol.FourEyesLimits) || (kind == "assignments" && pol.FourEyesAssignments) ||
+			(kind == "flows" && pol.FourEyesCommands && s.flowNeedsFourEyes(r, p.OrgID))
 		if !on {
 			fn(w, r)
 			return
@@ -135,6 +137,14 @@ func (s *Server) changeSummary(ctx context.Context, kind, method, path string, b
 		return "assign " + dsLabel(str("datastream_id")) + " to device " + devLabel(parts[3])
 	case kind == "assignments" && method == http.MethodDelete && len(parts) >= 6:
 		return "remove " + dsLabel(parts[5]) + " from device " + devLabel(parts[3])
+	case kind == "flows" && len(parts) >= 4:
+		var name string
+		var version int
+		p := PrincipalFrom(ctx)
+		if p != nil {
+			_ = s.pool.QueryRow(ctx, `SELECT name, version FROM core.flow WHERE org_id = $1::uuid AND slug = $2 AND valid_to IS NULL`, p.OrgID, parts[3]).Scan(&name, &version)
+		}
+		return fmt.Sprintf("deploy flow %s version %d (it sends device commands)", name, version)
 	}
 	return method + " " + path
 }
@@ -150,6 +160,8 @@ func (s *Server) canApprove(p *iam.Principal, kind string) bool {
 		return p.Has("config.write")
 	case "assignments":
 		return p.Has("device.manage")
+	case "flows":
+		return p.Has("content.write") && p.Has("device.command")
 	}
 	return false
 }

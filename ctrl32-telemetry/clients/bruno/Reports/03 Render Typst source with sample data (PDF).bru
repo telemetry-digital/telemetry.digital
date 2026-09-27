@@ -1,0 +1,25 @@
+meta {
+  name: Render Typst source with sample data (PDF)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/report-templates/preview
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "body": "string",
+    "kind": "string",
+    "locale": "string"
+  }
+}
+
+docs {
+  Render Typst source with sample data (PDF)
+  
+  Requires permission `content.write`.
+}

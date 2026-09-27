@@ -196,7 +196,17 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err.Error())
 		return
 	}
-	s.audit(r, "user.create", "user", u.ID, nil, map[string]any{"username": u.Username, "roles": u.Roles}, in.Reason)
+	detail := map[string]any{"username": u.Username, "roles": u.Roles}
+	// an administrator limited to camera groups creates users limited to the same groups (never wider)
+	if p.CameraLimited {
+		groups := append([]string{}, p.CameraGroups...) // never nil: NULL would mean all cameras
+		if _, err := s.pool.Exec(r.Context(), `UPDATE core.user_account SET camera_groups = $2::text[] WHERE id = $1::uuid`, u.ID, groups); err != nil {
+			writeErr(w, 500, "camera groups not set")
+			return
+		}
+		detail["camera_groups"] = p.CameraGroups
+	}
+	s.audit(r, "user.create", "user", u.ID, nil, detail, in.Reason)
 	writeJSON(w, 201, map[string]any{"user": u, "initial_password": pw})
 }
 

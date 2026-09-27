@@ -1,0 +1,30 @@
+meta {
+  name: Signed evidence package
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/v1/video/cameras/:id/evidence
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  from: 
+  to: 
+  reason: 
+  ~case_ref: 
+}
+
+docs {
+  Signed evidence package
+  
+  ZIP with video.mp4 (remuxed, not re-encoded), manifest.json (SHA-256 of the video and of every recorded file as computed while recording and now, events, who exported it and why), manifest.sig (Ed25519 by the server key), public_key.txt and README.txt. At most one hour. Verify with `ctrl32-telemetry verify-evidence`. Audited with the video hash.
+  
+  Requires permission `video.evidence`.
+}

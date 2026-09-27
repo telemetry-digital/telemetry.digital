@@ -1,0 +1,25 @@
+meta {
+  name: Revoke a provisioning profile
+  type: http
+  seq: 9
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/provision-profiles/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Revoke a provisioning profile
+  
+  Requires permission `device.manage`.
+}

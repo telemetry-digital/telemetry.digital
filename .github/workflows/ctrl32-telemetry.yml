@@ -1,0 +1,86 @@
+# Every automated check of ctrl32 telemetry and its device library: go vet, go test -race, the C host tests,
+# the e2e suites and the headless browser probes (tests/run-all.sh), plus a compile of the Arduino port.
+name: ctrl32-telemetry
+
+on:
+  push:
+    branches: [main]
+    paths: ["ctrl32-telemetry/**", "ctrl32-telemetry-c/**", ".github/workflows/ctrl32-telemetry.yml"]
+  pull_request:
+    paths: ["ctrl32-telemetry/**", "ctrl32-telemetry-c/**", ".github/workflows/ctrl32-telemetry.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: ctrl32-telemetry
+    env:
+      TYPST_VERSION: v0.15.1          # the release the installers pin
+      PG_ADMIN_URL: postgres://ctrl32:ctrl32-dev-only@127.0.0.1:5433/postgres?sslmode=disable
+      CTRL32_TEST_PG_CONTAINER: ctrl32-pg-ci   # the agent backup test dumps through this container
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ctrl32-telemetry/go.mod
+          cache-dependency-path: ctrl32-telemetry/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: PostgreSQL 18
+        run: |
+          docker run -d --name ctrl32-pg-ci -p 5433:5432 \
+            -e POSTGRES_USER=ctrl32 -e POSTGRES_PASSWORD=ctrl32-dev-only -e POSTGRES_DB=ctrl32 postgres:18
+          for i in $(seq 60); do docker exec ctrl32-pg-ci pg_isready -U ctrl32 -d ctrl32 -q && break; sleep 1; done
+          docker exec ctrl32-pg-ci pg_isready -U ctrl32 -d ctrl32
+      - name: Typst
+        run: |
+          curl -fsSL "https://github.com/typst/typst/releases/download/$TYPST_VERSION/typst-x86_64-unknown-linux-musl.tar.xz" | tar -xJ -C "$RUNNER_TEMP"
+          sudo install "$RUNNER_TEMP/typst-x86_64-unknown-linux-musl/typst" /usr/local/bin/typst
+          typst --version
+      - name: All checks
+        run: bash tests/run-all.sh
+      - name: Failed checks
+        if: failure()
+        # the artifact is not reachable from every environment: print what failed straight into the job log
+        run: |
+          for f in test-results/*.log; do
+            if grep -qE '^\s*FAIL|DATA RACE|^--- FAIL|panic:' "$f"; then
+              echo "::group::$f"
+              grep -nE -B2 -A12 '^\s*FAIL|DATA RACE|^--- FAIL|panic:' "$f" | head -300
+              echo "::endgroup::"
+            fi
+          done
+      - name: Logs and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ctrl32-telemetry/test-results/
+          retention-days: 14
+
+  arduino:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ hashFiles('ctrl32-telemetry-c/ci/platformio.ini') }}
+      - run: pip install platformio
+      - name: Compile the fridge_node example for ESP32-S3 (Arduino port)
+        run: pio run -d ctrl32-telemetry-c/ci

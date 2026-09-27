@@ -1,0 +1,31 @@
+meta {
+  name: Change a replicas mode or limits
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/replication/replicas/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "lag_limit_s": 1,
+    "max_retained_mb": 1,
+    "mode": "copy",
+    "reason": "string",
+    "standby_url": "string"
+  }
+}
+
+docs {
+  Change a replica's mode or limits
+  
+  Requires permission `system.admin`.
+}

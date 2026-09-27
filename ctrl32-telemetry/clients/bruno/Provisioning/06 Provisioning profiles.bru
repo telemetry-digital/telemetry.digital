@@ -1,0 +1,17 @@
+meta {
+  name: Provisioning profiles
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/provision-profiles
+  body: none
+  auth: inherit
+}
+
+docs {
+  Provisioning profiles
+  
+  Requires permission `device.manage`.
+}

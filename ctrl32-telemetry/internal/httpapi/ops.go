@@ -1,8 +1,11 @@
 package httpapi
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"runtime"
 	"strings"
@@ -71,6 +74,16 @@ func (c *countingWriter) Flush() {
 
 func (c *countingWriter) Unwrap() http.ResponseWriter { return c.ResponseWriter }
 
+// Hijack lets WebSockets (camera video) take over the connection.
+func (c *countingWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := c.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("connection cannot be taken over")
+	}
+	c.status, c.wrote = http.StatusSwitchingProtocols, true
+	return h.Hijack()
+}
+
 // metricsHandler exposes operational numbers in the Prometheus text format (URS K-12). Counts only, never records.
 func (s *Server) metricsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
@@ -132,6 +145,16 @@ func (s *Server) metricsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			g("ctrl32_data_completeness_ratio_24h", "Share of the last 24 hours covered by data across datastreams with an expected interval (1 = no gaps)", c)
 		}
+	}
+	if s.flows != nil {
+		running, processed, errs, dropped := s.flows.Totals()
+		c := func(name, help string, v int64) {
+			samples = append(samples, metrics.Sample{Name: name, Help: help, Type: "counter", Value: float64(v)})
+		}
+		g("ctrl32_flows_running", "Flows deployed and running", float64(running))
+		c("ctrl32_flow_messages_total", "Messages processed by flow nodes since start", processed)
+		c("ctrl32_flow_errors_total", "Flow node errors since start", errs)
+		c("ctrl32_flow_dropped_total", "Flow messages dropped (full queue, rate limit) since start", dropped)
 	}
 	g("ctrl32_incidents_open", "Incidents open or under investigation", float64(s.incidents.OpenCount(ctx, "")))
 	ts := s.tc.State()

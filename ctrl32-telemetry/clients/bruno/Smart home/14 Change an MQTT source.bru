@@ -1,0 +1,43 @@
+meta {
+  name: Change an MQTT source
+  type: http
+  seq: 14
+}
+
+put {
+  url: {{baseUrl}}/api/v1/mqtt-sources/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "adopt": "auto",
+    "client_id": "string",
+    "discovery_prefix": "string",
+    "host": "string",
+    "insecure_skip_verify": true,
+    "kind": "account",
+    "name": "string",
+    "outage_incident_min": 21.5,
+    "password": "string",
+    "port": 1,
+    "publish_datastreams": [
+      "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00"
+    ],
+    "reason": "string",
+    "site_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "tls": true,
+    "username": "string"
+  }
+}
+
+docs {
+  Change an MQTT source
+  
+  Requires permission `device.manage`.
+}

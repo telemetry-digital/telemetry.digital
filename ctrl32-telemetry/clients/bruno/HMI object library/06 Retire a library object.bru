@@ -1,0 +1,25 @@
+meta {
+  name: Retire a library object
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/hmi/objects/:slug
+  body: none
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Retire a library object
+  
+  Requires permission `content.write`.
+}

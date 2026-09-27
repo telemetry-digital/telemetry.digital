@@ -6,11 +6,18 @@ Developer: telemetry.digital (Palo Krnáč). Revenue comes from implementation s
 
 ## Status
 
-Version **0.36.3** (25 Sep 2026). Phases 1–2 of the roadmap (`docs/02-navrh-systemu.md`, chapter 13) are functionally covered; the `Zdroj` column of the URS names the version and the test that fulfil each requirement. The production instance runs at `https://telemetry.digital/` (installed with the public installer, updated from the Server page). Every release has an entry in `JOURNAL.md`.
+Version **0.46.0** (26 Sep 2026; production runs 0.36.3). Phases 1–2 of the roadmap (`docs/02-navrh-systemu.md`, chapter 13) are functionally covered; the `Zdroj` column of the URS names the version and the test that fulfil each requirement. The production instance runs at `https://telemetry.digital/` (installed with the public installer, updated from the Server page). Every release has an entry in `JOURNAL.md`.
 
 ## What it does
 
 - **Collection:** MQTT broker in the process (TLS, WebSocket, per-device ACL, ThingsBoard-compatible topics and payloads), a device HTTP API (telemetry, status, attributes, commands by long polling), LoRaWAN through ChirpStack, OPC UA client with write, Modbus TCP and RTU-over-TCP with versioned register profiles, device provisioning with tokens, device positions.
+- **SCADA:** process pictures drawn in a WinCC-style editor (68 industrial symbols, pipes with flow, dynamics, faceplates, commands with reason, object library with SVG import), dashboards of widgets, or both on one screen.
+- **Redundant database:** attach a second PC with a one-time code — one-time copy with a verified safe detach, continuous offsite replica, or hot standby with manual failover and fencing (`docs/runbook-replication.md`).
+- **Smart home and MQTT provisioning:** zigbee2mqtt, Tasmota, ESPHome, Shelly and any device that announces itself over MQTT are recognized automatically with rooms and entities, are recorded and controlled from a Home page (switches, dimming, blinds, thermostats, locks) with audited commands confirmed by the device; MQTT accounts with private topic namespaces, bridges to existing brokers, values published back to the broker for other systems; Shelly Gen2+/Gen3 and Tasmota also with their own native protocols; colour pickers on light cards; scenes; an energy overview with consumption, production and cost per hour, day and month; MQTT in/out flow nodes; an incident when a bridge stays disconnected; fleets provision themselves with a key and secret, ThingsBoard firmware works unchanged (`docs/smarthome.md`).
+- **Cameras:** IP cameras over RTSP (H.264, H.265, MJPEG) or HTTP MJPEG recorded continuously into one-minute MP4 files with retention per camera and a disk limit, live and recorded video in the browser without plug-ins or ffmpeg, a timeline with playback at up to 16× and MP4 export (audited), video walls over several monitors such as 2 × 20 cameras, a camera widget for dashboards, a player with zoom and timeshift, remote sites through an encrypted relay, motion and other ONVIF events without decoding video, recording on events with a pre-roll, PTZ, discovery, camera events in flows, camera groups per user, incidents for cameras that stop recording, tested with 128 cameras (`docs/video.md`).
+- **Displays (kiosks):** a PC or TV at a wall paired once with a code shows dashboards, process screens and video wall screens in turn without anyone signed in, enlarges cameras with events and follows operators' commands; it reads only its own content and can be disconnected at any time (`docs/displays.md`).
+- **Flows:** Node-RED-style automation built into the server — a closed library of 28 trigger, logic and action nodes wired on a canvas, typed expressions instead of code, test messages with dry run, a debug panel, versions with deploy and four eyes, every action audited with the flow as origin; automation rules convert into flows (`docs/flows.md`).
+- **Dashboard widgets:** 47 widget types (values, gauges, charts, tables, controls, clock, Markdown, QR…), each with ThingsBoard-level settings — appearance, per-series options, two axes, time window and aggregation, legend values, conditional formatting, click actions, full screen, and filters the viewer can switch on the widget.
 - **Records:** append-only observations with two timestamps, gaps and quality, hash-chained audit trail with `audit verify`, versioned objects (assets, datastreams, screens, rules, profiles) with a reason on every change, CSV exports of audit and access logs, cursor pagination.
 - **Evaluation:** alarm rules with escalation policies and delivery records (e-mail, HMAC-signed webhooks, HTTP SMS and voice gateways, Web Push), automation rules "condition → action" with an expression language, commands to devices with four-eyes approval, change requests for limits and assignments, an incident log with impact, cause and CAPA (opened automatically for undelivered alarms and a broken audit chain).
 - **Presentation:** dashboards as a versioned screen format (20 widget types, live values over SSE, public read-only links with QR), ISA-101 process mimics on a free canvas, maps with the organization's tiles or a self-hosted PMTiles archive, PDF reports and exports rendered with Typst from block-designed templates.
@@ -49,10 +56,16 @@ Go 1.27, PostgreSQL 18 (`docker compose -f deploy/dev/docker-compose.yml up -d`,
 ```bash
 cp config.example.toml config.toml            # then set db.url / admin_url for the dev database
 go run ./cmd/ctrl32-telemetry migrate -config config.toml
-go run ./cmd/ctrl32-telemetry dev seed -config config.toml   # demo organization, admin/admin1234, a device token
+go run ./cmd/ctrl32-telemetry dev seed -config config.toml   # demo organization, site, datastreams, a device token
+go run ./cmd/ctrl32-telemetry admin bootstrap -config config.toml   # first org_admin "admin" with a one-time password
+go run ./cmd/ctrl32-telemetry admin reset-password -username admin -password admin1234 -permanent -allow-weak -config config.toml   # dev credentials the e2e suites use
+# e2e suites: USER=admin in the environment (the shell's $USER wins otherwise) and no forced MFA enrolment for the dev org:
+#   UPDATE core.organization SET settings = jsonb_set(coalesce(settings,'{}'), '{security}', coalesce(settings->'security','{}') || '{"mfa_optional":true}');
+# tests/e2e/iam.sh is the exception: run it first on a fresh database with the one-time password from `admin bootstrap`.
 go run ./cmd/ctrl32-telemetry serve -config config.toml      # http://127.0.0.1:8080
 go test ./...                                  # unit and integration tests (OpenAPI completeness, generated clients, agent)
 bash tests/e2e/assets.sh                       # 26 end-to-end suites against the running server, one at a time
+bash tests/run-all.sh                          # everything above on a fresh database (PG_ADMIN_URL, SKIP; also run by CI)
 ```
 
 Static files under `internal/httpapi/static` are embedded: rebuild before checking a UI change. New user-visible strings are added to all 19 catalogs in `internal/i18n/catalog` (English key = text). After an API change run `go run ./tools/apigen`; the test in `tools/apigen` fails while `clients/` is stale. Releases: `deploy/publish.sh <version> root@host -i key` builds Linux amd64/arm64 and Windows amd64 and publishes them with the installers.
@@ -64,6 +77,10 @@ Static files under `internal/httpapi/static` are embedded: rebuild before checki
 | `JOURNAL.md` | Journal: one entry per release, decisions, next steps — the current state of the product |
 | `docs/02-navrh-systemu.md` | System design (the original plan; chapter 15 lists which open decisions were resolved and how) |
 | `docs/adr/` | Architecture decision records 0001–0014 |
+| `docs/smarthome.md` | Smart home and MQTT provisioning: accounts, bridges, provisioning profiles, ThingsBoard API, entities, Home page |
+| `docs/flows.md` | Flows: nodes, expressions, governance, rule conversion, operation |
+| `docs/video.md` | Cameras: adding cameras, recording and storage, ONVIF events, PTZ, playback and export, video walls on several monitors |
+| `docs/displays.md` | Displays (kiosks) at a wall: pairing, content in turn, alarm cameras, operator commands, camera groups |
 | `docs/urs/URS-v0.1.md` | User requirements with IDs, priority, GxP relevance, phase, and the version and test that fulfil them |
 | `docs/threat-model.md` | Threat model |
 | `docs/protocol/device-protocol-v0.1.md` | Device protocol (MQTT/HTTP), normative |

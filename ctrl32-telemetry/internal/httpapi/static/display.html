@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Display</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/app.css">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body class="kiosk">
+<main>
+  <section id="pair" hidden>
+    <div class="kiosk-pair">
+      <div class="kiosk-logo" id="logo"></div>
+      <h1>Pair this display</h1>
+      <p>In ctrl32 open <b>Displays</b>, choose <b>Pair display</b> and enter this code:</p>
+      <div class="kiosk-code notranslate" id="code">····-····</div>
+      <p class="muted" id="codeInfo"></p>
+      <p class="muted" style="font-size:13px">The display then shows only what it is given and cannot change anything. An administrator can disconnect it at any time.</p>
+    </div>
+  </section>
+  <div id="stage" class="kiosk-stage" hidden></div>
+  <div id="overlay" class="kiosk-overlay" hidden></div>
+  <div id="ident" class="kiosk-ident" hidden></div>
+  <div id="msg" class="kiosk-msg" hidden><div class="kiosk-msg-text notranslate"></div><div class="kiosk-msg-by"></div></div>
+  <div class="kiosk-status" id="status" hidden></div>
+  <div class="kiosk-title" id="title"></div>
+</main>
+<script src="/app.js"></script>
+<script src="/scada.js"></script>
+<script src="/vendor/tabler-icons.js"></script>
+<script src="/widgets.js"></script>
+<script src="/widgets-more.js"></script>
+<script src="/videoplayer.js"></script>
+<script>
+// A kiosk (spec 014): paired once with a code, then shows its dashboards, process screens and video wall screens in
+// turn, enlarges cameras with events, and follows the operator's commands. It never needs a user session.
+const $ = s => document.querySelector(s), esc = ctrl32.esc, t = ctrl32.t;
+let STATE = null, VERSION = null, IDX = 0, rotateT = null, refreshFn = null, refreshT = null, players = [], lastCmd = 0, pollT = null;
+let popups = new Map(); // camera id → {player, until}
+const api = async (m, url, body) => {
+  const r = await fetch(url, {method: m, headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined, credentials: 'same-origin', cache: 'no-store'});
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(data.error || 'HTTP ' + r.status); e.status = r.status; throw e; }
+  return data;
+};
+
+// ---- pairing ----
+let codeKnown = false, pairT = null;
+async function hello() {
+  try {
+    const r = await api('POST', '/api/v1/display/hello', {code_known: codeKnown});
+    if (r.paired) { $('#pair').hidden = true; clearTimeout(pairT); start(); return; }
+    if (r.code) { $('#code').textContent = r.code; codeKnown = true; }
+    $('#pair').hidden = false; $('#stage').hidden = true;
+    const left = Math.max(0, Math.round((new Date(r.expires_at) - Date.now()) / 60000));
+    $('#codeInfo').textContent = `${t('The code is valid for')} ${left} min.`;
+  } catch (x) { codeKnown = false; $('#codeInfo').textContent = x.message; }
+  pairT = setTimeout(hello, 3000);
+}
+
+// ---- content ----
+function stopContent() {
+  for (const p of players) p.close(); players = [];
+  clearInterval(refreshT); refreshT = null; refreshFn = null;
+  $('#stage').innerHTML = '';
+}
+async function showItem(it) {
+  stopContent();
+  const st = $('#stage'); st.hidden = false;
+  $('#title').textContent = it.title || '';
+  if (it.kind === 'dashboard') {
+    const wrap = document.createElement('div'); wrap.className = 'kiosk-dash'; st.appendChild(wrap);
+    const box = document.createElement('div'); wrap.appendChild(box);
+    ctrl32Widgets.setPublic('~' + it.slug);
+    const d = await api('GET', `/api/v1/public/${encodeURIComponent('~' + it.slug)}`);
+    fitGrid(d.spec, box);
+    refreshFn = await ctrl32Widgets.render(box, d.spec, {range: d.spec.range || '6h'});
+    FITTED = {box, spec: d.spec};
+    refreshT = setInterval(() => refreshFn && refreshFn(), Math.max(5, d.spec.refresh_s || 30) * 1000);
+  } else if (it.kind === 'wall') {
+    const w = await api('GET', `/api/v1/display/walls/${encodeURIComponent(it.wall)}`);
+    const sc = w.screens[it.screen] || w.screens[0];
+    const g = document.createElement('div'); g.className = 'wall-grid'; st.appendChild(g);
+    g.style.gridTemplateColumns = `repeat(${sc.cols}, 1fr)`; g.style.gridTemplateRows = `repeat(${sc.rows}, 1fr)`;
+    const quality = sc.quality === 'main' || sc.quality === 'sub' ? sc.quality : sc.cols * sc.rows > (w.sub_stream_above ?? 4) ? 'sub' : 'main';
+    let html = '';
+    for (let i = 0; i < sc.cols * sc.rows; i++) {
+      const id = (sc.tiles || [])[i], name = id && w.cameras[id];
+      html += `<div class="cell" ${name ? `data-id="${esc(id)}"` : ''}>${name ? `<div class="cap"><span class="cam-dot"></span><span class="notranslate">${esc(name)}</span></div>` : ''}</div>`;
+    }
+    g.innerHTML = html;
+    for (const el of g.querySelectorAll('.cell[data-id]')) {
+      const dot = el.querySelector('.cam-dot');
+      const p = ctrl32Player(el, {url: `/api/v1/display/cameras/${el.dataset.id}/live?quality=${quality}`, live: true,
+        onState: s => { dot.className = 'cam-dot ' + (s === 'online' ? 'online' : s === 'offline' ? 'offline' : ''); }});
+      el.prepend(p.el); players.push(p);
+    }
+    markActive();
+  }
+}
+// a wall never scrolls: a grid dashboard gets the row height that fills the screen (process screens scale themselves)
+let FITTED = null;
+function fitGrid(spec, box) {
+  if (spec.layout && spec.layout.type === 'canvas') {
+    // a process screen scales with its width: give it the width at which its height fits the screen too
+    const W = spec.layout.width || 1600, H = spec.layout.height || 900;
+    box.style.width = Math.min(innerWidth - 24, (innerHeight - 24) * W / H) + 'px'; box.style.margin = '0 auto'; box.style.position = 'relative'; box.style.inset = 'auto';
+    return;
+  }
+  if (!spec.layout || !(spec.widgets || []).length) return;
+  const rows = Math.max(...spec.widgets.map(w => (w.geometry.y || 0) + (w.geometry.h || 1)));
+  spec.layout.row_height = Math.max(36, Math.floor((innerHeight - 24 - 12 * (rows - 1)) / rows));
+}
+let resizeT = null;
+addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(async () => {
+  if (!FITTED || !FITTED.box.isConnected) return; fitGrid(FITTED.spec, FITTED.box); refreshFn = await ctrl32Widgets.render(FITTED.box, FITTED.spec, {range: FITTED.spec.range || '6h'}); }, 400); });
+function rotate() {
+  clearTimeout(rotateT);
+  const items = STATE.items;
+  if (!items.length) { stopContent(); $('#stage').innerHTML = `<div class="kiosk-empty">${esc(STATE.name)}<br><span class="muted">${esc(t('Nothing to show'))}</span></div>`; $('#stage').hidden = false; return; }
+  IDX = IDX % items.length;
+  const it = items[IDX];
+  showItem(it).catch(x => { $('#stage').innerHTML = `<div class="kiosk-empty">${esc(x.message)}</div>`; });
+  if (items.length > 1) rotateT = setTimeout(() => { IDX++; rotate(); }, (it.seconds || 60) * 1000);
+}
+function markActive() {
+  for (const el of document.querySelectorAll('.wall-grid .cell[data-id]')) {
+    const a = STATE.active[el.dataset.id];
+    el.classList.toggle('cam-alert', !!a); el.dataset.active = a ? a.kinds.map(k => t(k)).join(', ') : '';
+  }
+}
+
+// ---- overlays: cameras with events and cameras sent by an operator ----
+function renderOverlay() {
+  const now = Date.now();
+  for (const [id, p] of popups) if (p.until < now) { p.player.close(); p.el.remove(); popups.delete(id); }
+  const ov = $('#overlay');
+  if (!popups.size) { ov.hidden = true; ov.innerHTML = ''; return; }
+  ov.hidden = false;
+  const n = popups.size, cols = n === 1 ? 1 : 2;
+  ov.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  for (const [id, p] of popups) if (!p.el.isConnected) ov.appendChild(p.el);
+}
+function popup(id, name, label, seconds, quality) {
+  const until = Date.now() + seconds * 1000;
+  const cur = popups.get(id);
+  if (cur) { cur.until = Math.max(cur.until, until); cur.el.querySelector('.kiosk-pop-label').textContent = label; renderOverlay(); return; }
+  if (popups.size >= 4) { const [oldest] = popups.keys(); popups.get(oldest).player.close(); popups.get(oldest).el.remove(); popups.delete(oldest); }
+  const el = document.createElement('div'); el.className = 'kiosk-pop';
+  el.innerHTML = `<div class="kiosk-pop-head"><b class="notranslate">${esc(name || '')}</b><span class="kiosk-pop-label">${esc(label)}</span></div>`;
+  const player = ctrl32Player(el, {url: `/api/v1/display/cameras/${encodeURIComponent(id)}/live?quality=${quality || 'main'}`, live: true});
+  el.appendChild(player.el);
+  popups.set(id, {player, el, until});
+  renderOverlay();
+}
+let wasActive = {};
+function handleEvents() {
+  if (STATE.popup !== 'none') {
+    for (const [id, a] of Object.entries(STATE.active)) {
+      if (!a.popup) continue;
+      if (!wasActive[id]) popup(id, a.name, a.kinds.map(k => t(k)).join(', '), STATE.popup_seconds || 30, 'main');
+      else if (popups.has(id)) popups.get(id).until = Math.max(popups.get(id).until, Date.now() + (STATE.popup_seconds || 30) * 1000);
+    }
+  }
+  wasActive = STATE.active;
+}
+function handleCommand(c) {
+  if (!c || c.seq <= lastCmd) return;
+  const first = lastCmd === 0; lastCmd = c.seq;
+  try { sessionStorage.setItem('ctrl32.display.cmd', String(c.seq)); } catch (x) { /* ignore */ }
+  const secs = Math.max(1, (new Date(c.until) - Date.now()) / 1000);
+  if (c.action === 'camera') popup(c.camera, c.name, `${t('sent by')} ${c.by}`, secs, c.quality);
+  else if (c.action === 'identify') { const el = $('#ident'); el.innerHTML = `<div>${esc(STATE.name)}</div><small>${esc(t('This display'))}</small>`; el.hidden = false; setTimeout(() => { el.hidden = true; }, secs * 1000); }
+  else if (c.action === 'reload' && !first) location.reload();
+  else if (c.action === 'clear') { for (const p of popups.values()) p.player.close(); popups.clear(); renderOverlay(); $('#ident').hidden = true; }
+}
+
+// announcements: info and warning as a band, alarm over the whole screen (text only, never HTML)
+function handleMessage(m) {
+  const el = $('#msg');
+  if (!m || new Date(m.until) < Date.now()) { el.hidden = true; return; }
+  el.className = 'kiosk-msg ' + m.level; el.hidden = false;
+  el.querySelector('.kiosk-msg-text').textContent = m.text;
+  el.querySelector('.kiosk-msg-by').textContent = `${m.by} · ${new Date(m.seq / 1e6).toLocaleTimeString(document.documentElement.lang || undefined)}`;
+}
+
+// ---- state ----
+async function poll() {
+  clearTimeout(pollT);
+  try {
+    const s = await api('GET', '/api/v1/display/state');
+    $('#status').hidden = true;
+    // switch only to a language the server has enabled (otherwise the page would reload forever)
+    if (s.locale && s.locale !== ctrl32.locale && (ctrl32.langs.enabled || []).includes(s.locale)) { ctrl32.setLocale(s.locale); return; }
+    STATE = s; window.ctrl32DisplayCameras = s.cameras || {}; window.ctrl32DisplayActive = s.active || {};
+    document.title = s.name;
+    if (s.version !== VERSION) { VERSION = s.version; IDX = 0; rotate(); }
+    markActive(); handleEvents(); handleCommand(s.command); handleMessage(s.message); renderOverlay();
+  } catch (x) {
+    if (x.status === 401) { stopContent(); STATE = null; VERSION = null; codeKnown = false; hello(); return; }
+    $('#status').hidden = false; $('#status').textContent = t('Connection to the server lost — retrying…');
+  }
+  pollT = setTimeout(poll, 4000);
+}
+function start() {
+  try { lastCmd = +(sessionStorage.getItem('ctrl32.display.cmd') || 0); } catch (x) { /* ignore */ }
+  poll();
+}
+
+// keep the screen on and the cursor away; the first click switches to full screen
+async function wake() { try { if ('wakeLock' in navigator) (await navigator.wakeLock.request('screen')).addEventListener('release', () => setTimeout(wake, 1000)); } catch (x) { /* not allowed yet */ } }
+document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
+document.addEventListener('click', () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}); wake(); });
+let idle = null;
+document.addEventListener('mousemove', () => { document.body.style.cursor = ''; clearTimeout(idle); idle = setTimeout(() => { document.body.style.cursor = 'none'; }, 3000); });
+ctrl32.ready({}).then(({brand}) => {
+  if (brand && brand.logo_url) $('#logo').innerHTML = `<img src="${esc(brand.logo_url)}" alt="">`;
+  wake(); hello();
+});
+</script>
+</body>
+</html>

@@ -135,11 +135,13 @@ async function openUser(id){
       <button class="btn" type="button" data-act="mfa-reset">Reset MFA</button>
       <button class="btn" type="button" data-act="sessions">Sign out everywhere</button></div>
     <div id="actResult" hidden><div class="muted">One-time password (shown once):</div><div class="secret" id="actPw"></div></div></form>
+    <h3>Cameras</h3><div class="form" id="camGroups"><p class="muted">Loading…</p></div>
     <h3>API tokens (${d.api_tokens.length})</h3><div class="table-wrap"><table><thead><tr><th>Name</th><th>Scopes</th><th>Created</th><th>Last used</th><th>Expires</th><th>State</th></tr></thead><tbody>${d.api_tokens.map(t => `<tr><td>${esc(t.name)}</td><td style="white-space:normal">${(t.scopes||[]).map(s=>`<span class="badge">${esc(s)}</span>`).join(' ')}</td><td>${fmt(t.created_at)}</td><td>${fmt(t.last_used_at)}</td><td>${fmt(t.expires_at)}</td><td>${t.revoked_at ? '<span class="badge bad">revoked</span>' : '<span class="badge ok">active</span>'}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">none</td></tr>'}</tbody></table></div>
     <h3>Role history</h3><div class="table-wrap"><table><thead><tr><th>When</th><th>Event</th><th>Role</th><th>By</th><th>Reason</th></tr></thead><tbody>${d.role_history.map(h => `<tr><td>${fmt(h.ts)}</td><td>${h.event === 'granted' ? '<span class="badge ok">granted</span>' : '<span class="badge bad">revoked</span>'}</td><td>${esc(h.role)}</td><td>${esc(h.actor_name || 'system')}</td><td style="white-space:normal">${esc(h.reason)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">none</td></tr>'}</tbody></table></div>
     <p class="muted">Created ${fmt(u.created_at)} · id <code>${esc(u.id)}</code></p>`;
   $('#dlgClose').onclick = () => { dlg.close(); loadAll(); };
   const form = $('#profile');
+  cameraGroups(u, () => { const r = form.reason.value.trim(); if(!r){ $('#profileErr').textContent = 'reason is required'; form.reason.focus(); } return r; });
   const reason = () => { const r = form.reason.value.trim(); if(!r){ $('#profileErr').textContent = 'reason is required'; form.reason.focus(); return null; } return r; };
   form.onsubmit = async e => { e.preventDefault(); const r = reason(); if(!r) return; $('#profileErr').textContent='';
     const roles = [...form.querySelectorAll('input[name=role]:checked')].map(i => i.value); if(self && !roles.includes('org_admin')) roles.push('org_admin');
@@ -151,6 +153,24 @@ async function openUser(id){
       else { const path = {unlock: 'unlock', 'mfa-reset': 'mfa-reset', sessions: 'sessions/revoke'}[act]; await api('POST', `/api/v1/users/${u.id}/${path}`, {reason: r}); }
       ctrl32.toast('done','ok'); openUser(u.id);
     }catch(x){ $('#profileErr').textContent = x.message; } };
+}
+// Camera groups (spec 014): all cameras, or only the cameras of some groups (enforced by the server everywhere).
+async function cameraGroups(u, reason){
+  const box = $('#camGroups');
+  let cur, groups = [];
+  try{ cur = await api('GET', `/api/v1/users/${u.id}/camera-groups`); }catch(x){ box.innerHTML = `<p class="muted">${esc(x.message)}</p>`; return; }
+  try{ groups = (await api('GET', '/api/v1/video/camera-groups')).map(g => g.group); }catch(x){ /* no video permission: groups typed by hand */ }
+  for(const g of cur.groups) if(!groups.includes(g)) groups.push(g);
+  box.innerHTML = `<label class="inline"><input type="radio" name="cgm" value="all" ${cur.limited ? '' : 'checked'}> ${esc(ctrl32.t('All cameras of the organization'))}</label>
+    <label class="inline"><input type="radio" name="cgm" value="some" ${cur.limited ? 'checked' : ''}> ${esc(ctrl32.t('Only cameras of these groups'))}</label>
+    <div class="perm-grid" id="cgList">${groups.map(g => `<label class="inline"><input type="checkbox" value="${esc(g)}" ${cur.groups.includes(g) ? 'checked' : ''}><span class="notranslate">${esc(g || ctrl32.t('(cameras without a group)'))}</span></label>`).join('') || `<span class="muted">${esc(ctrl32.t('No camera groups yet — set a group on the cameras first.'))}</span>`}</div>
+    <div class="row"><button class="btn" type="button" id="cgSave">Save camera access</button><span class="muted" style="font-size:13px">${esc(ctrl32.t('Applies at once to live view, recordings, walls, events and PTZ.'))}</span></div>`;
+  const sync = () => { $('#cgList').style.opacity = box.querySelector('input[name=cgm]:checked').value === 'some' ? 1 : .4; };
+  for(const r of box.querySelectorAll('input[name=cgm]')) r.onchange = sync; sync();
+  $('#cgSave').onclick = async () => { const r = reason(); if(!r) return;
+    const limited = box.querySelector('input[name=cgm]:checked').value === 'some';
+    const sel = [...box.querySelectorAll('#cgList input:checked')].map(i => i.value);
+    try{ await api('PUT', `/api/v1/users/${u.id}/camera-groups`, {limited, groups: sel, reason: r}); ctrl32.toast('saved','ok'); }catch(x){ $('#profileErr').textContent = x.message; } };
 }
 ctrl32.ready({requireAuth: true, requirePerm: 'user.admin'}).then(() => {
   const sec = ctrl32.section('accounts', ['accounts', 'roles']); document.title = (sec === 'roles' ? 'Roles and permissions' : 'Users') + ' — ctrl32 telemetry';

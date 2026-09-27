@@ -1,0 +1,29 @@
+meta {
+  name: Reject a self-provisioned device
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/devices/:id/reject
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Reject a self-provisioned device
+  
+  The device and its token are revoked.
+  
+  Requires permission `device.manage`.
+}

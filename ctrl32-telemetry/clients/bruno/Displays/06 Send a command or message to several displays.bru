@@ -1,0 +1,34 @@
+meta {
+  name: Send a command or message to several displays
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/displays/command
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "action": "camera",
+    "all": true,
+    "camera": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "ids": [
+      "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00"
+    ],
+    "level": "info",
+    "location": "string",
+    "seconds": 1,
+    "text": "string"
+  }
+}
+
+docs {
+  Send a command or message to several displays
+  
+  The same actions for the listed displays, those of a location, or all displays of the organization. One audit entry lists the displays.
+  
+  Requires permission `display.control`.
+}

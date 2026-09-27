@@ -1,0 +1,23 @@
+meta {
+  name: A users camera access
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/v1/users/:id/camera-groups
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  A user's camera access
+  
+  limited = false: all cameras; otherwise only the cameras of the groups ("" = cameras without a group).
+  
+  Requires permission `user.admin`.
+}

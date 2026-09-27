@@ -1,0 +1,23 @@
+meta {
+  name: A flow (current version)
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/flows/:slug
+  body: none
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+docs {
+  A flow (current version)
+  
+  With validation problems, running status per node and the URLs of its webhook nodes.
+  
+  Requires permission `data.read`.
+}

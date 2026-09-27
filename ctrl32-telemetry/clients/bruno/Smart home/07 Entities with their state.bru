@@ -1,0 +1,24 @@
+meta {
+  name: Entities with their state
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/entities
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~room: 
+  ~device: 
+  ~component: 
+  ~source: 
+}
+
+docs {
+  Entities with their state
+  
+  Requires permission `data.read`.
+}

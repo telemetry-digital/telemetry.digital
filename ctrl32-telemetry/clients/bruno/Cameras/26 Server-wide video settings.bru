@@ -1,0 +1,19 @@
+meta {
+  name: Server-wide video settings
+  type: http
+  seq: 26
+}
+
+get {
+  url: {{baseUrl}}/api/v1/video/settings
+  body: none
+  auth: inherit
+}
+
+docs {
+  Server-wide video settings
+  
+  Current settings, their defaults and whether this user may change them (system.admin).
+  
+  Requires permission `video.manage`.
+}

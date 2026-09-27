@@ -9,3 +9,5 @@ config.toml
 .pio/
 node_modules/
 __pycache__/
+pio-*.log
+ctrl32-telemetry-c/ci/gen/

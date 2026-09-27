@@ -1,0 +1,23 @@
+meta {
+  name: Data contract of a report kind
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/report-templates/:kind/contract
+  body: none
+  auth: inherit
+}
+
+params:path {
+  kind: 
+}
+
+docs {
+  Data contract of a report kind
+  
+  The variables and tables a template of this kind receives.
+  
+  Requires permission `data.export`.
+}

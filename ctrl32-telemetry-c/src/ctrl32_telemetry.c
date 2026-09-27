@@ -2,6 +2,7 @@
 #include "ctrl32_telemetry.h"
 
 #include <ctype.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,10 +19,10 @@ static void w_putc(w_t *w, char c) {
     if (w->len + 1 < w->cap) { w->p[w->len++] = c; w->p[w->len] = 0; } else { w->overflow = 1; }
 }
 static void w_puts(w_t *w, const char *s) { while (*s) w_putc(w, *s++); }
-static void w_putn(w_t *w, const char *s, size_t n) { while (n--) w_putc(w, *s++); }
 static void w_num(w_t *w, double v) {
     char tmp[32];
-    if (v == (double)(long long)v && v < 1e15 && v > -1e15) snprintf(tmp, sizeof tmp, "%lld", (long long)v);
+    if (!isfinite(v)) { w_puts(w, "null"); return; } /* NaN/Inf are not JSON numbers */
+    if (v < 1e15 && v > -1e15 && v == (double)(long long)v) snprintf(tmp, sizeof tmp, "%lld", (long long)v);
     else snprintf(tmp, sizeof tmp, "%.6g", v);
     w_puts(w, tmp);
 }
@@ -68,7 +69,7 @@ static int add_value(c32_sample_t *s, const char *key, c32_vtype_t t, double num
     s->n++;
     return 0;
 }
-int c32_sample_add(c32_sample_t *s, const char *key, double value) { return add_value(s, key, C32_NUM, value, NULL); }
+int c32_sample_add(c32_sample_t *s, const char *key, double value) { return isfinite(value) ? add_value(s, key, C32_NUM, value, NULL) : -1; }
 int c32_sample_add_bool(c32_sample_t *s, const char *key, int value) { return add_value(s, key, C32_BOOL, value ? 1 : 0, NULL); }
 int c32_sample_add_str(c32_sample_t *s, const char *key, const char *value) { return add_value(s, key, C32_STR, 0, value); }
 

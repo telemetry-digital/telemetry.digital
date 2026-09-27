@@ -1,0 +1,27 @@
+meta {
+  name: Template of a report kind
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/report-templates/:kind
+  body: none
+  auth: inherit
+}
+
+params:path {
+  kind: 
+}
+
+params:query {
+  ~locale: 
+}
+
+docs {
+  Template of a report kind
+  
+  The effective template (organization override or built-in) as Typst source and, when designed with blocks, its block spec.
+  
+  Requires permission `data.export`.
+}

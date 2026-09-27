@@ -1,0 +1,23 @@
+meta {
+  name: Compile a block spec to Typst source
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/report-templates/compile
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "spec": {}
+  }
+}
+
+docs {
+  Compile a block spec to Typst source
+  
+  Requires permission `content.write`.
+}

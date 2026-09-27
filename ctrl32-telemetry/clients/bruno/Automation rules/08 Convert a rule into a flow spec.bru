@@ -1,0 +1,23 @@
+meta {
+  name: Convert a rule into a flow spec
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/rules/:id/as-flow
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  Convert a rule into a flow spec
+  
+  Returns an equivalent flow (datastream triggers → join → "true for" → actions) to create as a draft with `POST /api/v1/flows`; parts without a flow equivalent (staleness, webhook secrets, custom RPC arguments) are listed in `notes` and in a comment node. The rule itself is not changed.
+  
+  Requires permission `config.write`.
+}

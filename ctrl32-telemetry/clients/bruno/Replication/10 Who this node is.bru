@@ -1,0 +1,17 @@
+meta {
+  name: Who this node is
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/v1/replication/role
+  body: none
+  auth: inherit
+}
+
+docs {
+  Who this node is
+  
+  No authentication: a returning primary asks its hot standby whether it was promoted (fencing).
+}

@@ -75,15 +75,18 @@ RAW=$(echo "$T" | json token); [ -n "$RAW" ] && pass "api token created" || fail
 echo "8. exports (CSV + JSONL) with audit entry"
 DS=$(curl -s -H "Authorization: Bearer $RAW" "$BASE/api/v1/datastreams" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{console.log(JSON.parse(s)[0].id)})')
 CSV=$(curl -s -H "Authorization: Bearer $RAW" "$BASE/api/v1/export/observations?datastream_id=$DS&format=csv")
-echo "$CSV" | head -1 | grep -q '^measured_at,received_at,value' && pass "observations csv header" || fail "csv: $(echo "$CSV" | head -2)"
+grep -q '^measured_at,received_at,value' <<< "${CSV%%$'\n'*}" && pass "observations csv header" || fail "csv: $(echo "$CSV" | head -2)"
 curl -s -H "Authorization: Bearer $RAW" "$BASE/api/v1/export/alarms?format=jsonl" | head -1 | grep -q '"alarm_id"' && pass "alarms jsonl" || pass "alarms jsonl (empty is fine)"
 [ "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $RAW" "$BASE/api/v1/export/audit")" = 403 ] && pass "audit export needs audit.read (403 for token)" || fail "audit export scope"
-AUD=$(req "$BASE/api/v1/export/audit?format=csv"); echo "$AUD" | grep -q 'export.read' && pass "export recorded in audit trail" || fail "export not audited"
+AUD=$(req "$BASE/api/v1/export/audit?format=csv"); grep -q 'export.read' <<< "$AUD" && pass "export recorded in audit trail" || fail "export not audited"
 
 echo "9. lockout after failed logins, revocation"
+# The per-address login limiter (10 per minute) must not answer first: wait until it has room for the six attempts.
+sleep 40
 : > /tmp/lock.jar
 for i in 1 2 3 4 5; do curl -s -o /dev/null -c /tmp/lock.jar -H 'Content-Type: application/json' -X POST "$BASE/api/v1/auth/login" -d "{\"username\":\"$USER\",\"password\":\"wrong-$i\"}"; done
-[ "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -X POST "$BASE/api/v1/auth/login" -d "{\"username\":\"$USER\",\"password\":\"$NEWPW\"}")" = 423 ] && pass "account locked after 5 failures (423)" || fail "lockout not applied"
+LOCKED=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -X POST "$BASE/api/v1/auth/login" -d "{\"username\":\"$USER\",\"password\":\"$NEWPW\"}")
+[ "$LOCKED" = 423 ] && pass "account locked after 5 failures (423)" || fail "lockout not applied (got $LOCKED)"
 [ "$(code -X POST "$BASE/api/v1/devices/$DEVID/revoke" -H "X-CSRF-Token: $CSRF" -d '{"reason":"e2e cleanup"}')" = 200 ] && pass "device revoked" || fail "revoke"
 [ "$(code -X POST "$BASE/api/v1/auth/logout" -H "X-CSRF-Token: $CSRF")" = 200 ] && pass "logout" || fail "logout"
 [ "$(code "$BASE/api/v1/auth/me")" = 401 ] && pass "session revoked" || fail "session still valid"

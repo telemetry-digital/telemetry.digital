@@ -1,0 +1,17 @@
+meta {
+  name: Scenes
+  type: http
+  seq: 18
+}
+
+get {
+  url: {{baseUrl}}/api/v1/scenes
+  body: none
+  auth: inherit
+}
+
+docs {
+  Scenes
+  
+  Requires permission `data.read`.
+}

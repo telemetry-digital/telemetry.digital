@@ -1,0 +1,28 @@
+meta {
+  name: Device self-provisioning with a claim code or a provisioning
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/provision
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "claim": "string",
+    "deviceName": "string",
+    "fw": "string",
+    "hw": "string",
+    "provisionDeviceKey": "string",
+    "provisionDeviceSecret": "string"
+  }
+}
+
+docs {
+  Device self-provisioning with a claim code or a provisioning key
+  
+  Either the claim code from device registration (response: token and MQTT connection details), or ThingsBoard-compatible `{deviceName, provisionDeviceKey, provisionDeviceSecret}` of a provisioning profile (response: `{status, credentialsType: ACCESS_TOKEN, credentialsValue}`; the same works over MQTT: user name `provision`, publish `/provision/request`, answer on `/provision/response`). Rate limited per IP and key.
+}

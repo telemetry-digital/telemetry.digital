@@ -1,0 +1,29 @@
+meta {
+  name: ChirpStack HTTP integration endpoint
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/ingest/chirpstack/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  event: 
+}
+
+body:json {
+  {}
+}
+
+docs {
+  ChirpStack HTTP integration endpoint
+  
+  Called by ChirpStack with `?event=up` (and others) and the connector's bearer secret. Uplinks are decoded per device profile and stored like MQTT telemetry.
+}

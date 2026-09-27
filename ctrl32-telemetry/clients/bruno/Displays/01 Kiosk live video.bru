@@ -1,0 +1,23 @@
+meta {
+  name: Kiosk live video
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/display/cameras/:id/live
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  Kiosk: live video
+  
+  WebSocket like /video/cameras/{id}/live, only for cameras on the display's walls, in camera widgets of its dashboards, sent by an operator, or (popup all) with an active event.
+  
+  Requires permission `display`.
+}

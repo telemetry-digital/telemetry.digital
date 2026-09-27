@@ -1,0 +1,27 @@
+meta {
+  name: Delete an MQTT source
+  type: http
+  seq: 15
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/mqtt-sources/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Delete an MQTT source
+  
+  Its entities are marked removed; their history stays.
+  
+  Requires permission `device.manage`.
+}

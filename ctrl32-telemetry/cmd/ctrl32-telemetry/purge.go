@@ -69,6 +69,11 @@ func cmdPurge(args []string) error {
 		return err
 	}
 	defer tx.Rollback(ctx)
+	// A safe detach of a database replica compares row counts with the primary (spec 003); it holds this lock shared,
+	// so a purge waits until the detach has finished.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('ctrl32.purge'))`); err != nil {
+		return err
+	}
 	p := &purger{ctx: ctx, tx: tx, pool: pool, org: orgID}
 	// Record tables carry append-only triggers (0001_core.sql) that refuse DELETE for everyone. The purge is the one
 	// sanctioned exception: the user triggers of exactly these tables are disabled inside this transaction and

@@ -1,4 +1,5 @@
 /* Host unit tests for the protocol core. Build: tcc -Isrc tests/core_test.c src/ctrl32_telemetry.c -run  (or any C99 compiler) */
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -17,6 +18,7 @@ int main(void) {
     CHECK(c32_sample_add_bool(&s, "door", 1) == 0, "add door");
     CHECK(c32_sample_add_str(&s, "mode", "eco \"x\"") == 0, "add str");
     CHECK(c32_sample_add(&s, "Bad Key", 1) == -1, "invalid key rejected");
+    CHECK(c32_sample_add(&s, "nan", NAN) == -1 && c32_sample_add(&s, "inf", INFINITY) == -1, "non-finite value rejected (failed sensor read)");
     CHECK(c32_telemetry_json(buf, sizeof buf, &s, 1) > 0, "encode");
     CHECK_STR(buf, "{\"ts\":1758620000,\"v\":{\"temp\":4.5,\"door\":true,\"mode\":\"eco \\\"x\\\"\"},\"seq\":12}", "telemetry json");
     CHECK(c32_telemetry_json(buf, 20, &s, 1) == -1, "small buffer -> -1");

@@ -3,21 +3,28 @@
 //	ctrl32-telemetry serve   [-config path]           run the server (foreground or under the service manager)
 //	ctrl32-telemetry migrate [-config path]           apply embedded schema migrations
 //	ctrl32-telemetry audit verify [-config path]      re-walk the audit hash chain
-//	ctrl32-telemetry service install|uninstall|start|stop|restart [-config path]
+//	ctrl32-telemetry service install|uninstall|start|stop|restart[-agent|-relay] [-config path]
 //	ctrl32-telemetry dev seed [-config path]          create demo organization, device and datastreams (prints the device token)
 //	ctrl32-telemetry version
 package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/flows"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/incident"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/metrics"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/timecheck"
+	"io"
+	"log"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -26,6 +33,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/sync/errgroup"
 
@@ -47,10 +55,13 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/notify"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/opcua"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/push"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/replication"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/report"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/rules"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/seed"
 	svc "github.com/telemetry-digital/ctrl32-telemetry/internal/service"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/smarthome"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/video"
 )
 
 // version is set at build time: -ldflags "-X main.version=1.2.3"
@@ -79,11 +90,21 @@ func main() {
 		err = cmdAdmin(args)
 	case "agent":
 		err = cmdAgent(args)
+	case "replica":
+		err = cmdReplica(args)
+	case "camera-relay":
+		err = cmdCameraRelay(args)
+	case "verify-evidence":
+		err = cmdVerifyEvidence(args)
 	case "version":
 		fmt.Println("ctrl32-telemetry", version)
 	default:
 		usage()
 		os.Exit(2)
+	}
+	if errors.Is(err, replication.ErrRestart) {
+		fmt.Fprintln(os.Stderr, "restarting in the new replication role (the service manager starts the server again)")
+		os.Exit(3)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
@@ -92,7 +113,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: ctrl32-telemetry <serve|agent|migrate|audit verify|service <action>|admin bootstrap|admin reset-password|admin seed-dashboard|dev seed|version> [-config path]")
+	fmt.Fprintln(os.Stderr, "usage: ctrl32-telemetry <serve|agent|migrate|audit verify|service <action>|admin bootstrap|admin reset-password|admin seed-dashboard|dev seed|replica attach|status|promote|camera-relay|verify-evidence|version> [-config path]")
 }
 
 func loadConfig(args []string) (*config.Config, string, error) {
@@ -128,7 +149,7 @@ func cmdServe(args []string) error {
 		return err
 	}
 	defer closeLog()
-	run := func(ctx context.Context) error { return runServer(ctx, cfg, logger) }
+	run := func(ctx context.Context) error { return runServer(ctx, cfg, path, logger) }
 
 	if svc.Interactive() {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -143,13 +164,34 @@ func cmdServe(args []string) error {
 	return s.Run()
 }
 
-func runServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
+func runServer(ctx context.Context, cfg *config.Config, cfgPath string, logger *slog.Logger) error {
+	// Redundant database (spec 003): a fenced former primary and a replica run restricted; neither writes.
+	if f := replication.ReadFence(cfgPath); f != nil {
+		return runFenced(ctx, cfg, cfgPath, f, logger)
+	}
+	if st, err := replication.ReadState(cfgPath); err != nil {
+		return err
+	} else if st != nil {
+		return runReplica(ctx, cfg, cfgPath, st, logger)
+	}
 	pool, err := db.Connect(ctx, cfg.DB.URL)
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
 	inc := incident.New(pool, logger)
+	repl := &replication.Primary{Pool: pool, AdminURL: cfg.DB.AdminURL, DBURL: cfg.DB.URL, Version: version, Log: logger.With("component", "replication"), Incident: inc}
+	defer repl.Close()
+	// A hot standby promoted while this server was down: stay out of the way (no two primaries).
+	fctx, fcancel := context.WithTimeout(ctx, 20*time.Second)
+	if f, err := repl.CheckFence(fctx, cfgPath); err != nil {
+		logger.Warn("fencing check", "err", err)
+	} else if f != nil {
+		fcancel()
+		pool.Close()
+		return runFenced(ctx, cfg, cfgPath, f, logger)
+	}
+	fcancel()
 
 	if res, err := audit.Verify(ctx, pool); err != nil {
 		logger.Warn("audit chain verification failed at startup", "err", err)
@@ -202,6 +244,35 @@ func runServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) err
 	rulesEngine.Deriver = ing
 	ing.AddSink(rulesEngine)
 	rulesEngine.Start(ctx)
+	flowEngine := flows.New(pool, nil, cfg.Security.SecretKey, logger)
+	smart := smarthome.New(pool, br, ing, hub, cfg.Security.SecretKey, logger)
+	smart.Inc = inc
+	vids := video.New(pool, cfg.Video.StorageDir, cfg.Video.MaxDiskGB, cfg.Security.SecretKey, logger)
+	// camera events reach flows and pages through the live hub (spec 013)
+	vids.Incidents = inc
+	vids.OnEvent = func(e video.CameraEvent) {
+		hub.Publish(live.Event{Type: "camera", Org: e.OrgID, State: e.Phase, At: e.At,
+			Detail: map[string]any{"camera_id": e.CameraID, "camera": e.Camera, "kind": e.Kind, "source": e.Source, "label": e.Label, "phase": e.Phase, "event_id": e.ID}})
+	}
+	if cfg.Video.PushListen != "" {
+		if ps, err := vids.StartPush(video.PushConfig{Listen: cfg.Video.PushListen, TLSCert: cfg.Video.PushTLSCert, TLSKey: cfg.Video.PushTLSKey}); err != nil {
+			logger.Error("camera push listener not started", "err", err)
+		} else {
+			defer ps.Close()
+			host := cfg.Video.PushHost
+			if host == "" {
+				if u, err := url.Parse(cfg.HTTP.BaseURL); err == nil && u.Hostname() != "" {
+					host = u.Hostname()
+				} else {
+					host = "SERVER"
+				}
+			}
+			vids.SetPushHost(host, cfg.Video.PushListen, ps.TLS())
+		}
+	}
+	ing.AddSink(smart) // values of datastreams exported to Home Assistant through bridges
+	ing.AddSink(flowEngine)
+	hub.Tap(flowEngine.OnEvent)
 	detector := gap.New(pool, logger, cfg.Gap.CheckInterval)
 	con := console.New(pool, br, logger)
 	ing.SetConsole(con)
@@ -215,7 +286,7 @@ func runServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) err
 
 	srv := &http.Server{
 		Addr:              cfg.HTTP.Listen,
-		Handler:           httpapi.New(cfg, pool, br, iamSvc, rep, ing, con, agent.NewClient(cfg.Agent.Socket), opc, logger, version, hub, mbm, esc, rulesEngine, pm, tc, inc),
+		Handler:           httpapi.New(cfg, pool, br, iamSvc, rep, ing, con, agent.NewClient(cfg.Agent.Socket), opc, logger, version, hub, mbm, esc, rulesEngine, pm, tc, inc, repl, flowEngine, notifier, smart, vids),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
@@ -227,6 +298,34 @@ func runServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) err
 	g.Go(func() error { return br.Serve(gctx) })
 	g.Go(func() error { detector.Run(gctx); return nil })
 	g.Go(func() error { con.Run(gctx); return nil })
+	g.Go(func() error { repl.Run(gctx, 10*time.Second); return nil })
+	g.Go(func() error { flowEngine.Start(gctx); return nil })
+	g.Go(func() error {
+		if err := vids.Run(gctx); err != nil {
+			logger.Error("cameras not started", "err", err)
+		}
+		return nil
+	})
+	g.Go(func() error {
+		if err := smart.Start(gctx); err != nil {
+			logger.Error("smart home not started", "err", err)
+		}
+		return nil
+	})
+	g.Go(func() error {
+		t := time.NewTicker(time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-gctx.Done():
+				return nil
+			case <-t.C:
+				if f, err := repl.CheckFence(gctx, cfgPath); err == nil && f != nil {
+					return replication.ErrRestart // restart in fenced mode
+				}
+			}
+		}
+	})
 	g.Go(func() error {
 		logger.Info("http listening", "addr", cfg.HTTP.Listen, "tls", cfg.HTTP.TLSCert != "")
 		var err error
@@ -252,6 +351,75 @@ func runServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) err
 		err = nil
 	}
 	logger.Info("stopped")
+	return err
+}
+
+// runReplica serves a replica (research R7): the tunnel for the local standby, the primary's commands, and a status
+// page; no broker, ingest or background workers — the database is read-only.
+func runReplica(ctx context.Context, cfg *config.Config, cfgPath string, st *replication.State, logger *slog.Logger) error {
+	pool, err := replication.ConnectLocal(ctx, st, cfg.DB.URL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	rs := &replication.ReplicaServer{State: st, ConfigPath: cfgPath, Pool: pool, AppURL: cfg.DB.URL, AdminURL: cfg.DB.AdminURL, Version: version,
+		Log: logger.With("component", "replica")}
+	if ag := agent.NewClient(cfg.Agent.Socket); ag.Configured() {
+		rs.Promote = func(ctx context.Context) (string, error) { return ag.ReplicaPromote(ctx) }
+	}
+	return serveRestricted(ctx, cfg, rs.Handler(), logger, rs.Run)
+}
+
+// runFenced serves a former primary whose hot standby was promoted: read-only notice, no writes, no ingest.
+func runFenced(ctx context.Context, cfg *config.Config, cfgPath string, f *replication.Fence, logger *slog.Logger) error {
+	logger.Error("FENCED: this server is no longer the primary; it accepts no writes until it is re-attached as a replica", "security", true,
+		"new_primary", f.ByNode, "standby", f.StandbyURL, "since", f.At)
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/replication/role" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"node_id": f.OwnNode, "role": "fenced", "new_primary": f.ByNode, "standby_url": f.StandbyURL, "since": f.At})
+			return
+		}
+		if r.URL.Path == "/healthz" {
+			_, _ = w.Write([]byte("fenced\n"))
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		fmt.Fprintf(w, "This ctrl32 telemetry server was the primary until its hot standby %s was promoted (%s).\nIt accepts no data and no changes. Use the new primary, or re-attach this machine as its replica (see the replication runbook), then remove %s.\n",
+			f.StandbyURL, f.At.Format(time.RFC3339), replication.FencePath(cfgPath))
+	})
+	return serveRestricted(ctx, cfg, h, logger, nil)
+}
+
+func serveRestricted(ctx context.Context, cfg *config.Config, h http.Handler, logger *slog.Logger, work func(context.Context) error) error {
+	srv := &http.Server{Addr: cfg.HTTP.Listen, Handler: h, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 60 * time.Second}
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		var err error
+		if cfg.HTTP.TLSCert != "" {
+			err = srv.ListenAndServeTLS(cfg.HTTP.TLSCert, cfg.HTTP.TLSKey)
+		} else {
+			err = srv.ListenAndServe()
+		}
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	})
+	g.Go(func() error {
+		<-gctx.Done()
+		sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return srv.Shutdown(sctx)
+	})
+	if work != nil {
+		g.Go(func() error { return work(gctx) })
+	}
+	err := g.Wait()
+	if errors.Is(err, context.Canceled) {
+		err = nil
+	}
 	return err
 }
 
@@ -304,9 +472,12 @@ func cmdAudit(args []string) error {
 
 func cmdService(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: ctrl32-telemetry service <install|uninstall|start|stop|restart>[-agent] [-config path]")
+		return errors.New("usage: ctrl32-telemetry service <install|uninstall|start|stop|restart>[-agent|-relay] [-config path]")
 	}
 	action := args[0]
+	if strings.HasSuffix(action, "-relay") {
+		return cmdRelayService(strings.TrimSuffix(action, "-relay"), args[1:])
+	}
 	_, path, err := loadConfig(args[1:])
 	if err != nil && strings.HasPrefix(action, "install") {
 		return err
@@ -359,7 +530,7 @@ func newIAM(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*iam.S
 
 // admin bootstrap: create the organization (if none) and the first org_admin; prints a one-time password.
 // admin reset-password: set a new one-time password for a user.
-// admin seed-dashboard: create a starter dashboard (overview or showcase) for an organization without a browser session.
+// admin seed-dashboard: create a starter dashboard (overview, showcase, mimic or plant) for an organization without a browser session.
 // admin purge: the authorised, logged deletion of a site, device, dashboard or the stored reports (purge.go).
 func cmdAdmin(args []string) error {
 	if len(args) == 0 {
@@ -379,7 +550,7 @@ func cmdAdmin(args []string) error {
 	password := fs.String("password", "", "initial password (generated if empty; must be changed at first login)")
 	permanent := fs.Bool("permanent", false, "reset-password: do not force a password change at the next login")
 	allowWeak := fs.Bool("allow-weak", false, "reset-password: bypass the password policy (demo instances only; recorded in the audit trail)")
-	dashKind := fs.String("kind", "showcase", "seed-dashboard: overview or showcase")
+	dashKind := fs.String("kind", "showcase", "seed-dashboard: overview, showcase, mimic or plant")
 	dashName := fs.String("dashboard-name", "", "seed-dashboard: dashboard name (default: the starter's name)")
 	dashSlug := fs.String("slug", "", "seed-dashboard: slug (default: from the name)")
 	dashDefault := fs.Bool("default", false, "seed-dashboard: show it on the home page")
@@ -538,4 +709,138 @@ func seqOrZero(p *int64) int64 {
 		return 0
 	}
 	return *p
+}
+
+// cmdCameraRelay runs at a remote site: it reads the local cameras and sends their video to the server over RTSPS
+// (spec 011). The site needs no open port; see docs/video.md.
+func cmdCameraRelay(args []string) error {
+	fs := flag.NewFlagSet("camera-relay", flag.ContinueOnError)
+	path := fs.String("config", "relay.toml", "relay configuration (server, cameras with id, secret and source)")
+	check := fs.Bool("check", false, "test the configuration (server, local cameras, secrets) and exit")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	cfg, err := loadRelayConfig(*path)
+	if err != nil {
+		return err
+	}
+	if *check {
+		log.SetOutput(io.Discard) // the RTSP library's own notes would only confuse the report
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		failed := 0
+		for _, c := range video.CheckRelay(ctx, cfg) {
+			mark := "ok  "
+			if !c.OK {
+				mark = "FAIL"
+				failed++
+			}
+			fmt.Printf("%s %s: %s\n", mark, c.What, c.Info)
+		}
+		if failed > 0 {
+			return fmt.Errorf("%d check(s) failed", failed)
+		}
+		fmt.Println("the relay is ready")
+		return nil
+	}
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil)).With("app", "ctrl32-camera-relay")
+	run := func(ctx context.Context) error {
+		logger.Info("camera relay", "server", cfg.Server, "cameras", len(cfg.Cameras), "version", version)
+		return video.RunRelay(ctx, cfg, logger)
+	}
+	if svc.Interactive() {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		return run(ctx)
+	}
+	// under the Windows Service Control Manager (or systemd) run through the service wrapper
+	s, err := svc.New(svc.RelayConfig(*path), run, logger)
+	if err != nil {
+		return err
+	}
+	return s.Run()
+}
+
+func loadRelayConfig(path string) (video.RelayConfig, error) {
+	var cfg video.RelayConfig
+	if fi, err := os.Stat(path); err == nil && fi.Mode().Perm()&0o077 != 0 && runtime.GOOS != "windows" {
+		fmt.Fprintf(os.Stderr, "warning: %s holds camera secrets and is readable by others; chmod 600 it\n", path)
+	}
+	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+		return cfg, err
+	}
+	return cfg, cfg.Validate()
+}
+
+// cmdRelayService installs or controls the camera relay as a service (systemd unit or Windows service). The
+// configuration is checked before installing so a broken relay.toml never becomes a restarting service.
+func cmdRelayService(action string, args []string) error {
+	fs := flag.NewFlagSet("service", flag.ContinueOnError)
+	path := fs.String("config", "relay.toml", "relay configuration")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	abs, err := filepath.Abs(*path)
+	if err != nil {
+		return err
+	}
+	if action == "install" {
+		if _, err := loadRelayConfig(abs); err != nil {
+			return fmt.Errorf("%s: %w", abs, err)
+		}
+	}
+	s, err := svc.New(svc.RelayConfig(abs), func(ctx context.Context) error { return nil }, slog.Default())
+	if err != nil {
+		return err
+	}
+	if err := svc.Control(s, action); err != nil {
+		return err
+	}
+	fmt.Println("relay service", action, "ok")
+	return nil
+}
+
+// cmdVerifyEvidence checks an evidence package (spec 015): the signature of the manifest and the hash of the video.
+// Anyone can run it; -key pins the server's public key (base64, from Cameras -> Evidence) instead of the included one.
+func cmdVerifyEvidence(args []string) error {
+	fs := flag.NewFlagSet("verify-evidence", flag.ContinueOnError)
+	keyB64 := fs.String("key", "", "the server's Ed25519 public key (base64); default: the key in the package, compare its fingerprint")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return errors.New("usage: ctrl32-telemetry verify-evidence [-key base64] package.zip")
+	}
+	var trusted ed25519.PublicKey
+	if *keyB64 != "" {
+		raw, err := base64.StdEncoding.DecodeString(*keyB64)
+		if err != nil || len(raw) != ed25519.PublicKeySize {
+			return errors.New("-key: not a base64 Ed25519 public key")
+		}
+		trusted = raw
+	}
+	rep, err := video.VerifyEvidence(fs.Arg(0), trusted)
+	if err != nil {
+		return err
+	}
+	m := rep.Manifest
+	fmt.Printf("camera        %s (%s)\nrecorded      %s – %s\nexported      %s by %s\nreason        %s\n",
+		m.Camera["name"], m.Camera["id"], m.From.UTC().Format(time.RFC3339), m.To.UTC().Format(time.RFC3339),
+		m.ExportedAt.UTC().Format(time.RFC3339), m.ExportedBy["username"], m.Reason)
+	fmt.Printf("key           %s\nsignature     %s\nvideo hash    %s\nrecorded files %d\n", rep.KeyFingerprint, okText(rep.SignatureValid), okText(rep.VideoHashValid), len(m.Segments))
+	for _, p := range rep.Problems {
+		fmt.Println("note:", p)
+	}
+	if !rep.SignatureValid || !rep.VideoHashValid {
+		return errors.New("the package is NOT intact")
+	}
+	fmt.Println("the package is intact")
+	return nil
+}
+
+func okText(ok bool) string {
+	if ok {
+		return "valid"
+	}
+	return "INVALID"
 }

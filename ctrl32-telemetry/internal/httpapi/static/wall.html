@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Video wall</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<link rel="stylesheet" href="/app.css">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body class="wall">
+<main>
+  <div class="wall-grid" id="grid"></div>
+  <div class="wall-bar" id="bar">
+    <b class="notranslate" id="wname"></b>
+    <select id="screen" aria-label="Screen"></select>
+    <button class="btn ghost small" type="button" id="fs">Full screen</button>
+    <button class="btn ghost small" type="button" id="all">Open on all monitors</button>
+    <a class="btn ghost small" href="/video/walls">Close</a>
+    <span class="muted" style="font-size:11px">ctrl32 · telemetry</span>
+  </div>
+</main>
+<script src="/app.js"></script>
+<script src="/videoplayer.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, api = ctrl32.api, t = ctrl32.t;
+const ID = location.pathname.split('/').pop(), Q = new URLSearchParams(location.search);
+let WALL = null, CAMS = {}, players = [], SCREEN = +(Q.get('screen') || 0);
+
+function render() {
+  for (const p of players) p.close(); players = [];
+  const sc = WALL.screens[SCREEN] || WALL.screens[0];
+  document.title = `${WALL.name} · ${sc.name || t('Screen') + ' ' + (SCREEN + 1)}`;
+  const g = $('#grid');
+  g.style.gridTemplateColumns = `repeat(${sc.cols}, 1fr)`; g.style.gridTemplateRows = `repeat(${sc.rows}, 1fr)`;
+  const cells = [];
+  for (let i = 0; i < sc.cols * sc.rows; i++) {
+    const id = (sc.tiles || [])[i], c = id && CAMS[id];
+    cells.push(`<div class="cell" data-i="${i}" ${c ? `data-id="${id}"` : ''}>${c ? `<div class="cap"><span class="cam-dot"></span><span class="notranslate">${esc(c.name)}</span></div>` : ''}</div>`);
+  }
+  g.innerHTML = cells.join('');
+  // the screen's choice; automatic: the sub-stream for many tiles, the main stream for a few large ones
+  const quality = sc.quality === 'main' || sc.quality === 'sub' ? sc.quality : sc.cols * sc.rows > (WALL.sub_stream_above ?? 4) ? 'sub' : 'main';
+  for (const el of g.querySelectorAll('.cell[data-id]')) {
+    const dotEl = el.querySelector('.cam-dot');
+    const p = ctrl32Player(el, {url: `/api/v1/video/cameras/${el.dataset.id}/live?quality=${quality}`, live: true,
+      onState: s => { dotEl.className = 'cam-dot ' + (s === 'online' ? 'online' : s === 'offline' ? 'offline' : ''); }});
+    el.prepend(p.el); players.push(p);
+    // a click enlarges the tile to the whole screen (main stream), another click returns
+    el.ondblclick = el.onclick = () => maximize(el);
+  }
+  $('#screen').innerHTML = WALL.screens.map((s, i) => `<option value="${i}"${i === SCREEN ? ' selected' : ''}>${esc(s.name || t('Screen') + ' ' + (i + 1))} (${s.cols}×${s.rows})</option>`).join('');
+}
+let big = null;
+function maximize(el) {
+  if (big) { big.p.close(); big.el.classList.remove('max'); const was = big.el; big = null; if (was === el) return; }
+  el.classList.add('max');
+  const p = ctrl32Player(el, {url: `/api/v1/video/cameras/${el.dataset.id}/live?quality=main`, live: true});
+  p.el.style.position = 'absolute'; p.el.style.inset = '0'; p.el.style.zIndex = '1';
+  big = {el, p};
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && big) maximize(big.el); });
+$('#screen').onchange = e => { SCREEN = +e.target.value; const u = new URL(location.href); u.searchParams.set('screen', SCREEN); history.replaceState(null, '', u); render(); };
+$('#fs').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); };
+$('#all').onclick = async () => {
+  let screens = null;
+  try { if ('getScreenDetails' in window) screens = (await window.getScreenDetails()).screens; } catch (e) { screens = null; }
+  WALL.screens.forEach((s, i) => {
+    if (i === SCREEN) return;
+    const m = screens && screens[i % screens.length];
+    window.open(`/video/walls/${ID}?screen=${i}&auto=1`, 'ctrl32wall' + ID + '-' + i, m ? `popup,left=${m.availLeft},top=${m.availTop},width=${m.availWidth},height=${m.availHeight}` : '');
+  });
+};
+// the toolbar hides after a few seconds without mouse movement
+let idle = null;
+function wake() { $('#bar').classList.remove('idle'); document.body.style.cursor = ''; clearTimeout(idle); idle = setTimeout(() => { $('#bar').classList.add('idle'); document.body.style.cursor = 'none'; }, 3000); }
+document.addEventListener('mousemove', wake); document.addEventListener('touchstart', wake);
+ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(async () => {
+  try {
+    const [w, cams] = await Promise.all([api('GET', '/api/v1/video/walls/' + ID), api('GET', '/api/v1/video/cameras')]);
+    WALL = w; for (const c of cams) CAMS[c.id] = c;
+  } catch (x) { $('#grid').innerHTML = `<div class="vp-msg">${esc(x.message)}</div>`; return; }
+  $('#wname').textContent = WALL.name;
+  render(); wake();
+  // cameras reporting motion or other events are outlined
+  setInterval(async () => {
+    if (document.hidden) return;
+    try { for (const c of await api('GET', '/api/v1/video/cameras')) for (const el of document.querySelectorAll(`.cell[data-id="${c.id}"]`)) {
+      const a = c.status.active || []; el.classList.toggle('cam-alert', a.length > 0); el.dataset.active = a.map(k => t(k)).join(', '); } } catch (x) { /* next time */ }
+  }, 3000);
+  // opened by "Open on all monitors": the first click anywhere switches this window to full screen
+  if (Q.get('auto')) document.addEventListener('click', () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}); }, {once: true, capture: true});
+});
+</script>
+</body>
+</html>

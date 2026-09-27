@@ -1,0 +1,25 @@
+meta {
+  name: History of a replica
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/replication/replicas/:id/events
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~limit: 
+}
+
+docs {
+  History of a replica
+  
+  Requires permission `system.admin`.
+}

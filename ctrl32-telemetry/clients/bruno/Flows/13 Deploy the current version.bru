@@ -1,0 +1,29 @@
+meta {
+  name: Deploy the current version
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/api/v1/flows/:slug/deploy
+  body: json
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Deploy the current version
+  
+  Refused (422) with the problems when the flow is not valid. A flow that sends commands needs device.command and, with the four-eyes policy for commands, becomes a change request (202) that another user approves.
+  
+  Requires permission `content.write`.
+}

@@ -1,0 +1,21 @@
+meta {
+  name: Entity with its discovery config
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/entities/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  Entity with its discovery config
+  
+  Requires permission `data.read`.
+}

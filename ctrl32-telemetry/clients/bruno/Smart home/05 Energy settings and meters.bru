@@ -1,0 +1,17 @@
+meta {
+  name: Energy settings and meters
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/energy/settings
+  body: none
+  auth: inherit
+}
+
+docs {
+  Energy settings and meters
+  
+  Requires permission `data.read`.
+}

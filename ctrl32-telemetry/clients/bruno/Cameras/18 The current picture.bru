@@ -1,0 +1,27 @@
+meta {
+  name: The current picture
+  type: http
+  seq: 18
+}
+
+get {
+  url: {{baseUrl}}/api/v1/video/cameras/:id/snapshot
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~quality: 
+}
+
+docs {
+  The current picture
+  
+  MJPEG streams only (the server does not decode H.264/H.265).
+  
+  Requires permission `video.view`.
+}

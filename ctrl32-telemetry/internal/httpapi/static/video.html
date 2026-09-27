@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cameras</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+  <div class="page-head"><h1>Cameras</h1><span class="grow"></span>
+    <button class="btn primary" type="button" id="addCam" hidden>Add camera</button>
+    <button class="btn primary" type="button" id="addWall" hidden>New video wall</button></div>
+  <nav class="subnav"><a href="/video" data-section="live">Live view</a><a href="/video/walls" data-section="walls">Video walls</a><a href="/video/manage" data-section="manage" id="manageTab" hidden>Camera management</a><a href="/video/evidence" data-section="evidence" id="evidenceTab" hidden>Evidence</a><a href="/video/settings" data-section="settings" id="settingsTab" hidden>Settings</a></nav>
+
+  <section data-section="live">
+    <div class="row" style="margin-bottom:10px"><span class="muted" id="liveInfo"></span><span class="grow"></span>
+      <label class="muted">Tile size <select id="tileSize"><option value="200">small</option><option value="280" selected>medium</option><option value="420">large</option></select></label></div>
+    <div class="cam-grid" id="liveGrid"></div>
+    <div class="card muted" id="noCams" hidden><p>No cameras yet. An administrator adds them under Camera management (RTSP or HTTP MJPEG address of the camera).</p></div>
+  </section>
+
+  <section data-section="walls">
+    <p class="muted">A video wall is a saved layout of camera tiles over one or more monitors — for example two monitors with 20 cameras each. Open it on all monitors at once, or open one screen per monitor and switch it to full screen.</p>
+    <div class="table-wrap"><table id="walls"><thead><tr><th>Name</th><th>Screens</th><th>Cameras</th><th></th></tr></thead><tbody></tbody></table></div>
+    <div class="card muted" id="noWalls" hidden><p>No video walls yet.</p></div>
+  </section>
+
+  <section data-section="manage">
+    <div class="table-wrap"><table id="cams"><thead><tr><th>Name</th><th>Location</th><th>Stream</th><th>State</th><th>Recording</th><th class="num">Stored</th><th></th></tr></thead><tbody></tbody></table></div>
+    <div class="card" style="margin-top:12px"><h2 style="margin-top:0">Storage</h2><div id="storage" class="muted"></div></div>
+  </section>
+
+  <section data-section="evidence">
+    <p class="muted">Recordings held as evidence are never deleted — neither after the camera's retention days nor to free disk space — until someone releases them with a reason. Hold a part of a recording on the camera's page: drag over the hour detail and choose <b>Hold as evidence</b>; <b>Evidence package (ZIP)</b> exports it signed.</p>
+    <div class="card"><h2 style="margin-top:0">Server key for verifying evidence packages</h2>
+      <div class="row" style="align-items:center"><span class="muted">Fingerprint</span> <code id="keyFp" class="notranslate" style="font-size:15px"></code></div>
+      <p class="muted" style="margin-bottom:0;font-size:13px">A package is intact when <code>ctrl32-telemetry verify-evidence package.zip</code> reports a valid signature and video hash and the key fingerprint equals this one. Give this fingerprint to whoever receives evidence (police, insurer) through another channel.</p>
+      <details style="margin-top:6px"><summary class="muted" style="font-size:13px">Public key</summary><code id="keyPub" class="notranslate" style="word-break:break-all;font-size:12px"></code></details></div>
+    <div class="row" style="margin:12px 0 6px"><b>Held recordings</b><span class="grow"></span><label class="inline"><input type="checkbox" id="holdsAll"> show released</label></div>
+    <div class="table-wrap"><table id="holds"><thead><tr><th>Evidence</th><th>Camera</th><th>Time</th><th class="num">Size</th><th>By</th><th>State</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section data-section="settings">
+    <form class="form" id="setForm" style="max-width:none">
+      <p class="muted" id="setInfo">Settings for all cameras on this server. Every change is written to the audit trail with its reason.</p>
+      <div class="set-grid">
+      <div class="card"><h2>Storage and recording</h2>
+        <label>Disk space for recordings (GB) <input name="max_disk_gb" type="number" min="1" required></label>
+        <div class="hint" id="diskHint"></div>
+        <label>Length of one recorded file (s) <input name="segment_seconds" type="number" min="10" max="600" required></label>
+        <div class="hint">Shorter files: less is lost after a power cut, more files. Each file starts with a key frame.</div>
+      </div>
+      <div class="card"><h2>Events</h2>
+        <label>Join events that start again within (s) <input name="event_merge_seconds" type="number" min="0" max="120" required></label>
+        <div class="hint">Flapping motion becomes one event instead of many. 0 = never join.</div>
+        <label>Find cameras: wait for answers (s) <input name="discovery_seconds" type="number" min="1" max="15" required></label>
+        <label>Audit PTZ moves once per (min) <input name="ptz_audit_minutes" type="number" min="0" max="60" required></label>
+        <div class="hint">0 = every move is audited. Going to a preset is always audited.</div>
+      </div>
+      <div class="card"><h2>Viewing</h2>
+        <label>Keep an unwatched camera connected (s) <input name="linger_seconds" type="number" min="0" max="600" required></label>
+        <div class="hint">For cameras that do not record: switching back to a camera is instant within this time.</div>
+        <label>Timeshift: end playback without new video after (s) <input name="timeshift_seconds" type="number" min="5" max="300" required></label>
+        <label>Video walls: sub-stream above (tiles) <input name="wall_sub_stream_above" type="number" min="0" max="64" required></label>
+        <div class="hint">Screens set to "automatic" use the smaller sub-stream when they have more tiles than this.</div>
+      </div>
+      <div class="card"><h2>Monitoring (incidents)</h2>
+        <label>Camera offline or not recording for (min) <input name="camera_offline_minutes" type="number" min="0" max="1440" required></label>
+        <label>Display not showing for (min) <input name="display_offline_minutes" type="number" min="0" max="1440" required></label>
+        <label>Free space of the video disk below (%) <input name="disk_free_percent" type="number" min="0" max="50" required></label>
+        <div class="hint">An incident is opened and administrators are notified; it resolves itself when the problem ends. 0 = no incident.</div>
+      </div>
+      <div class="card"><h2>Remote cameras (relay) — security</h2>
+        <label>Block an address after failed attempts <input name="push_max_fails" type="number" min="3" max="100" required></label>
+        <label>… within (min) <input name="push_window_minutes" type="number" min="1" max="1440" required></label>
+        <label>Block for (min) <input name="push_block_minutes" type="number" min="1" max="10080" required></label>
+        <div class="hint" id="pushHint"></div>
+      </div>
+      </div>
+      <div class="row" id="setSave"><label style="flex:1">Reason (audit trail) <input name="reason" required maxlength="200"></label>
+        <button class="btn" type="button" id="setDefaults">Default values</button><button class="btn primary" type="submit">Save settings</button></div>
+      <div class="err" id="setErr"></div>
+    </form>
+  </section>
+
+  <dialog id="camDlg"><form class="form" id="camForm">
+    <h2 style="margin-top:0" id="camTitle">Camera</h2>
+    <div class="row2"><label>Name <input name="name" required maxlength="80"></label><label>Location <input name="location" maxlength="120"></label></div>
+    <label>Camera group (who may see it; optional) <input name="group" maxlength="60" list="groupList" placeholder="e.g. Gatehouse"><datalist id="groupList"></datalist></label>
+    <label>Connection <select name="source"><option value="pull">The server connects to the camera (local network or VPN)</option><option value="push">The camera sends its video to the server (remote site with camera-relay)</option></select></label>
+    <div class="muted push-only" style="font-size:13px">A relay at the remote site (<code>ctrl32-telemetry camera-relay</code>) reads the local camera and sends the video over an encrypted connection (RTSPS) that it opens itself — no open port and no VPN at the site. After saving you get the camera's secret and the relay configuration, once.</div>
+    <div class="pull-only">
+    <label>Main stream URL <input name="url" placeholder="rtsp://192.168.1.64:554/Streaming/Channels/101" class="notranslate"></label>
+    <label>Sub-stream URL for tiles (optional, smaller picture) <input name="sub_url" placeholder="rtsp://192.168.1.64:554/Streaming/Channels/102" class="notranslate"></label>
+    <div class="muted" style="font-size:13px">RTSP with H.264, H.265 or MJPEG, or an HTTP MJPEG address. User name and password may be part of the URL; they are stored separately and the password is encrypted.</div>
+    <div class="row2"><label>User name <input name="username" autocomplete="off"></label><label>Password <input name="password" type="password" autocomplete="new-password" placeholder="unchanged"></label></div>
+    <label>Transport <select name="transport"><option value="auto">automatic</option><option value="tcp">TCP</option><option value="udp">UDP</option></select></label>
+    <div class="row"><button class="btn" type="button" id="testBtn">Test connection</button><span id="testOut" class="muted"></span></div>
+    <label>ONVIF address (motion and other events, PTZ; optional) <input name="onvif_url" placeholder="http://192.168.1.64/onvif/device_service" class="notranslate"></label>
+    <div class="row"><button class="btn small" type="button" id="findBtn">Find cameras in the network</button><button class="btn small" type="button" id="profBtn">Fill in from ONVIF</button><span id="onvifOut" class="muted" style="font-size:13px"></span></div>
+    <div id="found" class="row" style="gap:6px"></div>
+    </div>
+    <div class="row2">
+      <label>Recording <select name="record"><option value="continuous">continuous</option><option value="events">on events (motion, marks)</option><option value="off">off</option></select></label></div>
+    <div class="events-only">
+      <div class="row2"><label>Record before the event (s) <input name="event_pre_s" type="number" min="0" max="60" value="10"></label><label>Record after the event (s) <input name="event_post_s" type="number" min="1" max="600" value="20"></label></div>
+      <div style="font-size:13px">Events that start recording</div>
+      <div class="row" id="kinds" style="gap:10px;font-size:13px"></div>
+    </div>
+    <div class="row2"><label>Keep recordings (days) <input name="retention_days" type="number" min="1" max="3650" value="7"></label><label>Order <input name="sort" type="number" value="0"></label></div>
+    <label class="check"><input type="checkbox" name="audio"> Sound: record it and let permitted people hear it</label>
+    <div class="muted audio-only" style="font-size:13px">Recording sound (conversations) is regulated more strictly than pictures: switch it on only where it is lawful and people are informed (a sign). The camera must send AAC (or Opus) — set it in the camera's audio settings; G.711 cannot be played in browsers. Hearing and exporting sound needs the permission <code>video.audio</code> and is recorded in the audit trail. A relay forwards sound only with <code>audio = true</code>.</div>
+    <label class="check"><input type="checkbox" name="motion_detect"> Motion detection on the server (cameras without ONVIF events)</label>
+    <div class="motion-only">
+      <div class="row2"><label>Sensitivity <span class="muted" id="sensOut"></span><input name="motion_sensitivity" type="range" min="1" max="100" value="50"></label>
+        <label class="pull-only">Snapshot address for H.264/H.265 cameras (optional) <input name="snapshot_url" placeholder="http://192.168.1.64/ISAPI/Streaming/channels/101/picture" class="notranslate"></label></div>
+      <div class="muted" style="font-size:13px">The server compares the pictures of an MJPEG stream (the sub-stream first), or the camera's JPEG snapshot once a second — it does not decode H.264/H.265. Motion zones (below, after saving) limit where motion counts. Events look like the camera's own: they show on walls and plans, start recording on events and flows.</div>
+    </div>
+    <div id="maskSec" hidden>
+      <div class="row"><b>Draw over the picture:</b><span class="seg" id="drawMode"><button type="button" class="on" data-dm="mask">Privacy masks (GDPR)</button><button type="button" data-dm="zone">Motion zones</button></span><span class="grow"></span><button class="btn small" type="button" id="maskClear">Remove all</button></div>
+      <div class="muted" style="font-size:13px">Drag over the picture to cover an area (a neighbour's window, a cash desk, a public street). The areas are covered wherever the picture is shown; the recording stays complete and only people with the permission to see unmasked pictures can see or export it. Masks set in the camera itself keep the areas out of the recording.</div>
+      <div class="mask-edit" id="maskBox"><div class="mask-draw" id="maskDraw"></div></div>
+    </div>
+    <label class="check"><input type="checkbox" name="enabled" checked> Enabled</label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="camErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form></dialog>
+
+  <dialog id="secretDlg" style="max-width:min(760px,96vw)"><div class="form">
+    <h2 style="margin-top:0">Relay for the remote camera</h2>
+    <p class="bad" style="margin:0"><b>The secret is shown only now.</b> Copy the configuration to the relay at the remote site; a lost secret can only be replaced by a new one.</p>
+    <p class="muted" style="margin:6px 0">1. Save this configuration as <code>relay.toml</code> and fill in the local address of the camera (and its password).</p>
+    <textarea id="relayCfg" rows="11" readonly class="notranslate" style="width:100%;font-family:var(--mono);font-size:12px"></textarea>
+    <p class="muted" style="margin:6px 0">2. On a computer at the site that reaches the camera, run the installer next to the file:</p>
+    <div style="font-size:12px"><b>Linux / Raspberry Pi</b><pre class="notranslate relay-cmd">curl -fsSL https://telemetry.digital/install-relay.sh -o install-relay.sh
+sudo bash install-relay.sh --config relay.toml</pre>
+    <b>Windows (PowerShell as administrator)</b><pre class="notranslate relay-cmd">irm https://telemetry.digital/install-relay.ps1 -OutFile install-relay.ps1
+.\install-relay.ps1 -Config .\relay.toml</pre></div>
+    <p class="muted" style="margin:6px 0">The installer tests the connection to the server, the camera and the secret, then runs the relay as a service that starts with the computer. Delete the copied file afterwards.</p>
+    <div class="actions"><button class="btn primary" type="button" id="dlCfg">Download relay.toml</button><button class="btn" type="button" id="copyCfg">Copy</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </div></dialog>
+
+  <dialog id="wallDlg" style="max-width:min(1100px,96vw)"><form class="form" id="wallForm">
+    <h2 style="margin-top:0">Video wall</h2>
+    <label>Name <input name="name" required maxlength="80"></label>
+    <div class="row"><b>Screens (monitors)</b><span class="grow"></span>
+      <button class="btn small" type="button" id="addScreen">Add screen</button>
+      <button class="btn small" type="button" id="autoFill" title="Put all cameras on the screens in order">Fill with all cameras</button></div>
+    <div id="screens"></div>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="wallErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form></dialog>
+</main>
+<script src="/app.js"></script>
+<script src="/videoplayer.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, api = ctrl32.api, t = ctrl32.t;
+let CAMS = [], WALLS = [], ME = null, players = [], SECTION = 'live';
+const LAYOUTS = [[1, 1], [2, 1], [2, 2], [3, 2], [3, 3], [4, 3], [4, 4], [5, 4], [6, 4], [6, 5], [8, 5], [8, 6]];
+const can = p => !!(ME && (ME.permissions || []).includes(p));
+const fmtBytes = b => b >= 1 << 30 ? (b / (1 << 30)).toFixed(1) + ' GB' : b >= 1 << 20 ? (b / (1 << 20)).toFixed(0) + ' MB' : Math.round(b / 1024) + ' kB';
+const dot = st => `<span class="cam-dot ${st.recording ? 'rec' : st.state === 'online' ? 'online' : st.state === 'offline' ? 'offline' : ''}" title="${esc(t(st.recording ? 'recording' : st.state))}"></span>`;
+
+function stopPlayers() { for (const p of players) p.close(); players = []; }
+function renderLive() {
+  stopPlayers();
+  const g = $('#liveGrid'), on = CAMS.filter(c => c.enabled);
+  $('#noCams').hidden = CAMS.length > 0;
+  $('#liveInfo').textContent = CAMS.length ? `${on.length} / ${CAMS.length} ${t('cameras enabled')}` : '';
+  g.innerHTML = on.map(c => `<div class="cam-tile" data-id="${c.id}"><div class="cap">${dot(c.status)}<b class="notranslate">${esc(c.name)}</b></div></div>`).join('');
+  for (const el of g.querySelectorAll('.cam-tile')) {
+    const cam = CAMS.find(c => c.id === el.dataset.id);
+    const p = ctrl32Player(el, {url: `/api/v1/video/cameras/${el.dataset.id}/live?quality=sub`, live: true,
+      onState: s => { if (!cam.status.recording) el.querySelector('.cam-dot').className = 'cam-dot ' + (s === 'online' ? 'online' : s === 'offline' ? 'offline' : ''); }});
+    el.prepend(p.el); players.push(p);
+    el.onclick = () => { location.href = '/video/cameras/' + el.dataset.id; };
+  }
+}
+function wallCams(w) { const s = new Set(); for (const sc of w.screens) for (const x of sc.tiles || []) if (x) s.add(x); return s.size; }
+function preview(sc) { const n = sc.cols * sc.rows; let h = ''; for (let i = 0; i < n; i++) h += `<i class="${(sc.tiles || [])[i] ? 'on' : ''}"></i>`; return `<span class="wall-preview" style="grid-template-columns:repeat(${sc.cols},1fr)">${h}</span>`; }
+function renderWalls() {
+  $('#noWalls').hidden = WALLS.length > 0;
+  $('#walls tbody').innerHTML = WALLS.map(w => `<tr><td class="notranslate"><a href="/video/walls/${w.id}">${esc(w.name)}</a></td>
+    <td>${w.screens.map((s, i) => `<a href="/video/walls/${w.id}?screen=${i}" title="${esc(s.name || t('Screen') + ' ' + (i + 1))}">${preview(s)}</a> `).join('')}</td><td>${wallCams(w)}</td>
+    <td class="actions-cell"><button class="btn small" data-open="${w.id}" type="button">Open on all monitors</button>
+    ${can('video.manage') ? `<button class="btn small" data-edit="${w.id}" type="button">Edit</button><button class="btn small" data-del="${w.id}" type="button">Delete</button>` : ''}</td></tr>`).join('');
+  for (const b of document.querySelectorAll('[data-open]')) b.onclick = () => openAll(WALLS.find(w => w.id === b.dataset.open));
+  for (const b of document.querySelectorAll('[data-edit]')) b.onclick = () => wallDialog(WALLS.find(w => w.id === b.dataset.edit));
+  for (const b of document.querySelectorAll('[data-del]')) b.onclick = async () => {
+    const r = ctrl32.ask('Reason for deleting the video wall'); if (!r) return;
+    try { await api('DELETE', `/api/v1/video/walls/${b.dataset.del}?reason=${encodeURIComponent(r)}`); load(); } catch (x) { ctrl32.toast(x.message, 'bad'); }
+  };
+}
+// Opens one window per screen of the wall, each on its own monitor (Window Management API, Chrome and Edge); without
+// it the screens open as tabs to be dragged to the monitors.
+async function openAll(w) {
+  let screens = null;
+  try { if ('getScreenDetails' in window) screens = (await window.getScreenDetails()).screens; } catch (e) { screens = null; }
+  w.screens.forEach((s, i) => {
+    const url = `/video/walls/${w.id}?screen=${i}&auto=1`;
+    const m = screens && screens[i % screens.length];
+    const feat = m ? `popup,left=${m.availLeft},top=${m.availTop},width=${m.availWidth},height=${m.availHeight}` : '';
+    window.open(url, 'ctrl32wall' + w.id + '-' + i, feat);
+  });
+  if (!screens && w.screens.length > 1) ctrl32.toast(t('Move each window to its monitor and press F11 (the browser did not allow placing windows)'), '');
+}
+function renderManage() {
+  $('#cams tbody').innerHTML = CAMS.map(c => `<tr><td class="notranslate">${esc(c.name)}</td><td class="notranslate">${esc(c.location)}${c.group ? ` <span class="badge" title="${esc(t('Camera group'))}">${esc(c.group)}</span>` : ''}</td>
+    <td class="notranslate" style="max-width:280px;overflow:hidden;text-overflow:ellipsis">${c.source === 'push' ? `<span class="badge primary">${esc(t('remote, sends via relay'))}</span>${c.push && !c.push.enabled ? ` <span class="badge bad" title="${esc(t('video.push_listen is not set in the server configuration'))}">${esc(t('receiving is off'))}</span>` : ''}` : esc(c.url || '') + (c.has_sub ? ' <span class="badge">+ sub</span>' : '')}</td>
+    <td>${dot(c.status)} ${esc(t(c.enabled ? (c.status.state === 'idle' ? 'on demand' : c.status.state) : 'disabled'))}${c.status.codec ? ` <span class="muted">${esc(c.status.codec.toUpperCase())} ${c.status.width}×${c.status.height} · ${c.status.fps} fps · ${Math.round(c.status.kbps)} kbit/s</span>` : ''}${c.status.error ? `<br><span class="bad" style="font-size:12px">${esc(c.status.error)}</span>` : ''}</td>
+    <td>${c.record === 'off' ? esc(t('off')) : esc(t(c.record === 'events' ? 'on events' : 'continuous')) + ', ' + c.retention_days + ' ' + esc(t('days'))}${c.onvif ? ` <span class="badge" title="${esc(t('ONVIF events'))}: ${esc(c.status.events || '')}">ONVIF${c.status.events && c.status.events !== 'connected' && c.status.events !== 'connecting' ? ' ⚠' : ''}</span>` : ''}${c.audio ? ` <span class="badge" title="${esc(t('Sound'))}: ${esc(c.status.audio || '')}">🔊${c.status.audio && !/^(AAC|Opus)/.test(c.status.audio) ? ' ⚠' : ''}</span>` : ''}${c.motion_detect ? ` <span class="badge" title="${esc(t('Motion detection on the server'))}: ${esc(t(c.status.motion || ''))}">${esc(t('motion'))}${c.status.motion && !c.status.motion.startsWith('watching') && c.status.motion !== 'starting' ? ' ⚠' : ''}</span>` : ''}</td><td class="num" data-bytes="${c.id}"></td>
+    <td class="actions-cell"><a class="btn small" href="/video/cameras/${c.id}">Open</a><button class="btn small" data-cedit="${c.id}" type="button">Edit</button>${c.source === 'push' ? `<button class="btn small" data-secret="${c.id}" type="button">New secret</button>` : ''}<button class="btn small" data-cdel="${c.id}" type="button">Delete</button></td></tr>`).join('');
+  for (const b of document.querySelectorAll('[data-cedit]')) b.onclick = () => camDialog(CAMS.find(c => c.id === b.dataset.cedit));
+  for (const b of document.querySelectorAll('[data-secret]')) b.onclick = async () => {
+    const r = ctrl32.ask('Reason for a new secret (the relay with the old one is disconnected at once)'); if (!r) return;
+    try { showSecret(await api('POST', `/api/v1/video/cameras/${b.dataset.secret}/push-secret`, {reason: r})); } catch (x) { ctrl32.toast(x.message, 'bad'); }
+  };
+  for (const b of document.querySelectorAll('[data-cdel]')) b.onclick = async () => {
+    const r = ctrl32.ask('Reason for removing the camera (recordings stay until their retention ends)'); if (!r) return;
+    try { await api('DELETE', `/api/v1/video/cameras/${b.dataset.cdel}?reason=${encodeURIComponent(r)}`); load(); } catch (x) { ctrl32.toast(x.message, 'bad'); }
+  };
+  api('GET', '/api/v1/video/storage').then(s => {
+    for (const c of s.cameras) { const td = document.querySelector(`[data-bytes="${c.id}"]`); if (td) td.textContent = fmtBytes(c.bytes); }
+    const pct = s.max_bytes ? Math.round(100 * s.used_bytes / s.max_bytes) : 0;
+    $('#storage').innerHTML = `${esc(t('Recordings use'))} <b>${fmtBytes(s.used_bytes)}</b> ${esc(t('of'))} ${fmtBytes(s.max_bytes)} (${pct} %). <span>${esc(t('Beyond the limit the oldest recordings are deleted first; each camera also keeps its recordings only for its number of days.'))}</span>`;
+  }).catch(() => {});
+}
+
+let EDIT = null;
+function showSecret(c) { $('#relayCfg').value = c.relay_config || ''; $('#secretDlg').showModal(); }
+$('#dlCfg').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([$('#relayCfg').value], { type: 'application/toml' })); a.download = 'relay.toml'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
+$('#copyCfg').onclick = async () => { try { await navigator.clipboard.writeText($('#relayCfg').value); ctrl32.toast(t('copied'), 'ok'); } catch (x) { $('#relayCfg').select(); } };
+const KINDS = [['motion', 'motion'], ['tamper', 'tampering'], ['line', 'line crossing'], ['intrusion', 'intrusion'], ['input', 'input'], ['mark', 'marks (flows, people)'], ['other', 'other']];
+$('#kinds').innerHTML = KINDS.map(([k, l]) => `<label class="inline"><input type="checkbox" data-kind="${k}"><span>${esc(t(l))}</span></label>`).join('');
+function recordMode() { for (const el of document.querySelectorAll('#camForm .events-only')) el.hidden = $('#camForm').record.value !== 'events'; }
+$('#camForm').record.onchange = recordMode;
+function audioMode() { for (const el of document.querySelectorAll('#camForm .audio-only')) el.hidden = !$('#camForm').audio.checked; }
+$('#camForm').audio.onchange = audioMode;
+function motionMode() { const f = $('#camForm'); for (const el of document.querySelectorAll('#camForm .motion-only')) el.hidden = !f.motion_detect.checked; $('#sensOut').textContent = f.motion_sensitivity.value; }
+$('#camForm').motion_detect.onchange = motionMode; $('#camForm').motion_sensitivity.oninput = motionMode;
+$('#findBtn').onclick = async () => {
+  const out = $('#onvifOut'); out.textContent = t('Searching…'); $('#found').innerHTML = '';
+  try {
+    const list = await api('POST', '/api/v1/video/discover', {});
+    out.textContent = list.length ? `${list.length} ${t('found')}:` : t('No ONVIF camera answered in this network.');
+    $('#found').innerHTML = list.map((d, i) => `<button class="btn small" type="button" data-found="${i}">${esc(d.name || d.host)} <span class="muted">${esc(d.host)}${d.hardware ? ' · ' + esc(d.hardware) : ''}</span></button>`).join('');
+    for (const b of document.querySelectorAll('[data-found]')) b.onclick = () => { const d = list[+b.dataset.found], f = $('#camForm'); f.onvif_url.value = d.address; if (!f.name.value) f.name.value = d.name || d.host; $('#profBtn').click(); };
+  } catch (x) { out.textContent = x.message; }
+};
+$('#profBtn').onclick = async () => {
+  const f = $('#camForm'), out = $('#onvifOut');
+  if (!f.onvif_url.value) { out.textContent = t('Enter the ONVIF address first.'); return; }
+  out.textContent = t('Connecting…');
+  const body = {url: f.onvif_url.value, username: f.username.value};
+  if (f.password.value) body.password = f.password.value;
+  if (EDIT) body.id = EDIT.id;
+  try {
+    const r = await api('POST', '/api/v1/video/onvif/profiles', body);
+    const ps = r.profiles.filter(p => p.uri).sort((a, b) => b.width * b.height - a.width * a.height);
+    if (ps.length) { f.url.value = ps[0].uri; if (ps.length > 1) f.sub_url.value = ps[ps.length - 1].uri; }
+    out.className = 'ok'; out.textContent = `✓ ${ps.map(p => `${p.name} ${p.encoding} ${p.width}×${p.height}`).join(', ')}${r.events ? ' · ' + t('events') : ''}${r.ptz ? ' · PTZ' : ''}`;
+  } catch (x) { out.className = 'bad'; out.textContent = x.status === 401 ? t('The camera refused the user name or password.') : x.message; }
+};
+function sourceMode() { const push = $('#camForm').source.value === 'push'; for (const el of document.querySelectorAll('#camForm .pull-only')) el.hidden = push; for (const el of document.querySelectorAll('#camForm .push-only')) el.hidden = !push; $('#camForm').url.required = !push; }
+$('#camForm').source.onchange = sourceMode;
+// ---- privacy mask editor: rectangles in picture coordinates 0..1 over the live picture ----
+let MASKS = [], ZONES = [], DRAW = 'mask', maskPlayer = null;
+for (const b of document.querySelectorAll('#drawMode [data-dm]')) b.onclick = () => { DRAW = b.dataset.dm; for (const x of document.querySelectorAll('#drawMode [data-dm]')) x.classList.toggle('on', x === b); };
+function maskRect() {
+  // the picture area inside the player (object-fit: contain)
+  const box = $('#maskBox'), el = maskPlayer && maskPlayer.el, size = (el && el.dataset.size || '').split('x').map(Number);
+  const bw = box.clientWidth, bh = box.clientHeight;
+  if (!size[0] || !size[1]) return {x: 0, y: 0, w: bw, h: bh};
+  const k = Math.min(bw / size[0], bh / size[1]), w = size[0] * k, h = size[1] * k;
+  return {x: (bw - w) / 2, y: (bh - h) / 2, w, h};
+}
+function drawMasks() {
+  const r = maskRect();
+  const box = (list, cls, key) => list.map((p, i) => { const xs = p.map(q => q[0]), ys = p.map(q => q[1]); const x0 = Math.min(...xs), y0 = Math.min(...ys), x1 = Math.max(...xs), y1 = Math.max(...ys);
+    return `<div class="${cls}" style="left:${r.x + x0 * r.w}px;top:${r.y + y0 * r.h}px;width:${(x1 - x0) * r.w}px;height:${(y1 - y0) * r.h}px"><button type="button" data-${key}="${i}" title="${esc(t('Remove'))}">✕</button></div>`; }).join('');
+  $('#maskDraw').innerHTML = box(ZONES, 'mask-r zone-r', 'zi') + box(MASKS, 'mask-r', 'mi');
+  for (const b of document.querySelectorAll('[data-mi]')) b.onpointerdown = e => { e.stopPropagation(); MASKS.splice(+b.dataset.mi, 1); drawMasks(); };
+  for (const b of document.querySelectorAll('[data-zi]')) b.onpointerdown = e => { e.stopPropagation(); ZONES.splice(+b.dataset.zi, 1); drawMasks(); };
+}
+function maskEditor(c) {
+  if (maskPlayer) { maskPlayer.close(); maskPlayer = null; }
+  $('#maskSec').hidden = !c;
+  if (!c) return;
+  MASKS = JSON.parse(JSON.stringify(c.privacy_masks || [])); ZONES = JSON.parse(JSON.stringify(c.motion_zones || []));
+  // the editor shows the picture without masks when permitted (audited), so the areas can be placed exactly
+  maskPlayer = ctrl32Player($('#maskBox'), {url: `/api/v1/video/cameras/${c.id}/live?quality=sub&unmask=1`, live: true, onMasks: () => {}});
+  $('#maskBox').prepend(maskPlayer.el);
+  const layer = $('#maskDraw'); let start = null, ghost = null;
+  const pt = e => { const b = $('#maskBox').getBoundingClientRect(), r = maskRect(); return [Math.min(1, Math.max(0, (e.clientX - b.left - r.x) / r.w)), Math.min(1, Math.max(0, (e.clientY - b.top - r.y) / r.h))]; };
+  layer.onpointerdown = e => { start = pt(e); ghost = document.createElement('div'); ghost.className = 'mask-r ghost' + (DRAW === 'zone' ? ' zone-r' : ''); layer.appendChild(ghost); layer.setPointerCapture(e.pointerId); };
+  layer.onpointermove = e => { if (!start) return; const p = pt(e), r = maskRect(); Object.assign(ghost.style, {left: r.x + Math.min(start[0], p[0]) * r.w + 'px', top: r.y + Math.min(start[1], p[1]) * r.h + 'px', width: Math.abs(p[0] - start[0]) * r.w + 'px', height: Math.abs(p[1] - start[1]) * r.h + 'px'}); };
+  layer.onpointerup = e => { if (!start) return; const p = pt(e), x0 = Math.min(start[0], p[0]), x1 = Math.max(start[0], p[0]), y0 = Math.min(start[1], p[1]), y1 = Math.max(start[1], p[1]); start = null;
+    const list = DRAW === 'zone' ? ZONES : MASKS;
+    if (x1 - x0 > 0.01 && y1 - y0 > 0.01 && list.length < 16) list.push([[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(q => q.map(v => Math.round(v * 10000) / 10000)));
+    drawMasks(); };
+  setTimeout(drawMasks, 800); setTimeout(drawMasks, 2500);
+}
+$('#maskClear').onclick = () => { if (DRAW === 'zone') ZONES = []; else MASKS = []; drawMasks(); };
+if (window.ResizeObserver) new ResizeObserver(() => { if (maskPlayer) drawMasks(); }).observe($('#maskBox'));
+$('#camDlg').addEventListener('close', () => { if (maskPlayer) { maskPlayer.close(); maskPlayer = null; } });
+
+function camDialog(c) {
+  EDIT = c || null; const f = $('#camForm'); f.reset(); $('#camErr').textContent = ''; $('#testOut').textContent = '';
+  $('#camTitle').textContent = t(c ? 'Edit camera' : 'Add camera');
+  $('#found').innerHTML = ''; $('#onvifOut').textContent = '';
+  for (const b of document.querySelectorAll('#kinds [data-kind]')) b.checked = (c ? c.event_kinds || [] : ['motion', 'tamper', 'line', 'intrusion', 'input', 'mark']).includes(b.dataset.kind);
+  if (c) { for (const k of ['source', 'name', 'location', 'group', 'url', 'onvif_url', 'event_pre_s', 'event_post_s', 'sub_url', 'username', 'transport', 'record', 'retention_days', 'sort']) f[k].value = c[k] ?? ''; f.enabled.checked = c.enabled; f.audio.checked = !!c.audio; f.motion_detect.checked = !!c.motion_detect; f.motion_sensitivity.value = c.motion_sensitivity || 50; f.snapshot_url.value = c.snapshot_url || ''; f.password.placeholder = t(c.has_password ? 'unchanged' : 'none'); }
+  else f.password.placeholder = '';
+  sourceMode(); recordMode(); motionMode(); audioMode();
+  $('#groupList').innerHTML = [...new Set(CAMS.map(x => x.group).filter(Boolean))].sort().map(g => `<option value="${esc(g)}">`).join('');
+  $('#camDlg').showModal();
+  maskEditor(c);
+}
+$('#testBtn').onclick = async () => {
+  const f = $('#camForm'), out = $('#testOut'); out.textContent = t('Connecting…'); out.className = 'muted';
+  const body = {url: f.url.value, username: f.username.value, transport: f.transport.value};
+  if (f.password.value) body.password = f.password.value; if (EDIT) body.id = EDIT.id;
+  try { const s = await api('POST', '/api/v1/video/cameras/test', body);
+    if (s.state === 'online') { out.textContent = `✓ ${s.codec.toUpperCase()} ${s.width}×${s.height}`; out.className = 'ok'; }
+    else { out.textContent = '✗ ' + (s.error || t('no picture')); out.className = 'bad'; }
+  } catch (x) { out.textContent = x.message; out.className = 'bad'; }
+};
+$('#camForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#camErr').textContent = '';
+  const body = {source: f.source.value, name: f.name.value, location: f.location.value, group: f.group.value, url: f.url.value, sub_url: f.sub_url.value, username: f.username.value, transport: f.transport.value,
+    record: f.record.value, retention_days: +f.retention_days.value, sort: +f.sort.value, enabled: f.enabled.checked, reason: f.reason.value,
+    onvif_url: f.onvif_url.value, event_pre_s: +f.event_pre_s.value, event_post_s: +f.event_post_s.value, event_kinds: [...document.querySelectorAll('#kinds [data-kind]:checked')].map(b => b.dataset.kind),
+    audio: f.audio.checked, motion_detect: f.motion_detect.checked, motion_sensitivity: +f.motion_sensitivity.value, snapshot_url: f.snapshot_url.value.trim()};
+  if (EDIT) { body.privacy_masks = MASKS; body.motion_zones = ZONES; }
+  if (f.password.value) body.password = f.password.value;
+  if (body.source === 'push') { delete body.url; delete body.sub_url; delete body.username; delete body.transport; delete body.password; body.onvif_url = ''; body.snapshot_url = ''; }
+  try { const r = EDIT ? await api('PUT', '/api/v1/video/cameras/' + EDIT.id, body) : await api('POST', '/api/v1/video/cameras', body);
+    $('#camDlg').close(); ctrl32.toast(t('camera saved'), 'ok'); load(); if (r.push_secret) showSecret(r); } catch (x) { $('#camErr').textContent = x.message; } };
+
+// ---- wall editor
+let WEDIT = null, WSCREENS = [];
+function camOptions(sel) { return `<option value="">—</option>` + CAMS.map(c => `<option value="${c.id}"${c.id === sel ? ' selected' : ''}>${esc(c.name)}</option>`).join(''); }
+function renderScreens() {
+  $('#screens').innerHTML = WSCREENS.map((s, i) => `<div class="card" style="margin:8px 0" data-si="${i}">
+    <div class="row"><label>${esc(t('Screen'))} ${i + 1} <input data-sname value="${esc(s.name || '')}" maxlength="40" placeholder="${esc(t('Monitor') + ' ' + (i + 1))}"></label>
+      <label>${esc(t('Layout'))} <select data-layout>${LAYOUTS.map(([c, r]) => `<option value="${c}x${r}"${c === s.cols && r === s.rows ? ' selected' : ''}>${c} × ${r} (${c * r})</option>`).join('')}</select></label>
+      <label>${esc(t('Stream'))} <select data-quality>${[['auto', 'automatic'], ['sub', 'sub-stream (smaller, saves bandwidth)'], ['main', 'main stream (full quality)']].map(([v, l]) => `<option value="${v}"${(s.quality || 'auto') === v ? ' selected' : ''}>${esc(t(l))}</option>`).join('')}</select></label>
+      <span class="grow"></span>${WSCREENS.length > 1 ? `<button class="btn small" type="button" data-sdel>${esc(t('Remove screen'))}</button>` : ''}</div>
+    <div class="wall-edit-grid" style="grid-template-columns:repeat(${s.cols},1fr)">${Array.from({length: s.cols * s.rows}, (_, k) => `<select data-tile="${k}" class="notranslate">${camOptions((s.tiles || [])[k])}</select>`).join('')}</div></div>`).join('');
+  for (const card of document.querySelectorAll('#screens [data-si]')) {
+    const s = WSCREENS[+card.dataset.si];
+    card.querySelector('[data-sname]').oninput = e => { s.name = e.target.value; };
+    card.querySelector('[data-quality]').onchange = e => { s.quality = e.target.value; };
+    card.querySelector('[data-layout]').onchange = e => { const [c, r] = e.target.value.split('x').map(Number); s.cols = c; s.rows = r; s.tiles = (s.tiles || []).slice(0, c * r); renderScreens(); };
+    for (const sel of card.querySelectorAll('[data-tile]')) sel.onchange = () => { s.tiles = s.tiles || []; while (s.tiles.length < s.cols * s.rows) s.tiles.push(null); s.tiles[+sel.dataset.tile] = sel.value || null; };
+    const d = card.querySelector('[data-sdel]'); if (d) d.onclick = () => { WSCREENS.splice(+card.dataset.si, 1); renderScreens(); };
+  }
+}
+function wallDialog(w) {
+  WEDIT = w || null; const f = $('#wallForm'); f.reset(); $('#wallErr').textContent = '';
+  f.name.value = w ? w.name : '';
+  WSCREENS = w ? JSON.parse(JSON.stringify(w.screens)) : [{name: '', cols: 3, rows: 3, tiles: []}];
+  renderScreens(); $('#wallDlg').showModal();
+}
+$('#addScreen').onclick = () => { if (WSCREENS.length < 8) { WSCREENS.push({name: '', cols: 3, rows: 3, tiles: []}); renderScreens(); } };
+$('#autoFill').onclick = () => {
+  let k = 0; const on = CAMS.filter(c => c.enabled);
+  for (const s of WSCREENS) { s.tiles = []; for (let i = 0; i < s.cols * s.rows; i++) s.tiles.push(k < on.length ? on[k++].id : null); }
+  renderScreens();
+};
+$('#wallForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#wallErr').textContent = '';
+  const screens = WSCREENS.map(s => { const tiles = (s.tiles || []).slice(0, s.cols * s.rows); while (tiles.length && !tiles[tiles.length - 1]) tiles.pop(); return {name: s.name || '', cols: s.cols, rows: s.rows, tiles, quality: s.quality && s.quality !== 'auto' ? s.quality : undefined}; });
+  try { if (WEDIT) await api('PUT', '/api/v1/video/walls/' + WEDIT.id, {name: f.name.value, screens, reason: f.reason.value});
+    else await api('POST', '/api/v1/video/walls', {name: f.name.value, screens, reason: f.reason.value});
+    $('#wallDlg').close(); ctrl32.toast(t('video wall saved'), 'ok'); load(); } catch (x) { $('#wallErr').textContent = x.message; } };
+
+// ---- evidence (spec 015) ----
+async function loadEvidence() {
+  try {
+    const [k, list] = await Promise.all([api('GET', '/api/v1/video/evidence/key'), api('GET', '/api/v1/video/holds' + ($('#holdsAll').checked ? '?all=1' : ''))]);
+    $('#keyFp').textContent = k.fingerprint; $('#keyPub').textContent = k.public_key;
+    $('#holds tbody').innerHTML = list.map(h => `<tr><td><b class="notranslate">${esc(h.title)}</b>${h.case_ref ? `<div class="muted notranslate" style="font-size:12px">${esc(h.case_ref)}</div>` : ''}<div class="muted" style="font-size:12px">${esc(h.reason)}</div></td>
+      <td class="notranslate"><a href="/video/cameras/${h.camera_id}">${esc(h.camera)}</a></td>
+      <td>${esc(ctrl32.fmt(h.from))} – ${esc(new Date(h.to).toLocaleTimeString(document.documentElement.lang || undefined))}</td><td class="num">${fmtBytes(h.bytes)}</td>
+      <td>${esc(h.created_by)}<div class="muted" style="font-size:12px">${esc(ctrl32.fmt(h.created_at))}</div></td>
+      <td>${h.released_at ? `<span class="badge">${esc(t('released'))}</span><div class="muted" style="font-size:12px">${esc(h.released_by)}: ${esc(h.release_reason)}</div>` : `<span class="badge warn">${esc(t('held'))}</span>`}</td></tr>`).join('') || `<tr><td colspan="6" class="muted">${esc(t('No recordings are held.'))}</td></tr>`;
+  } catch (x) { ctrl32.toast(x.message, 'bad'); }
+}
+$('#holdsAll').onchange = loadEvidence;
+
+// ---- settings (server-wide; editing needs system.admin) ----
+let SETS = null;
+const SET_FIELDS = ['max_disk_gb', 'segment_seconds', 'event_merge_seconds', 'discovery_seconds', 'ptz_audit_minutes', 'linger_seconds', 'timeshift_seconds', 'wall_sub_stream_above', 'push_max_fails', 'push_window_minutes', 'push_block_minutes', 'camera_offline_minutes', 'display_offline_minutes', 'disk_free_percent'];
+function fillSettings(v) {
+  const f = $('#setForm');
+  for (const k of SET_FIELDS) f[k].value = v[k];
+  updateHints();
+}
+function updateHints() {
+  const f = $('#setForm'), gb = +f.max_disk_gb.value || 0;
+  // 2 Mbit/s ≈ 21 GB a day; how many camera-days fit
+  $('#diskHint').textContent = SETS ? `${t('Stored now')}: ${fmtBytes(SETS.used || 0)} · ${t('about')} ${Math.max(0, Math.floor(gb / 21))} ${t('camera-days at 2 Mbit/s')} · ${SETS.storage_dir}` : '';
+  $('#pushHint').textContent = `${t('A relay with a wrong secret is blocked after')} ${f.push_max_fails.value} ${t('attempts within')} ${f.push_window_minutes.value} min ${t('for')} ${f.push_block_minutes.value} min.`;
+}
+async function loadSettings() {
+  try {
+    const [r, st] = await Promise.all([api('GET', '/api/v1/video/settings'), api('GET', '/api/v1/video/storage')]);
+    SETS = {...r, used: st.used_bytes};
+    fillSettings(r.settings);
+    const ro = !r.can_edit;
+    for (const el of $('#setForm').querySelectorAll('input')) el.disabled = ro;
+    $('#setSave').hidden = ro;
+    if (ro) $('#setInfo').textContent = t('Settings for all cameras on this server. Only a system administrator can change them.');
+  } catch (x) { $('#setErr').textContent = x.message; }
+}
+$('#setForm').oninput = updateHints;
+$('#setDefaults').onclick = () => { if (SETS) fillSettings(SETS.defaults); };
+$('#setForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#setErr').textContent = '';
+  const body = {reason: f.reason.value}; for (const k of SET_FIELDS) body[k] = +f[k].value;
+  try { const v = await api('PUT', '/api/v1/video/settings', body); SETS.settings = v; fillSettings(v); f.reason.value = ''; ctrl32.toast(t('settings saved'), 'ok'); }
+  catch (x) { $('#setErr').textContent = x.message; } };
+
+async function load() {
+  try {
+    [CAMS, WALLS] = await Promise.all([api('GET', '/api/v1/video/cameras'), api('GET', '/api/v1/video/walls')]);
+    if (SECTION === 'live') renderLive(); else stopPlayers();
+    renderWalls(); if (SECTION === 'manage') renderManage(); if (SECTION === 'settings') loadSettings(); if (SECTION === 'evidence') loadEvidence();
+  } catch (x) { ctrl32.toast(x.message, 'bad'); }
+}
+async function refreshStatus() {
+  if (SECTION !== 'manage' && SECTION !== 'live') return;
+  try { const list = await api('GET', '/api/v1/video/cameras');
+    if (SECTION === 'manage') { CAMS = list; renderManage(); return; }
+    for (const c of list) {
+      const el = document.querySelector(`.cam-tile[data-id="${c.id}"] .cam-dot`); if (el && c.status.recording) el.outerHTML = dot(c.status);
+      const tile = document.querySelector(`.cam-tile[data-id="${c.id}"]`); if (tile) { tile.classList.toggle('cam-alert', !!(c.status.active || []).length); tile.dataset.active = (c.status.active || []).map(k => t(k)).join(', '); }
+    }
+  } catch (x) { /* next time */ }
+}
+$('#tileSize').onchange = e => { $('#liveGrid').style.gridTemplateColumns = `repeat(auto-fill, minmax(${e.target.value}px, 1fr))`; try { localStorage.setItem('ctrl32.video.tile', e.target.value); } catch (x) { /* ignore */ } };
+try { const v = localStorage.getItem('ctrl32.video.tile'); if (v) { $('#tileSize').value = v; $('#liveGrid').style.gridTemplateColumns = `repeat(auto-fill, minmax(${v}px, 1fr))`; } } catch (x) { /* ignore */ }
+ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(({me}) => {
+  ME = me;
+  SECTION = ctrl32.section('live', ['live', 'walls', 'manage', 'evidence', 'settings']);
+  $('#manageTab').hidden = !can('video.manage');
+  $('#settingsTab').hidden = !can('video.manage');
+  $('#evidenceTab').hidden = !can('video.playback');
+  $('#addCam').hidden = !(can('video.manage') && SECTION === 'manage');
+  $('#addWall').hidden = !(can('video.manage') && SECTION === 'walls');
+  $('#addCam').onclick = () => camDialog(null);
+  $('#addWall').onclick = () => wallDialog(null);
+  load(); setInterval(() => { if (!document.hidden) refreshStatus(); }, 5000);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Devices and connections</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+  <div class="page-head"><a class="btn small ghost" href="/home" title="Home">←</a><h1>Devices and connections</h1></div>
+  <nav class="tabs" id="tabs">
+    <a href="#add" data-tab="add">Add a device</a>
+    <a href="#inbox" data-tab="inbox">Discovered devices <span class="badge warn" id="inboxN" hidden></span></a>
+    <a href="#sources" data-tab="sources">MQTT accounts and bridges</a>
+    <a href="#provisioning" data-tab="provisioning">Provisioning <span class="badge warn" id="apprN" hidden></span></a>
+  </nav>
+
+  <section data-sec="add" hidden>
+    <div class="sh-paths">
+      <button type="button" class="sh-path" data-path="smart"><b>Smart-home device</b><span>zigbee2mqtt, Tasmota, ESPHome, Shelly, Z-Wave JS UI, OpenMQTTGateway or any device that announces itself over MQTT connects to this server with its own MQTT account and is recognized automatically.</span></button>
+      <button type="button" class="sh-path" data-path="bridge"><b>Existing MQTT broker</b><span>You already run your own MQTT broker (for example the Mosquitto of zigbee2mqtt): this server connects to it and takes the devices from there.</span></button>
+      <button type="button" class="sh-path" data-path="fleet"><b>Fleet of devices</b><span>Many identical devices register themselves with a provisioning key and secret (ThingsBoard-compatible over MQTT and HTTP).</span></button>
+      <a class="sh-path" href="/devices"><b>A single ctrl32 device</b><span>Register it under Devices; it receives a one-time claim code and exchanges it for its token.</span></a>
+      <a class="sh-path" href="/settings/connectors"><b>Industrial connector</b><span>OPC UA server, Modbus TCP device or a LoRaWAN network server (ChirpStack).</span></a>
+    </div>
+    <div id="pathBody"></div>
+  </section>
+
+  <section data-sec="inbox" hidden>
+    <div class="card"><p class="muted">Devices that announced themselves through a bridge (or an account set to "ask first"). Adopt a device to create it with its entities, or ignore it.</p>
+      <div class="table-wrap"><table id="inbox"><thead><tr><th>Device</th><th>Model</th><th>Entities</th><th>Connection</th><th>Seen</th><th></th></tr></thead><tbody></tbody></table></div>
+      <label class="inline"><input type="checkbox" id="showAll"><span>Also show adopted and ignored devices</span></label>
+    </div>
+  </section>
+
+  <section data-sec="sources" hidden>
+    <div class="card"><div class="table-wrap"><table id="sources"><thead><tr><th>Name</th><th>Kind</th><th>Connection</th><th>Entities</th><th>New devices</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="actions"><button class="btn primary" type="button" data-new="account">New MQTT account</button><button class="btn" type="button" data-new="bridge">New bridge</button></div>
+    </div>
+  </section>
+
+  <section data-sec="provisioning" hidden>
+    <div class="card"><h2 style="margin-top:0">Provisioning profiles</h2>
+      <div class="table-wrap"><table id="profiles"><thead><tr><th>Name</th><th>Key</th><th>Strategy</th><th>Approval</th><th>Devices</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="actions"><button class="btn primary" type="button" id="newProfile">New profile</button></div>
+    </div>
+    <div class="card"><h2 style="margin-top:0">Devices waiting for approval</h2>
+      <div class="table-wrap"><table id="approvals"><thead><tr><th>Device</th><th>Profile</th><th>Registered</th><th></th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <dialog id="srcDlg"><form id="srcForm" class="form" method="dialog">
+    <h2 style="margin-top:0" id="srcTitle"></h2>
+    <label>Name <input name="name" required maxlength="128" placeholder="Apartment"></label>
+    <div id="bridgeFields">
+      <div class="row2"><label>Broker host <input name="host" placeholder="192.168.1.10"></label><label>Port <input name="port" type="number" min="1" max="65535" value="1883"></label></div>
+      <label class="inline"><input type="checkbox" name="tls"><span>TLS</span></label>
+      <label class="inline"><input type="checkbox" name="insecure"><span>Accept a self-signed certificate</span></label>
+      <div class="row2"><label>User name <input name="username" autocomplete="off"></label><label>Password <input name="password" type="password" autocomplete="new-password" placeholder="unchanged when empty"></label></div>
+      <label>Client id <input name="client_id" placeholder="generated when empty"></label>
+      <label>Publish these values on the broker so other systems see them as devices (Ctrl/Cmd for several) <select name="publish" multiple size="6"></select></label>
+    </div>
+    <div class="row2"><label>Discovery prefix <input name="prefix" value="homeassistant"></label>
+      <label>New devices <select name="adopt"><option value="auto">add automatically</option><option value="inbox">ask first (inbox)</option></select></label></div>
+    <label>Incident when disconnected longer than (minutes, 0 = never) <input name="outage" type="number" min="0" max="10080" step="any" value="10"></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="srcErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form></dialog>
+
+  <dialog id="profDlg"><form id="profForm" class="form" method="dialog">
+    <h2 style="margin-top:0" id="profTitle">Provisioning profile</h2>
+    <label>Name <input name="name" required maxlength="128" placeholder="Room sensors 2026"></label>
+    <label>Strategy <select name="strategy"><option value="create">create new devices</option><option value="preprovisioned">only devices registered beforehand</option></select></label>
+    <label class="inline"><input type="checkbox" name="approval"><span>New devices wait for approval</span></label>
+    <label class="inline"><input type="checkbox" name="auto" checked><span>Create datastreams from the telemetry keys automatically</span></label>
+    <div class="row2"><label>Site <select name="site"><option value="">—</option></select></label><label>Room / asset <select name="room"><option value="">—</option></select></label></div>
+    <div class="row2"><label>Device names must match (regular expression) <input name="pattern" placeholder="^sensor-[0-9]+$"></label><label>At most devices (0 = unlimited) <input name="max" type="number" min="0" value="0"></label></div>
+    <label>Transport of the devices <select name="transport"><option value="mqtt">MQTT</option><option value="http">HTTP</option></select></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="profErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form></dialog>
+
+  <dialog id="secretDlg"><div class="form">
+    <h2 style="margin-top:0" id="secretTitle"></h2>
+    <p class="warn-box">Save these values now; the password or secret is not shown again.</p>
+    <div id="secretBody"></div>
+    <div class="actions"><button class="btn primary" type="button" onclick="this.closest('dialog').close()">Done</button></div>
+  </div></dialog>
+
+  <dialog id="reasonDlg"><form id="reasonForm" class="form" method="dialog">
+    <h2 style="margin-top:0" id="reasonTitle"></h2>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="reasonErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">OK</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form></dialog>
+</main>
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, api = ctrl32.api, t = ctrl32.t, fmt = ctrl32.fmt;
+let ON = null, SOURCES = [], PATH = '', LAST = {}; // LAST: credentials shown once, by source id
+
+function tab() {
+  const h = (location.hash || '#add').slice(1);
+  for (const s of document.querySelectorAll('[data-sec]')) s.hidden = s.dataset.sec !== h;
+  for (const a of document.querySelectorAll('#tabs a')) a.classList.toggle('on', a.dataset.tab === h);
+  ({add: renderPath, inbox: loadInbox, sources: loadSources, provisioning: loadProvisioning})[h]?.();
+}
+window.addEventListener('hashchange', tab);
+
+let reasonCb = null;
+function askReason(title, cb) { $('#reasonTitle').textContent = t(title); $('#reasonForm').reset(); $('#reasonErr').textContent = ''; reasonCb = cb; $('#reasonDlg').showModal(); }
+$('#reasonForm').onsubmit = async e => { e.preventDefault(); try { await reasonCb(e.target.reason.value); $('#reasonDlg').close(); } catch (x) { $('#reasonErr').textContent = x.message; } };
+
+const code = (s) => `<div class="sh-code"><pre class="notranslate">${esc(s)}</pre><button type="button" class="btn small" data-copy>Copy</button></div>`;
+document.addEventListener('click', e => { const b = e.target.closest('[data-copy]'); if (!b) return; navigator.clipboard?.writeText(b.previousElementSibling.textContent); ctrl32.toast(t('copied'), 'ok'); });
+
+// ---- add a device ----
+function hostPort() { const m = ON.mqtt || {}; return {host: m.host || location.hostname, port: m.port || 1883, tls: m.tls_port || 0}; }
+function snippets(user, pass, prefix) {
+  const {host, port, tls} = hostPort(); const pw = pass || t('<the password of the account>');
+  return `<h3>zigbee2mqtt <small class="muted">configuration.yaml</small></h3>${code(`mqtt:\n  server: mqtt://${host}:${port}\n  user: ${user}\n  password: ${pw}\nhomeassistant:\n  enabled: true\n  discovery_topic: ${prefix}`)}
+    <h3>Tasmota <small class="muted">${esc(t('console'))}</small></h3>${code(`Backlog MqttHost ${host}; MqttPort ${port}; MqttUser ${user}; MqttPassword ${pw}; SetOption19 1`)}
+    <h3>ESPHome <small class="muted">YAML</small></h3>${code(`mqtt:\n  broker: ${host}\n  port: ${port}\n  username: ${user}\n  password: ${pw}\n  discovery: true\n  discovery_prefix: ${prefix}`)}
+    <h3>${esc(t('Any other device'))}</h3>${code(`host: ${host}\nport: ${port}${tls ? `   (TLS: ${tls})` : ''}\nuser: ${user}\npassword: ${pw}\ndiscovery prefix: ${prefix}`)}
+    <p class="muted">${esc(t('Topics are private to this account: other accounts cannot read or write them. Devices appear on the Home page as soon as they announce themselves.'))}</p>`;
+}
+async function renderPath() {
+  for (const b of document.querySelectorAll('.sh-path[data-path]')) { b.classList.toggle('on', b.dataset.path === PATH); b.onclick = () => { PATH = b.dataset.path; renderPath(); }; }
+  const box = $('#pathBody');
+  if (!PATH) { box.innerHTML = ''; return; }
+  if (PATH === 'smart') {
+    SOURCES = await api('GET', '/api/v1/mqtt-sources');
+    const accts = SOURCES.filter(s => s.kind === 'account');
+    box.innerHTML = `<div class="card"><h2 style="margin-top:0">${esc(t('Smart-home device'))}</h2>
+      ${accts.length ? `<label>${esc(t('MQTT account'))} <select id="acctSel">${accts.map(a => `<option value="${a.id}">${esc(a.name)} (${esc(a.settings.username)})</option>`).join('')}</select></label>` : `<p>${esc(t('Create an MQTT account first; its user name and password go into the device.'))}</p>`}
+      <div class="actions"><button class="btn${accts.length ? '' : ' primary'}" type="button" data-new="account">New MQTT account</button></div><div id="acctSnip"></div></div>`;
+    const show = () => { const a = accts.find(x => x.id === $('#acctSel').value); if (a) $('#acctSnip').innerHTML = snippets(a.settings.username, LAST[a.id], a.settings.discovery_prefix || 'homeassistant'); };
+    if (accts.length) { $('#acctSel').onchange = show; show(); }
+  } else if (PATH === 'bridge') {
+    box.innerHTML = `<div class="card"><h2 style="margin-top:0">${esc(t('Existing MQTT broker'))}</h2><p>${esc(t('This server connects to your broker as a client, recognizes the devices that announce themselves there and controls them. Your existing programs keep working as before.'))}</p>
+      <div class="actions"><button class="btn primary" type="button" data-new="bridge">New bridge</button></div></div>`;
+  } else if (PATH === 'fleet') {
+    const profs = await api('GET', '/api/v1/provision-profiles');
+    const {host, port} = hostPort();
+    box.innerHTML = `<div class="card"><h2 style="margin-top:0">${esc(t('Fleet of devices'))}</h2>
+      ${profs.length ? `<label>${esc(t('Profile'))} <select id="profSel">${profs.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></label>` : `<p>${esc(t('Create a provisioning profile; its key and secret go into the firmware of all devices.'))}</p>`}
+      <div class="actions"><button class="btn${profs.length ? '' : ' primary'}" type="button" id="newProfile2">New profile</button></div><div id="profSnip"></div></div>`;
+    $('#newProfile2').onclick = () => editProfile(null);
+    const show = () => { const p = profs.find(x => x.id === $('#profSel').value); if (!p) return; const sec = LAST[p.id] || t('<the secret of the profile>');
+      $('#profSnip').innerHTML = `<h3>MQTT <small class="muted">${esc(t('ThingsBoard-compatible'))}</small></h3>${code(`host ${host}:${port}, user name "provision", no password\npublish  /provision/request  {"deviceName":"sensor-001","provisionDeviceKey":"${p.key}","provisionDeviceSecret":"${sec}"}\nreceive  /provision/response {"status":"SUCCESS","credentialsType":"ACCESS_TOKEN","credentialsValue":"<token>"}\nthen connect with user name = <token> and publish to v1/devices/me/telemetry`)}
+        <h3>HTTP</h3>${code(`curl -X POST ${ON.provision_url} -H 'Content-Type: application/json' \\\n  -d '{"deviceName":"sensor-001","provisionDeviceKey":"${p.key}","provisionDeviceSecret":"${sec}"}'`)}`; };
+    if (profs.length) { $('#profSel').onchange = show; show(); }
+  }
+}
+
+// ---- sources ----
+async function loadSources() {
+  SOURCES = await api('GET', '/api/v1/mqtt-sources');
+  $('#sources tbody').innerHTML = SOURCES.map(s => `<tr><td class="notranslate"><b>${esc(s.name)}</b>${s.kind === 'account' ? `<br><small class="muted">${esc(s.settings.username)}</small>` : `<br><small class="muted">${esc(s.settings.host + ':' + s.settings.port)}</small>`}</td>
+    <td>${esc(t(s.kind === 'account' ? 'MQTT account' : 'Bridge'))}</td>
+    <td>${s.status.connected ? `<span class="badge ok">${esc(t('connected'))}</span>` : `<span class="badge">${esc(t('not connected'))}</span>${s.status.error ? `<br><small class="muted">${esc(s.status.error)}</small>` : ''}`}</td>
+    <td>${s.status.entities}</td><td>${s.pending ? `<a href="#inbox" class="badge warn">${s.pending}</a>` : '0'}</td>
+    <td class="nowrap"><button class="btn small" type="button" data-edit="${s.id}">Edit</button>${s.kind === 'account' ? ` <button class="btn small" type="button" data-pw="${s.id}">New password</button>` : ''} <button class="btn small danger" type="button" data-del="${s.id}">Delete</button></td></tr>`).join('')
+    || `<tr><td colspan="6" class="muted">${esc(t('no MQTT accounts or bridges yet'))}</td></tr>`;
+}
+let EDIT = null, KIND = '';
+function editSource(kind, s) {
+  EDIT = s; KIND = kind; const f = $('#srcForm'); f.reset(); $('#srcErr').textContent = '';
+  $('#srcTitle').textContent = t(s ? 'Edit' : kind === 'account' ? 'New MQTT account' : 'New bridge');
+  $('#bridgeFields').hidden = kind !== 'bridge';
+  if (kind === 'bridge') {
+    const pub = new Set((s && s.settings.publish_datastreams) || []);
+    api('GET', '/api/v1/datastreams').then(ds => { f.publish.innerHTML = ds.map(d => `<option value="${d.id}"${pub.has(d.id) ? ' selected' : ''}>${esc(d.asset + ' / ' + d.key + (d.unit ? ' [' + d.unit + ']' : ''))}</option>`).join(''); }).catch(() => {});
+  }
+  f.host.required = kind === 'bridge';
+  f.adopt.value = kind === 'account' ? 'auto' : 'inbox';
+  f.outage.value = 10;
+  if (s) { const st = s.settings; f.name.value = s.name; f.prefix.value = st.discovery_prefix || 'homeassistant'; f.adopt.value = st.adopt || f.adopt.value; f.outage.value = st.outage_incident_min != null ? st.outage_incident_min : 10;
+    if (kind === 'bridge') { f.host.value = st.host || ''; f.port.value = st.port || 1883; f.tls.checked = !!st.tls; f.insecure.checked = !!st.insecure_skip_verify; f.username.value = st.username || ''; f.client_id.value = st.client_id || ''; } }
+  $('#srcDlg').showModal();
+}
+$('#srcForm').onsubmit = async e => {
+  e.preventDefault(); const f = e.target;
+  const body = {name: f.name.value, discovery_prefix: f.prefix.value, adopt: f.adopt.value, outage_incident_min: +f.outage.value, reason: f.reason.value};
+  if (KIND === 'bridge') Object.assign(body, {publish_datastreams: [...f.publish.selectedOptions].map(o => o.value), host: f.host.value, port: +f.port.value, tls: f.tls.checked, insecure_skip_verify: f.insecure.checked, username: f.username.value, client_id: f.client_id.value}, f.password.value ? {password: f.password.value} : {});
+  try {
+    if (EDIT) await api('PUT', '/api/v1/mqtt-sources/' + EDIT.id, body);
+    else { body.kind = KIND; const r = await api('POST', '/api/v1/mqtt-sources', body); if (r.password) { LAST[r.id] = r.password; showSecret(t('MQTT account') + ' ' + r.name, [['User name', r.username], ['Password', r.password]]); } }
+    $('#srcDlg').close(); tab();
+  } catch (x) { $('#srcErr').textContent = x.message; }
+};
+function showSecret(title, rows) {
+  $('#secretTitle').textContent = title;
+  $('#secretBody').innerHTML = `<dl class="kv">${rows.map(([k, v]) => `<dt>${esc(t(k))}</dt><dd class="notranslate"><code>${esc(v)}</code> <button type="button" class="btn small" data-copyv="${esc(v)}">Copy</button></dd>`).join('')}</dl>`;
+  $('#secretDlg').showModal();
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.copyv) { navigator.clipboard?.writeText(b.dataset.copyv); ctrl32.toast(t('copied'), 'ok'); }
+  if (b.dataset.new) editSource(b.dataset.new, null);
+  if (b.dataset.edit) { const s = SOURCES.find(x => x.id === b.dataset.edit); editSource(s.kind, s); }
+  if (b.dataset.pw) askReason('New password', async reason => { const r = await api('POST', `/api/v1/mqtt-sources/${b.dataset.pw}/password`, {reason}); LAST[r.id] = r.password; showSecret(t('New password'), [['User name', r.username], ['Password', r.password]]); });
+  if (b.dataset.del) askReason('Delete the connection', async reason => { await api('DELETE', `/api/v1/mqtt-sources/${b.dataset.del}?reason=${encodeURIComponent(reason)}`); loadSources(); });
+  if (b.dataset.adopt) askReason('Adopt the device', async reason => { await api('POST', `/api/v1/discovery/${b.dataset.adopt}/adopt`, {reason}); ctrl32.toast(t('device added'), 'ok'); loadInbox(); counts(); });
+  if (b.dataset.ignore) askReason('Ignore the device', async reason => { await api('POST', `/api/v1/discovery/${b.dataset.ignore}/ignore`, {reason}); loadInbox(); counts(); });
+  if (b.dataset.approve) askReason('Approve the device', async reason => { await api('POST', `/api/v1/devices/${b.dataset.approve}/approve`, {reason}); loadProvisioning(); counts(); });
+  if (b.dataset.reject) askReason('Reject the device', async reason => { await api('POST', `/api/v1/devices/${b.dataset.reject}/reject`, {reason}); loadProvisioning(); counts(); });
+  if (b.dataset.rotate) askReason('New secret', async reason => { const r = await api('POST', `/api/v1/provision-profiles/${b.dataset.rotate}/rotate`, {reason}); LAST[r.id] = r.secret; showSecret(t('New secret'), [['Secret', r.secret]]); });
+  if (b.dataset.revoke) askReason('Revoke the profile', async reason => { await api('DELETE', `/api/v1/provision-profiles/${b.dataset.revoke}?reason=${encodeURIComponent(reason)}`); loadProvisioning(); });
+  if (b.dataset.editprof) editProfile(PROFS.find(p => p.id === b.dataset.editprof));
+});
+
+// ---- inbox ----
+async function loadInbox() {
+  const rows = await api('GET', '/api/v1/discovery' + ($('#showAll').checked ? '' : '?status=pending'));
+  $('#inbox tbody').innerHTML = rows.map(d => `<tr><td class="notranslate"><b>${esc(d.name || d.device_key)}</b><br><small class="muted">${esc(d.device_key)}</small></td>
+    <td class="notranslate">${esc([d.manufacturer, d.model].filter(Boolean).join(' '))}</td><td>${d.entities}<br><small class="muted">${esc((d.components || []).join(', '))}</small></td>
+    <td class="notranslate">${esc(d.source)}</td><td>${esc(fmt(d.last_seen))}</td>
+    <td class="nowrap">${d.status === 'pending' ? `<button class="btn small primary" type="button" data-adopt="${d.id}">Adopt</button> <button class="btn small" type="button" data-ignore="${d.id}">Ignore</button>` : `<span class="badge">${esc(t(d.status))}</span>`}</td></tr>`).join('')
+    || `<tr><td colspan="6" class="muted">${esc(t('no devices waiting'))}</td></tr>`;
+}
+$('#showAll').onchange = loadInbox;
+
+// ---- provisioning ----
+let PROFS = [], SITES = [], ASSETS = [];
+async function loadProvisioning() {
+  PROFS = await api('GET', '/api/v1/provision-profiles');
+  $('#profiles tbody').innerHTML = PROFS.map(p => `<tr><td class="notranslate"><b>${esc(p.name)}</b></td><td class="notranslate"><code>${esc(p.key)}</code></td>
+    <td>${esc(t(p.strategy === 'create' ? 'create new devices' : 'only devices registered beforehand'))}</td><td>${esc(t(p.approval ? 'yes' : 'no'))}</td><td>${p.devices}${p.max_devices ? ' / ' + p.max_devices : ''}</td>
+    <td class="nowrap"><button class="btn small" type="button" data-editprof="${p.id}">Edit</button> <button class="btn small" type="button" data-rotate="${p.id}">New secret</button> <button class="btn small danger" type="button" data-revoke="${p.id}">Revoke</button></td></tr>`).join('')
+    || `<tr><td colspan="6" class="muted">${esc(t('no provisioning profiles yet'))}</td></tr>`;
+  const ap = await api('GET', '/api/v1/device-approvals');
+  $('#approvals tbody').innerHTML = ap.map(d => `<tr><td class="notranslate"><b>${esc(d.name)}</b><br><small class="muted">${esc(d.external_id)}</small></td><td class="notranslate">${esc(d.profile)}</td><td>${esc(fmt(d.created_at))}</td>
+    <td class="nowrap"><button class="btn small primary" type="button" data-approve="${d.id}">Approve</button> <button class="btn small danger" type="button" data-reject="${d.id}">Reject</button></td></tr>`).join('')
+    || `<tr><td colspan="4" class="muted">${esc(t('no devices waiting'))}</td></tr>`;
+}
+let PEDIT = null;
+async function editProfile(p) {
+  PEDIT = p; const f = $('#profForm'); f.reset(); $('#profErr').textContent = '';
+  if (!SITES.length) { SITES = await api('GET', '/api/v1/sites').catch(() => []); ASSETS = await api('GET', '/api/v1/assets').catch(() => []); }
+  f.site.innerHTML = '<option value="">—</option>' + (SITES.items || SITES).map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  f.room.innerHTML = '<option value="">—</option>' + (ASSETS.items || ASSETS).map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
+  $('#profTitle').textContent = t(p ? 'Edit' : 'New profile');
+  if (p) { f.name.value = p.name; f.strategy.value = p.strategy; f.approval.checked = p.approval; f.auto.checked = p.auto_datastreams; f.site.value = p.site_id || ''; f.room.value = p.room_id || '';
+    f.pattern.value = p.name_pattern; f.max.value = p.max_devices; f.transport.value = p.transport; }
+  $('#profDlg').showModal();
+}
+$('#newProfile').onclick = () => editProfile(null);
+$('#profForm').onsubmit = async e => {
+  e.preventDefault(); const f = e.target;
+  const body = {name: f.name.value, strategy: f.strategy.value, approval: f.approval.checked, auto_datastreams: f.auto.checked, site_id: f.site.value, room_id: f.room.value,
+    name_pattern: f.pattern.value, max_devices: +f.max.value, transport: f.transport.value, reason: f.reason.value};
+  try {
+    if (PEDIT) await api('PUT', '/api/v1/provision-profiles/' + PEDIT.id, body);
+    else { const r = await api('POST', '/api/v1/provision-profiles', body); LAST[r.id] = r.secret; showSecret(t('Provisioning profile') + ' ' + r.name, [['Key', r.key], ['Secret', r.secret]]); }
+    $('#profDlg').close(); tab();
+  } catch (x) { $('#profErr').textContent = x.message; }
+};
+
+async function counts() {
+  const [inbox, appr] = await Promise.all([api('GET', '/api/v1/discovery?status=pending').catch(() => []), api('GET', '/api/v1/device-approvals').catch(() => [])]);
+  $('#inboxN').hidden = !inbox.length; $('#inboxN').textContent = inbox.length;
+  $('#apprN').hidden = !appr.length; $('#apprN').textContent = appr.length;
+}
+ctrl32.ready({requireAuth: true, requirePerm: 'device.manage'}).then(async () => {
+  try { ON = await api('GET', '/api/v1/onboarding'); } catch (x) { ON = {mqtt: {}}; }
+  tab(); counts();
+});
+</script>
+</body>
+</html>

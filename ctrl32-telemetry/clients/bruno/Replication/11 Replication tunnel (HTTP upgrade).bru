@@ -1,0 +1,19 @@
+meta {
+  name: Replication tunnel (HTTP upgrade)
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/v1/replication/tunnel
+  body: none
+  auth: inherit
+}
+
+docs {
+  Replication tunnel (HTTP upgrade)
+  
+  With `Connection: Upgrade`, `Upgrade: ctrl32-pgrepl` and the replica token the connection becomes a byte stream to the primary's PostgreSQL (101 Switching Protocols).
+  
+  Requires permission `replica token`.
+}

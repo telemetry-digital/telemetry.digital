@@ -1,0 +1,33 @@
+meta {
+  name: Limit a user to camera groups
+  type: http
+  seq: 11
+}
+
+put {
+  url: {{baseUrl}}/api/v1/users/:id/camera-groups
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "groups": [
+      "string"
+    ],
+    "limited": true,
+    "reason": "string"
+  }
+}
+
+docs {
+  Limit a user to camera groups
+  
+  Applies at once to every camera endpoint. An administrator limited to some groups can hand out only those. Audited.
+  
+  Requires permission `user.admin`.
+}

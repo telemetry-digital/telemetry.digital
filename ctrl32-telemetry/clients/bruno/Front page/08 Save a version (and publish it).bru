@@ -1,0 +1,63 @@
+meta {
+  name: Save a version (and publish it)
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/landing/versions
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "publish": true,
+    "reason": "string",
+    "spec": {
+      "blocks": [
+        {
+          "address": "string",
+          "align": "left",
+          "background": "string",
+          "background2": "string",
+          "buttons": [
+            null
+          ],
+          "columns": 1,
+          "email": "string",
+          "id": "string",
+          "image": "string",
+          "image_side": "left",
+          "items": [
+            null
+          ],
+          "phone": "string",
+          "size": "small",
+          "subtitle": "string",
+          "text": "string",
+          "text_color": "string",
+          "title": "string",
+          "type": "hero"
+        }
+      ],
+      "description": "string",
+      "theme": {
+        "accent": "string",
+        "background": "string",
+        "text": "string",
+        "width": "normal"
+      },
+      "title": "string",
+      "version": 1
+    }
+  }
+}
+
+docs {
+  Save a version (and publish it)
+  
+  Strict validation: known block types and fields only, #rrggbb colours, catalogue icons, links to a page here, https://, mailto: or tel:, own images.
+  
+  Requires permission `system.admin`.
+}

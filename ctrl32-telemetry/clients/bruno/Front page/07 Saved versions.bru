@@ -1,0 +1,17 @@
+meta {
+  name: Saved versions
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/landing/versions
+  body: none
+  auth: inherit
+}
+
+docs {
+  Saved versions
+  
+  Requires permission `system.admin`.
+}

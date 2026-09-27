@@ -1,0 +1,23 @@
+meta {
+  name: The sanitised SVG of a graphic
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/hmi/objects/:slug/svg
+  body: none
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+docs {
+  The sanitised SVG of a graphic
+  
+  Served as image/svg+xml with a sandbox Content-Security-Policy.
+  
+  Requires permission `data.read`.
+}

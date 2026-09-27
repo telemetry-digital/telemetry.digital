@@ -1,0 +1,22 @@
+meta {
+  name: A library graphic shown by the shared picture
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public/:token/hmi/objects/:slug/svg
+  body: none
+  auth: inherit
+}
+
+params:path {
+  token: 
+  slug: 
+}
+
+docs {
+  A library graphic shown by the shared picture
+  
+  Only graphics that the linked process picture references.
+}

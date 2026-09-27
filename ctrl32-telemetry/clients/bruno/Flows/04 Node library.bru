@@ -1,0 +1,19 @@
+meta {
+  name: Node library
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/flows/catalog
+  body: none
+  auth: inherit
+}
+
+docs {
+  Node library
+  
+  Every node type with its group, ports and settings schema, and the expression functions.
+  
+  Requires permission `data.read`.
+}

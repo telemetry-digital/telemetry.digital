@@ -1,0 +1,21 @@
+meta {
+  name: An image of the front page
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/landing/assets/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  An image of the front page
+  
+  Public; served with a sandbox Content-Security-Policy.
+}

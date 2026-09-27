@@ -75,6 +75,67 @@ export type Branding = {
   version?: string;
 };
 
+export type Camera = {
+  audio?: boolean;
+  enabled?: boolean;
+  /** camera group */
+  group?: string;
+  /** video.manage only */
+  has_password?: boolean;
+  has_sub?: boolean;
+  id?: string;
+  location?: string;
+  motion_detect?: boolean;
+  motion_sensitivity?: number;
+  motion_zones?: number[][][];
+  name?: string;
+  privacy_masks?: number[][][];
+  push?: {
+    /** video.push_listen configured */
+    enabled?: boolean;
+    /** sub-stream */
+    sub_url?: string;
+    /** where the relay publishes the main stream */
+    url?: string;
+    /** = camera id */
+    user?: string;
+  };
+  record?: "continuous" | "off";
+  retention_days?: number;
+  /** video.manage only */
+  snapshot_url?: string;
+  sort?: number;
+  source?: "pull" | "push";
+  status?: CameraStatus;
+  /** video.manage only */
+  sub_url?: string;
+  /** video.manage only */
+  transport?: string;
+  /** video.manage only */
+  url?: string;
+  /** video.manage only */
+  username?: string;
+};
+
+export type CameraStatus = {
+  active?: string[];
+  codec?: "h264" | "h265" | "mjpeg";
+  /** password removed */
+  error?: string;
+  /** ONVIF event connection: connected, connecting or the error */
+  events?: string;
+  fps?: number;
+  height?: number;
+  kbps?: number;
+  /** events when recording only around events */
+  record_mode?: string;
+  recording?: boolean;
+  since?: string;
+  state?: "idle" | "connecting" | "online" | "offline" | "disabled";
+  viewers?: number;
+  width?: number;
+};
+
 export type Campaign = {
   close_reason?: string | null;
   closed_at?: string | null;
@@ -299,6 +360,47 @@ export type Device = {
   transport?: "mqtt" | "http" | "lorawan" | "opcua" | "modbus";
 };
 
+export type Display = {
+  /** current operator command */
+  command?: Record<string, unknown>;
+  content?: DisplayContent;
+  created_at?: string;
+  id?: string;
+  last_agent?: string;
+  last_ip?: string;
+  last_seen_at?: string;
+  location?: string;
+  /** current message */
+  message?: Record<string, unknown>;
+  name?: string;
+  offline_alert?: boolean;
+  /** reported within 90 s */
+  online?: boolean;
+  /** the device collected its credential */
+  paired?: boolean;
+  updated_at?: string;
+};
+
+export type DisplayContent = {
+  items: ({
+    kind: "dashboard" | "wall";
+    /** screen of the wall, from 0 */
+    screen?: number;
+    /** 10–3600, when shown in turn */
+    seconds?: number;
+    /** dashboard or process screen */
+    slug?: string;
+    /** video wall */
+    wall?: string;
+  })[];
+  /** language of the display */
+  locale?: string;
+  /** enlarge cameras with an event */
+  popup?: "none" | "wall" | "all";
+  /** 5–600 */
+  popup_seconds?: number;
+};
+
 export type Error = {
   /** human-readable message */
   error: string;
@@ -337,6 +439,47 @@ export type Firmware = {
   version?: string;
 };
 
+export type Flow = {
+  checksum?: string;
+  created_at?: string;
+  created_by?: string;
+  deployed_version?: number | null;
+  has_commands?: boolean;
+  /** this version */
+  id?: string;
+  name: string;
+  nodes?: number;
+  reason?: string;
+  slug: string;
+  spec?: FlowSpec;
+  state: "draft" | "deployed" | "disabled";
+  version: number;
+};
+
+export type FlowProblem = {
+  message: string;
+  node?: string;
+};
+
+export type FlowSpec = {
+  nodes: ({
+    disabled?: boolean;
+    id: string;
+    name?: string;
+    settings?: Record<string, unknown>;
+    /** node type from the catalogue */
+    type: string;
+    x?: number;
+    y?: number;
+  })[];
+  wires: ({
+    from: string;
+    /** output index */
+    port: number;
+    to: string;
+  })[];
+};
+
 export type Incident = {
   /** Corrective and preventive action */
   capa?: string;
@@ -347,7 +490,7 @@ export type Incident = {
   detail?: Record<string, unknown>;
   id?: string;
   impact?: string;
-  /** alarm_undelivered, audit_chain, backup_failed or manual */
+  /** alarm_undelivered, audit_chain, backup_failed, manual, replica, flow or mqtt_source */
   kind?: string;
   opened_at?: string;
   /** Username or system */
@@ -371,6 +514,66 @@ export type IncidentEvent = {
   /** opened, fields, note, status or notified */
   event?: string;
   id?: string;
+};
+
+export type LandingBlock = {
+  address?: string;
+  align?: "left" | "center";
+  /** #rrggbb */
+  background?: string;
+  /** #rrggbb gradient end */
+  background2?: string;
+  buttons?: ({
+    /** /path, https://…, mailto:, tel: */
+    href?: string;
+    label?: string;
+    style?: "primary" | "secondary";
+  })[];
+  /** 1–4 */
+  columns?: number;
+  email?: string;
+  /** [a-z0-9_-]{1,24}, unique */
+  id: string;
+  /** "logo" or an asset id */
+  image?: string;
+  image_side?: "left" | "right";
+  items?: ({
+    /** catalogue icon */
+    icon?: string;
+    text?: string;
+    title?: string;
+    value?: string;
+  })[];
+  phone?: string;
+  size?: "small" | "medium" | "large";
+  /** ≤ 300 */
+  subtitle?: string;
+  /** ≤ 4000; blank line = paragraph, "- " = list, **bold** */
+  text?: string;
+  /** #rrggbb */
+  text_color?: string;
+  /** ≤ 160 */
+  title?: string;
+  type: "hero" | "features" | "text" | "image" | "split" | "stats" | "cta" | "contact" | "spacer";
+};
+
+export type LandingSpec = {
+  blocks: LandingBlock[];
+  /** ≤ 200 */
+  description?: string;
+  theme?: {
+    /** #rrggbb */
+    accent?: string;
+    /** #rrggbb */
+    background?: string;
+    /** #rrggbb */
+    text?: string;
+    width?: "normal" | "wide" | "full";
+  };
+  /** ≤ 80 */
+  title?: string;
+  /** 1 */
+  version: number;
 };
 
 export type LatestValue = {
@@ -594,6 +797,35 @@ export type RegisterProfileSpec = {
   registers: ModbusRegister[];
 };
 
+export type Replica = {
+  /** total_bytes, done_bytes, percent, eta_s */
+  copy?: Record<string, unknown>;
+  created_at?: string;
+  created_by?: string;
+  /** detachment record with verification */
+  detach?: Record<string, unknown>;
+  host_info?: Record<string, unknown>;
+  id: string;
+  lag_bytes?: number | null;
+  lag_limit_s?: number;
+  lag_s?: number | null;
+  last_contact?: string | null;
+  max_retained_mb?: number;
+  mode: "copy" | "continuous" | "standby";
+  name: string;
+  replay_lsn?: string;
+  standby_url?: string;
+  state: "pairing" | "copying" | "in_sync" | "lagging" | "disconnected" | "detaching" | "detached" | "failed" | "lost" | "dropped";
+};
+
+export type ReplicationNode = {
+  /** +1 on every promotion */
+  epoch?: number;
+  node_id: string;
+  promoted_from?: string | null;
+  role: "primary" | "replica" | "fenced";
+};
+
 export type Report = {
   created_at?: string;
   created_by?: string;
@@ -730,6 +962,31 @@ export type RuleSpec = {
   match?: "all" | "any";
 };
 
+export type Scene = {
+  actions?: ({
+    component?: string;
+    entity?: string;
+    entity_id?: string;
+    /** brightness, rgb, color_temp, position, temperature, mode, value, percentage */
+    params?: Record<string, unknown>;
+    service?: string;
+  })[];
+  icon?: string;
+  id?: string;
+  name?: string;
+  room?: string | null;
+  room_id?: string | null;
+  sort?: number;
+};
+
+export type SceneAction = {
+  entity_id: string;
+  /** brightness, rgb, color_temp, position, temperature, mode, value, percentage */
+  params?: Record<string, unknown>;
+  /** turn_on, turn_off, set_position, … */
+  service: string;
+};
+
 export type Share = {
   public?: boolean;
   /** data URL of the QR code */
@@ -794,6 +1051,44 @@ export type User = {
   must_change_password?: boolean;
   roles?: string[];
   username?: string;
+};
+
+export type VideoSettings = {
+  camera_offline_minutes?: number;
+  discovery_seconds?: number;
+  disk_free_percent?: number;
+  display_offline_minutes?: number;
+  event_merge_seconds?: number;
+  linger_seconds?: number;
+  max_disk_gb?: number;
+  ptz_audit_minutes?: number;
+  push_block_minutes?: number;
+  push_max_fails?: number;
+  push_window_minutes?: number;
+  segment_seconds?: number;
+  timeshift_seconds?: number;
+  wall_sub_stream_above?: number;
+};
+
+export type VideoWall = {
+  id?: string;
+  name?: string;
+  screens?: WallScreen[];
+  /** tiles above which automatic screens use the sub-stream */
+  sub_stream_above?: number;
+  updated_at?: string;
+};
+
+export type WallScreen = {
+  /** 1–8 */
+  cols: number;
+  /** ≤ 40 */
+  name?: string;
+  /** auto: sub-stream above the video setting wall_sub_stream_above */
+  quality?: "auto" | "main" | "sub";
+  /** 1–8 */
+  rows: number;
+  tiles?: (string | null)[];
 };
 
 export interface Ctrl32Options {
@@ -1510,7 +1805,7 @@ export class Ctrl32Client {
   /** A starter dashboard spec built from the organization's data
    *
    * Requires permission `data.read`. */
-  getDashboardsStarter(query?: { kind?: string; /** overview (default), showcase, or mimic (process picture on a canvas) */ }): Promise<{
+  getDashboardsStarter(query?: { kind?: string; /** overview (default), showcase, mimic (widget symbols on a canvas) or plant (mixing plant process picture) */ }): Promise<{
     kind?: string;
     name?: string;
     spec?: DashboardSpec;
@@ -1531,6 +1826,8 @@ export class Ctrl32Client {
 
   /** Save a new version of a dashboard
    *
+   * Widget settings are validated against the catalogue; invalid values are refused, settings the catalogue does not know are dropped and listed in `warnings` of the response.
+   * 
    * Requires permission `content.write`. */
   putDashboardsSlug(slug: string, body: {
     is_default?: boolean;
@@ -1671,6 +1968,13 @@ export class Ctrl32Client {
     return this.request<Datastream>('PATCH', `/api/v1/datastreams/${encodeURIComponent(id)}`, undefined, body, false);
   }
 
+  /** Devices waiting for approval
+   *
+   * Requires permission `device.manage`. */
+  getDeviceApprovals(): Promise<(Record<string, unknown>)[]> {
+    return this.request<(Record<string, unknown>)[]>('GET', `/api/v1/device-approvals`, undefined, undefined, false);
+  }
+
   /** List devices
    *
    * Requires permission `data.read`. */
@@ -1740,6 +2044,24 @@ export class Ctrl32Client {
     reason: string;
   }): Promise<Device> {
     return this.request<Device>('PATCH', `/api/v1/devices/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Approve a self-provisioned device
+   *
+   * Its token works from now on.
+   * 
+   * Requires permission `device.manage`. */
+  postDevicesIdApprove(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    approval?: string;
+    id?: string;
+  }> {
+    return this.request<{
+    approval?: string;
+    id?: string;
+  }>('POST', `/api/v1/devices/${encodeURIComponent(id)}/approve`, undefined, body, false);
   }
 
   /** Shared and client attributes
@@ -1960,6 +2282,24 @@ export class Ctrl32Client {
     return this.request<Message[]>('GET', `/api/v1/devices/${encodeURIComponent(id)}/messages`, query, undefined, false);
   }
 
+  /** Reject a self-provisioned device
+   *
+   * The device and its token are revoked.
+   * 
+   * Requires permission `device.manage`. */
+  postDevicesIdReject(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    approval?: string;
+    id?: string;
+  }> {
+    return this.request<{
+    approval?: string;
+    id?: string;
+  }>('POST', `/api/v1/devices/${encodeURIComponent(id)}/reject`, undefined, body, false);
+  }
+
   /** Revoke a device
    *
    * Disconnects it and rejects its credentials; data stays.
@@ -1996,6 +2336,524 @@ export class Ctrl32Client {
     /** shown once */
     token?: string;
   }>('POST', `/api/v1/devices/${encodeURIComponent(id)}/token`, undefined, body, false);
+  }
+
+  /** Discovered devices (inbox)
+   *
+   * Requires permission `device.manage`. */
+  getDiscovery(query?: { status?: string; /** pending | adopted | ignored */ }): Promise<(Record<string, unknown>)[]> {
+    return this.request<(Record<string, unknown>)[]>('GET', `/api/v1/discovery`, query, undefined, false);
+  }
+
+  /** Adopt a discovered device
+   *
+   * Creates the device, its room (from the suggested area) and its entities.
+   * 
+   * Requires permission `device.manage`. */
+  postDiscoveryIdAdopt(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    device_id?: string;
+    id?: string;
+    status?: string;
+  }> {
+    return this.request<{
+    device_id?: string;
+    id?: string;
+    status?: string;
+  }>('POST', `/api/v1/discovery/${encodeURIComponent(id)}/adopt`, undefined, body, false);
+  }
+
+  /** Ignore a discovered device
+   *
+   * Requires permission `device.manage`. */
+  postDiscoveryIdIgnore(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    id?: string;
+    status?: string;
+  }> {
+    return this.request<{
+    id?: string;
+    status?: string;
+  }>('POST', `/api/v1/discovery/${encodeURIComponent(id)}/ignore`, undefined, body, false);
+  }
+
+  /** Kiosk: live video
+   *
+   * WebSocket like /video/cameras/{id}/live, only for cameras on the display's walls, in camera widgets of its dashboards, sent by an operator, or (popup all) with an active event.
+   * 
+   * Requires permission `display`. */
+  getDisplayCamerasIdLive(id: string): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/display/cameras/${encodeURIComponent(id)}/live`, undefined, undefined, true);
+  }
+
+  /** Kiosk: paired, or a pairing code
+   *
+   * Called by the kiosk page. A paired kiosk (display cookie) gets paired = true. Otherwise a pairing is created (15 minutes, at most 20 waiting per address): the code to show is returned once and a secret is set as an HttpOnly cookie; after an administrator entered the code, the next call with that cookie sets the display cookie. With code_known the waiting pairing is kept. */
+  postDisplayHello(body: {
+    code_known?: boolean;
+  }): Promise<{
+    /** XXXX-XXXX, only when created */
+    code?: string;
+    expires_at?: string;
+    name?: string;
+    paired?: boolean;
+  }> {
+    return this.request<{
+    /** XXXX-XXXX, only when created */
+    code?: string;
+    expires_at?: string;
+    name?: string;
+    paired?: boolean;
+  }>('POST', `/api/v1/display/hello`, undefined, body, false);
+  }
+
+  /** Kiosk: content, command and camera events
+   *
+   * Display cookie only. Also records when the display was last seen.
+   * 
+   * Requires permission `display`. */
+  getDisplayState(): Promise<{
+    /** id → {name, kinds} of cameras with events */
+    active?: Record<string, unknown>;
+    /** id → name of the cameras it may show */
+    cameras?: Record<string, unknown>;
+    /** current command */
+    command?: Record<string, unknown>;
+    id?: string;
+    items?: (Record<string, unknown>)[];
+    locale?: string;
+    name?: string;
+    popup?: string;
+    popup_seconds?: number;
+    server_time?: string;
+    /** changes when the content changes */
+    version?: number;
+  }> {
+    return this.request<{
+    /** id → {name, kinds} of cameras with events */
+    active?: Record<string, unknown>;
+    /** id → name of the cameras it may show */
+    cameras?: Record<string, unknown>;
+    /** current command */
+    command?: Record<string, unknown>;
+    id?: string;
+    items?: (Record<string, unknown>)[];
+    locale?: string;
+    name?: string;
+    popup?: string;
+    popup_seconds?: number;
+    server_time?: string;
+    /** changes when the content changes */
+    version?: number;
+  }>('GET', `/api/v1/display/state`, undefined, undefined, false);
+  }
+
+  /** Kiosk: a video wall of its content
+   *
+   * Requires permission `display`. */
+  getDisplayWallsId(id: string): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('GET', `/api/v1/display/walls/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Displays
+   *
+   * Requires permission `display.control`. */
+  getDisplays(): Promise<Display[]> {
+    return this.request<Display[]>('GET', `/api/v1/displays`, undefined, undefined, false);
+  }
+
+  /** Send a command or message to several displays
+   *
+   * The same actions for the listed displays, those of a location, or all displays of the organization. One audit entry lists the displays.
+   * 
+   * Requires permission `display.control`. */
+  postDisplaysCommand(body: {
+    action: "camera" | "identify" | "reload" | "clear" | "message";
+    all?: boolean;
+    camera?: string;
+    ids?: string[];
+    level?: "info" | "warning" | "alarm";
+    location?: string;
+    seconds?: number;
+    text?: string;
+  }): Promise<{
+    /** how many got it */
+    displays?: number;
+  }> {
+    return this.request<{
+    /** how many got it */
+    displays?: number;
+  }>('POST', `/api/v1/displays/command`, undefined, body, false);
+  }
+
+  /** Pair a display
+   *
+   * Enter the code the kiosk shows (case-insensitive; 10 wrong codes in 10 minutes block the user for a while). Returns the device's address and browser. Audited.
+   * 
+   * Requires permission `display.manage`. */
+  postDisplaysPair(body: {
+    /** XXXX-XXXX */
+    code: string;
+    content: DisplayContent;
+    /** hall, line ≤ 60 */
+    location?: string;
+    /** ≤ 80 */
+    name: string;
+    /** default true */
+    offline_alert?: boolean;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<Display> {
+    return this.request<Display>('POST', `/api/v1/displays/pair`, undefined, body, false);
+  }
+
+  /** Change a display
+   *
+   * Requires permission `display.manage`. */
+  putDisplaysId(id: string, body: {
+    content?: DisplayContent;
+    location?: string;
+    name?: string;
+    offline_alert?: boolean;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<Display> {
+    return this.request<Display>('PUT', `/api/v1/displays/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Disconnect a display
+   *
+   * The display is locked out at once and must be paired again.
+   * 
+   * Requires permission `display.manage`. */
+  deleteDisplaysId(id: string, query?: { reason?: string; /** required */ }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/displays/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Send a command to a display
+   *
+   * camera: show a camera the operator may see (seconds 5–3600); identify: show the display's name; reload; clear: back to the content (also ends a message); message: an announcement (info as a band at the bottom, warning at the top, alarm over the whole screen) shown apart from cameras. Audited.
+   * 
+   * Requires permission `display.control`. */
+  postDisplaysIdCommand(id: string, body: {
+    action: "camera" | "identify" | "reload" | "clear" | "message";
+    camera?: string;
+    level?: "info" | "warning" | "alarm";
+    quality?: "main" | "sub";
+    /** 5–3600, default 60 */
+    seconds?: number;
+    /** message, 1–200 characters, shown as text */
+    text?: string;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/displays/${encodeURIComponent(id)}/command`, undefined, body, false);
+  }
+
+  /** Energy overview
+   *
+   * Consumption and production of energy meters (entities with device_class energy, datastreams in Wh/kWh/MWh) per hour (day), day (week, month) or month (year) in the organization's time zone, with cost.
+   * 
+   * Requires permission `data.read`. */
+  getEnergy(query?: { period?: string; /** day (default), week, month, year */ date?: string; /** YYYY-MM-DD inside the period (default today) */ }): Promise<{
+    /** hour, day, month */
+    bucket?: string;
+    buckets?: ({
+      consumption?: number;
+      cost?: number;
+      production?: number;
+      start?: string;
+    })[];
+    currency?: string;
+    feed_in_per_kwh?: number;
+    from?: string;
+    period?: string;
+    /** sum of the current states of power entities */
+    power_w?: number;
+    price_per_kwh?: number;
+    sources?: ({
+      datastream_id?: string;
+      device?: string;
+      entity_id?: string;
+      kwh?: number;
+      name?: string;
+      /** consumption, production, off */
+      role?: string;
+      /** % of consumption */
+      share?: number;
+      unit?: string;
+    })[];
+    to?: string;
+    total?: {
+      consumption?: number;
+      cost?: number;
+      production?: number;
+    };
+    tz?: string;
+    /** kWh */
+    unit?: string;
+  }> {
+    return this.request<{
+    /** hour, day, month */
+    bucket?: string;
+    buckets?: ({
+      consumption?: number;
+      cost?: number;
+      production?: number;
+      start?: string;
+    })[];
+    currency?: string;
+    feed_in_per_kwh?: number;
+    from?: string;
+    period?: string;
+    /** sum of the current states of power entities */
+    power_w?: number;
+    price_per_kwh?: number;
+    sources?: ({
+      datastream_id?: string;
+      device?: string;
+      entity_id?: string;
+      kwh?: number;
+      name?: string;
+      /** consumption, production, off */
+      role?: string;
+      /** % of consumption */
+      share?: number;
+      unit?: string;
+    })[];
+    to?: string;
+    total?: {
+      consumption?: number;
+      cost?: number;
+      production?: number;
+    };
+    tz?: string;
+    /** kWh */
+    unit?: string;
+  }>('GET', `/api/v1/energy`, query, undefined, false);
+  }
+
+  /** Energy settings and meters
+   *
+   * Requires permission `data.read`. */
+  getEnergySettings(): Promise<{
+    currency?: string;
+    exclude_others?: boolean;
+    feed_in_per_kwh?: number;
+    meters?: ({
+      datastream_id?: string;
+      device?: string;
+      name?: string;
+      role?: string;
+      unit?: string;
+    })[];
+    price_per_kwh?: number;
+  }> {
+    return this.request<{
+    currency?: string;
+    exclude_others?: boolean;
+    feed_in_per_kwh?: number;
+    meters?: ({
+      datastream_id?: string;
+      device?: string;
+      name?: string;
+      role?: string;
+      unit?: string;
+    })[];
+    price_per_kwh?: number;
+  }>('GET', `/api/v1/energy/settings`, undefined, undefined, false);
+  }
+
+  /** Set energy price and meter roles
+   *
+   * Meters without an explicit role count as consumption; a device with several energy sensors counts the one named total.
+   * 
+   * Requires permission `content.write`. */
+  putEnergySettings(body: {
+    /** ≤ 4 */
+    currency?: string;
+    /** count only the listed meters */
+    exclude_others?: boolean;
+    /** 0–100 */
+    feed_in_per_kwh?: number;
+    /** 0–100 */
+    price_per_kwh?: number;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    sources?: ({
+      datastream_id?: string;
+      role?: "consumption" | "production" | "off";
+    })[];
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('PUT', `/api/v1/energy/settings`, undefined, body, false);
+  }
+
+  /** Entities with their state
+   *
+   * Requires permission `data.read`. */
+  getEntities(query?: { room?: string; device?: string; component?: string; source?: string; /** MQTT source id */ }): Promise<({
+    attributes?: Record<string, unknown>;
+    available?: boolean;
+    /** sensor, binary_sensor, switch, light, cover, fan, lock, climate, number, select, button, text, … */
+    component?: string;
+    /** history of the state */
+    datastream_id?: string;
+    device?: string;
+    device_id?: string;
+    error?: string;
+    id?: string;
+    name?: string;
+    room?: string;
+    room_id?: string;
+    services?: string[];
+    state?: string;
+    status?: "active" | "unsupported" | "removed";
+    /** control hints: min, max, step, options, modes, …; lights: color {rgb, color_temp, min_mireds, max_mireds} */
+    ui?: Record<string, unknown>;
+    unit?: string;
+  })[]> {
+    return this.request<({
+    attributes?: Record<string, unknown>;
+    available?: boolean;
+    /** sensor, binary_sensor, switch, light, cover, fan, lock, climate, number, select, button, text, … */
+    component?: string;
+    /** history of the state */
+    datastream_id?: string;
+    device?: string;
+    device_id?: string;
+    error?: string;
+    id?: string;
+    name?: string;
+    room?: string;
+    room_id?: string;
+    services?: string[];
+    state?: string;
+    status?: "active" | "unsupported" | "removed";
+    /** control hints: min, max, step, options, modes, …; lights: color {rgb, color_temp, min_mireds, max_mireds} */
+    ui?: Record<string, unknown>;
+    unit?: string;
+  })[]>('GET', `/api/v1/entities`, query, undefined, false);
+  }
+
+  /** Entity with its discovery config
+   *
+   * Requires permission `data.read`. */
+  getEntitiesId(id: string): Promise<{
+    attributes?: Record<string, unknown>;
+    available?: boolean;
+    /** sensor, binary_sensor, switch, light, cover, fan, lock, climate, number, select, button, text, … */
+    component?: string;
+    /** history of the state */
+    datastream_id?: string;
+    device?: string;
+    device_id?: string;
+    error?: string;
+    id?: string;
+    name?: string;
+    room?: string;
+    room_id?: string;
+    services?: string[];
+    state?: string;
+    status?: "active" | "unsupported" | "removed";
+    /** control hints: min, max, step, options, modes, …; lights: color {rgb, color_temp, min_mireds, max_mireds} */
+    ui?: Record<string, unknown>;
+    unit?: string;
+  }> {
+    return this.request<{
+    attributes?: Record<string, unknown>;
+    available?: boolean;
+    /** sensor, binary_sensor, switch, light, cover, fan, lock, climate, number, select, button, text, … */
+    component?: string;
+    /** history of the state */
+    datastream_id?: string;
+    device?: string;
+    device_id?: string;
+    error?: string;
+    id?: string;
+    name?: string;
+    room?: string;
+    room_id?: string;
+    services?: string[];
+    state?: string;
+    status?: "active" | "unsupported" | "removed";
+    /** control hints: min, max, step, options, modes, …; lights: color {rgb, color_temp, min_mireds, max_mireds} */
+    ui?: Record<string, unknown>;
+    unit?: string;
+  }>('GET', `/api/v1/entities/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Rename, move to a room, hide
+   *
+   * Requires permission `device.manage`. */
+  patchEntitiesId(id: string, body: {
+    event_kinds?: string[];
+    /** 1–600 */
+    event_post_s?: number;
+    /** 0–60, record = events */
+    event_pre_s?: number;
+    /** camera group ≤ 60; users limited to groups see only their cameras (spec 014) */
+    group?: string;
+    hidden?: boolean;
+    name?: string;
+    /** http://camera/onvif/device_service: events and PTZ (spec 013) */
+    onvif_url?: string;
+    privacy_masks?: number[][][];
+    /** empty = the first profile with PTZ */
+    ptz_profile?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    room_id?: string;
+    sort?: number;
+    /** pull: the server connects to the camera; push: a relay at a remote site sends the video (secret returned once as push_secret with relay_config) */
+    source?: "pull" | "push";
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('PATCH', `/api/v1/entities/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Control an entity
+   *
+   * Becomes a device command (permissions, four eyes, audit): `sent` until the device reports the requested state, then `acked`; optimistic entities and buttons are `acked` at once. The reason defaults to "Home: <service> <entity>".
+   * 
+   * Requires permission `device.command`. */
+  postEntitiesIdCommand(id: string, body: {
+    /** 0–100 % */
+    brightness?: number;
+    /** mireds */
+    color_temp?: number;
+    mode?: string;
+    percentage?: number;
+    /** 0–100 % */
+    position?: number;
+    /** optional */
+    reason?: string;
+    rgb?: number[];
+    /** turn_on, turn_off, toggle, open, close, stop, set_position, lock, unlock, set_temperature, set_hvac_mode, set_value, select_option, press, set_percentage */
+    service: string;
+    temperature?: number;
+    /** number, text or option */
+    value?: Record<string, unknown>;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/entities/${encodeURIComponent(id)}/command`, undefined, body, false);
   }
 
   /** List escalation policies
@@ -2112,6 +2970,310 @@ export class Ctrl32Client {
     return this.request<Firmware>('POST', `/api/v1/firmware`, undefined, body, false);
   }
 
+  /** Incoming webhook of a flow
+   *
+   * The JSON body's value and topic become the message, other fields msg.<name>. With a secret on the node, X-Signature: sha256=<HMAC-SHA256 of the body> is required. */
+  postFlowHooksToken(token: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/flow-hooks/${encodeURIComponent(token)}`, undefined, body, false);
+  }
+
+  /** Flows
+   *
+   * Requires permission `data.read`. */
+  getFlows(): Promise<({
+    dropped?: number;
+    errors?: number;
+    flow?: Flow;
+    running?: boolean;
+  })[]> {
+    return this.request<({
+    dropped?: number;
+    errors?: number;
+    flow?: Flow;
+    running?: boolean;
+  })[]>('GET', `/api/v1/flows`, undefined, undefined, false);
+  }
+
+  /** Create a flow (draft)
+   *
+   * Requires permission `content.write`. */
+  postFlows(body: {
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    spec?: FlowSpec;
+  }): Promise<{
+    flow?: Flow;
+    problems?: FlowProblem[];
+  }> {
+    return this.request<{
+    flow?: Flow;
+    problems?: FlowProblem[];
+  }>('POST', `/api/v1/flows`, undefined, body, false);
+  }
+
+  /** Node library
+   *
+   * Every node type with its group, ports and settings schema, and the expression functions.
+   * 
+   * Requires permission `data.read`. */
+  getFlowsCatalog(): Promise<{
+    functions?: string[];
+    limits?: Record<string, unknown>;
+    nodes?: (Record<string, unknown>)[];
+  }> {
+    return this.request<{
+    functions?: string[];
+    limits?: Record<string, unknown>;
+    nodes?: (Record<string, unknown>)[];
+  }>('GET', `/api/v1/flows/catalog`, undefined, undefined, false);
+  }
+
+  /** Import a flow
+   *
+   * Requires permission `content.write`. */
+  postFlowsImport(body: {
+    /** ctrl32-flow/1 */
+    format: string;
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    slug?: string;
+    spec: FlowSpec;
+  }): Promise<{
+    flow?: Flow;
+    problems?: FlowProblem[];
+  }> {
+    return this.request<{
+    flow?: Flow;
+    problems?: FlowProblem[];
+  }>('POST', `/api/v1/flows/import`, undefined, body, false);
+  }
+
+  /** Flow settings
+   *
+   * Requires permission `data.read`. */
+  getFlowsSettings(): Promise<{
+    allowed_hosts?: string[];
+  }> {
+    return this.request<{
+    allowed_hosts?: string[];
+  }>('GET', `/api/v1/flows/settings`, undefined, undefined, false);
+  }
+
+  /** Change flow settings
+   *
+   * Requires permission `config.write`. */
+  putFlowsSettings(body: {
+    allowed_hosts: string[];
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    allowed_hosts?: string[];
+  }> {
+    return this.request<{
+    allowed_hosts?: string[];
+  }>('PUT', `/api/v1/flows/settings`, undefined, body, false);
+  }
+
+  /** Validate a flow
+   *
+   * Requires permission `data.read`. */
+  postFlowsValidate(body: {
+    spec: FlowSpec;
+  }): Promise<{
+    has_commands?: boolean;
+    ok?: boolean;
+    problems?: FlowProblem[];
+  }> {
+    return this.request<{
+    has_commands?: boolean;
+    ok?: boolean;
+    problems?: FlowProblem[];
+  }>('POST', `/api/v1/flows/validate`, undefined, body, false);
+  }
+
+  /** A flow (current version)
+   *
+   * With validation problems, running status per node and the URLs of its webhook nodes.
+   * 
+   * Requires permission `data.read`. */
+  getFlowsSlug(slug: string): Promise<{
+    flow?: Flow;
+    /** node id → URL */
+    hooks?: Record<string, unknown>;
+    problems?: FlowProblem[];
+    /** running, version, queue, dropped, nodes {in, out, errors, last} */
+    status?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    flow?: Flow;
+    /** node id → URL */
+    hooks?: Record<string, unknown>;
+    problems?: FlowProblem[];
+    /** running, version, queue, dropped, nodes {in, out, errors, last} */
+    status?: Record<string, unknown>;
+  }>('GET', `/api/v1/flows/${encodeURIComponent(slug)}`, undefined, undefined, false);
+  }
+
+  /** Save a new version (draft)
+   *
+   * The deployed version keeps running until the new one is deployed.
+   * 
+   * Requires permission `content.write`. */
+  putFlowsSlug(slug: string, body: {
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    spec: FlowSpec;
+  }): Promise<{
+    flow?: Flow;
+    problems?: FlowProblem[];
+  }> {
+    return this.request<{
+    flow?: Flow;
+    problems?: FlowProblem[];
+  }>('PUT', `/api/v1/flows/${encodeURIComponent(slug)}`, undefined, body, false);
+  }
+
+  /** Delete a flow
+   *
+   * Requires permission `content.write`. */
+  deleteFlowsSlug(slug: string, query: { reason: string; }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('DELETE', `/api/v1/flows/${encodeURIComponent(slug)}`, query, undefined, false);
+  }
+
+  /** Debug panel entries
+   *
+   * The last 500 entries: debug nodes, errors, actions, dry-run actions, drops.
+   * 
+   * Requires permission `data.read`. */
+  getFlowsSlugDebug(slug: string, query?: { after?: number; /** sequence number of the last entry seen */ }): Promise<({
+    dry?: boolean;
+    /** debug, error, action, dry_action, drop, info */
+    kind?: string;
+    msg?: Record<string, unknown>;
+    node?: string;
+    seq?: number;
+    text?: string;
+    ts?: string;
+  })[]> {
+    return this.request<({
+    dry?: boolean;
+    /** debug, error, action, dry_action, drop, info */
+    kind?: string;
+    msg?: Record<string, unknown>;
+    node?: string;
+    seq?: number;
+    text?: string;
+    ts?: string;
+  })[]>('GET', `/api/v1/flows/${encodeURIComponent(slug)}/debug`, query, undefined, false);
+  }
+
+  /** Deploy the current version
+   *
+   * Refused (422) with the problems when the flow is not valid. A flow that sends commands needs device.command and, with the four-eyes policy for commands, becomes a change request (202) that another user approves.
+   * 
+   * Requires permission `content.write`. */
+  postFlowsSlugDeploy(slug: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    flow?: Flow;
+    status?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    flow?: Flow;
+    status?: Record<string, unknown>;
+  }>('POST', `/api/v1/flows/${encodeURIComponent(slug)}/deploy`, undefined, body, false);
+  }
+
+  /** Stop a deployed flow
+   *
+   * Requires permission `content.write`. */
+  postFlowsSlugDisable(slug: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    flow?: Flow;
+  }> {
+    return this.request<{
+    flow?: Flow;
+  }>('POST', `/api/v1/flows/${encodeURIComponent(slug)}/disable`, undefined, body, false);
+  }
+
+  /** Export a flow (JSON)
+   *
+   * Requires permission `data.read`. */
+  getFlowsSlugExport(slug: string): Promise<{
+    checksum?: string;
+    /** ctrl32-flow/1 */
+    format?: string;
+    name?: string;
+    slug?: string;
+    spec?: FlowSpec;
+    version?: number;
+  }> {
+    return this.request<{
+    checksum?: string;
+    /** ctrl32-flow/1 */
+    format?: string;
+    name?: string;
+    slug?: string;
+    spec?: FlowSpec;
+    version?: number;
+  }>('GET', `/api/v1/flows/${encodeURIComponent(slug)}/export`, undefined, undefined, false);
+  }
+
+  /** Send a test message
+   *
+   * Into a node of the deployed flow (dry_run: actions are shown, not executed), or with `spec` into the edited flow (always a dry run).
+   * 
+   * Requires permission `content.write`. */
+  postFlowsSlugInject(slug: string, body: {
+    dry_run?: boolean;
+    node: string;
+    spec?: FlowSpec;
+    topic?: string;
+    /** number, text, bool or null */
+    value?: Record<string, unknown>;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/flows/${encodeURIComponent(slug)}/inject`, undefined, body, false);
+  }
+
+  /** Restore a version
+   *
+   * Saves the old content as a new version (deploy it separately).
+   * 
+   * Requires permission `content.write`. */
+  postFlowsSlugRestore(slug: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    version: number;
+  }): Promise<{
+    flow?: Flow;
+    problems?: FlowProblem[];
+  }> {
+    return this.request<{
+    flow?: Flow;
+    problems?: FlowProblem[];
+  }>('POST', `/api/v1/flows/${encodeURIComponent(slug)}/restore`, undefined, body, false);
+  }
+
+  /** Counters of a running flow
+   *
+   * Requires permission `data.read`. */
+  getFlowsSlugStatus(slug: string): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('GET', `/api/v1/flows/${encodeURIComponent(slug)}/status`, undefined, undefined, false);
+  }
+
+  /** Versions of a flow
+   *
+   * Requires permission `data.read`. */
+  getFlowsSlugVersions(slug: string): Promise<Flow[]> {
+    return this.request<Flow[]>('GET', `/api/v1/flows/${encodeURIComponent(slug)}/versions`, undefined, undefined, false);
+  }
+
   /** List update campaigns
    *
    * Requires permission `fota.read`. */
@@ -2192,6 +3354,157 @@ export class Ctrl32Client {
     /** true on success */
     ok?: boolean;
   }>('DELETE', `/api/v1/fota/campaigns/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Library objects for process pictures (current versions)
+   *
+   * Requires permission `data.read`. */
+  getHmiObjects(query?: { kind?: string; /** svg or composite (empty = all) */ }): Promise<(Record<string, unknown>)[]> {
+    return this.request<(Record<string, unknown>)[]>('GET', `/api/v1/hmi/objects`, query, undefined, false);
+  }
+
+  /** Create a library object
+   *
+   * kind `composite`: body {elements, tags, width, height} — drawing elements (screen format v1) whose tags may be placeholders `$name` listed in `tags`; kind `svg`: body {svg}, sanitised like an import.
+   * 
+   * Requires permission `content.write`. */
+  postHmiObjects(body: {
+    /** object body */
+    body: Record<string, unknown>;
+    category?: string;
+    /** svg | composite */
+    kind: string;
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    slug?: string;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/hmi/objects`, undefined, body, false);
+  }
+
+  /** Import an SVG graphic
+   *
+   * The SVG is sanitised by a whitelist (no script, event handlers, foreignObject, images, links, animations or external references); the response lists what was removed.
+   * 
+   * Requires permission `content.write`. */
+  postHmiObjectsImportSvg(body: {
+    category?: string;
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    slug?: string;
+    /** SVG document, at most 512 KiB */
+    svg: string;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/hmi/objects/import-svg`, undefined, body, false);
+  }
+
+  /** Library object with its body
+   *
+   * Requires permission `data.read`. */
+  getHmiObjectsSlug(slug: string): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('GET', `/api/v1/hmi/objects/${encodeURIComponent(slug)}`, undefined, undefined, false);
+  }
+
+  /** Save a new version of a library object
+   *
+   * Requires permission `content.write`. */
+  putHmiObjectsSlug(slug: string, body: {
+    /** object body */
+    body: Record<string, unknown>;
+    category?: string;
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('PUT', `/api/v1/hmi/objects/${encodeURIComponent(slug)}`, undefined, body, false);
+  }
+
+  /** Retire a library object
+   *
+   * Requires permission `content.write`. */
+  deleteHmiObjectsSlug(slug: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/hmi/objects/${encodeURIComponent(slug)}`, query, undefined, false);
+  }
+
+  /** The sanitised SVG of a graphic
+   *
+   * Served as image/svg+xml with a sandbox Content-Security-Policy.
+   * 
+   * Requires permission `data.read`. */
+  getHmiObjectsSlugSvg(slug: string): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/hmi/objects/${encodeURIComponent(slug)}/svg`, undefined, undefined, true);
+  }
+
+  /** Rooms with their entities (Home page)
+   *
+   * Requires permission `data.read`. */
+  getHome(): Promise<{
+    can_control?: boolean;
+    can_manage?: boolean;
+    pending_devices?: number;
+    rooms?: ({
+      entities?: ({
+        attributes?: Record<string, unknown>;
+        available?: boolean;
+        /** sensor, binary_sensor, switch, light, cover, fan, lock, climate, number, select, button, text, … */
+        component?: string;
+        /** history of the state */
+        datastream_id?: string;
+        device?: string;
+        device_id?: string;
+        error?: string;
+        id?: string;
+        name?: string;
+        room?: string;
+        room_id?: string;
+        services?: string[];
+        state?: string;
+        status?: "active" | "unsupported" | "removed";
+        /** control hints: min, max, step, options, modes, …; lights: color {rgb, color_temp, min_mireds, max_mireds} */
+        ui?: Record<string, unknown>;
+        unit?: string;
+      })[];
+      id?: string;
+      name?: string;
+    })[];
+  }> {
+    return this.request<{
+    can_control?: boolean;
+    can_manage?: boolean;
+    pending_devices?: number;
+    rooms?: ({
+      entities?: ({
+        attributes?: Record<string, unknown>;
+        available?: boolean;
+        /** sensor, binary_sensor, switch, light, cover, fan, lock, climate, number, select, button, text, … */
+        component?: string;
+        /** history of the state */
+        datastream_id?: string;
+        device?: string;
+        device_id?: string;
+        error?: string;
+        id?: string;
+        name?: string;
+        room?: string;
+        room_id?: string;
+        services?: string[];
+        state?: string;
+        status?: "active" | "unsupported" | "removed";
+        /** control hints: min, max, step, options, modes, …; lights: color {rgb, color_temp, min_mireds, max_mireds} */
+        ui?: Record<string, unknown>;
+        unit?: string;
+      })[];
+      id?: string;
+      name?: string;
+    })[];
+  }>('GET', `/api/v1/home`, undefined, undefined, false);
   }
 
   /** Supported and enabled languages */
@@ -2361,6 +3674,334 @@ export class Ctrl32Client {
   }>('POST', `/api/v1/ingest/chirpstack/${encodeURIComponent(id)}`, query, body, false);
   }
 
+  /** The published front page
+   *
+   * Public. `spec` is null while the built-in page is shown. */
+  getLanding(): Promise<{
+    spec?: LandingSpec;
+    version?: number;
+  }> {
+    return this.request<{
+    spec?: LandingSpec;
+    version?: number;
+  }>('GET', `/api/v1/landing`, undefined, undefined, false);
+  }
+
+  /** Uploaded images
+   *
+   * Requires permission `system.admin`. */
+  getLandingAssets(): Promise<({
+    bytes?: number;
+    created_at?: string;
+    id?: string;
+    mime?: string;
+    name?: string;
+    url?: string;
+  })[]> {
+    return this.request<({
+    bytes?: number;
+    created_at?: string;
+    id?: string;
+    mime?: string;
+    name?: string;
+    url?: string;
+  })[]>('GET', `/api/v1/landing/assets`, undefined, undefined, false);
+  }
+
+  /** Upload an image
+   *
+   * PNG, JPEG or WebP (checked by content) or SVG (sanitised), at most 2 MiB.
+   * 
+   * Requires permission `system.admin`. */
+  postLandingAssets(body: FormData): Promise<{
+    bytes?: number;
+    id?: string;
+    mime?: string;
+    name?: string;
+    url?: string;
+  }> {
+    return this.request<{
+    bytes?: number;
+    id?: string;
+    mime?: string;
+    name?: string;
+    url?: string;
+  }>('POST', `/api/v1/landing/assets`, undefined, body, false);
+  }
+
+  /** An image of the front page
+   *
+   * Public; served with a sandbox Content-Security-Policy. */
+  getLandingAssetsId(id: string): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/landing/assets/${encodeURIComponent(id)}`, undefined, undefined, true);
+  }
+
+  /** The newest version for the editor
+   *
+   * The built-in page as blocks when nothing was saved yet.
+   * 
+   * Requires permission `system.admin`. */
+  getLandingDraft(): Promise<{
+    published_version?: number;
+    spec?: LandingSpec;
+    /** null when nothing was saved */
+    version?: number;
+  }> {
+    return this.request<{
+    published_version?: number;
+    spec?: LandingSpec;
+    /** null when nothing was saved */
+    version?: number;
+  }>('GET', `/api/v1/landing/draft`, undefined, undefined, false);
+  }
+
+  /** Show the built-in page again
+   *
+   * Requires permission `system.admin`. */
+  postLandingUnpublish(body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    published_version?: number | null;
+  }> {
+    return this.request<{
+    published_version?: number | null;
+  }>('POST', `/api/v1/landing/unpublish`, undefined, body, false);
+  }
+
+  /** Saved versions
+   *
+   * Requires permission `system.admin`. */
+  getLandingVersions(): Promise<({
+    blocks?: number;
+    created_at?: string;
+    created_by?: string;
+    published?: boolean;
+    reason?: string;
+    version?: number;
+  })[]> {
+    return this.request<({
+    blocks?: number;
+    created_at?: string;
+    created_by?: string;
+    published?: boolean;
+    reason?: string;
+    version?: number;
+  })[]>('GET', `/api/v1/landing/versions`, undefined, undefined, false);
+  }
+
+  /** Save a version (and publish it)
+   *
+   * Strict validation: known block types and fields only, #rrggbb colours, catalogue icons, links to a page here, https://, mailto: or tel:, own images.
+   * 
+   * Requires permission `system.admin`. */
+  postLandingVersions(body: {
+    /** publish at once */
+    publish?: boolean;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    spec: LandingSpec;
+  }): Promise<{
+    published?: boolean;
+    version?: number;
+  }> {
+    return this.request<{
+    published?: boolean;
+    version?: number;
+  }>('POST', `/api/v1/landing/versions`, undefined, body, false);
+  }
+
+  /** One version
+   *
+   * Requires permission `system.admin`. */
+  getLandingVersionsV(v: string): Promise<{
+    spec?: LandingSpec;
+    version?: number;
+  }> {
+    return this.request<{
+    spec?: LandingSpec;
+    version?: number;
+  }>('GET', `/api/v1/landing/versions/${encodeURIComponent(v)}`, undefined, undefined, false);
+  }
+
+  /** Publish a version
+   *
+   * Requires permission `system.admin`. */
+  postLandingVersionsVPublish(v: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    published_version?: number;
+  }> {
+    return this.request<{
+    published_version?: number;
+  }>('POST', `/api/v1/landing/versions/${encodeURIComponent(v)}/publish`, undefined, body, false);
+  }
+
+  /** MQTT accounts and bridges
+   *
+   * Requires permission `device.manage`. */
+  getMqttSources(): Promise<({
+    id?: string;
+    kind?: "account" | "bridge";
+    name?: string;
+    /** devices waiting in the inbox */
+    pending?: number;
+    /** host, port, tls, username, client_id, discovery_prefix, adopt (auto|inbox), site_id, namespace; never passwords */
+    settings?: Record<string, unknown>;
+    status?: {
+      connected?: boolean;
+      entities?: number;
+      error?: string;
+    };
+  })[]> {
+    return this.request<({
+    id?: string;
+    kind?: "account" | "bridge";
+    name?: string;
+    /** devices waiting in the inbox */
+    pending?: number;
+    /** host, port, tls, username, client_id, discovery_prefix, adopt (auto|inbox), site_id, namespace; never passwords */
+    settings?: Record<string, unknown>;
+    status?: {
+      connected?: boolean;
+      entities?: number;
+      error?: string;
+    };
+  })[]>('GET', `/api/v1/mqtt-sources`, undefined, undefined, false);
+  }
+
+  /** Create an MQTT account or a bridge
+   *
+   * An account gets a generated user name and password (returned once) and its own topic namespace: its devices use any topics (zigbee2mqtt/…, cmnd/…, homeassistant/…) without seeing other accounts. A bridge connects ctrl32 to a foreign broker.
+   * 
+   * Requires permission `device.manage`. */
+  postMqttSources(body: {
+    adopt?: "auto" | "inbox";
+    /** bridge */
+    client_id?: string;
+    /** default homeassistant */
+    discovery_prefix?: string;
+    /** bridge */
+    host?: string;
+    /** bridge, self-signed brokers */
+    insecure_skip_verify?: boolean;
+    kind?: "account" | "bridge";
+    name?: string;
+    /** minutes disconnected before an incident opens (default 10, 0 = never; accounts only once they have entities) */
+    outage_incident_min?: number;
+    /** bridge; stored encrypted */
+    password?: string;
+    /** bridge */
+    port?: number;
+    publish_datastreams?: string[];
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    site_id?: string;
+    /** bridge */
+    tls?: boolean;
+    /** bridge */
+    username?: string;
+  }): Promise<{
+    id?: string;
+    kind?: "account" | "bridge";
+    name?: string;
+    /** devices waiting in the inbox */
+    pending?: number;
+    /** host, port, tls, username, client_id, discovery_prefix, adopt (auto|inbox), site_id, namespace; never passwords */
+    settings?: Record<string, unknown>;
+    status?: {
+      connected?: boolean;
+      entities?: number;
+      error?: string;
+    };
+  }> {
+    return this.request<{
+    id?: string;
+    kind?: "account" | "bridge";
+    name?: string;
+    /** devices waiting in the inbox */
+    pending?: number;
+    /** host, port, tls, username, client_id, discovery_prefix, adopt (auto|inbox), site_id, namespace; never passwords */
+    settings?: Record<string, unknown>;
+    status?: {
+      connected?: boolean;
+      entities?: number;
+      error?: string;
+    };
+  }>('POST', `/api/v1/mqtt-sources`, undefined, body, false);
+  }
+
+  /** Change an MQTT source
+   *
+   * Requires permission `device.manage`. */
+  putMqttSourcesId(id: string, body: {
+    adopt?: "auto" | "inbox";
+    /** bridge */
+    client_id?: string;
+    /** default homeassistant */
+    discovery_prefix?: string;
+    /** bridge */
+    host?: string;
+    /** bridge, self-signed brokers */
+    insecure_skip_verify?: boolean;
+    kind?: "account" | "bridge";
+    name?: string;
+    /** minutes disconnected before an incident opens (default 10, 0 = never; accounts only once they have entities) */
+    outage_incident_min?: number;
+    /** bridge; stored encrypted */
+    password?: string;
+    /** bridge */
+    port?: number;
+    publish_datastreams?: string[];
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    site_id?: string;
+    /** bridge */
+    tls?: boolean;
+    /** bridge */
+    username?: string;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('PUT', `/api/v1/mqtt-sources/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Delete an MQTT source
+   *
+   * Its entities are marked removed; their history stays.
+   * 
+   * Requires permission `device.manage`. */
+  deleteMqttSourcesId(id: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/mqtt-sources/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** New password for an MQTT account
+   *
+   * Connected clients of the account are disconnected.
+   * 
+   * Requires permission `device.manage`. */
+  postMqttSourcesIdPassword(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    id?: string;
+    /** shown once */
+    password?: string;
+    username?: string;
+  }> {
+    return this.request<{
+    id?: string;
+    /** shown once */
+    password?: string;
+    username?: string;
+  }>('POST', `/api/v1/mqtt-sources/${encodeURIComponent(id)}/password`, undefined, body, false);
+  }
+
   /** List channels
    *
    * Requires permission `config.write`. */
@@ -2440,6 +4081,31 @@ export class Ctrl32Client {
    * Requires permission `data.read`. */
   getObservations(query: { datastream_id: string; from?: string; /** RFC 3339 (default: 24 hours ago) */ to?: string; /** RFC 3339 (default: now) */ bucket?: number; /** aggregation bucket in seconds; omitted = raw rows */ limit?: number; /** max rows per page */ cursor?: string; /** X-Next-Cursor of the previous page */ }): Promise<Observation[] | ObservationBuckets> {
     return this.request<Observation[] | ObservationBuckets>('GET', `/api/v1/observations`, query, undefined, false);
+  }
+
+  /** Connection details for devices
+   *
+   * Requires permission `device.manage`. */
+  getOnboarding(): Promise<{
+    base_url?: string;
+    mqtt?: {
+      host?: string;
+      port?: number;
+      tls_port?: number;
+      ws_port?: number;
+    };
+    provision_url?: string;
+  }> {
+    return this.request<{
+    base_url?: string;
+    mqtt?: {
+      host?: string;
+      port?: number;
+      tls_port?: number;
+      ws_port?: number;
+    };
+    provision_url?: string;
+  }>('GET', `/api/v1/onboarding`, undefined, undefined, false);
   }
 
   /** OpenAPI 3.1 document
@@ -2528,16 +4194,20 @@ export class Ctrl32Client {
     return this.request<Permission[]>('GET', `/api/v1/permissions`, undefined, undefined, false);
   }
 
-  /** Device self-provisioning with a claim code
+  /** Device self-provisioning with a claim code or a provisioning key
    *
-   * The device presents the claim code from device registration and receives its token and MQTT connection details. Rate limited per IP. */
+   * Either the claim code from device registration (response: token and MQTT connection details), or ThingsBoard-compatible `{deviceName, provisionDeviceKey, provisionDeviceSecret}` of a provisioning profile (response: `{status, credentialsType: ACCESS_TOKEN, credentialsValue}`; the same works over MQTT: user name `provision`, publish `/provision/request`, answer on `/provision/response`). Rate limited per IP and key. */
   postProvision(body: {
     /** claim code */
-    claim: string;
+    claim?: string;
+    /** provisioning profile variant */
+    deviceName?: string;
     /** firmware version */
     fw?: string;
     /** hardware id */
     hw?: string;
+    provisionDeviceKey?: string;
+    provisionDeviceSecret?: string;
   }): Promise<{
     device_id?: string;
     external_id?: string;
@@ -2562,6 +4232,188 @@ export class Ctrl32Client {
     /** device token, shown once */
     token?: string;
   }>('POST', `/api/v1/provision`, undefined, body, false);
+  }
+
+  /** Provisioning profiles
+   *
+   * Requires permission `device.manage`. */
+  getProvisionProfiles(): Promise<({
+    /** created devices wait for approval */
+    approval?: boolean;
+    auto_datastreams?: boolean;
+    devices?: number;
+    id?: string;
+    /** pk_…, identifies the profile */
+    key?: string;
+    /** 0 = unlimited */
+    max_devices?: number;
+    name?: string;
+    /** regular expression */
+    name_pattern?: string;
+    room_id?: string;
+    site_id?: string;
+    strategy?: "create" | "preprovisioned";
+    transport?: "mqtt" | "http";
+  })[]> {
+    return this.request<({
+    /** created devices wait for approval */
+    approval?: boolean;
+    auto_datastreams?: boolean;
+    devices?: number;
+    id?: string;
+    /** pk_…, identifies the profile */
+    key?: string;
+    /** 0 = unlimited */
+    max_devices?: number;
+    name?: string;
+    /** regular expression */
+    name_pattern?: string;
+    room_id?: string;
+    site_id?: string;
+    strategy?: "create" | "preprovisioned";
+    transport?: "mqtt" | "http";
+  })[]>('GET', `/api/v1/provision-profiles`, undefined, undefined, false);
+  }
+
+  /** Create a provisioning profile
+   *
+   * The response carries the `secret` once; devices use key and secret to register themselves.
+   * 
+   * Requires permission `device.manage`. */
+  postProvisionProfiles(body: {
+    approval?: boolean;
+    auto_datastreams?: boolean;
+    max_devices?: number;
+    name?: string;
+    name_pattern?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    room_id?: string;
+    site_id?: string;
+    strategy?: "create" | "preprovisioned";
+    transport?: "mqtt" | "http";
+  }): Promise<{
+    /** created devices wait for approval */
+    approval?: boolean;
+    auto_datastreams?: boolean;
+    devices?: number;
+    id?: string;
+    /** pk_…, identifies the profile */
+    key?: string;
+    /** 0 = unlimited */
+    max_devices?: number;
+    name?: string;
+    /** regular expression */
+    name_pattern?: string;
+    room_id?: string;
+    site_id?: string;
+    strategy?: "create" | "preprovisioned";
+    transport?: "mqtt" | "http";
+  }> {
+    return this.request<{
+    /** created devices wait for approval */
+    approval?: boolean;
+    auto_datastreams?: boolean;
+    devices?: number;
+    id?: string;
+    /** pk_…, identifies the profile */
+    key?: string;
+    /** 0 = unlimited */
+    max_devices?: number;
+    name?: string;
+    /** regular expression */
+    name_pattern?: string;
+    room_id?: string;
+    site_id?: string;
+    strategy?: "create" | "preprovisioned";
+    transport?: "mqtt" | "http";
+  }>('POST', `/api/v1/provision-profiles`, undefined, body, false);
+  }
+
+  /** Change a provisioning profile
+   *
+   * Requires permission `device.manage`. */
+  putProvisionProfilesId(id: string, body: {
+    approval?: boolean;
+    auto_datastreams?: boolean;
+    max_devices?: number;
+    name?: string;
+    name_pattern?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    room_id?: string;
+    site_id?: string;
+    strategy?: "create" | "preprovisioned";
+    transport?: "mqtt" | "http";
+  }): Promise<{
+    /** created devices wait for approval */
+    approval?: boolean;
+    auto_datastreams?: boolean;
+    devices?: number;
+    id?: string;
+    /** pk_…, identifies the profile */
+    key?: string;
+    /** 0 = unlimited */
+    max_devices?: number;
+    name?: string;
+    /** regular expression */
+    name_pattern?: string;
+    room_id?: string;
+    site_id?: string;
+    strategy?: "create" | "preprovisioned";
+    transport?: "mqtt" | "http";
+  }> {
+    return this.request<{
+    /** created devices wait for approval */
+    approval?: boolean;
+    auto_datastreams?: boolean;
+    devices?: number;
+    id?: string;
+    /** pk_…, identifies the profile */
+    key?: string;
+    /** 0 = unlimited */
+    max_devices?: number;
+    name?: string;
+    /** regular expression */
+    name_pattern?: string;
+    room_id?: string;
+    site_id?: string;
+    strategy?: "create" | "preprovisioned";
+    transport?: "mqtt" | "http";
+  }>('PUT', `/api/v1/provision-profiles/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Revoke a provisioning profile
+   *
+   * Requires permission `device.manage`. */
+  deleteProvisionProfilesId(id: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/provision-profiles/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** New secret for a profile
+   *
+   * Devices already provisioned keep their tokens.
+   * 
+   * Requires permission `device.manage`. */
+  postProvisionProfilesIdRotate(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    id?: string;
+    /** shown once */
+    secret?: string;
+  }> {
+    return this.request<{
+    id?: string;
+    /** shown once */
+    secret?: string;
+  }>('POST', `/api/v1/provision-profiles/${encodeURIComponent(id)}/rotate`, undefined, body, false);
   }
 
   /** Shared dashboard */
@@ -2595,6 +4447,13 @@ export class Ctrl32Client {
   /** Devices shown in the shared dashboard */
   getPublicTokenDevices(token: string): Promise<Device[]> {
     return this.request<Device[]>('GET', `/api/v1/public/${encodeURIComponent(token)}/devices`, undefined, undefined, false);
+  }
+
+  /** A library graphic shown by the shared picture
+   *
+   * Only graphics that the linked process picture references. */
+  getPublicTokenHmiObjectsSlugSvg(token: string, slug: string): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/public/${encodeURIComponent(token)}/hmi/objects/${encodeURIComponent(slug)}/svg`, undefined, undefined, true);
   }
 
   /** Observations (bound datastreams only)
@@ -2798,6 +4657,192 @@ export class Ctrl32Client {
     id?: string;
     version?: number;
   }>('POST', `/api/v1/register-profiles/${encodeURIComponent(id)}/apply`, undefined, body, false);
+  }
+
+  /** This node and its replicas
+   *
+   * Node identity and role (primary, replica, fenced) and every replica with mode, state, lag, copy progress, limits and detachment record.
+   * 
+   * Requires permission `system.admin`. */
+  getReplication(): Promise<{
+    max_replicas?: number;
+    modes?: string[];
+    node?: ReplicationNode;
+    pending?: (Record<string, unknown>)[];
+    replicas?: Replica[];
+  }> {
+    return this.request<{
+    max_replicas?: number;
+    modes?: string[];
+    node?: ReplicationNode;
+    pending?: (Record<string, unknown>)[];
+    replicas?: Replica[];
+  }>('GET', `/api/v1/replication`, undefined, undefined, false);
+  }
+
+  /** Pending command for the replica (long poll)
+   *
+   * Requires permission `replica token`. */
+  getReplicationAgent(): Promise<{
+    /** detach command: lsn, seq, hash, snapshot, counts, partial */
+    command?: Record<string, unknown> | null;
+  }> {
+    return this.request<{
+    /** detach command: lsn, seq, hash, snapshot, counts, partial */
+    command?: Record<string, unknown> | null;
+  }>('GET', `/api/v1/replication/agent`, undefined, undefined, false);
+  }
+
+  /** Report from the replica
+   *
+   * Requires permission `replica token`. */
+  postReplicationAgent(body: {
+    /** detach result: promoted, chain_ok, entry_ok, counts, errors */
+    result?: Record<string, unknown>;
+    /** replica's own view */
+    status?: Record<string, unknown>;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/replication/agent`, undefined, body, false);
+  }
+
+  /** Pair a replica with a one-time code
+   *
+   * Used by `ctrl32-telemetry replica attach`. Rate-limited; a wrong or expired code is a security event (403). Versions of PostgreSQL (major) and ctrl32 must match (400). */
+  postReplicationPair(body: {
+    code: string;
+    ctrl32_version: string;
+    hostname?: string;
+    name?: string;
+    os?: string;
+    pg_major: number;
+    standby_url?: string;
+  }): Promise<{
+    mode?: string;
+    name?: string;
+    /** its password (shown once) */
+    password?: string;
+    pg_major?: number;
+    primary_node?: string;
+    replica_id?: string;
+    /** replication role */
+    role?: string;
+    slot?: string;
+    /** bearer token of the replica (shown once) */
+    token?: string;
+  }> {
+    return this.request<{
+    mode?: string;
+    name?: string;
+    /** its password (shown once) */
+    password?: string;
+    pg_major?: number;
+    primary_node?: string;
+    replica_id?: string;
+    /** replication role */
+    role?: string;
+    slot?: string;
+    /** bearer token of the replica (shown once) */
+    token?: string;
+  }>('POST', `/api/v1/replication/pair`, undefined, body, false);
+  }
+
+  /** Create a one-time pairing code
+   *
+   * The code (XXXX-XXXX-XXXX) is shown once and is valid 15 minutes; on the second machine run `ctrl32-telemetry replica attach -primary <this URL> -code <code>`.
+   * 
+   * Requires permission `system.admin`. */
+  postReplicationPairings(body: {
+    /** alarm when the replica is further behind (default 10) */
+    lag_limit_s?: number;
+    mode: "copy" | "continuous" | "standby";
+    /** ≤ 64 */
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    code?: string;
+    expires_at?: string;
+    mode?: string;
+    name?: string;
+  }> {
+    return this.request<{
+    code?: string;
+    expires_at?: string;
+    mode?: string;
+    name?: string;
+  }>('POST', `/api/v1/replication/pairings`, undefined, body, false);
+  }
+
+  /** Change a replica's mode or limits
+   *
+   * Requires permission `system.admin`. */
+  patchReplicationReplicasId(id: string, body: {
+    lag_limit_s?: number;
+    /** maximum WAL the primary keeps for it (64 MB – 10 TB) */
+    max_retained_mb?: number;
+    mode?: "copy" | "continuous" | "standby";
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** hot standby: its public URL */
+    standby_url?: string;
+  }): Promise<Replica> {
+    return this.request<Replica>('PATCH', `/api/v1/replication/replicas/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Drop a replica
+   *
+   * Revokes its token and removes its replication role, slot and pg_hba rule; the copy stays as it is and is no longer fed.
+   * 
+   * Requires permission `system.admin`. */
+  deleteReplicationReplicasId(id: string, query: { reason: string; }): Promise<Replica> {
+    return this.request<Replica>('DELETE', `/api/v1/replication/replicas/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Detach a replica safely
+   *
+   * Counts the record tables in one snapshot, writes the `replica.detach` audit entry, then the replica catches up to it, becomes independent and verifies the audit chain and the counts; the result is in `detach.verification`. Refused (409) when not in sync unless `accept_partial`.
+   * 
+   * Requires permission `system.admin`. */
+  postReplicationReplicasIdDetach(id: string, body: {
+    /** detach a replica that is not in sync; the copy is marked partial */
+    accept_partial?: boolean;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<Replica> {
+    return this.request<Replica>('POST', `/api/v1/replication/replicas/${encodeURIComponent(id)}/detach`, undefined, body, false);
+  }
+
+  /** History of a replica
+   *
+   * Requires permission `system.admin`. */
+  getReplicationReplicasIdEvents(id: string, query?: { limit?: number; /** default 100 */ }): Promise<({
+    detail?: Record<string, unknown>;
+    /** state, alarm, command, detach, promote, security, config */
+    kind?: string;
+    ts?: string;
+  })[]> {
+    return this.request<({
+    detail?: Record<string, unknown>;
+    /** state, alarm, command, detach, promote, security, config */
+    kind?: string;
+    ts?: string;
+  })[]>('GET', `/api/v1/replication/replicas/${encodeURIComponent(id)}/events`, query, undefined, false);
+  }
+
+  /** Who this node is
+   *
+   * No authentication: a returning primary asks its hot standby whether it was promoted (fencing). */
+  getReplicationRole(): Promise<ReplicationNode> {
+    return this.request<ReplicationNode>('GET', `/api/v1/replication/role`, undefined, undefined, false);
+  }
+
+  /** Replication tunnel (HTTP upgrade)
+   *
+   * With `Connection: Upgrade`, `Upgrade: ctrl32-pgrepl` and the replica token the connection becomes a byte stream to the primary's PostgreSQL (101 Switching Protocols).
+   * 
+   * Requires permission `replica token`. */
+  getReplicationTunnel(): Promise<unknown> {
+    return this.request<unknown>('GET', `/api/v1/replication/tunnel`, undefined, undefined, false);
   }
 
   /** Report kinds, overrides and engine info
@@ -3108,6 +5153,25 @@ export class Ctrl32Client {
   }>('POST', `/api/v1/rules/${encodeURIComponent(id)}/approve`, undefined, body, false);
   }
 
+  /** Convert a rule into a flow spec
+   *
+   * Returns an equivalent flow (datastream triggers → join → "true for" → actions) to create as a draft with `POST /api/v1/flows`; parts without a flow equivalent (staleness, webhook secrets, custom RPC arguments) are listed in `notes` and in a comment node. The rule itself is not changed.
+   * 
+   * Requires permission `config.write`. */
+  getRulesIdAsFlow(id: string): Promise<{
+    name?: string;
+    notes?: string[];
+    problems?: FlowProblem[];
+    spec?: FlowSpec;
+  }> {
+    return this.request<{
+    name?: string;
+    notes?: string[];
+    problems?: FlowProblem[];
+    spec?: FlowSpec;
+  }>('GET', `/api/v1/rules/${encodeURIComponent(id)}/as-flow`, undefined, undefined, false);
+  }
+
   /** Reject a pending rule
    *
    * Requires permission `device.command`. */
@@ -3122,6 +5186,128 @@ export class Ctrl32Client {
     id?: string;
     status?: string;
   }>('POST', `/api/v1/rules/${encodeURIComponent(id)}/reject`, undefined, body, false);
+  }
+
+  /** Scenes
+   *
+   * Requires permission `data.read`. */
+  getScenes(): Promise<Scene[]> {
+    return this.request<Scene[]>('GET', `/api/v1/scenes`, undefined, undefined, false);
+  }
+
+  /** Create a scene
+   *
+   * Actions explicitly, or capture: entity ids whose current states (on/off, brightness, colour, position, temperature, mode, value) become the actions.
+   * 
+   * Requires permission `device.manage`. */
+  postScenes(body: {
+    actions?: SceneAction[];
+    capture?: string[];
+    event_kinds?: string[];
+    /** 1–600 */
+    event_post_s?: number;
+    /** 0–60, record = events */
+    event_pre_s?: number;
+    /** camera group ≤ 60; users limited to groups see only their cameras (spec 014) */
+    group?: string;
+    /** icon name */
+    icon?: string;
+    /** ≤ 80 */
+    name: string;
+    /** http://camera/onvif/device_service: events and PTZ (spec 013) */
+    onvif_url?: string;
+    privacy_masks?: number[][][];
+    /** empty = the first profile with PTZ */
+    ptz_profile?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    room_id?: string;
+    sort?: number;
+    /** pull: the server connects to the camera; push: a relay at a remote site sends the video (secret returned once as push_secret with relay_config) */
+    source?: "pull" | "push";
+  }): Promise<Scene> {
+    return this.request<Scene>('POST', `/api/v1/scenes`, undefined, body, false);
+  }
+
+  /** Change a scene
+   *
+   * Requires permission `device.manage`. */
+  putScenesId(id: string, body: {
+    actions?: SceneAction[];
+    capture?: string[];
+    event_kinds?: string[];
+    /** 1–600 */
+    event_post_s?: number;
+    /** 0–60, record = events */
+    event_pre_s?: number;
+    /** camera group ≤ 60; users limited to groups see only their cameras (spec 014) */
+    group?: string;
+    icon?: string;
+    name?: string;
+    /** http://camera/onvif/device_service: events and PTZ (spec 013) */
+    onvif_url?: string;
+    privacy_masks?: number[][][];
+    /** empty = the first profile with PTZ */
+    ptz_profile?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    room_id?: string;
+    sort?: number;
+    /** pull: the server connects to the camera; push: a relay at a remote site sends the video (secret returned once as push_secret with relay_config) */
+    source?: "pull" | "push";
+  }): Promise<Scene> {
+    return this.request<Scene>('PUT', `/api/v1/scenes/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Delete a scene
+   *
+   * Requires permission `device.manage`. */
+  deleteScenesId(id: string, query?: { reason?: string; /** required */ }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/scenes/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Activate a scene
+   *
+   * Each action is an entity command of the signed-in user (four eyes when required, audit with reason "Scene: <name>"). 409 when every command failed.
+   * 
+   * Requires permission `device.command`. */
+  postScenesIdActivate(id: string, body: {
+    /** optional */
+    reason?: string;
+  }): Promise<{
+    failed?: number;
+    name?: string;
+    results?: ({
+      command_id?: string;
+      entity_id?: string;
+      error?: string;
+      http_status?: number;
+      service?: string;
+      /** sent, acked, pending, failed */
+      status?: string;
+    })[];
+    scene?: string;
+  }> {
+    return this.request<{
+    failed?: number;
+    name?: string;
+    results?: ({
+      command_id?: string;
+      entity_id?: string;
+      error?: string;
+      http_status?: number;
+      service?: string;
+      /** sent, acked, pending, failed */
+      status?: string;
+    })[];
+    scene?: string;
+  }>('POST', `/api/v1/scenes/${encodeURIComponent(id)}/activate`, undefined, body, false);
   }
 
   /** Server status and configuration summary
@@ -3545,6 +5731,41 @@ export class Ctrl32Client {
     return this.request<User>('PATCH', `/api/v1/users/${encodeURIComponent(id)}`, undefined, body, false);
   }
 
+  /** A user's camera access
+   *
+   * limited = false: all cameras; otherwise only the cameras of the groups ("" = cameras without a group).
+   * 
+   * Requires permission `user.admin`. */
+  getUsersIdCameraGroups(id: string): Promise<{
+    groups?: string[];
+    limited?: boolean;
+  }> {
+    return this.request<{
+    groups?: string[];
+    limited?: boolean;
+  }>('GET', `/api/v1/users/${encodeURIComponent(id)}/camera-groups`, undefined, undefined, false);
+  }
+
+  /** Limit a user to camera groups
+   *
+   * Applies at once to every camera endpoint. An administrator limited to some groups can hand out only those. Audited.
+   * 
+   * Requires permission `user.admin`. */
+  putUsersIdCameraGroups(id: string, body: {
+    groups?: string[];
+    limited: boolean;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    groups?: string[];
+    limited?: boolean;
+  }> {
+    return this.request<{
+    groups?: string[];
+    limited?: boolean;
+  }>('PUT', `/api/v1/users/${encodeURIComponent(id)}/camera-groups`, undefined, body, false);
+  }
+
   /** Remove a user's MFA enrolment
    *
    * Requires permission `user.admin`. */
@@ -3613,5 +5834,645 @@ export class Ctrl32Client {
     by?: string;
     username?: string;
   }>('POST', `/api/v1/users/${encodeURIComponent(id)}/unlock`, undefined, body, false);
+  }
+
+  /** Camera groups in use
+   *
+   * Groups of the organization's cameras with their counts; a limited user sees only their groups.
+   * 
+   * Requires permission `video.view`. */
+  getVideoCameraGroups(): Promise<({
+    cameras?: number;
+    group?: string;
+  })[]> {
+    return this.request<({
+    cameras?: number;
+    group?: string;
+  })[]>('GET', `/api/v1/video/camera-groups`, undefined, undefined, false);
+  }
+
+  /** Cameras
+   *
+   * Stream addresses, user name and transport only for video.manage.
+   * 
+   * Requires permission `video.view`. */
+  getVideoCameras(): Promise<Camera[]> {
+    return this.request<Camera[]>('GET', `/api/v1/video/cameras`, undefined, undefined, false);
+  }
+
+  /** Add a camera
+   *
+   * Requires permission `video.manage`. */
+  postVideoCameras(body: {
+    /** record the camera's sound (AAC or Opus); spec 020 */
+    audio?: boolean;
+    enabled?: boolean;
+    event_kinds?: string[];
+    /** 1–600 */
+    event_post_s?: number;
+    /** 0–60, record = events */
+    event_pre_s?: number;
+    /** camera group ≤ 60; users limited to groups see only their cameras (spec 014) */
+    group?: string;
+    /** ≤ 120 */
+    location?: string;
+    /** motion detection on the server (spec 019) */
+    motion_detect?: boolean;
+    /** 1 to 100, default 50 */
+    motion_sensitivity?: number;
+    motion_zones?: number[][][];
+    /** ≤ 80 */
+    name: string;
+    /** http://camera/onvif/device_service: events and PTZ (spec 013) */
+    onvif_url?: string;
+    /** stored encrypted; omit to keep, "" to clear */
+    password?: string;
+    privacy_masks?: number[][][];
+    /** empty = the first profile with PTZ */
+    ptz_profile?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** continuous; events: only around events (pre- and post-roll); off */
+    record?: "continuous" | "events" | "off";
+    /** 1–3650, default 7 */
+    retention_days?: number;
+    /** http(s) address of one JPEG picture, for H.264/H.265 cameras; without credentials */
+    snapshot_url?: string;
+    sort?: number;
+    /** pull: the server connects to the camera; push: a relay at a remote site sends the video (secret returned once as push_secret with relay_config) */
+    source?: "pull" | "push";
+    /** smaller stream for tiles (optional) */
+    sub_url?: string;
+    transport?: "auto" | "tcp" | "udp";
+    /** rtsp://, rtsps://, http:// or https:// main stream; user:password in the URL are moved to username/password */
+    url: string;
+    username?: string;
+  }): Promise<Camera> {
+    return this.request<Camera>('POST', `/api/v1/video/cameras`, undefined, body, false);
+  }
+
+  /** Test a stream
+   *
+   * Connects once (at most 8 s) and reports codec and picture size or the error. With id and no password the stored password is used.
+   * 
+   * Requires permission `video.manage`. */
+  postVideoCamerasTest(body: {
+    /** camera whose stored password to use */
+    id?: string;
+    password?: string;
+    transport?: "auto" | "tcp" | "udp";
+    url: string;
+    username?: string;
+  }): Promise<CameraStatus> {
+    return this.request<CameraStatus>('POST', `/api/v1/video/cameras/test`, undefined, body, false);
+  }
+
+  /** A camera
+   *
+   * Requires permission `video.view`. */
+  getVideoCamerasId(id: string): Promise<Camera> {
+    return this.request<Camera>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Change a camera
+   *
+   * Requires permission `video.manage`. */
+  putVideoCamerasId(id: string, body: {
+    /** record the camera's sound (AAC or Opus); spec 020 */
+    audio?: boolean;
+    enabled?: boolean;
+    event_kinds?: string[];
+    /** 1–600 */
+    event_post_s?: number;
+    /** 0–60, record = events */
+    event_pre_s?: number;
+    /** camera group ≤ 60; users limited to groups see only their cameras (spec 014) */
+    group?: string;
+    /** ≤ 120 */
+    location?: string;
+    /** motion detection on the server (spec 019) */
+    motion_detect?: boolean;
+    /** 1 to 100, default 50 */
+    motion_sensitivity?: number;
+    motion_zones?: number[][][];
+    /** ≤ 80 */
+    name?: string;
+    /** http://camera/onvif/device_service: events and PTZ (spec 013) */
+    onvif_url?: string;
+    /** stored encrypted; omit to keep, "" to clear */
+    password?: string;
+    privacy_masks?: number[][][];
+    /** empty = the first profile with PTZ */
+    ptz_profile?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** continuous; events: only around events (pre- and post-roll); off */
+    record?: "continuous" | "events" | "off";
+    /** 1–3650, default 7 */
+    retention_days?: number;
+    /** http(s) address of one JPEG picture, for H.264/H.265 cameras; without credentials */
+    snapshot_url?: string;
+    sort?: number;
+    /** pull: the server connects to the camera; push: a relay at a remote site sends the video (secret returned once as push_secret with relay_config) */
+    source?: "pull" | "push";
+    /** smaller stream for tiles (optional) */
+    sub_url?: string;
+    transport?: "auto" | "tcp" | "udp";
+    /** rtsp://, rtsps://, http:// or https:// main stream; user:password in the URL are moved to username/password */
+    url?: string;
+    username?: string;
+  }): Promise<Camera> {
+    return this.request<Camera>('PUT', `/api/v1/video/cameras/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Remove a camera
+   *
+   * Recordings stay until the camera's retention ends.
+   * 
+   * Requires permission `video.manage`. */
+  deleteVideoCamerasId(id: string, query?: { reason?: string; /** required */ }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/video/cameras/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Events of a camera
+   *
+   * Motion, tampering, line crossing, intrusion and inputs reported by the camera over ONVIF, and marks from flows and people.
+   * 
+   * Requires permission `video.playback`. */
+  getVideoCamerasIdEvents(id: string, query?: { from?: string; /** RFC 3339, required */ to?: string; /** RFC 3339 */ kind?: string; }): Promise<({
+    camera?: string;
+    camera_id?: string;
+    /** null while it lasts */
+    ended_at?: string | null;
+    id?: number;
+    kind?: "motion" | "tamper" | "line" | "intrusion" | "input" | "mark" | "other";
+    label?: string;
+    source?: "camera" | "flow" | "user";
+    started_at?: string;
+  })[]> {
+    return this.request<({
+    camera?: string;
+    camera_id?: string;
+    /** null while it lasts */
+    ended_at?: string | null;
+    id?: number;
+    kind?: "motion" | "tamper" | "line" | "intrusion" | "input" | "mark" | "other";
+    label?: string;
+    source?: "camera" | "flow" | "user";
+    started_at?: string;
+  })[]>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/events`, query, undefined, false);
+  }
+
+  /** Mark a camera
+   *
+   * A mark on the timeline; on a camera recording on events it records the given seconds with the pre-roll before. Audited.
+   * 
+   * Requires permission `video.view`. */
+  postVideoCamerasIdEvents(id: string, body: {
+    /** 1–200 characters */
+    label: string;
+    /** 0–3600 */
+    seconds?: number;
+  }): Promise<{
+    id?: number;
+  }> {
+    return this.request<{
+    id?: number;
+  }>('POST', `/api/v1/video/cameras/${encodeURIComponent(id)}/events`, undefined, body, false);
+  }
+
+  /** Signed evidence package
+   *
+   * ZIP with video.mp4 (remuxed, not re-encoded), manifest.json (SHA-256 of the video and of every recorded file as computed while recording and now, events, who exported it and why), manifest.sig (Ed25519 by the server key), public_key.txt and README.txt. At most one hour. Verify with `ctrl32-telemetry verify-evidence`. Audited with the video hash.
+   * 
+   * Requires permission `video.evidence`. */
+  getVideoCamerasIdEvidence(id: string, query: { from: string; /** RFC 3339 */ to: string; /** RFC 3339 */ reason: string; /** written into the manifest */ case_ref?: string; }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/evidence`, query, undefined, true);
+  }
+
+  /** Download recorded video
+   *
+   * One MP4 file (fragmented) of at most one hour; a change of resolution or codec ends it early. The recorded sound is the second track only for people with video.audio. Written to the audit trail (video.export).
+   * 
+   * Requires permission `video.playback`. */
+  getVideoCamerasIdExport(id: string, query?: { from?: string; /** RFC 3339, required */ to?: string; /** RFC 3339, required */ }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/export`, query, undefined, true);
+  }
+
+  /** Live video (WebSocket)
+   *
+   * Upgrade to a WebSocket. Text messages: `{type:"init", codec, mime, width, height}`, `{type:"time", t (ms), pos (s)}` at key frames, `{type:"status", state, error}`, `{type:"audio", mime, codec}` when the sound comes (spec 020: `audio=1`, main stream, camera with sound, video.audio; audited as video.listen): binary messages starting with the byte `A` then carry the sound as its own fragmented MP4 stream on the picture's time line. Binary messages: for H.264/H.265 the MP4 initialization, then one fragment (moof+mdat) per frame, for Media Source Extensions; for MJPEG one JPEG picture each.
+   * 
+   * Requires permission `video.view`. */
+  getVideoCamerasIdLive(id: string, query?: { audio?: string; /** 1 = with the sound (needs video.audio) */ quality?: string; /** sub (default; falls back to main) or main */ }): Promise<unknown> {
+    return this.request<unknown>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/live`, query, undefined, false);
+  }
+
+  /** Recorded video (WebSocket)
+   *
+   * Same messages as live, paced by the recording from the key frame before `from`; periods without recording are skipped; `{type:"end"}` after the newest recording. Written to the audit trail (video.playback).
+   * 
+   * Requires permission `video.playback`. */
+  getVideoCamerasIdPlayback(id: string, query?: { audio?: string; /** 1 = with the recorded sound at speed 1 (needs video.audio) */ from?: string; /** RFC 3339, required */ speed?: string; /** 0.25–16, default 1 */ }): Promise<unknown> {
+    return this.request<unknown>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/playback`, query, undefined, false);
+  }
+
+  /** Turn and zoom a PTZ camera
+   *
+   * move starts a continuous movement (speeds -1…1) until stop; preset goes to a stored position. Audited (moves once per the video setting ptz_audit_minutes per user and camera, presets always).
+   * 
+   * Requires permission `video.ptz`. */
+  postVideoCamerasIdPtz(id: string, body: {
+    action: "move" | "stop" | "preset";
+    pan?: number;
+    /** token */
+    preset?: string;
+    tilt?: number;
+    zoom?: number;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/video/cameras/${encodeURIComponent(id)}/ptz`, undefined, body, false);
+  }
+
+  /** PTZ presets
+   *
+   * Requires permission `video.ptz`. */
+  getVideoCamerasIdPtzPresets(id: string): Promise<({
+    name?: string;
+    token?: string;
+  })[]> {
+    return this.request<({
+    name?: string;
+    token?: string;
+  })[]>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/ptz/presets`, undefined, undefined, false);
+  }
+
+  /** New secret of a remote camera
+   *
+   * The relay with the old secret is disconnected at once. The new secret and a relay configuration are returned only in this response. Push cameras only (409 otherwise).
+   * 
+   * Requires permission `video.manage`. */
+  postVideoCamerasIdPushSecret(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** shown once */
+    push_secret?: string;
+    /** relay.toml for camera-relay */
+    relay_config?: string;
+  }> {
+    return this.request<{
+    /** shown once */
+    push_secret?: string;
+    /** relay.toml for camera-relay */
+    relay_config?: string;
+  }>('POST', `/api/v1/video/cameras/${encodeURIComponent(id)}/push-secret`, undefined, body, false);
+  }
+
+  /** Recorded spans
+   *
+   * Adjacent files are merged into spans for a timeline. Range at most 32 days.
+   * 
+   * Requires permission `video.playback`. */
+  getVideoCamerasIdRecordings(id: string, query?: { from?: string; /** RFC 3339, required */ to?: string; /** RFC 3339, default now */ }): Promise<{
+    bytes?: number;
+    camera?: string;
+    files?: number;
+    from?: string;
+    spans?: ({
+      from?: string;
+      to?: string;
+    })[];
+    to?: string;
+  }> {
+    return this.request<{
+    bytes?: number;
+    camera?: string;
+    files?: number;
+    from?: string;
+    spans?: ({
+      from?: string;
+      to?: string;
+    })[];
+    to?: string;
+  }>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/recordings`, query, undefined, false);
+  }
+
+  /** The current picture
+   *
+   * MJPEG streams only (the server does not decode H.264/H.265).
+   * 
+   * Requires permission `video.view`. */
+  getVideoCamerasIdSnapshot(id: string, query?: { quality?: string; /** sub or main */ }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/snapshot`, query, undefined, true);
+  }
+
+  /** Find ONVIF cameras
+   *
+   * WS-Discovery in the server's network (3 s); extra IP addresses (other subnets) are probed directly.
+   * 
+   * Requires permission `video.manage`. */
+  postVideoDiscover(body: {
+    hosts?: string[];
+  }): Promise<({
+    /** device service */
+    address?: string;
+    hardware?: string;
+    host?: string;
+    name?: string;
+  })[]> {
+    return this.request<({
+    /** device service */
+    address?: string;
+    hardware?: string;
+    host?: string;
+    name?: string;
+  })[]>('POST', `/api/v1/video/discover`, undefined, body, false);
+  }
+
+  /** Events of all cameras
+   *
+   * Requires permission `video.playback`. */
+  getVideoEvents(query?: { from?: string; /** RFC 3339, required */ to?: string; /** RFC 3339 */ kind?: string; /** motion, tamper, line, intrusion, input, mark, other */ }): Promise<({
+    camera?: string;
+    camera_id?: string;
+    /** null while it lasts */
+    ended_at?: string | null;
+    id?: number;
+    kind?: "motion" | "tamper" | "line" | "intrusion" | "input" | "mark" | "other";
+    label?: string;
+    source?: "camera" | "flow" | "user";
+    started_at?: string;
+  })[]> {
+    return this.request<({
+    camera?: string;
+    camera_id?: string;
+    /** null while it lasts */
+    ended_at?: string | null;
+    id?: number;
+    kind?: "motion" | "tamper" | "line" | "intrusion" | "input" | "mark" | "other";
+    label?: string;
+    source?: "camera" | "flow" | "user";
+    started_at?: string;
+  })[]>('GET', `/api/v1/video/events`, query, undefined, false);
+  }
+
+  /** Evidence signing key
+   *
+   * The server's Ed25519 public key and its fingerprint, to verify evidence packages.
+   * 
+   * Requires permission `video.playback`. */
+  getVideoEvidenceKey(): Promise<{
+    /** ed25519 */
+    algorithm?: string;
+    fingerprint?: string;
+    /** base64 */
+    public_key?: string;
+  }> {
+    return this.request<{
+    /** ed25519 */
+    algorithm?: string;
+    fingerprint?: string;
+    /** base64 */
+    public_key?: string;
+  }>('GET', `/api/v1/video/evidence/key`, undefined, undefined, false);
+  }
+
+  /** Recordings held as evidence
+   *
+   * Held ranges with their size; all=1 includes released ones (who released them and why). Limited users see only their cameras.
+   * 
+   * Requires permission `video.playback`. */
+  getVideoHolds(query?: { camera_id?: string; all?: string; /** 1 = include released */ }): Promise<(Record<string, unknown>)[]> {
+    return this.request<(Record<string, unknown>)[]>('GET', `/api/v1/video/holds`, query, undefined, false);
+  }
+
+  /** Hold recordings as evidence
+   *
+   * Recordings of the camera in the range are never deleted — not by the camera's retention nor to free disk space — until released. At most 31 days. Audited.
+   * 
+   * Requires permission `video.evidence`. */
+  postVideoHolds(body: {
+    camera_id: string;
+    /** ≤ 80 */
+    case_ref?: string;
+    from: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** 1–120 */
+    title: string;
+    to: string;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/video/holds`, undefined, body, false);
+  }
+
+  /** Release held recordings
+   *
+   * The normal retention deletes them afterwards. Audited with the reason.
+   * 
+   * Requires permission `video.evidence`. */
+  deleteVideoHoldsId(id: string, query?: { reason?: string; /** required */ }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/video/holds/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Media profiles of an ONVIF camera
+   *
+   * With the stream addresses, so the camera form fills itself. With id and no password the stored password is used. 401 when the camera refuses the credentials.
+   * 
+   * Requires permission `video.manage`. */
+  postVideoOnvifProfiles(body: {
+    id?: string;
+    password?: string;
+    /** http://camera/onvif/device_service */
+    url: string;
+    username?: string;
+  }): Promise<{
+    events?: boolean;
+    profiles?: ({
+      encoding?: string;
+      height?: number;
+      name?: string;
+      ptz?: boolean;
+      token?: string;
+      uri?: string;
+      width?: number;
+    })[];
+    ptz?: boolean;
+  }> {
+    return this.request<{
+    events?: boolean;
+    profiles?: ({
+      encoding?: string;
+      height?: number;
+      name?: string;
+      ptz?: boolean;
+      token?: string;
+      uri?: string;
+      width?: number;
+    })[];
+    ptz?: boolean;
+  }>('POST', `/api/v1/video/onvif/profiles`, undefined, body, false);
+  }
+
+  /** Server-wide video settings
+   *
+   * Current settings, their defaults and whether this user may change them (system.admin).
+   * 
+   * Requires permission `video.manage`. */
+  getVideoSettings(): Promise<{
+    can_edit?: boolean;
+    defaults?: VideoSettings;
+    settings?: VideoSettings;
+    storage_dir?: string;
+  }> {
+    return this.request<{
+    can_edit?: boolean;
+    defaults?: VideoSettings;
+    settings?: VideoSettings;
+    storage_dir?: string;
+  }>('GET', `/api/v1/video/settings`, undefined, undefined, false);
+  }
+
+  /** Change the video settings
+   *
+   * Fields left out keep their value; every field has bounds (400 names the first one out of bounds). Audited with the old and new values.
+   * 
+   * Requires permission `system.admin`. */
+  putVideoSettings(body: {
+    /** 0–1440, 0 = no incident */
+    camera_offline_minutes?: number;
+    /** 1–15 */
+    discovery_seconds?: number;
+    /** 0–50 */
+    disk_free_percent?: number;
+    /** 0–1440 */
+    display_offline_minutes?: number;
+    /** 0–120 */
+    event_merge_seconds?: number;
+    /** 0–600 */
+    linger_seconds?: number;
+    /** 1–1048576 */
+    max_disk_gb?: number;
+    /** 0–60, 0 = every move */
+    ptz_audit_minutes?: number;
+    /** 1–10080 */
+    push_block_minutes?: number;
+    /** 3–100 */
+    push_max_fails?: number;
+    /** 1–1440 */
+    push_window_minutes?: number;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** 10–600 */
+    segment_seconds?: number;
+    /** 5–300 */
+    timeshift_seconds?: number;
+    /** 0–64 */
+    wall_sub_stream_above?: number;
+  }): Promise<VideoSettings> {
+    return this.request<VideoSettings>('PUT', `/api/v1/video/settings`, undefined, body, false);
+  }
+
+  /** Space used by recordings
+   *
+   * Requires permission `video.manage`. */
+  getVideoStorage(): Promise<{
+    cameras?: ({
+      bytes?: number;
+      files?: number;
+      id?: string;
+      name?: string;
+      oldest?: string | null;
+      removed?: boolean;
+    })[];
+    /** video.max_disk_gb */
+    max_bytes?: number;
+    /** all organizations */
+    used_bytes?: number;
+  }> {
+    return this.request<{
+    cameras?: ({
+      bytes?: number;
+      files?: number;
+      id?: string;
+      name?: string;
+      oldest?: string | null;
+      removed?: boolean;
+    })[];
+    /** video.max_disk_gb */
+    max_bytes?: number;
+    /** all organizations */
+    used_bytes?: number;
+  }>('GET', `/api/v1/video/storage`, undefined, undefined, false);
+  }
+
+  /** Video walls
+   *
+   * Requires permission `video.view`. */
+  getVideoWalls(): Promise<VideoWall[]> {
+    return this.request<VideoWall[]>('GET', `/api/v1/video/walls`, undefined, undefined, false);
+  }
+
+  /** Create a video wall
+   *
+   * Requires permission `video.manage`. */
+  postVideoWalls(body: {
+    /** ≤ 80 */
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    screens: WallScreen[];
+  }): Promise<VideoWall> {
+    return this.request<VideoWall>('POST', `/api/v1/video/walls`, undefined, body, false);
+  }
+
+  /** A video wall
+   *
+   * Requires permission `video.view`. */
+  getVideoWallsId(id: string): Promise<VideoWall> {
+    return this.request<VideoWall>('GET', `/api/v1/video/walls/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Change a video wall
+   *
+   * Requires permission `video.manage`. */
+  putVideoWallsId(id: string, body: {
+    /** ≤ 80 */
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    screens?: WallScreen[];
+  }): Promise<VideoWall> {
+    return this.request<VideoWall>('PUT', `/api/v1/video/walls/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Delete a video wall
+   *
+   * Requires permission `video.manage`. */
+  deleteVideoWallsId(id: string, query?: { reason?: string; /** required */ }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/video/walls/${encodeURIComponent(id)}`, query, undefined, false);
   }
 }

@@ -1,0 +1,21 @@
+meta {
+  name: Download the report PDF
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/v1/reports/:id/file
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  Download the report PDF
+  
+  Requires permission `data.export`.
+}

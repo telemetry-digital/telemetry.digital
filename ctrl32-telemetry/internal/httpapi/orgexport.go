@@ -104,6 +104,8 @@ func (s *Server) exportOrganization(w http.ResponseWriter, r *http.Request) {
 	addJSON("report_templates.json", `SELECT id::text, kind, name, version, locale, engine, body, checksum, created_by::text, created_at, valid_to, reason FROM core.report_template WHERE org_id = $1::uuid ORDER BY kind, locale, version`, org)
 	addJSON("reports.json", `SELECT id::text, kind, template_id::text, template_ver, scope, data_hash, file_hash, bytes, generated_at, generated_by, audit_seq FROM core.report WHERE org_id = $1::uuid AND generated_at >= $2 AND generated_at < $3 ORDER BY generated_at`, org, from, to)
 	addJSON("connectors.json", `SELECT id::text, kind, name, settings, created_at, last_seen_at, messages, revoked_at FROM core.connector WHERE org_id = $1::uuid ORDER BY name`, org)
+	addJSON("screens.json", `SELECT id::text, slug, name, version, spec, checksum, is_default, created_by::text, created_at, valid_to, reason FROM core.dashboard WHERE org_id = $1::uuid ORDER BY slug, version`, org)
+	addJSON("hmi_objects.json", `SELECT id::text, slug, kind, name, category, version, body, checksum, created_by::text, created_at, valid_to, reason FROM core.hmi_object WHERE org_id = $1::uuid ORDER BY slug, version`, org)
 	addJSON("device_commands.json", `SELECT id::text, device_id::text, method, args, expires_at, status, issued_by_name, issued_at, sent_at, acked_at, result, error, reason FROM core.device_command WHERE org_id = $1::uuid AND issued_at >= $2 AND issued_at < $3 ORDER BY issued_at`, org, from, to)
 
 	addCSV("observations.csv", []string{"datastream_id", "measured_at", "received_at", "value", "value_json", "quality", "time_source", "decoder_version", "calibration_version", "series_version", "raw_id"},

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/modbus"
@@ -58,11 +59,35 @@ func (s *Server) dispatchCommand(ctx context.Context, e cmdExec) (status string,
 	status = "queued"
 	if e.transport == "mqtt" && s.br != nil {
 		msg, _ := json.Marshal(map[string]any{"id": e.cid, "m": e.method, "a": e.args, "exp": e.exp.Unix()})
+		// ThingsBoard-style devices receive the same command as an RPC request (only the subscribed dialect arrives)
+		if s.ing != nil {
+			n := s.ing.RegisterRPC(e.deviceID, e.cid)
+			rpc, _ := json.Marshal(map[string]any{"method": e.method, "params": e.args})
+			_ = s.br.Publish("d/"+e.ext+"/tb/rpc/request/"+strconv.FormatInt(n, 10), rpc, false)
+		}
 		if err := s.br.Publish("d/"+e.ext+"/cmd", msg, false); err == nil {
 			status = "sent"
 			_, _ = s.pool.Exec(ctx, `UPDATE core.device_command SET status = 'sent', sent_at = now() WHERE id = $1::uuid`, e.cid)
 		} else {
 			s.log.Warn("command publish failed", "device", e.ext, "err", err)
+		}
+	}
+	if e.transport == "mqtt_discovery" {
+		if s.smart == nil {
+			status, cmdErr = "failed", "smart home is not available"
+		} else {
+			var res any
+			status, res, cmdErr = s.smart.Dispatch(ctx, e.deviceID, e.cid, e.method, e.args)
+			result = res
+		}
+		b, _ := json.Marshal(result)
+		switch status {
+		case "sent":
+			_, _ = s.pool.Exec(ctx, `UPDATE core.device_command SET status = 'sent', sent_at = now(), result = $2::jsonb WHERE id = $1::uuid AND status = 'queued'`, e.cid, string(b))
+		case "acked":
+			_, _ = s.pool.Exec(ctx, `UPDATE core.device_command SET status = 'acked', sent_at = now(), acked_at = now(), result = $2::jsonb WHERE id = $1::uuid`, e.cid, string(b))
+		default:
+			_, _ = s.pool.Exec(ctx, `UPDATE core.device_command SET status = 'failed', sent_at = now(), acked_at = now(), error = $2 WHERE id = $1::uuid`, e.cid, cmdErr)
 		}
 	}
 	finish := func(res map[string]any, err error) {

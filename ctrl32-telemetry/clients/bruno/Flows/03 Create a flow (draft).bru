@@ -1,0 +1,44 @@
+meta {
+  name: Create a flow (draft)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/flows
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "string",
+    "reason": "string",
+    "spec": {
+      "nodes": [
+        {
+          "disabled": true,
+          "id": "string",
+          "name": "string",
+          "settings": {},
+          "type": "string",
+          "x": 21.5,
+          "y": 21.5
+        }
+      ],
+      "wires": [
+        {
+          "from": "string",
+          "port": 1,
+          "to": "string"
+        }
+      ]
+    }
+  }
+}
+
+docs {
+  Create a flow (draft)
+  
+  Requires permission `content.write`.
+}

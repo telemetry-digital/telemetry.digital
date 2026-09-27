@@ -26,6 +26,7 @@ type Event struct {
 	Connected    *bool      `json:"connected,omitempty"`
 	AlarmID      string     `json:"alarm_id,omitempty"`
 	CommandID    string     `json:"command_id,omitempty"`
+	EntityID     string     `json:"entity_id,omitempty"`
 	Method       string     `json:"method,omitempty"`
 	Status       string     `json:"status,omitempty"`
 	Detail       any        `json:"detail,omitempty"`
@@ -43,6 +44,7 @@ type Filter struct {
 	Alarms           bool
 	AlarmDatastreams map[string]bool // nil = alarms of any datastream of the organization
 	Commands         bool            // command status changes of the filtered devices (never for public streams)
+	Entities         bool            // smart-home entity states (never for public streams)
 }
 
 // Sub is one subscription; read events from C.
@@ -68,6 +70,8 @@ func (s *Sub) wants(e Event) bool {
 		return s.F.Alarms && (s.F.AlarmDatastreams == nil || s.F.AlarmDatastreams[e.DatastreamID])
 	case "command":
 		return s.F.Commands && (s.F.AllDevices || s.F.Devices[e.DeviceID])
+	case "entity":
+		return s.F.Entities
 	}
 	return false
 }
@@ -76,6 +80,15 @@ func (s *Sub) wants(e Event) bool {
 type Hub struct {
 	mu   sync.RWMutex
 	subs map[*Sub]struct{}
+	taps []func(Event)
+}
+
+// Tap registers a function that sees every event of every organization (the flow engine's triggers); it must not
+// block.
+func (h *Hub) Tap(fn func(Event)) {
+	h.mu.Lock()
+	h.taps = append(h.taps, fn)
+	h.mu.Unlock()
 }
 
 // NewHub creates an empty hub.
@@ -111,6 +124,9 @@ func (h *Hub) Publish(e Event) {
 	}
 	h.mu.RLock()
 	defer h.mu.RUnlock()
+	for _, t := range h.taps {
+		t(e)
+	}
 	for s := range h.subs {
 		if !s.wants(e) {
 			continue
@@ -144,6 +160,12 @@ func (h *Hub) DeviceState(org, deviceID string, connected bool) {
 // Command reports a command status change (queued, sent, pending, acked, failed, rejected, expired).
 func (h *Hub) Command(org, deviceID, commandID, method, status string, detail any) {
 	h.Publish(Event{Type: "command", Org: org, DeviceID: deviceID, CommandID: commandID, Method: method, Status: status, Detail: detail})
+}
+
+// Entity reports a smart-home entity's state, attributes and availability (spec 005).
+func (h *Hub) Entity(org, entityID, deviceID, state string, attrs map[string]any, available bool) {
+	a := available
+	h.Publish(Event{Type: "entity", Org: org, EntityID: entityID, DeviceID: deviceID, State: state, Detail: attrs, Connected: &a})
 }
 
 // Alarm reports an alarm raised, escalated or cleared (alarm engine hook).

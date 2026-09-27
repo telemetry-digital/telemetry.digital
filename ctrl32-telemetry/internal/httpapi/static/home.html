@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Home</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+  <div class="page-head"><h1>Home</h1><span class="grow"></span>
+    <a class="btn" id="inboxBtn" href="/smarthome#inbox" hidden><span class="badge warn" id="inboxCount">0</span> <span>new devices</span></a>
+    <a class="btn" id="manageBtn" href="/smarthome" hidden>Devices and connections</a>
+  </div>
+  <div class="hm-scenes" id="scenes"></div>
+  <div class="hm-rooms" id="roomTabs"></div>
+  <div id="rooms"></div>
+  <div class="card muted" id="empty" hidden>
+    <p><span>No smart-home devices yet. Connect zigbee2mqtt, Tasmota, ESPHome, Shelly or any device that announces itself over MQTT; it is recognized automatically.</span> <a href="/smarthome">Devices and connections</a></p>
+  </div>
+  <dialog id="sceneDlg"><form class="form" id="sceneForm">
+    <h2 style="margin-top:0" id="sceneTitle">New scene</h2>
+    <div class="row2"><label>Name <input name="name" required maxlength="80" placeholder="Evening"></label>
+      <label>Icon <select name="icon"><option value="bulb">bulb</option><option value="moon">moon</option><option value="sun">sun</option><option value="sofa">sofa</option><option value="bed">bed</option><option value="door-exit">door-exit</option><option value="home">home</option><option value="snowflake">snowflake</option><option value="flame">flame</option></select></label></div>
+    <div class="muted">Choose the devices; the scene remembers their current states (on/off, brightness, colour, position, temperature). Set them first, then save.</div>
+    <div class="hm-pick" id="scenePick"></div>
+    <label class="inline" id="sceneKeepWrap" hidden><input type="checkbox" name="keep" checked> Keep the saved actions (do not capture again)</label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="sceneErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn danger" type="button" id="sceneDel" hidden>Delete</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form></dialog>
+  <dialog id="histDlg" class="hm-hist"><div class="form">
+    <div class="page-head" style="margin:0"><h2 style="margin:0" id="histTitle" class="notranslate"></h2><span class="grow"></span>
+      <div class="seg" id="histRange"><button type="button" data-h="24" class="on">24 h</button><button type="button" data-h="168">7 days</button><button type="button" data-h="720">30 days</button></div></div>
+    <div id="histBody" class="hm-hist-body"></div>
+    <div class="actions"><a class="btn" id="histLink">Open the device</a><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </div></dialog>
+</main>
+<script src="/app.js"></script>
+<script src="/vendor/tabler-icons.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, api = ctrl32.api, t = ctrl32.t;
+let HOME = null, ROOM = '', ENT = new Map(), CAN = false, CMD = new Map(), EARLY = new Map(); // EARLY: command results that arrived before the POST returned
+try { ROOM = localStorage.getItem('ctrl32.home.room') || ''; } catch (e) { /* private mode */ }
+
+const icon = (n, sz = 22) => { const p = (window.ctrl32Icons || {})[n]; return p ? `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${p}</svg>` : ''; };
+const DC_ICON = {temperature: 'temperature', humidity: 'droplet', moisture: 'droplet', power: 'bolt', energy: 'bolt', voltage: 'bolt', current: 'bolt', battery: 'battery',
+  illuminance: 'sun', pressure: 'gauge', co2: 'leaf', carbon_dioxide: 'leaf', pm25: 'wind', signal_strength: 'antenna-bars-5', door: 'door', garage_door: 'door',
+  window: 'window', opening: 'door', motion: 'walk', occupancy: 'walk', presence: 'walk', smoke: 'flame', gas: 'flame', moisture_leak: 'droplets', plug: 'plug', outlet: 'plug', lock: 'lock'};
+function entIcon(e) {
+  const dc = (e.ui || {}).device_class, on = isOn(e);
+  switch (e.component) {
+    case 'light': return on ? 'bulb' : 'bulb-off';
+    case 'switch': return dc === 'outlet' ? (on ? 'plug-connected' : 'plug') : (on ? 'toggle-right' : 'toggle-left');
+    case 'fan': return 'propeller';
+    case 'lock': return e.state === 'locked' ? 'lock' : 'lock-open';
+    case 'cover': case 'valve': return 'window';
+    case 'climate': return 'air-conditioning';
+    case 'button': case 'scene': return 'hand-click';
+    case 'binary_sensor': return DC_ICON[dc] || (on ? 'circle-check' : 'circle-x');
+    case 'device_tracker': return 'map-pin';
+    case 'siren': return 'bell-ringing';
+    case 'select': case 'text': return 'list-details';
+  }
+  return DC_ICON[dc] || 'activity';
+}
+const isOn = e => ['on', 'open', 'opening', 'unlocked', 'home', 'heat', 'cool', 'auto', 'dry', 'fan_only', 'heat_cool'].includes(e.state);
+const BIN_TEXT = {door: ['Opened', 'Closed'], garage_door: ['Opened', 'Closed'], window: ['Opened', 'Closed'], opening: ['Opened', 'Closed'], motion: ['Motion', 'Clear'],
+  occupancy: ['Occupied', 'Clear'], presence: ['Home', 'Away'], moisture: ['Wet', 'Dry'], smoke: ['Smoke', 'Clear'], gas: ['Gas', 'Clear'], lock: ['Unlocked', 'Locked'],
+  battery: ['Low', 'Normal'], connectivity: ['Connected', 'Disconnected'], plug: ['Plugged in', 'Unplugged'], problem: ['Problem', 'OK'], safety: ['Unsafe', 'Safe']};
+function fmtNum(v, e) {
+  const n = Number(v); if (!isFinite(n)) return v;
+  const p = (e.ui || {}).suggested_display_precision; const d = p != null ? p : Math.abs(n) >= 100 ? 0 : Math.abs(n) >= 10 ? 1 : 2;
+  return n.toLocaleString((typeof ctrl32.locale === 'function' ? ctrl32.locale() : ctrl32.locale) || undefined, {maximumFractionDigits: d, minimumFractionDigits: p != null ? p : 0});
+}
+function stateText(e) {
+  if (!e.available) return t('Unavailable');
+  const s = e.state;
+  if (s == null || s === '') return '—';
+  switch (e.component) {
+    case 'binary_sensor': { const pair = BIN_TEXT[(e.ui || {}).device_class] || ['On', 'Off']; return t(s === 'on' ? pair[0] : pair[1]); }
+    case 'sensor': case 'number': return isFinite(Number(s)) ? fmtNum(s, e) + (e.unit ? ' ' + e.unit : '') : s;
+    case 'light': { const b = (e.attributes || {}).brightness; return s === 'on' && b != null ? t('On') + ' · ' + Math.round(b / 2.55) + ' %' : t(s === 'on' ? 'On' : 'Off'); }
+    case 'cover': case 'valve': { const p = (e.attributes || {}).position; return t(s.charAt(0).toUpperCase() + s.slice(1)) + (p != null ? ' · ' + p + ' %' : ''); }
+    case 'climate': { const a = e.attributes || {}; return (a.current_temperature != null ? fmtNum(a.current_temperature, e) + ' °C · ' : '') + t(s); }
+    case 'lock': return t(s.charAt(0).toUpperCase() + s.slice(1));
+    case 'switch': case 'fan': case 'siren': case 'humidifier': return t(s === 'on' ? 'On' : 'Off');
+    case 'device_tracker': return t(s === 'home' ? 'Home' : s === 'not_home' ? 'Away' : s);
+  }
+  return s;
+}
+
+function rgbHex(c) {
+  if (!Array.isArray(c) || c.length !== 3) return '#ffffff';
+  return '#' + c.map(v => Math.max(0, Math.min(255, Math.round(+v || 0))).toString(16).padStart(2, '0')).join('');
+}
+function controls(e) {
+  const dis = !CAN || !e.available || e.status !== 'active' ? ' disabled' : '';
+  const svc = new Set(e.services || []), ui = e.ui || {}, a = e.attributes || {};
+  const btn = (s, label, ic, extra = '') => `<button class="btn small${extra}" type="button" data-svc="${s}"${dis} title="${esc(t(label))}">${ic ? icon(ic, 16) : ''}<span>${esc(t(label))}</span></button>`;
+  let h = '';
+  if (svc.has('toggle')) h += `<label class="hm-switch"><input type="checkbox" data-toggle${isOn(e) ? ' checked' : ''}${dis}><span></span></label>`;
+  if (e.component === 'light' && (ui.brightness || (ui.supported_color_modes || []).some(m => m !== 'onoff'))) {
+    const b = a.brightness != null ? Math.round(a.brightness / 2.55) : 0;
+    h += `<input class="hm-slider" type="range" min="1" max="100" value="${e.state === 'on' ? b : 0}" data-bright title="${esc(t('Brightness'))}"${dis}>`;
+  }
+  if (e.component === 'light' && ui.color) {
+    const col = ui.color; let row = '';
+    if (col.rgb) row += `<input type="color" class="hm-color" data-rgb value="${rgbHex(a.rgb_color)}" title="${esc(t('Colour'))}"${dis}>`;
+    if (col.color_temp) {
+      const ct = a.color_temp != null ? a.color_temp : Math.round((col.min_mireds + col.max_mireds) / 2);
+      row += `<input class="hm-slider hm-ct" type="range" min="${col.min_mireds}" max="${col.max_mireds}" value="${ct}" data-ct title="${esc(t('Colour temperature'))} ${Math.round(1e6 / ct)} K"${dis}>`;
+    }
+    h += `<div class="hm-colors">${row}</div>`;
+  }
+  if (e.component === 'fan' && svc.has('set_percentage')) h += `<input class="hm-slider" type="range" min="0" max="100" step="10" value="${a.percentage || 0}" data-pct${dis}>`;
+  if (e.component === 'cover' || e.component === 'valve') {
+    h += `<div class="hm-btns">${btn('open', 'Open', 'arrow-bar-to-up')}${btn('stop', 'Stop', 'player-stop')}${btn('close', 'Close', 'arrow-bar-to-down')}</div>`;
+    if (a.position != null || (e.ui || {}).set_position) h += `<input class="hm-slider" type="range" min="0" max="100" value="${a.position || 0}" data-pos title="${esc(t('Position'))}"${dis}>`;
+  }
+  if (e.component === 'lock') h += `<div class="hm-btns">${e.state === 'locked' ? btn('unlock', 'Unlock', 'lock-open') : btn('lock', 'Lock', 'lock')}</div>`;
+  if (e.component === 'button' || e.component === 'scene') h += `<div class="hm-btns">${btn(e.component === 'scene' ? 'turn_on' : 'press', e.component === 'scene' ? 'Activate' : 'Press', 'hand-click')}</div>`;
+  if (e.component === 'climate') {
+    const tgt = a.temperature != null ? a.temperature : '';
+    h += `<div class="hm-btns hm-climate"><button class="btn small" type="button" data-temp="-"${dis}>${icon('temperature-minus', 16)}</button><b class="hm-target">${tgt !== '' ? fmtNum(tgt, e) + ' °C' : '—'}</b><button class="btn small" type="button" data-temp="+"${dis}>${icon('temperature-plus', 16)}</button></div>`;
+    const modes = ui.modes || ['off', 'heat'];
+    h += `<select data-mode${dis}>${modes.map(m => `<option value="${esc(m)}"${m === e.state ? ' selected' : ''}>${esc(t(m))}</option>`).join('')}</select>`;
+  }
+  if (e.component === 'number') {
+    const min = ui.min != null ? ui.min : 1, max = ui.max != null ? ui.max : 100, step = ui.step || 1;
+    h += ui.mode === 'box' ? `<input type="number" min="${min}" max="${max}" step="${step}" value="${esc(e.state || '')}" data-number${dis}>`
+      : `<input class="hm-slider" type="range" min="${min}" max="${max}" step="${step}" value="${esc(e.state || min)}" data-number${dis}>`;
+  }
+  if (e.component === 'select') h += `<select data-select${dis}>${(ui.options || []).map(o => `<option${String(o) === e.state ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+  if (e.component === 'text') h += `<div class="hm-btns"><input type="text" value="${esc(e.state || '')}" data-text${dis}>${btn('set_value', 'Set', '')}</div>`;
+  return h;
+}
+
+function card(e) {
+  const sensorish = ['sensor', 'binary_sensor', 'device_tracker', 'event', 'update'].includes(e.component);
+  const cls = ['hm-card', 'hm-c-' + e.component, isOn(e) ? 'on' : '', e.available ? '' : 'off', e.status !== 'active' ? 'bad' : ''].filter(Boolean).join(' ');
+  return `<div class="${cls}" data-id="${e.id}">
+    <div class="hm-top"><span class="hm-ico">${icon(entIcon(e))}</span><span class="hm-name"><b class="notranslate">${esc(e.name)}</b><small class="muted notranslate">${esc(e.device && e.device !== e.name ? e.device : '')}</small></span>
+      ${e.datastream_id ? `<button class="hm-histbtn" type="button" data-hist title="${esc(t('History'))}">${icon('chart-line', 16)}</button>` : ''}</div>
+    <div class="hm-state${sensorish ? ' big' : ''}">${esc(stateText(e))}</div>
+    ${e.status !== 'active' ? `<div class="hm-err">${esc(e.error || t('Not supported'))}</div>` : ''}
+    ${sensorish && e.datastream_id && isFinite(Number(e.state)) ? `<svg class="hm-spark" viewBox="0 0 100 24" preserveAspectRatio="none" data-spark="${e.datastream_id}"></svg>` : ''}
+    <div class="hm-ctl">${controls(e)}</div>
+    <div class="hm-msg" hidden></div>
+  </div>`;
+}
+
+function render() {
+  const rooms = HOME.rooms || [];
+  $('#empty').hidden = rooms.length > 0;
+  $('#roomTabs').innerHTML = rooms.length > 1 ? [`<button type="button" data-room=""${ROOM === '' ? ' class="on"' : ''}>${esc(t('All'))}</button>`]
+    .concat(rooms.map(r => `<button type="button" data-room="${esc(r.id || '-')}"${ROOM === (r.id || '-') ? ' class="on"' : ''}><span class="notranslate">${esc(r.name || t('Other'))}</span> <small>${r.entities.length}</small></button>`)).join('') : '';
+  $('#rooms').innerHTML = rooms.filter(r => !ROOM || ROOM === (r.id || '-')).map(r => `<section class="hm-room"><h2 class="notranslate">${esc(r.name || t('Other'))}</h2>
+    <div class="hm-grid">${r.entities.map(card).join('')}</div></section>`).join('');
+  for (const b of document.querySelectorAll('#roomTabs [data-room]')) b.onclick = () => { ROOM = b.dataset.room; try { localStorage.setItem('ctrl32.home.room', ROOM); } catch (e) { /* ignore */ } render(); };
+  sparks();
+}
+
+function updateCard(id) {
+  const e = ENT.get(id), el = document.querySelector(`.hm-card[data-id="${id}"]`);
+  if (!e || !el) return;
+  if (el.contains(document.activeElement) && document.activeElement.matches('input[type=range], input[type=text], input[type=number], select')) { el.querySelector('.hm-state').textContent = stateText(e); return; }
+  const tmp = document.createElement('div'); tmp.innerHTML = card(e); const nu = tmp.firstElementChild;
+  const msg = el.querySelector('.hm-msg'); if (msg && !msg.hidden) nu.querySelector('.hm-msg').replaceWith(msg);
+  const sp = el.querySelector('.hm-spark'); if (sp && nu.querySelector('.hm-spark')) nu.querySelector('.hm-spark').replaceWith(sp);
+  el.replaceWith(nu);
+}
+
+async function sparks() {
+  const since = new Date(Date.now() - 24 * 3600e3).toISOString();
+  for (const svg of document.querySelectorAll('.hm-spark:not([data-done])')) {
+    svg.dataset.done = 1;
+    try { const rows = await api('GET', `/api/v1/observations?datastream_id=${svg.dataset.spark}&from=${encodeURIComponent(since)}&limit=500`); drawLine(svg, rows, 100, 24, false); } catch (e) { /* no history access */ }
+  }
+}
+
+function drawLine(svg, rows, W, H, axes) {
+  const pts = rows.filter(r => r.value != null).map(r => [Date.parse(r.measured_at), Number(r.value)]);
+  if (pts.length < 2) { svg.innerHTML = axes ? `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" class="muted">${esc(t('no data in this period'))}</text>` : ''; return; }
+  const x0 = pts[0][0], x1 = pts[pts.length - 1][0]; let y0 = Math.min(...pts.map(p => p[1])), y1 = Math.max(...pts.map(p => p[1])); if (y0 === y1) { y0 -= 1; y1 += 1; }
+  const L = axes ? 44 : 0, B = axes ? 18 : 0, X = x => L + (x - x0) / (x1 - x0 || 1) * (W - L - 4), Y = y => 3 + (1 - (y - y0) / (y1 - y0)) * (H - 6 - B);
+  const d = pts.map((p, i) => (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ',' + Y(p[1]).toFixed(1)).join('');
+  let ax = '';
+  if (axes) {
+    for (let i = 0; i <= 4; i++) { const v = y0 + (y1 - y0) * i / 4, y = Y(v); ax += `<line x1="${L}" x2="${W}" y1="${y}" y2="${y}" class="hm-grid-line"/><text x="${L - 6}" y="${y + 4}" text-anchor="end">${esc(fmtNum(v, {}))}</text>`; }
+    const short = x1 - x0 < 36 * 3600e3, loc = (typeof ctrl32.locale === 'function' ? ctrl32.locale() : ctrl32.locale) || undefined;
+    const lab = x => new Date(x).toLocaleString(loc, short ? {hour: '2-digit', minute: '2-digit'} : {day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit'});
+    for (let i = 0; i <= 4; i++) { const x = x0 + (x1 - x0) * i / 4; ax += `<text x="${X(x)}" y="${H - 2}" text-anchor="${i === 0 ? 'start' : i === 4 ? 'end' : 'middle'}">${esc(lab(x))}</text>`; }
+  }
+  svg.innerHTML = ax + `<path d="${d}" class="hm-line" vector-effect="non-scaling-stroke"/>`;
+}
+
+let HIST = null;
+async function openHist(id, hours) {
+  const e = ENT.get(id); if (!e) return; HIST = id;
+  $('#histTitle').textContent = e.name + (e.device && e.device !== e.name ? ' · ' + e.device : '');
+  $('#histLink').href = '/devices/' + e.device_id;
+  for (const b of document.querySelectorAll('#histRange button')) b.classList.toggle('on', +b.dataset.h === hours);
+  if (!$('#histDlg').open) $('#histDlg').showModal();
+  const since = new Date(Date.now() - hours * 3600e3).toISOString();
+  const rows = await api('GET', `/api/v1/observations?datastream_id=${e.datastream_id}&from=${encodeURIComponent(since)}&limit=5000`).catch(() => []);
+  const numeric = rows.some(r => r.value != null) && ['sensor', 'number'].includes(e.component);
+  if (numeric) { $('#histBody').innerHTML = '<svg viewBox="0 0 720 260" class="hm-chart"></svg>'; drawLine($('#histBody svg'), rows, 720, 260, true); return; }
+  const list = rows.slice(-200).reverse();
+  $('#histBody').innerHTML = list.length ? `<div class="table-wrap"><table><thead><tr><th>${esc(t('Time'))}</th><th>${esc(t('State'))}</th></tr></thead><tbody>${list.map(r => {
+    let v = r.value_json != null ? r.value_json : r.value; if (typeof v === 'string') { /* already text */ } else v = JSON.stringify(v);
+    return `<tr><td>${esc(ctrl32.fmt(r.measured_at))}</td><td>${esc(stateText(Object.assign({}, e, {state: String(v).replace(/^"|"$/g, ''), available: true})))}</td></tr>`; }).join('')}</tbody></table></div>`
+    : `<p class="muted">${esc(t('no data in this period'))}</p>`;
+}
+for (const b of document.querySelectorAll('#histRange button')) b.onclick = () => HIST && openHist(HIST, +b.dataset.h);
+
+// ---- control ----
+function showMsg(id, text, kind) {
+  const el = document.querySelector(`.hm-card[data-id="${id}"] .hm-msg`); if (!el) return;
+  el.hidden = !text; el.textContent = text || ''; el.className = 'hm-msg ' + (kind || '');
+  if (kind === 'ok') setTimeout(() => { if (el.textContent === text) el.hidden = true; }, 2500);
+}
+async function command(id, body) {
+  const e = ENT.get(id); showMsg(id, t('sending…'), 'busy');
+  try {
+    const r = await api('POST', `/api/v1/entities/${id}/command`, body);
+    if (EARLY.has(r.id)) { const d = EARLY.get(r.id); EARLY.delete(r.id); r.status = d.status; r.error = (d.detail && d.detail.error) || r.error; }
+    else CMD.set(r.id, id);
+    if (r.status === 'pending') showMsg(id, t('waiting for approval by another user (four eyes)'), 'warn');
+    else if (r.status === 'acked') showMsg(id, t('done'), 'ok');
+    else if (r.status === 'failed') { showMsg(id, r.error || t('failed'), 'bad'); updateCard(id); }
+    else showMsg(id, t('waiting for the device…'), 'busy');
+  } catch (x) { showMsg(id, x.message, 'bad'); updateCard(id); }
+  return e;
+}
+document.addEventListener('change', ev => {
+  const el = ev.target, c = el.closest('.hm-card'); if (!c) return; const id = c.dataset.id, e = ENT.get(id);
+  if (el.matches('[data-toggle]')) command(id, {service: el.checked ? 'turn_on' : 'turn_off'});
+  else if (el.matches('[data-bright]')) command(id, +el.value > 0 ? {service: 'turn_on', brightness: +el.value} : {service: 'turn_off'});
+  else if (el.matches('[data-rgb]')) command(id, {service: 'turn_on', rgb: [1, 3, 5].map(i => parseInt(el.value.slice(i, i + 2), 16))});
+  else if (el.matches('[data-ct]')) command(id, {service: 'turn_on', color_temp: +el.value});
+  else if (el.matches('[data-pct]')) command(id, {service: 'set_percentage', percentage: +el.value});
+  else if (el.matches('[data-pos]')) command(id, {service: 'set_position', position: +el.value});
+  else if (el.matches('[data-mode]')) command(id, {service: 'set_hvac_mode', mode: el.value});
+  else if (el.matches('[data-number]')) command(id, {service: 'set_value', value: +el.value});
+  else if (el.matches('[data-select]')) command(id, {service: 'select_option', value: el.value});
+  return e;
+});
+document.addEventListener('click', ev => {
+  const el = ev.target.closest('button'); if (!el) return; const c = el.closest('.hm-card'); if (!c) return; const id = c.dataset.id, e = ENT.get(id);
+  if (el.matches('[data-hist]')) return openHist(id, 24);
+  if (el.matches('[data-svc]')) { const body = {service: el.dataset.svc}; if (el.dataset.svc === 'set_value') body.value = c.querySelector('[data-text]').value; return command(id, body); }
+  if (el.matches('[data-temp]')) { const ui = e.ui || {}, step = ui.temp_step || 0.5, cur = Number((e.attributes || {}).temperature != null ? e.attributes.temperature : 20);
+    const v = Math.min(ui.max_temp || 35, Math.max(ui.min_temp || 7, cur + (el.dataset.temp === '+' ? step : -step)));
+    e.attributes = Object.assign({}, e.attributes, {temperature: v}); c.querySelector('.hm-target').textContent = fmtNum(v, e) + ' °C';
+    clearTimeout(e._tt); e._tt = setTimeout(() => command(id, {service: 'set_temperature', temperature: v}), 700); }
+});
+
+// ---- live ----
+function live() {
+  const es = new EventSource('/api/v1/stream?entities=1&devices=all', {withCredentials: true});
+  const queue = new Set(); let timer = null;
+  es.addEventListener('entity', ev => {
+    const d = JSON.parse(ev.data), e = ENT.get(d.entity_id); if (!e) return;
+    e.state = d.state; e.attributes = d.detail || {}; e.available = d.connected !== false;
+    queue.add(d.entity_id); if (!timer) timer = setTimeout(() => { timer = null; queue.forEach(updateCard); queue.clear(); }, 250);
+  });
+  es.addEventListener('command', ev => {
+    const d = JSON.parse(ev.data), id = CMD.get(d.command_id);
+    if (!id) { if (['acked', 'failed', 'rejected', 'expired'].includes(d.status)) { EARLY.set(d.command_id, d); setTimeout(() => EARLY.delete(d.command_id), 10000); } return; }
+    if (d.status === 'acked') { showMsg(id, t('done'), 'ok'); CMD.delete(d.command_id); }
+    else if (d.status === 'failed' || d.status === 'rejected' || d.status === 'expired') { showMsg(id, (d.detail && d.detail.error) || t('failed'), 'bad'); CMD.delete(d.command_id); updateCard(id); }
+  });
+  window.addEventListener('pagehide', () => es.close(), {once: true});
+}
+
+// ---- scenes (spec 008)
+let SCENE = null;
+function renderScenes() {
+  const sc = HOME.scenes || [];
+  $('#scenes').innerHTML = sc.map(x => `<span class="hm-scene"><button class="btn" type="button" data-scene="${x.id}"${CAN ? '' : ' disabled'} title="${esc(x.actions.map(a => a.entity + ': ' + t(a.service.replace(/_/g, ' '))).join('\n'))}">${icon(x.icon || 'bulb', 18)}<span class="notranslate">${esc(x.name)}</span></button>${HOME.can_manage ? `<button class="btn small hm-scene-edit" type="button" data-scene-edit="${x.id}" title="${esc(t('Edit'))}">⋯</button>` : ''}</span>`).join('')
+    + (HOME.can_manage ? `<button class="btn small" type="button" id="sceneAdd">+ ${esc(t('Scene'))}</button>` : '');
+  $('#scenes').hidden = !sc.length && !HOME.can_manage;
+}
+function openScene(sc) {
+  SCENE = sc; const f = $('#sceneForm'); f.reset(); $('#sceneErr').textContent = '';
+  $('#sceneTitle').textContent = t(sc ? 'Edit scene' : 'New scene'); $('#sceneDel').hidden = !sc; $('#sceneKeepWrap').hidden = !sc;
+  f.name.value = sc ? sc.name : ''; f.icon.value = sc ? (sc.icon || 'bulb') : 'bulb';
+  const chosen = new Set(sc ? sc.actions.map(a => a.entity_id) : []);
+  const ctrl = [...ENT.values()].filter(e => (e.services || []).length && e.component !== 'button' && e.component !== 'scene');
+  $('#scenePick').innerHTML = ctrl.map(e => `<label class="inline"><input type="checkbox" value="${e.id}"${chosen.has(e.id) ? ' checked' : ''}><span><span class="notranslate">${esc(e.name)}</span> <span class="muted notranslate">${esc(e.device || '')}</span> · ${esc(stateText(e))}</span></label>`).join('') || `<div class="muted">${esc(t('No controllable devices.'))}</div>`;
+  $('#sceneDlg').showModal();
+}
+$('#scenes').addEventListener('click', async ev => {
+  const b = ev.target.closest('button'); if (!b) return;
+  if (b.id === 'sceneAdd') return openScene(null);
+  if (b.dataset.sceneEdit) return openScene(HOME.scenes.find(x => x.id === b.dataset.sceneEdit));
+  if (b.dataset.scene) {
+    b.disabled = true;
+    try { const r = await api('POST', `/api/v1/scenes/${b.dataset.scene}/activate`, {});
+      const pending = r.results.filter(x => x.status === 'pending').length;
+      ctrl32.toast(r.failed ? `${t('scene activated with errors')}: ${r.failed}` : pending ? t('waiting for approval by another user (four eyes)') : t('scene activated'), r.failed ? 'bad' : 'ok');
+    } catch (x) { ctrl32.toast(x.message, 'bad'); }
+    b.disabled = false;
+  }
+});
+$('#sceneForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#sceneErr').textContent = '';
+  const ids = [...document.querySelectorAll('#scenePick input:checked')].map(i => i.value);
+  const body = {name: f.name.value, icon: f.icon.value, reason: f.reason.value};
+  if (!SCENE || !f.keep.checked) { if (!ids.length) { $('#sceneErr').textContent = t('choose at least one device'); return; } body.capture = ids; }
+  try { if (SCENE) await api('PUT', `/api/v1/scenes/${SCENE.id}`, body); else await api('POST', '/api/v1/scenes', body);
+    $('#sceneDlg').close(); ctrl32.toast(t('scene saved'), 'ok'); await load(); } catch (x) { $('#sceneErr').textContent = x.message; } };
+$('#sceneDel').onclick = async () => { const f = $('#sceneForm'); if (!f.reason.value.trim()) { $('#sceneErr').textContent = t('reason is required'); return; }
+  try { await api('DELETE', `/api/v1/scenes/${SCENE.id}?reason=${encodeURIComponent(f.reason.value)}`); $('#sceneDlg').close(); await load(); } catch (x) { $('#sceneErr').textContent = x.message; } };
+
+async function load() {
+  HOME = await api('GET', '/api/v1/home');
+  CAN = HOME.can_control;
+  ENT = new Map(); for (const r of HOME.rooms || []) for (const e of r.entities) ENT.set(e.id, e);
+  $('#manageBtn').hidden = !HOME.can_manage;
+  $('#inboxBtn').hidden = !HOME.can_manage || !HOME.pending_devices; $('#inboxCount').textContent = HOME.pending_devices;
+  renderScenes();
+  render();
+}
+ctrl32.ready({requireAuth: true, requirePerm: 'data.read'}).then(async () => {
+  try { await load(); live(); } catch (x) { ctrl32.toast(x.message, 'bad'); }
+});
+</script>
+</body>
+</html>

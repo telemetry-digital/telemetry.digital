@@ -1,0 +1,57 @@
+meta {
+  name: Change a scene
+  type: http
+  seq: 20
+}
+
+put {
+  url: {{baseUrl}}/api/v1/scenes/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "actions": [
+      {
+        "entity_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+        "params": {},
+        "service": "string"
+      }
+    ],
+    "capture": [
+      "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00"
+    ],
+    "event_kinds": [
+      "string"
+    ],
+    "event_post_s": 1,
+    "event_pre_s": 1,
+    "group": "string",
+    "icon": "string",
+    "name": "string",
+    "onvif_url": "string",
+    "privacy_masks": [
+      [
+        [
+          21.5
+        ]
+      ]
+    ],
+    "ptz_profile": "string",
+    "reason": "string",
+    "room_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "sort": 1,
+    "source": "pull"
+  }
+}
+
+docs {
+  Change a scene
+  
+  Requires permission `device.manage`.
+}

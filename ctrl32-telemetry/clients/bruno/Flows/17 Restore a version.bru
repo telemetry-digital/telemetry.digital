@@ -1,0 +1,30 @@
+meta {
+  name: Restore a version
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{baseUrl}}/api/v1/flows/:slug/restore
+  body: json
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+body:json {
+  {
+    "reason": "string",
+    "version": 1
+  }
+}
+
+docs {
+  Restore a version
+  
+  Saves the old content as a new version (deploy it separately).
+  
+  Requires permission `content.write`.
+}

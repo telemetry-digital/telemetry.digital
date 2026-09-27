@@ -1,0 +1,21 @@
+meta {
+  name: Counters of a running flow
+  type: http
+  seq: 18
+}
+
+get {
+  url: {{baseUrl}}/api/v1/flows/:slug/status
+  body: none
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+docs {
+  Counters of a running flow
+  
+  Requires permission `data.read`.
+}

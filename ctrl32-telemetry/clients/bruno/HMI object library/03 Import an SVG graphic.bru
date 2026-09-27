@@ -1,0 +1,29 @@
+meta {
+  name: Import an SVG graphic
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/hmi/objects/import-svg
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "category": "string",
+    "name": "string",
+    "reason": "string",
+    "slug": "string",
+    "svg": "string"
+  }
+}
+
+docs {
+  Import an SVG graphic
+  
+  The SVG is sanitised by a whitelist (no script, event handlers, foreignObject, images, links, animations or external references); the response lists what was removed.
+  
+  Requires permission `content.write`.
+}

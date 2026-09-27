@@ -1,0 +1,46 @@
+meta {
+  name: Import a flow
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/flows/import
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "format": "string",
+    "name": "string",
+    "reason": "string",
+    "slug": "string",
+    "spec": {
+      "nodes": [
+        {
+          "disabled": true,
+          "id": "string",
+          "name": "string",
+          "settings": {},
+          "type": "string",
+          "x": 21.5,
+          "y": 21.5
+        }
+      ],
+      "wires": [
+        {
+          "from": "string",
+          "port": 1,
+          "to": "string"
+        }
+      ]
+    }
+  }
+}
+
+docs {
+  Import a flow
+  
+  Requires permission `content.write`.
+}

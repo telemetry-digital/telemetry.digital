@@ -1,0 +1,55 @@
+meta {
+  name: Create a scene
+  type: http
+  seq: 19
+}
+
+post {
+  url: {{baseUrl}}/api/v1/scenes
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "actions": [
+      {
+        "entity_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+        "params": {},
+        "service": "string"
+      }
+    ],
+    "capture": [
+      "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00"
+    ],
+    "event_kinds": [
+      "string"
+    ],
+    "event_post_s": 1,
+    "event_pre_s": 1,
+    "group": "string",
+    "icon": "string",
+    "name": "string",
+    "onvif_url": "string",
+    "privacy_masks": [
+      [
+        [
+          21.5
+        ]
+      ]
+    ],
+    "ptz_profile": "string",
+    "reason": "string",
+    "room_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "sort": 1,
+    "source": "pull"
+  }
+}
+
+docs {
+  Create a scene
+  
+  Actions explicitly, or capture: entity ids whose current states (on/off, brightness, colour, position, temperature, mode, value) become the actions.
+  
+  Requires permission `device.manage`.
+}

@@ -1,0 +1,27 @@
+meta {
+  name: Publish a version
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/v1/landing/versions/:v/publish
+  body: json
+  auth: inherit
+}
+
+params:path {
+  v: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Publish a version
+  
+  Requires permission `system.admin`.
+}

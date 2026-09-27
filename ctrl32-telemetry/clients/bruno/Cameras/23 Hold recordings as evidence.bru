@@ -1,0 +1,30 @@
+meta {
+  name: Hold recordings as evidence
+  type: http
+  seq: 23
+}
+
+post {
+  url: {{baseUrl}}/api/v1/video/holds
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "camera_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "case_ref": "string",
+    "from": "2026-09-24T12:00:00Z",
+    "reason": "string",
+    "title": "string",
+    "to": "2026-09-24T12:00:00Z"
+  }
+}
+
+docs {
+  Hold recordings as evidence
+  
+  Recordings of the camera in the range are never deleted — not by the camera's retention nor to free disk space — until released. At most 31 days. Audited.
+  
+  Requires permission `video.evidence`.
+}

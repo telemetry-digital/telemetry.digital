@@ -55,7 +55,7 @@ typedef struct {
 } c32_sample_t;
 
 /* ---- building messages (return bytes written excluding NUL, or -1 if cap is too small) ---- */
-int c32_sample_add(c32_sample_t *s, const char *key, double value);
+int c32_sample_add(c32_sample_t *s, const char *key, double value);          /* -1 for NaN/Inf (e.g. a failed sensor read) */
 int c32_sample_add_bool(c32_sample_t *s, const char *key, int value);
 int c32_sample_add_str(c32_sample_t *s, const char *key, const char *value);
 int c32_telemetry_json(char *out, size_t cap, const c32_sample_t *samples, size_t n); /* n == 1 -> object, else array */

@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -54,6 +55,10 @@ type Ingest struct {
 	dsMu    sync.Mutex
 	dsMap   map[string]map[string]string // device id -> key -> datastream id (cache)
 	dsTime  map[string]time.Time
+	auto    map[string]autoInfo // device id -> automatic datastreams on/off (cache)
+	rpcSeq  atomic.Int64
+	rpcMu   sync.Mutex
+	rpc     map[string]rpcRef // device id:n -> command (ThingsBoard RPC)
 	console ConsoleSink
 	// OnCommand is called when a device acknowledges a command (live data hook).
 	OnCommand func(CommandEvent)
@@ -114,6 +119,8 @@ func (in *Ingest) Start() error {
 		{"d/+/attributes/request", in.handleAttrRequest},
 		{"d/+/console/out", in.handleConsoleOut},
 		{"d/+/fota/status", in.handleFotaStatus},
+		{"d/+/tb/rpc/response/+", in.handleTBRPCResponse},
+		{"d/+/tb/attributes/request/+", in.handleTBAttrRequest},
 		{"v1/devices/me/telemetry", in.handleTelemetry},
 		{"v1/devices/me/attributes", in.handleAttributes},
 	}
@@ -222,6 +229,7 @@ func (in *Ingest) IngestTelemetryResult(ctx context.Context, dev *broker.Device,
 			in.log.Error("datastream lookup failed", "device", dev.ExternalID, "err", err)
 			return TelemetryResult{Status: "error", Detail: "internal error, see the server log"}
 		}
+		keys = in.autoDatastreams(ctx, dev, samples, keys)
 		now := time.Now().UTC()
 		in.locationFromSamples(ctx, dev, samples)
 		for _, s := range samples {
@@ -426,7 +434,7 @@ func (in *Ingest) datastreamsFor(ctx context.Context, dev *broker.Device) (map[s
 	in.dsMu.Unlock()
 
 	rows, err := in.pool.Query(ctx, `
-		SELECT ds.key, ds.id::text
+		SELECT ds.key, ds.id::text, coalesce(ds.attributes->>'source_key', '')
 		FROM core.assignment a JOIN core.datastream ds ON ds.id = a.to_id
 		WHERE a.kind = 'device_datastream' AND a.from_id = $1::uuid AND a.valid_to IS NULL`, dev.ID)
 	if err != nil {
@@ -435,11 +443,14 @@ func (in *Ingest) datastreamsFor(ctx context.Context, dev *broker.Device) (map[s
 	defer rows.Close()
 	m := map[string]string{}
 	for rows.Next() {
-		var k, id string
-		if err := rows.Scan(&k, &id); err != nil {
+		var k, id, src string
+		if err := rows.Scan(&k, &id, &src); err != nil {
 			return nil, err
 		}
 		m[k] = id
+		if src != "" {
+			m[src] = id // telemetry key that was normalized into the datastream key
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

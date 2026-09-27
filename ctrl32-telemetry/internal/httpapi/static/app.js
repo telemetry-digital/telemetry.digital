@@ -3,6 +3,10 @@
 // of the product and is not configurable. Nothing user-specific is rendered before the session state is known.
 (function () {
   const ICON = {
+    display: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="1"/><path d="M7 20h10"/><path d="M9 16v4"/><path d="M15 16v4"/></svg>',
+    bolt: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3l0 7l6 0l-8 11l0 -7l-6 0l8 -11"/></svg>',
+    home: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l-2 0l9 -9l9 9l-2 0"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7"/><path d="M10 12h4v4h-4z"/></svg>',
+    flow: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="6" height="5" rx="1"/><rect x="15" y="4" width="6" height="5" rx="1"/><rect x="15" y="15" width="6" height="5" rx="1"/><path d="M9 6.5h6"/><path d="M6 9v6.5a1 1 0 0 0 1 1h8"/></svg>',
     github: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5"/></svg>',
     sun: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7"/></svg>',
     moon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z"/></svg>',
@@ -21,6 +25,7 @@
     system: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/></svg>',
     device: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10"/><path d="M9 16v4"/><path d="M15 16v4"/><path d="M7 8h2"/><path d="M7 12h6"/></svg>',
     assets: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21v-14l8 -4v18"/><path d="M19 21v-10l-6 -4"/><path d="M9 9v0"/><path d="M9 12v0"/><path d="M9 15v0"/><path d="M9 18v0"/></svg>',
+    camera: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.553 -2.276a1 1 0 0 1 1.447 .894v6.764a1 1 0 0 1 -1.447 .894l-4.553 -2.276v-4z"/><rect x="3" y="6" width="12" height="12" rx="2"/></svg>',
     file: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z"/></svg>',
   };
   const $ = (s) => document.querySelector(s);
@@ -90,6 +95,12 @@
     const items = [
       { href: '/', label: 'Dashboard', icon: ICON.dashboard, show: !!me },
       { href: '/dashboards', label: 'Dashboards', icon: ICON.dashboard, show: can('data.read') },
+      { href: '/home', label: 'Home', icon: ICON.home, show: can('data.read') },
+      { href: '/energy', label: 'Energy', icon: ICON.bolt, show: can('data.read') },
+      { href: '/video', label: 'Cameras', icon: ICON.camera, show: can('video.view'), children: [
+        { href: '/video', label: 'Live view' }, { href: '/video/walls', label: 'Video walls' }, { href: '/video/manage', label: 'Camera management', show: can('video.manage') }] },
+      { href: '/displays', label: 'Displays', icon: ICON.display, show: can('display.control') },
+      { href: '/flows', label: 'Flows', icon: ICON.flow, show: can('data.read') },
       { href: '/devices', label: 'Devices', icon: ICON.device, show: can('data.read') },
       { href: '/incidents', label: 'Incidents', icon: ICON.alert, show: can('data.read') },
       { href: '/assets', label: 'Assets', icon: ICON.assets, show: can('data.read'), children: [
@@ -106,7 +117,7 @@
         { href: '/settings/export', label: 'Organization export' }, { href: '/settings/notifications', label: 'Notifications' }, { href: '/settings/approvals', label: 'Approvals' }, { href: '/settings/policy', label: 'Security policy' }] },
       { href: '/organizations', label: 'System', icon: ICON.system, show: can('system.admin'), children: [
         { href: '/organizations', label: 'Organizations' }, { href: '/server', label: 'Server' }, { href: '/server/domain', label: 'Domain and TLS' },
-        { href: '/server/wireguard', label: 'WireGuard' }, { href: '/server/backups', label: 'Backups' }, { href: '/server/updates', label: 'Updates' }] },
+        { href: '/server/wireguard', label: 'WireGuard' }, { href: '/server/backups', label: 'Backups' }, { href: '/server/redundancy', label: 'Redundant database' }, { href: '/server/updates', label: 'Updates' }, { href: '/landing/edit', label: 'Front page' }] },
       { href: '/account', label: 'My account', icon: ICON.user, show: !!me, children: [
         { href: '/account', label: 'Profile' }, { href: '/account/security', label: 'Password and MFA' }, { href: '/account/tokens', label: 'API tokens' }, { href: '/account/push', label: 'Notifications' }, { href: '/api/docs', label: 'API documentation' }] },
     ];
@@ -316,7 +327,7 @@
   if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyMode);
   applyMode();
   window.ctrl32 = { ready, loadBranding, loadMe, api, logout, toggleMode, can, esc, section, t, ask, confirm: confirmAsk, setLocale, get locale() { return locale; }, get langs() { return langs; }, get brand() { return brand; }, get me() { return me; }, get csrf() { return csrf; }, ICON,
-    fmt: (t) => (t ? new Date(t).toLocaleString() : '—'), toast };
+    fmt: (t) => (t ? new Date(t).toLocaleString(document.documentElement.lang || undefined) : '—'), toast };
   function toast(msg, kind) {
     let t = $('#toast');
     if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }

@@ -1,0 +1,27 @@
+meta {
+  name: Reject a pending rule
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v1/rules/:id/reject
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Reject a pending rule
+  
+  Requires permission `device.command`.
+}
