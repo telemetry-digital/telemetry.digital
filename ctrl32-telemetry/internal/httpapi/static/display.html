@@ -72,10 +72,13 @@ async function showItem(it) {
   const st = $('#stage'); st.hidden = false;
   $('#title').textContent = it.title || '';
   if (it.kind === 'dashboard') {
-    const box = document.createElement('div'); box.className = 'kiosk-dash'; st.appendChild(box);
+    const wrap = document.createElement('div'); wrap.className = 'kiosk-dash'; st.appendChild(wrap);
+    const box = document.createElement('div'); wrap.appendChild(box);
     ctrl32Widgets.setPublic('~' + it.slug);
     const d = await api('GET', `/api/v1/public/${encodeURIComponent('~' + it.slug)}`);
+    fitGrid(d.spec, box);
     refreshFn = await ctrl32Widgets.render(box, d.spec, {range: d.spec.range || '6h'});
+    FITTED = {box, spec: d.spec};
     refreshT = setInterval(() => refreshFn && refreshFn(), Math.max(5, d.spec.refresh_s || 30) * 1000);
   } else if (it.kind === 'wall') {
     const w = await api('GET', `/api/v1/display/walls/${encodeURIComponent(it.wall)}`);
@@ -98,6 +101,22 @@ async function showItem(it) {
     markActive();
   }
 }
+// a wall never scrolls: a grid dashboard gets the row height that fills the screen (process screens scale themselves)
+let FITTED = null;
+function fitGrid(spec, box) {
+  if (spec.layout && spec.layout.type === 'canvas') {
+    // a process screen scales with its width: give it the width at which its height fits the screen too
+    const W = spec.layout.width || 1600, H = spec.layout.height || 900;
+    box.style.width = Math.min(innerWidth - 24, (innerHeight - 24) * W / H) + 'px'; box.style.margin = '0 auto'; box.style.position = 'relative'; box.style.inset = 'auto';
+    return;
+  }
+  if (!spec.layout || !(spec.widgets || []).length) return;
+  const rows = Math.max(...spec.widgets.map(w => (w.geometry.y || 0) + (w.geometry.h || 1)));
+  spec.layout.row_height = Math.max(36, Math.floor((innerHeight - 24 - 12 * (rows - 1)) / rows));
+}
+let resizeT = null;
+addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(async () => {
+  if (!FITTED || !FITTED.box.isConnected) return; fitGrid(FITTED.spec, FITTED.box); refreshFn = await ctrl32Widgets.render(FITTED.box, FITTED.spec, {range: FITTED.spec.range || '6h'}); }, 400); });
 function rotate() {
   clearTimeout(rotateT);
   const items = STATE.items;

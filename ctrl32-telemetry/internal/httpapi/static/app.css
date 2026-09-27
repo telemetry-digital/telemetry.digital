@@ -682,7 +682,7 @@ body.kiosk .footer { position: fixed; right: 8px; bottom: 4px; z-index: 30; back
 body.kiosk .footer .container { padding: 0; gap: 6px; }
 body.kiosk .footer svg { width: 11px; height: 11px; }
 .kiosk-stage { position: fixed; inset: 0; overflow: hidden; }
-.kiosk-dash { position: absolute; inset: 0; overflow: auto; padding: 12px; background: var(--bg); color: var(--fg); }
+.kiosk-dash { position: absolute; inset: 0; overflow: hidden; padding: 12px; background: var(--bg); color: var(--fg); }
 .kiosk-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 28px; text-align: center; gap: 8px; }
 .kiosk-pair { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 24px; background: radial-gradient(circle at 50% 30%, #1f2937, #000 70%); }
 .kiosk-pair h1 { margin: 8px 0 0; font-size: 34px; }

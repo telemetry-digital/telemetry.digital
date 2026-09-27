@@ -7,3 +7,4 @@
 - [x] T005 internal/video/health.go: incidents for cameras, displays, storage; settings; incident kinds
 - [x] T006 OpenAPI and clients; sk/cs translations
 - [x] T007 e2e tests/e2e/displays.sh; unit displays_test.go; docs/displays.md, docs/video.md; URS P-16…P-19; JOURNAL, STAV; run-all
+- [x] T008 Display location and messages to many displays (migration 0033); 8 h/12 h/today ranges; kiosk fits grids and process screens to the screen; valve labels, translated symbol states
