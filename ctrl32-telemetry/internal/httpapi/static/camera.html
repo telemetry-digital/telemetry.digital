@@ -33,6 +33,7 @@
       <button type="button" class="pb" id="bZoomIn" title="Zoom in (+, mouse wheel)"></button>
       <button type="button" class="pb" id="bZoomReset" title="Whole picture (0, double click)"></button>
       <span class="pb-sep"></span>
+      <button type="button" class="pb" id="bPtz" title="PTZ control (turn, zoom, presets)" hidden></button>
       <button type="button" class="pb" id="bMark" title="Mark this moment (records on cameras that record on events)"></button>
       <button type="button" class="pb" id="bSnap" title="Save picture"></button>
       <button type="button" class="pb" id="bFull" title="Full screen (F)"></button>
@@ -75,6 +76,7 @@ const ICONS = {
   zoomReset: I('<path d="M4 8v-2a2 2 0 0 1 2 -2h2"/><path d="M4 16v2a2 2 0 0 0 2 2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M16 20h2a2 2 0 0 0 2 -2v-2"/>'),
   snap: I('<path d="M5 7h1a2 2 0 0 0 2 -2a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2"/><circle cx="12" cy="13" r="3"/>'),
   full: I('<path d="M16 4h4v4"/><path d="M14 10l6 -6"/><path d="M8 20h-4v-4"/><path d="M4 20l6 -6"/>'),
+  ptz: I('<path d="M12 3l3 3h-6z"/><path d="M12 21l3 -3h-6z"/><path d="M3 12l3 -3v6z"/><path d="M21 12l-3 -3v6z"/><circle cx="12" cy="12" r="2"/>'),
   mark: I('<path d="M5 5a5 5 0 0 1 7 0a5 5 0 0 0 7 0v9a5 5 0 0 1 -7 0a5 5 0 0 0 -7 0v-9z"/><path d="M5 21v-7"/>'),
 };
 const SPEEDS = [0.5, 1, 2, 4, 8, 16];
@@ -189,6 +191,11 @@ function ptzUI() {
   const extra = document.createElement('div'); extra.className = 'ptz-extra';
   extra.innerHTML = `<button type="button" data-z="1" title="${esc(t('Hold to zoom in'))}">＋</button><button type="button" data-z="-1" title="${esc(t('Hold to zoom out'))}">－</button><select id="presets" title="${esc(t('Presets'))}"><option value="">${esc(t('Presets'))}</option></select><select id="ptzSpeed" title="${esc(t('PTZ speed'))}">${[[.2, 'slow'], [.6, 'normal'], [1, 'fast']].map(([v, l]) => `<option value="${v}"${v === speed ? ' selected' : ''}>${esc(t('speed'))}: ${esc(t(l))}</option>`).join('')}</select>`;
   $('#stage').append(pad, extra);
+  // the PTZ controls cover a small picture: shown by default on wide screens, toggled with the PTZ button (remembered)
+  let on = innerWidth > 700; try { const v = localStorage.getItem('ctrl32.ptz.shown'); if (v !== null) on = v === '1'; } catch (x) { /* ignore */ }
+  const show = (v) => { on = v; pad.hidden = extra.hidden = !v; $('#bPtz').classList.toggle('on', v); };
+  $('#bPtz').hidden = false; show(on);
+  $('#bPtz').onclick = () => { show(!on); try { localStorage.setItem('ctrl32.ptz.shown', on ? '1' : '0'); } catch (x) { /* ignore */ } };
   const send = (body) => api('POST', `/api/v1/video/cameras/${ID}/ptz`, body).catch(x => ctrl32.toast(x.message, 'bad'));
   const hold = (btn, body) => {
     const start = (e) => { e.preventDefault(); e.stopPropagation(); send(body()); };
@@ -285,7 +292,7 @@ $('#day').onchange = e => { if (e.target.value) { DAY = new Date(e.target.value 
 ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(async ({me}) => {
   ME = me;
   for (const [id, ic] of [['bPrevSpan', ICONS.prevSpan], ['bBack60', ICONS.back('60')], ['bBack10', ICONS.back('10')], ['bFwd10', ICONS.fwd('10')], ['bFwd60', ICONS.fwd('60')],
-    ['bZoomIn', ICONS.zoomIn], ['bZoomOut', ICONS.zoomOut], ['bZoomReset', ICONS.zoomReset], ['bSnap', ICONS.snap], ['bFull', ICONS.full], ['bMark', ICONS.mark]]) $('#' + id).innerHTML = ic;
+    ['bZoomIn', ICONS.zoomIn], ['bZoomOut', ICONS.zoomOut], ['bZoomReset', ICONS.zoomReset], ['bSnap', ICONS.snap], ['bFull', ICONS.full], ['bMark', ICONS.mark], ['bPtz', ICONS.ptz]]) $('#' + id).innerHTML = ic;
   $('#speedGroup').innerHTML = SPEEDS.map(s => `<button type="button" data-s="${s}">${s}×</button>`).join('');
   for (const b of document.querySelectorAll('#speedGroup button')) b.onclick = () => { SPEED = +b.dataset.s; if (MODE === 'rec' && !PAUSED && CUR) playFrom(CUR); else ui(); };
   try { CAM = await api('GET', '/api/v1/video/cameras/' + ID); } catch (x) { $('main').innerHTML = `<div class="card">${esc(x.message)}</div>`; return; }

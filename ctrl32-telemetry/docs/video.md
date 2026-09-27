@@ -52,7 +52,7 @@ addresses only); **Fill in from ONVIF** reads the profiles and fills the main an
   events too, as marks on the timeline.
 - **Marks**: the flag button on the camera page (or a flow) marks the camera with a label; on a camera recording on
   events it also records the chosen number of seconds. Marks are audited (`camera.mark`).
-- **PTZ**: hold an arrow or +/− to move, release to stop; presets from the camera. Needs `video.ptz`; moves are
+- **PTZ**: hold an arrow or +/− to move, release to stop; presets from the camera; the speed (slow, normal, fast) and whether the controls are shown (the PTZ button in the player; hidden by default on phones) are remembered in the browser. Needs `video.ptz`; moves are
   audited once per 5 minutes per user and camera (`camera.ptz`), preset changes always.
 - **Flows**: the trigger *Camera event* (camera, kind, start/end) and the action *Mark on camera* — for example a door
   contact opens → mark "Door opened" and record 30 s.
