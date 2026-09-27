@@ -25,6 +25,7 @@
 | 0.55.0 | Zvuk G.711 (TP-Link Tapo a väčšina kamier) ako PCM cez WebAudio; predvoľby výrobcov kamier vo formulári (Tapo, Hikvision, Dahua, Reolink, Axis, Uniview, EZVIZ) | e2e 137, unit |
 | 0.56.0 | Zvuk len naživo — počúvanie bez nahrávania (šetrí disk), odhad miesta vo formulári | e2e 140 |
 | 0.57.0 | Platený white labeling (99 EUR jednorazovo, navždy): trvalé licenčné kľúče overované offline (Ed25519, `licgen` predvolene bez vypršania), produkčný kľúč licencora v binárke, Systém → Licencia („navždy“), vlastný názov produktu, pätička, ikona, názov aplikácie, úvod, e-maily, 2FA, PDF; bez licencie pevná pätička ctrl32; migrácia 0039 (vetva `feature/paid-white-label`, spec 007, ADR-0016) | e2e 34, unit |
+| 0.58.0 | Kamery za prenášačom: PTZ, predvoľby, udalosti ONVIF a „Vyplniť z ONVIF“ cez prenášač (tunel cez webový port HTTPS, dlhé dotazovanie, tajomstvo kamery, prenášač dosiahne len `onvif` pôvod z `relay.toml`, cesty `/onvif/`, 1 MiB, 10 s); prenášač posiela aj zvuk G.711 (Tapo); informácie o prúde (kodek, rozmer, fps, kbit/s hlavného aj vedľajšieho prúdu) na stránke kamery, prekrytie v prehrávači, dlaždice, widget; `relay.toml`: `web`, `onvif`; doplnok HA: `web`, `audio`, `onvif` (vetva `feature/relay-onvif`, URS P-27, P-28) | e2e `video` 167 (27 nových; na Windows PC 158/167, 9 zlyhaní nesúvisí — čas +02:00 v URL, `python3`), `displays` 78, `masks` 20, unit (8 nových), headless `camera_relay` |
 
 Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (`tests/run-all.sh`) pre 0.54.0 (27. 9. 2026): všetko prešlo okrem 3 kontrol času NTP v `ops`, ktoré potrebujú internet (v tomto kontajneri nedostupný) — nesúvisí s kódom.
 
@@ -52,6 +53,11 @@ Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (
 
 ## Čaká na používateľa
 
+- 0.58.0 (ovládanie kamier cez prenášač, G.711 cez prenášač, informácie o prúde): zlúčenie vetvy
+  `feature/relay-onvif` do `main`; po nasadení servera aktualizovať prenášač na PC (nová binárka) a do `relay.toml`
+  pridať `onvif = "http://192.168.0.21:2020"` (C210) a `onvif = "http://192.168.0.197:2020"` (C225), `audio = true`;
+  na serveri pri oboch kamerách ONVIF adresu `http://IP:2020/onvif/device_service` a účet kamery z aplikácie Tapo;
+  overiť so skutočnými kamerami (PTZ C210/C225, pohyb, zvuk)
 - white labeling: zlúčenie vetvy `feature/paid-white-label` do `main` (pull request na požiadanie); súkromný kľúč
   licencora `C:\Users\PavolKRNÁČ\.ctrl32-license\telemetry-digital-2026.key` zálohovať offline (kto ho má, vydáva
   licencie; nikdy nie do repozitára); právna kontrola výnimky v podmienke 2 `LICENSE`; spôsob objednávky a fakturácie

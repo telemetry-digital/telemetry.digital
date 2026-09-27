@@ -1,0 +1,31 @@
+meta {
+  name: Answer of a camera control request (relay)
+  type: http
+  seq: 27
+}
+
+post {
+  url: {{baseUrl}}/api/v1/video/relay/:id/onvif/:rid
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+  rid: 
+}
+
+body:json {
+  {
+    "body": "string",
+    "error": "string",
+    "headers": {},
+    "status": 1
+  }
+}
+
+docs {
+  Answer of a camera control request (relay)
+  
+  The camera's answer (status, Content-Type, body up to 1 MiB) or the relay's error. 410 when the request no longer waits (the server gives up after 10 s).
+}

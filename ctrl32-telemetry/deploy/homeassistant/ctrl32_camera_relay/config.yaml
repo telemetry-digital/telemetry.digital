@@ -1,5 +1,5 @@
 name: ctrl32 camera relay
-version: "0.57.0"
+version: "0.58.0"
 slug: ctrl32_camera_relay
 description: Sends the cameras on this network to a ctrl32 telemetry server over an encrypted connection (RTSPS)
 url: https://telemetry.digital
@@ -15,6 +15,7 @@ options:
   cameras: []
 schema:
   server: str
+  web: "url?"
   ca_file: "str?"
   cameras:
     - name: "str?"
@@ -23,3 +24,5 @@ schema:
       source: password
       sub_source: "password?"
       transport: "list(auto|tcp|udp)?"
+      audio: "bool?"
+      onvif: "url?"

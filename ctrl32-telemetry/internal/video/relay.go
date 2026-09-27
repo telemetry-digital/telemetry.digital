@@ -24,6 +24,7 @@ import (
 type RelayConfig struct {
 	Server  string        `toml:"server"`  // rtsps://telemetry.example.com:8322 (rtsp:// only inside a trusted network)
 	CAFile  string        `toml:"ca_file"` // PEM of a private CA; empty = the system's trusted CAs
+	Web     string        `toml:"web"`     // the server's web address for camera control; empty = https://<host of server>
 	Cameras []RelayCamera `toml:"camera"`
 }
 
@@ -34,7 +35,10 @@ type RelayCamera struct {
 	Source    string `toml:"source"`     // rtsp://user:pw@192.168.1.64/… main stream of the local camera
 	SubSource string `toml:"sub_source"` // optional smaller stream for tiles
 	Transport string `toml:"transport"`  // auto, tcp, udp (towards the local camera)
-	Audio     bool   `toml:"audio"`      // forward the camera's sound too (AAC or Opus; main stream only)
+	Audio     bool   `toml:"audio"`      // forward the camera's sound too (AAC, Opus or G.711; main stream only)
+	// ONVIF is the camera's ONVIF address in this network (http://192.168.0.21:2020, or its device_service URL): the
+	// server controls the camera (PTZ, presets, events) through the relay, which reaches only this origin.
+	ONVIF string `toml:"onvif"`
 }
 
 // Validate checks the configuration before the relay starts.
@@ -64,6 +68,14 @@ func (c *RelayConfig) Validate() error {
 		if cam.Source == "" {
 			return fmt.Errorf("camera %d: source missing", i+1)
 		}
+		if cam.ONVIF != "" {
+			if _, err := relayOrigin(cam.ONVIF); err != nil {
+				return fmt.Errorf("camera %d: onvif: %w", i+1, err)
+			}
+			if _, err := c.webBase(); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -82,6 +94,13 @@ func RunRelay(ctx context.Context, cfg RelayConfig, log *slog.Logger) error {
 	}
 	var wg sync.WaitGroup
 	for _, cam := range cfg.Cameras {
+		if cam.ONVIF != "" {
+			wg.Add(1)
+			go func(cam RelayCamera) {
+				defer wg.Done()
+				relayONVIF(ctx, cfg, cam, log.With("camera", cam.ID, "part", "onvif"))
+			}(cam)
+		}
 		for _, sub := range []bool{false, true} {
 			src := cam.Source
 			if sub {
@@ -143,14 +162,26 @@ func relayTLS(cfg RelayConfig) (*tls.Config, error) {
 	return tlsCfg, nil
 }
 
-// relayAudio finds the sound the server can use (AAC or Opus).
-func relayAudio(desc *description.Session) *description.Media {
+// relayAudio finds the sound the server can use (AAC, Opus or G.711 — A-law or µ-law, as TP-Link Tapo and most
+// cameras send) and names it.
+func relayAudio(desc *description.Session) (*description.Media, string) {
 	var aac *format.MPEG4Audio
 	if m := desc.FindFormat(&aac); m != nil && aac.Config != nil {
-		return m
+		return m, fmt.Sprintf("AAC %d Hz", aac.Config.SampleRate)
 	}
 	var op *format.Opus
-	return desc.FindFormat(&op)
+	if m := desc.FindFormat(&op); m != nil {
+		return m, "Opus"
+	}
+	var g711 *format.G711
+	if m := desc.FindFormat(&g711); m != nil && g711.SampleRate > 0 {
+		law := "A-law"
+		if g711.MULaw {
+			law = "µ-law"
+		}
+		return m, fmt.Sprintf("G.711 %s %d Hz", law, g711.SampleRate)
+	}
+	return nil, ""
 }
 
 func redactAll(err error, src, secret string) string {
@@ -210,14 +241,16 @@ func relayOnce(ctx context.Context, src, transport, target, id, secret string, t
 	}
 	var amedi *description.Media
 	if audio {
-		amedi = relayAudio(desc)
+		var codec string
+		amedi, codec = relayAudio(desc)
 		if amedi != nil {
+			log.Info("relay: forwarding sound", "codec", codec)
 			if _, err := in.Setup(desc.BaseURL, amedi, 0, 0); err != nil {
 				log.Warn("relay: sound not available", "err", err)
 				amedi = nil
 			}
 		} else {
-			log.Warn("relay: the camera sends no AAC or Opus sound")
+			log.Warn("relay: the camera sends no AAC, Opus or G.711 sound")
 		}
 	}
 

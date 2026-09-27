@@ -61,13 +61,18 @@ func (m *Manager) startEvents(c *cam) {
 				return
 			}
 			msg := "events ended"
-			if err != nil {
+			if errors.Is(err, ErrRelayNotConnected) {
+				msg = ErrRelayNotConnected.Error()
+			} else if err != nil {
 				msg = err.Error()
 			}
 			c.ev.mu.Lock()
+			same := c.ev.status == msg
 			c.ev.status = msg
 			c.ev.mu.Unlock()
-			m.log.Warn("camera events down", "camera", c.cfg.Name, "err", msg)
+			if !same {
+				m.log.Warn("camera events down", "camera", c.cfg.Name, "err", msg)
+			}
 			m.closeOpen(c, time.Now()) // the state is unknown while disconnected
 			if time.Since(began) > time.Minute {
 				backoff = time.Second
@@ -78,6 +83,9 @@ func (m *Manager) startEvents(c *cam) {
 			case <-time.After(backoff):
 			}
 			backoff = min(backoff*2, time.Minute)
+			if errors.Is(err, ErrRelayNotConnected) {
+				backoff = min(backoff, 10*time.Second) // costs nothing to retry: events resume soon after the relay polls
+			}
 		}
 	}()
 }

@@ -14,6 +14,8 @@ import (
 	"github.com/bluenviron/gortsplib/v5/pkg/base"
 	"github.com/bluenviron/gortsplib/v5/pkg/description"
 	"github.com/bluenviron/gortsplib/v5/pkg/format"
+
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/video/onvif"
 )
 
 // RelayCheck is the result of one step of `camera-relay -check`.
@@ -68,14 +70,21 @@ func CheckRelay(ctx context.Context, cfg RelayConfig) []RelayCheck {
 	}
 	for i, cam := range cfg.Cameras {
 		name := fmt.Sprintf("camera %d (%s)", i+1, cam.ID)
-		medi, info, err := probeSource(cam.Source, cam.Transport)
+		medi, desc, info, err := probeSource(cam.Source, cam.Transport)
 		if err != nil {
 			add(name+": local camera", errors.New(redactAll(err, cam.Source, cam.Secret)), "")
 			continue
 		}
 		add(name+": local camera", nil, info)
+		if cam.Audio {
+			if _, codec := relayAudio(desc); codec != "" {
+				add(name+": sound", nil, codec)
+			} else {
+				add(name+": sound", errors.New("the camera sends no AAC, Opus or G.711 sound (switch its microphone on, or set audio = false)"), "")
+			}
+		}
 		if cam.SubSource != "" {
-			_, sinfo, err := probeSource(cam.SubSource, cam.Transport)
+			_, _, sinfo, err := probeSource(cam.SubSource, cam.Transport)
 			if err != nil {
 				err = errors.New(redactAll(err, cam.SubSource, cam.Secret))
 			}
@@ -94,15 +103,51 @@ func CheckRelay(ctx context.Context, cfg RelayConfig) []RelayCheck {
 			err = errors.New(redactAll(err, cam.Source, cam.Secret))
 		}
 		add(name+": server accepts the secret", err, "accepted")
+		if cam.ONVIF != "" {
+			checkONVIF(ctx, cfg, cam, name, add)
+		}
 	}
 	return out
 }
 
+// checkONVIF tests camera control: the camera's ONVIF service answers (GetSystemDateAndTime needs no password) and the
+// server's control endpoint accepts the secret.
+func checkONVIF(ctx context.Context, cfg RelayConfig, cam RelayCamera, name string, add func(string, error, string)) {
+	origin, _ := relayOrigin(cam.ONVIF)
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	cl := &onvif.Client{Device: relayDevice(cam.ONVIF), HTTP: cameraClient()}
+	if t, err := cl.DateTime(cctx); err != nil {
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			err = ue.Err
+		}
+		add(name+": local ONVIF "+origin, err, "")
+	} else {
+		add(name+": local ONVIF "+origin, nil, "answers (camera time "+t.Format("2006-01-02 15:04:05")+" UTC)")
+	}
+	base, err := cfg.webBase()
+	if err != nil {
+		add(name+": camera control through the server", err, "")
+		return
+	}
+	web, err := webClient(cfg, 15*time.Second)
+	if err != nil {
+		add(name+": camera control through the server", err, "")
+		return
+	}
+	_, _, err = relayPollWait(cctx, web, base+"/api/v1/video/relay/"+cam.ID+"/onvif", cam.Secret, 0)
+	if err != nil {
+		err = errors.New(strings.ReplaceAll(err.Error(), cam.Secret, "xxxxx"))
+	}
+	add(name+": camera control through the server "+base, err, "secret accepted")
+}
+
 // probeSource asks a local camera for its streams and returns the video media the relay would forward.
-func probeSource(src, transport string) (*description.Media, string, error) {
+func probeSource(src, transport string) (*description.Media, *description.Session, string, error) {
 	su, err := base.ParseURL(src)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, "", err
 	}
 	c := &gortsplib.Client{Scheme: su.Scheme, Host: su.Host, ReadTimeout: 8 * time.Second}
 	if transport == "tcp" {
@@ -110,12 +155,12 @@ func probeSource(src, transport string) (*description.Media, string, error) {
 		c.Protocol = &p
 	}
 	if err := c.Start(); err != nil {
-		return nil, "", err
+		return nil, nil, "", err
 	}
 	defer c.Close()
 	desc, _, err := c.Describe(su)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, "", err
 	}
 	for _, m := range desc.Medias {
 		if m.Type != description.MediaTypeVideo {
@@ -124,9 +169,9 @@ func probeSource(src, transport string) (*description.Media, string, error) {
 		for _, f := range m.Formats {
 			switch f.(type) {
 			case *format.H264, *format.H265, *format.MJPEG:
-				return m, f.Codec(), nil
+				return m, desc, f.Codec(), nil
 			}
 		}
 	}
-	return nil, "", errors.New("the camera offers no H.264, H.265 or MJPEG video")
+	return nil, nil, "", errors.New("the camera offers no H.264, H.265 or MJPEG video")
 }

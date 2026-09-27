@@ -37,11 +37,14 @@
       <button type="button" class="pb" id="bSend" title="Show this camera on a display (video wall)" hidden></button>
       <button type="button" class="pb" id="bSound" title="Sound on / off (S) — listening is recorded in the audit trail" hidden></button>
       <button type="button" class="pb" id="bMark" title="Mark this moment (records on cameras that record on events)"></button>
+      <button type="button" class="pb" id="bInfo" title="Stream information on the picture (I)"></button>
       <button type="button" class="pb" id="bSnap" title="Save picture"></button>
       <button type="button" class="pb" id="bFull" title="Full screen (F)"></button>
     </div>
   </div>
   <div class="muted" id="info" style="min-height:1.4em;margin:4px 0"></div>
+  <div class="muted notranslate" id="streams" style="font-size:13px;margin:0 0 6px"></div>
+  <div class="bad" id="relayNote" style="font-size:13px;margin:0 0 6px" hidden></div>
 
   <div class="card" id="recPanel" hidden>
     <div class="row" style="margin-bottom:8px">
@@ -86,11 +89,13 @@ const ICONS = {
   soundOff: I('<path d="M11 5l-5 4h-3v6h3l5 4z"/><path d="M16 9l5 6"/><path d="M21 9l-5 6"/>'),
   soundOn: I('<path d="M11 5l-5 4h-3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>'),
   mark: I('<path d="M5 5a5 5 0 0 1 7 0a5 5 0 0 0 7 0v9a5 5 0 0 1 -7 0a5 5 0 0 0 -7 0v-9z"/><path d="M5 21v-7"/>'),
+  info: I('<circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/>'),
 };
 const SPEEDS = [0.5, 1, 2, 4, 8, 16];
 let EVENTS = [];
 let HOLDS = [];
 let SOUND = false; // the user switched the sound on (spec 020): only then is it requested (and audited)
+let STATS = false; try { STATS = localStorage.getItem('ctrl32.video.stats') === '1'; } catch (x) { /* ignore */ } // stream information on the picture
 let CAM = null, P = null, MODE = 'live', PAUSED = false, DAY = new Date(), SPANS = [], CUR = null, SEL = null, ME = null, SPEED = 1;
 const can = p => !!(ME && (ME.permissions || []).includes(p));
 const dayStart = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
@@ -102,7 +107,7 @@ const dayLabel = ms => new Date(ms).toLocaleDateString(lang(), {day: 'numeric', 
 // ---- player and modes ---------------------------------------------------------------------------------------------
 function ensurePlayer() {
   if (P) return P;
-  P = ctrl32Player($('#stage'), {url: '', live: true, zoom: true,
+  P = ctrl32Player($('#stage'), {url: '', live: true, zoom: true, stats: STATS,
     onTime: ms => { CUR = ms; $('#clock').textContent = hm(ms); $('#ptime').textContent = `${dayLabel(ms)} ${hm(ms)}`; drawCursor(); },
     onState: (s, e) => { if (s === 'paused') return; $('#info').textContent = s === 'online' || s === 'connecting' ? '' : t(s) + (e ? ': ' + e : ''); },
     onEnd: () => { $('#info').textContent = t('End of the recording'); },
@@ -122,6 +127,7 @@ function ui() {
   $('#qualWrap').hidden = !(CAM && CAM.has_sub && MODE === 'live') || SOUND;
   $('#bSound').disabled = MODE !== 'live' && CAM && CAM.audio_record === false; $('#bSound').title = t($('#bSound').disabled ? 'The sound of this camera is heard live only, it is not recorded' : 'Sound on / off (S) — listening is recorded in the audit trail');
   $('#bSound').innerHTML = SOUND ? ICONS.soundOn : ICONS.soundOff; $('#bSound').classList.toggle('on', SOUND);
+  $('#bInfo').classList.toggle('on', STATS);
 }
 function live() {
   MODE = 'live'; PAUSED = false;
@@ -169,6 +175,7 @@ $('#bSnap').onclick = () => {
 };
 // sound: switching it on reconnects with the sound (the main stream); off reconnects without it
 $('#bSound').onclick = () => { SOUND = !SOUND; if (MODE === 'live') live(); else if (CUR) playFrom(CUR); ui(); };
+$('#bInfo').onclick = () => { STATS = !STATS; try { localStorage.setItem('ctrl32.video.stats', STATS ? '1' : '0'); } catch (x) { /* ignore */ } if (P) P.stats(STATS); ui(); };
 $('#bFull').onclick = () => { const s = $('#player'); if (document.fullscreenElement) document.exitFullscreen(); else s.requestFullscreen().catch(() => {}); };
 $('#quality').onchange = live;
 document.addEventListener('keydown', e => {
@@ -183,6 +190,7 @@ document.addEventListener('keydown', e => {
   else if (k === '0') ensurePlayer().zoomReset();
   else if (k === 'l' || k === 'L') live();
   else if (k === 'f' || k === 'F') $('#bFull').click();
+  else if (k === 'i' || k === 'I') $('#bInfo').click();
   else if ((k === 's' || k === 'S') && !$('#bSound').hidden) $('#bSound').click();
 });
 
@@ -242,11 +250,22 @@ function ptzUI() {
   $('#presets').onchange = (e) => { if (e.target.value) send({action: 'preset', preset: e.target.value}); e.target.value = ''; };
   $('#presets').onclick = (e) => e.stopPropagation();
 }
-// live activity from the camera's status
+// live activity from the camera's status, and what arrives on its streams (from the camera or its relay)
 async function activity() {
   try { const c = await api('GET', '/api/v1/video/cameras/' + ID); const a = (c.status.active || []).map(k => t(KIND[k] || k));
     $('#stage').classList.toggle('cam-alert', a.length > 0); $('#stage').dataset.active = a.join(', ');
+    streamInfo(c);
   } catch (x) { /* next time */ }
+}
+function streamInfo(c) {
+  const s = c.status || {}, line = (label, x) => `${t(label)}: ${x && x.state === 'online' && x.codec ? ctrl32Player.statsText(x) : t(x && x.state ? (x.state === 'idle' ? 'on demand' : x.state) : 'not sent')}`;
+  const parts = [line('Main stream', s)];
+  if (c.has_sub) parts.push(line('Sub-stream', s.sub));
+  if (c.source === 'push') parts.push(t('through the relay'));
+  $('#streams').textContent = c.enabled ? parts.join('  |  ') : '';
+  // camera control of a camera behind a relay goes through the relay (0.58.0)
+  $('#relayNote').hidden = !(c.source === 'push' && c.onvif && s.onvif_relay === false);
+  $('#relayNote').textContent = t("Camera control (PTZ, events) is not connected: the relay has to know the camera's ONVIF address (onvif = … in relay.toml) and run version 0.58.0 or newer.");
 }
 
 // ---- timeline: the day, and one hour in detail --------------------------------------------------------------------
@@ -350,7 +369,7 @@ $('#day').onchange = e => { if (e.target.value) { DAY = new Date(e.target.value 
 ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(async ({me}) => {
   ME = me;
   for (const [id, ic] of [['bPrevSpan', ICONS.prevSpan], ['bBack60', ICONS.back('60')], ['bBack10', ICONS.back('10')], ['bFwd10', ICONS.fwd('10')], ['bFwd60', ICONS.fwd('60')],
-    ['bZoomIn', ICONS.zoomIn], ['bZoomOut', ICONS.zoomOut], ['bZoomReset', ICONS.zoomReset], ['bSnap', ICONS.snap], ['bFull', ICONS.full], ['bMark', ICONS.mark], ['bPtz', ICONS.ptz], ['bSend', ICONS.send]]) $('#' + id).innerHTML = ic;
+    ['bZoomIn', ICONS.zoomIn], ['bZoomOut', ICONS.zoomOut], ['bZoomReset', ICONS.zoomReset], ['bSnap', ICONS.snap], ['bFull', ICONS.full], ['bInfo', ICONS.info], ['bMark', ICONS.mark], ['bPtz', ICONS.ptz], ['bSend', ICONS.send]]) $('#' + id).innerHTML = ic;
   $('#speedGroup').innerHTML = SPEEDS.map(s => `<button type="button" data-s="${s}">${s}×</button>`).join('');
   for (const b of document.querySelectorAll('#speedGroup button')) b.onclick = () => { SPEED = +b.dataset.s; if (MODE === 'rec' && !PAUSED && CUR) playFrom(CUR); else ui(); };
   try { CAM = await api('GET', '/api/v1/video/cameras/' + ID); } catch (x) { $('main').innerHTML = `<div class="card">${esc(x.message)}</div>`; return; }

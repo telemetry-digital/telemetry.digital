@@ -7,6 +7,7 @@
 // ONVIF: http://127.0.0.1:8555/onvif/<label>/device_service   (profiles, events with motion, PTZ that moves the picture)
 //
 //	POST http://127.0.0.1:8555/sim/motion/<label>?on=1        switches motion on (on=0 off)
+//	GET  http://127.0.0.1:8555/sim/ptz/<label>                 PTZ position {"pan","tilt","zoom"}
 //	GET  http://127.0.0.1:8555/snapshot/<label>/<W>x<H>           one JPEG picture (snapshot address)
 //
 // Cameras labelled STILL… show a standing scene until motion is switched on (for motion detection on the server).

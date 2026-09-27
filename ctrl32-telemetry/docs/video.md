@@ -103,6 +103,10 @@ Hikvision (HiLook), Dahua (Imou, Amcrest), Reolink, Axis, Uniview and EZVIZ; *Te
    C510W, C520WS) turn and use presets with PTZ; the sound is G.711 (switch *Sound* on if it is lawful there).
 4. Battery cameras and doorbells (C400, C420, C425, D230, D235) have no RTSP/ONVIF and cannot be added.
 5. Tapo cameras serve few RTSP connections at a time: do not also watch them from another recorder.
+6. Behind a relay (another site): in `relay.toml` `source = "rtsp://USER:PASSWORD@IP:554/stream1"`,
+   `sub_source = "…/stream2"`, `audio = true` for the G.711 sound and `onvif = "http://IP:2020"` for PTZ, presets
+   and motion events; on the server the camera's ONVIF address `http://IP:2020/onvif/device_service` with the camera
+   account (see *Camera control through the relay*).
 
 Tapo has no HTTP snapshot address, so motion detection on the server is not available for it; use the camera's
 motion events (ONVIF).
@@ -127,7 +131,10 @@ it on per camera (*Camera management → camera → Sound*) only where it is law
 - Exports (MP4 and evidence packages) contain the sound only for people with `video.audio`.
 - In the browser the sound is a separate stream played next to the picture on the same time line, so a gap in the
   sound never stops the picture.
-- A relay forwards the sound only with `audio = true` in its `relay.toml`.
+- A relay forwards the sound only with `audio = true` in its `relay.toml` — AAC, Opus and G.711 (A-law and µ-law, so
+  TP-Link Tapo cameras keep their sound through a relay; from 0.58.0), main stream only. The server takes it exactly
+  like the sound of a camera it reads itself (G.711 as PCM, *live only* works the same); `camera-relay -check` names
+  the codec it found, or fails when the camera sends none.
 
 ## Video settings
 
@@ -263,16 +270,21 @@ camera (192.168.1.64) ──RTSP──▶ camera-relay at the site ══RTSPS (
    ```toml
    # relay.toml — keep it private
    server = "rtsps://telemetry.example.com:8322"
+   web = "https://telemetry.example.com"   # the server's web address, for camera control (default: https://<host of server>)
    # ca_file = "/etc/ctrl32/ca.pem"   # only for a private CA
    [[camera]]
    id = "01a0dfcb-…"                 # from the server
    secret = "…"                      # shown once
    source = "rtsp://admin:pw@192.168.1.64:554/Streaming/Channels/101"
    sub_source = "rtsp://admin:pw@192.168.1.64:554/Streaming/Channels/102"   # optional, for tiles
+   audio = true                      # optional: forward the sound (AAC, Opus, G.711)
+   onvif = "http://192.168.1.64"     # optional: camera control through the relay (see below)
    ```
    The test alone: `ctrl32-telemetry camera-relay -check -config relay.toml` — the server is reachable and its
-   certificate trusted, every camera answers with H.264, H.265 or MJPEG, the server accepts each secret; passwords
-   and secrets are never printed. Without the installer: `ctrl32-telemetry camera-relay -config relay.toml`, or
+   certificate trusted, every camera answers with H.264, H.265 or MJPEG (and, with `audio = true`, which sound), the
+   server accepts each secret, and for cameras with `onvif` the camera's ONVIF service answers
+   (GetSystemDateAndTime, no password needed) and the server's control endpoint accepts the secret; passwords and
+   secrets are never printed. Without the installer: `ctrl32-telemetry camera-relay -config relay.toml`, or
    `ctrl32-telemetry service install-relay -config relay.toml` to register the service yourself.
    One relay forwards any number of cameras; each stream reconnects on its own (1 s … 30 s back-off).
 
@@ -283,13 +295,49 @@ events and an address with 10 failures in 10 minutes is blocked for 15 minutes; 
 relay at once; the relay never logs the secret or the camera password. The video is forwarded unchanged (no
 decoding), so a Raspberry Pi relays many cameras.
 
+### Camera control through the relay (PTZ, presets, events)
+
+From 0.58.0 a camera behind a relay is controlled like any other camera: PTZ, presets, ONVIF events (motion, tamper,
+line crossing …, event recording and flows) and *Fill in from ONVIF*. The server cannot reach the camera's ONVIF
+address in the remote network, so the relay carries the requests over the server's ordinary web port (HTTPS, no new
+port, works behind Caddy):
+
+```
+server ──(queue)── GET  /api/v1/video/relay/{camera}/onvif/next ◀══HTTPS long poll══ camera-relay ──HTTP──▶ camera ONVIF
+       ◀─────────── POST /api/v1/video/relay/{camera}/onvif/{rid} ═══the answer══════ (only its onvif origin)
+```
+
+1. On the server, edit the relayed camera: **ONVIF address** = the camera's address *in its own network*, e.g.
+   `http://192.168.0.21:2020/onvif/device_service` (TP-Link Tapo: port 2020), and the camera's **user name and
+   password** (Tapo: the camera account from the Tapo app; stored encrypted as for other cameras).
+2. In `relay.toml`, add to the camera `onvif = "http://192.168.0.21:2020"` (the origin, or the full device service
+   address) and, when the server is not reached at `https://<host of server>`, `web = "https://…"`. A relay.toml
+   downloaded after the ONVIF address is set already carries the line. Restart the relay (installer: run it again
+   with the new file) — `-check` tests the local ONVIF service and the control endpoint.
+3. The camera page shows the PTZ button as for other cameras. While the relay does not poll (old relay without
+   `onvif`, relay stopped) the page says *Camera control (PTZ, events) is not connected* and PTZ answers 409;
+   the camera management table shows *relay control not connected*. The camera status carries `onvif_relay`
+   (true/false) for push cameras with an ONVIF address.
+
+Security: the relay polls with the camera's push secret (`X-Camera-Secret`); wrong secrets are security events and count
+towards blocking the address together with the RTSP push port (`push_max_fails` etc.). The server hands the relay only a
+**path under `/onvif/`**; the relay builds the address from the `onvif` origin in its own `relay.toml`, allows only POST
+(SOAP) and GET, follows no redirects, limits bodies to 1 MiB each way and the camera's answer to 10 s, and never logs
+the bodies (they carry the camera's WS-Security digests). The server also refuses any service address outside the
+configured ONVIF origin. So the server can never use a relay to reach anything else in the remote network. A request
+waits at most 10 s for the relay; the relay is *connected* while it polls (a poll lasts up to 25 s; a relay that went
+away shows as not connected within a few seconds).
+
+The Home Assistant add-on (`deploy/homeassistant`) has the same options per camera: `onvif`, `audio`, and `web`.
+
 Alternatively connect the site with the server's WireGuard network (*System → WireGuard*) and add the cameras
 normally — useful when the site already has a router with WireGuard.
 
 ## Camera widget
 
 Dashboards and process pictures can show a live camera anywhere: *Add widget → Other → Camera*, choose the camera,
-the stream (sub for small widgets), whether to show the name and whether a click opens the camera page. The widget
+the stream (sub for small widgets), whether to show the name, whether a click opens the camera page and whether to
+show the stream information (codec, size, fps, kbit/s) on the picture. The widget
 keeps its connection across dashboard refreshes and closes it when it leaves the page. It needs `video.view`;
 public (shared) dashboards never show cameras.
 
@@ -317,6 +365,11 @@ window closes by itself after a minute; shared public dashboards show the pins w
   (timeshift) and can catch up to the present; LIVE returns to the live picture.
 - Browsers play H.264 everywhere; H.265 only where the operating system supports it (Safari, Edge/Chrome with
   hardware decoding) — otherwise use an H.264 sub-stream for tiles. MJPEG plays everywhere.
+- **Stream information** (0.58.0) — what actually arrives from the camera (or its relay): codec, picture size, frames
+  per second and kbit/s. The camera page shows it for the main and the sub-stream below the player (updated every
+  3 s) and, with the **ⓘ** button (key I), as a small overlay on the picture; *Live view* has a *Stream information*
+  switch for the tiles, the camera widget a *Show stream information* option (off by default). The live WebSocket
+  sends it as `{"type":"stats"}` every 3 s; the camera status has `sub` next to the main stream's numbers.
 
 ## Video walls
 

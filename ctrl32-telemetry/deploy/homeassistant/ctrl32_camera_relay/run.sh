@@ -15,6 +15,7 @@ fi
 
 jq -r '
   "server = \(.server | tojson)",
+  (if (.web // "") != "" then "web = \(.web | tojson)" else empty end),
   (if (.ca_file // "") != "" then "ca_file = \(.ca_file | tojson)" else empty end),
   (.cameras[] |
     "",
@@ -23,7 +24,9 @@ jq -r '
     "secret = \(.secret | tojson)",
     "source = \(.source | tojson)",
     (if (.sub_source // "") != "" then "sub_source = \(.sub_source | tojson)" else empty end),
-    (if (.transport // "") != "" then "transport = \(.transport | tojson)" else empty end))
+    (if (.transport // "") != "" then "transport = \(.transport | tojson)" else empty end),
+    (if (.audio // false) then "audio = true" else empty end),
+    (if (.onvif // "") != "" then "onvif = \(.onvif | tojson)" else empty end))
 ' "$OPTS" > "$CONF"
 
 echo "ctrl32 camera relay: $n camera(s) -> $(jq -r .server "$OPTS")"

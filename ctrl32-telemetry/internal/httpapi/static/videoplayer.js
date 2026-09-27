@@ -1,7 +1,9 @@
 // ctrl32 telemetry — camera video player (spec 010). One WebSocket per player: H.264/H.265 arrive as fragmented MP4 and
 // play through Media Source Extensions; MJPEG arrives as single JPEG pictures drawn on a canvas. Text messages:
 // {type:"init", codec, mime, width, height}, {type:"time", t (ms), pos (s in the player's timeline)},
-// {type:"status", state, error}, {type:"end"}, {type:"audio", mime} (spec 020).
+// {type:"status", state, error}, {type:"end"}, {type:"audio", mime} (spec 020), {type:"stats", stream, codec, width,
+// height, fps, kbps} every few seconds of a live picture: what arrives from the camera (or its relay) — shown in a small
+// overlay when opts.stats is true or after p.stats(true).
 // The sound comes only when the URL asks for it (audio=1) and the user may hear it: binary messages starting with 'A'
 // carry it as a separate fragmented MP4 stream, played by its own <audio> element that follows the picture's clock, so
 // a gap in the sound never stalls the picture. It starts muted; p.sound(true) switches it on (a user gesture).
@@ -10,15 +12,23 @@
 //
 //   const p = ctrl32Player(element, {url, live: true, zoom: true, onTime(ms), onState(state, error), onEnd()});
 //   p.open(url, live);   // another source in the same player (keeps the zoom)
-//   p.pause(); p.resume(); p.zoomBy(1.25); p.zoomReset(); p.close();
+//   p.pause(); p.resume(); p.zoomBy(1.25); p.zoomReset(); p.stats(true); p.close();
 // Digital zoom (opts.zoom): mouse wheel or pinch zooms at the pointer, dragging pans, a double click resets.
 (function () {
   function player(host, opts) {
     const box = document.createElement('div');
     box.className = 'vp';
-    box.innerHTML = '<div class="vp-stage"><video muted playsinline autoplay disablepictureinpicture></video><canvas hidden></canvas><svg class="vp-mask" hidden aria-hidden="true"></svg></div><div class="vp-msg" hidden></div><div class="vp-zoom" hidden></div>';
+    box.innerHTML = '<div class="vp-stage"><video muted playsinline autoplay disablepictureinpicture></video><canvas hidden></canvas><svg class="vp-mask" hidden aria-hidden="true"></svg></div><div class="vp-msg" hidden></div><div class="vp-zoom" hidden></div><div class="vp-stats notranslate" hidden></div>';
     host.appendChild(box);
     const video = box.querySelector('video'), canvas = box.querySelector('canvas'), msg = box.querySelector('.vp-msg'), stage = box.querySelector('.vp-stage'), zlabel = box.querySelector('.vp-zoom');
+    // stream information: what arrives from the camera (codec, size, frames per second, kbit/s)
+    const statsEl = box.querySelector('.vp-stats'); let statsOn = !!opts.stats, lastStats = null;
+    function drawStats() {
+      const m = lastStats;
+      statsEl.hidden = !statsOn || !m || !opts.live || box.dataset.state !== 'online';
+      if (statsEl.hidden) return;
+      statsEl.textContent = ctrl32Player.statsText(m);
+    }
     let ws = null, ms = null, sb = null, queue = [], closed = false, retry = null, mode = '', lastT = null, drawing = false, pendingJpeg = null, stallTimer = null;
     // the sound (spec 020)
     let audio = null, ams = null, asb = null, aqueue = [], soundOn = false;
@@ -112,7 +122,7 @@
     if (window.ResizeObserver) new ResizeObserver(placeMasks).observe(stage);
     video.addEventListener('loadedmetadata', placeMasks); video.addEventListener('resize', placeMasks);
     function say(text) { msg.textContent = text ? T(text) : ''; msg.hidden = !text; }
-    function state(s, e) { box.dataset.state = s; if (opts.onState) opts.onState(s, e || ''); }
+    function state(s, e) { box.dataset.state = s; if (s !== 'online') lastStats = null; if (typeof drawStats === 'function') drawStats(); if (opts.onState) opts.onState(s, e || ''); }
 
     function resetMedia() {
       if (ms) { try { if (ms.readyState === 'open') ms.endOfStream(); } catch (e) { /* closing */ } }
@@ -194,6 +204,7 @@
           else if (m.type === 'time') { lastT = { t: m.t, pos: m.pos, at: performance.now() }; if (mode === 'jpeg' && opts.onTime) opts.onTime(m.t); }
           else if (m.type === 'status') { if (m.state !== 'online') { say(m.state === 'offline' ? 'Camera offline' : 'Connecting…'); } state(m.state, m.error); }
           else if (m.type === 'end') { state('end'); if (opts.onEnd) opts.onEnd(); }
+          else if (m.type === 'stats') { lastStats = m; drawStats(); if (opts.onStats) opts.onStats(m); }
           return;
         }
         if (new Uint8Array(e.data, 0, 1)[0] === 0x50) { playPCM(e.data); return; }
@@ -278,6 +289,8 @@
       // switch the sound on or off (on needs a user gesture in browsers); true when there is sound to hear
       sound(on) { soundOn = !!on; if (soundOn) { const c = pcmCtx(); if (c) c.resume().catch(() => {}); } else if (actx) actx.suspend().catch(() => {}); if (audio) { audio.muted = !soundOn; if (soundOn) { syncAudio(); audio.play().catch(() => {}); } else audio.pause(); } return box.dataset.audio === '1'; },
       get hasSound() { return box.dataset.audio === '1'; },
+      // the stream information overlay on or off
+      stats(on) { statsOn = !!on; drawStats(); },
       close() {
         closed = true; stop(); clearInterval(stallTimer); clearInterval(syncTimer);
         resetMedia(); resetAudio(); if (actx) actx.close().catch(() => {}); box.remove();
@@ -288,4 +301,11 @@
   const all = new Set();
   setInterval(() => { for (const p of all) if (!p.el.isConnected) { if ((p._gone = (p._gone || 0) + 1) >= 2) { p.close(); all.delete(p); } } else p._gone = 0; }, 2000);
   window.ctrl32Player = (host, opts) => { const p = player(host, opts); all.add(p); const c = p.close; p.close = () => { all.delete(p); c(); }; return p; };
+  // "H.264 1920×1080 · 15 fps · 2048 kbit/s" from a stats message or a camera's status
+  const CODEC = { h264: 'H.264', h265: 'H.265', mjpeg: 'MJPEG' };
+  window.ctrl32Player.statsText = (m) => {
+    if (!m || !m.codec) return '';
+    const fps = Math.round((m.fps || 0) * 10) / 10, kb = Math.round(m.kbps || 0);
+    return `${CODEC[m.codec] || String(m.codec).toUpperCase()} ${m.width || '?'}×${m.height || '?'} · ${fps} fps · ${kb >= 10000 ? (kb / 1000).toFixed(1) + ' Mbit/s' : kb + ' kbit/s'}`;
+  };
 })();

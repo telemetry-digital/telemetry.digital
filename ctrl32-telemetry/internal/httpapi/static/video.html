@@ -19,6 +19,7 @@
 
   <section data-section="live">
     <div class="row" style="margin-bottom:10px"><span class="muted" id="liveInfo"></span><span class="grow"></span>
+      <label class="inline muted" title="Codec, size, frames per second and kbit/s of what arrives from each camera"><input type="checkbox" id="tileStats"> Stream information</label>
       <label class="muted">Tile size <select id="tileSize"><option value="200">small</option><option value="280" selected>medium</option><option value="420">large</option></select></label></div>
     <div class="cam-grid" id="liveGrid"></div>
     <div class="card muted" id="noCams" hidden><p>No cameras yet. An administrator adds them under Camera management (RTSP or HTTP MJPEG address of the camera).</p></div>
@@ -101,13 +102,16 @@
     <label>Main stream URL <input name="url" placeholder="rtsp://192.168.1.64:554/Streaming/Channels/101" class="notranslate"></label>
     <label>Sub-stream URL for tiles (optional, smaller picture) <input name="sub_url" placeholder="rtsp://192.168.1.64:554/Streaming/Channels/102" class="notranslate"></label>
     <div class="muted" style="font-size:13px">RTSP with H.264, H.265 or MJPEG, or an HTTP MJPEG address. User name and password may be part of the URL; they are stored separately and the password is encrypted.</div>
+    </div>
     <div class="row2"><label>User name <input name="username" autocomplete="off"></label><label>Password <input name="password" type="password" autocomplete="new-password" placeholder="unchanged"></label></div>
+    <div class="pull-only">
     <label>Transport <select name="transport"><option value="auto">automatic</option><option value="tcp">TCP</option><option value="udp">UDP</option></select></label>
     <div class="row"><button class="btn" type="button" id="testBtn">Test connection</button><span id="testOut" class="muted"></span></div>
-    <label>ONVIF address (motion and other events, PTZ; optional) <input name="onvif_url" placeholder="http://192.168.1.64/onvif/device_service" class="notranslate"></label>
-    <div class="row"><button class="btn small" type="button" id="findBtn">Find cameras in the network</button><button class="btn small" type="button" id="profBtn">Fill in from ONVIF</button><span id="onvifOut" class="muted" style="font-size:13px"></span></div>
-    <div id="found" class="row" style="gap:6px"></div>
     </div>
+    <label>ONVIF address (motion and other events, PTZ; optional) <input name="onvif_url" placeholder="http://192.168.1.64/onvif/device_service" class="notranslate"></label>
+    <div class="muted push-only" style="font-size:13px">For a camera behind a relay: its ONVIF address in its own network, e.g. http://192.168.0.21:2020/onvif/device_service for TP-Link Tapo. The server reaches it through the relay, which needs onvif = "http://192.168.0.21:2020" for this camera in relay.toml. User name and password above are the camera's account (Tapo: the camera account from the Tapo app); the password is stored encrypted.</div>
+    <div class="row"><button class="btn small pull-only" type="button" id="findBtn">Find cameras in the network</button><button class="btn small" type="button" id="profBtn">Fill in from ONVIF</button><span id="onvifOut" class="muted" style="font-size:13px"></span></div>
+    <div id="found" class="row pull-only" style="gap:6px"></div>
     <div class="row2">
       <label>Recording <select name="record"><option value="continuous">continuous</option><option value="events">on events (motion, marks)</option><option value="off">off</option></select></label></div>
     <div class="events-only">
@@ -141,7 +145,7 @@
     <h2 style="margin-top:0">Relay for the remote camera</h2>
     <p class="bad" style="margin:0"><b>The secret is shown only now.</b> Copy the configuration to the relay at the remote site; a lost secret can only be replaced by a new one.</p>
     <p class="muted" style="margin:6px 0">1. Save this configuration as <code>relay.toml</code> and fill in the local address of the camera (and its password).</p>
-    <textarea id="relayCfg" rows="11" readonly class="notranslate" style="width:100%;font-family:var(--mono);font-size:12px"></textarea>
+    <textarea id="relayCfg" rows="14" readonly class="notranslate" style="width:100%;font-family:var(--mono);font-size:12px"></textarea>
     <p class="muted" style="margin:6px 0">2. On a computer at the site that reaches the camera, run the installer next to the file:</p>
     <div style="font-size:12px"><b>Linux / Raspberry Pi</b><pre class="notranslate relay-cmd">curl -fsSL https://telemetry.digital/install-relay.sh -o install-relay.sh
 sudo bash install-relay.sh --config relay.toml</pre>
@@ -182,7 +186,7 @@ function renderLive() {
   g.innerHTML = on.map(c => `<div class="cam-tile" data-id="${c.id}"><div class="cap">${dot(c.status)}<b class="notranslate">${esc(c.name)}</b></div></div>`).join('');
   for (const el of g.querySelectorAll('.cam-tile')) {
     const cam = CAMS.find(c => c.id === el.dataset.id);
-    const p = ctrl32Player(el, {url: `/api/v1/video/cameras/${el.dataset.id}/live?quality=sub`, live: true,
+    const p = ctrl32Player(el, {url: `/api/v1/video/cameras/${el.dataset.id}/live?quality=sub`, live: true, stats: $('#tileStats').checked,
       onState: s => { if (!cam.status.recording) el.querySelector('.cam-dot').className = 'cam-dot ' + (s === 'online' ? 'online' : s === 'offline' ? 'offline' : ''); }});
     el.prepend(p.el); players.push(p);
     el.onclick = () => { location.href = '/video/cameras/' + el.dataset.id; };
@@ -219,8 +223,8 @@ async function openAll(w) {
 function renderManage() {
   $('#cams tbody').innerHTML = CAMS.map(c => `<tr><td class="notranslate">${esc(c.name)}</td><td class="notranslate">${esc(c.location)}${c.group ? ` <span class="badge" title="${esc(t('Camera group'))}">${esc(c.group)}</span>` : ''}</td>
     <td class="notranslate" style="max-width:280px;overflow:hidden;text-overflow:ellipsis">${c.source === 'push' ? `<span class="badge primary">${esc(t('remote, sends via relay'))}</span>${c.push && !c.push.enabled ? ` <span class="badge bad" title="${esc(t('video.push_listen is not set in the server configuration'))}">${esc(t('receiving is off'))}</span>` : ''}` : esc(c.url || '') + (c.has_sub ? ' <span class="badge">+ sub</span>' : '')}</td>
-    <td>${dot(c.status)} ${esc(t(c.enabled ? (c.status.state === 'idle' ? 'on demand' : c.status.state) : 'disabled'))}${c.status.codec ? ` <span class="muted">${esc(c.status.codec.toUpperCase())} ${c.status.width}×${c.status.height} · ${c.status.fps} fps · ${Math.round(c.status.kbps)} kbit/s</span>` : ''}${c.status.error ? `<br><span class="bad" style="font-size:12px">${esc(c.status.error)}</span>` : ''}</td>
-    <td>${c.record === 'off' ? esc(t('off')) : esc(t(c.record === 'events' ? 'on events' : 'continuous')) + ', ' + c.retention_days + ' ' + esc(t('days'))}${c.onvif ? ` <span class="badge" title="${esc(t('ONVIF events'))}: ${esc(c.status.events || '')}">ONVIF${c.status.events && c.status.events !== 'connected' && c.status.events !== 'connecting' ? ' ⚠' : ''}</span>` : ''}${c.audio ? ` <span class="badge" title="${esc(t('Sound'))}: ${esc(c.status.audio || '')}${c.audio_record === false ? ' · ' + esc(t('live only')) : ''}">🔊${c.audio_record === false ? ' ' + esc(t('live')) : ''}${c.status.audio && !/^(AAC|Opus|G\.711)/.test(c.status.audio) ? ' ⚠' : ''}</span>` : ''}${c.motion_detect ? ` <span class="badge" title="${esc(t('Motion detection on the server'))}: ${esc(t(c.status.motion || ''))}">${esc(t('motion'))}${c.status.motion && !c.status.motion.startsWith('watching') && c.status.motion !== 'starting' ? ' ⚠' : ''}</span>` : ''}</td><td class="num" data-bytes="${c.id}"></td>
+    <td>${dot(c.status)} ${esc(t(c.enabled ? (c.status.state === 'idle' ? 'on demand' : c.status.state) : 'disabled'))}${c.status.codec ? ` <span class="muted">${esc(ctrl32Player.statsText(c.status))}</span>` : ''}${c.status.sub && c.status.sub.codec ? `<br><span class="muted" style="font-size:12px">${esc(t('Sub-stream'))}: ${esc(ctrl32Player.statsText(c.status.sub))}</span>` : ''}${c.status.error ? `<br><span class="bad" style="font-size:12px">${esc(c.status.error)}</span>` : ''}</td>
+    <td>${c.record === 'off' ? esc(t('off')) : esc(t(c.record === 'events' ? 'on events' : 'continuous')) + ', ' + c.retention_days + ' ' + esc(t('days'))}${c.onvif ? ` <span class="badge" title="${esc(t('ONVIF events'))}: ${esc(c.status.events || '')}">ONVIF${c.status.events && c.status.events !== 'connected' && c.status.events !== 'connecting' ? ' ⚠' : ''}</span>` : ''}${c.status.onvif_relay === false ? ` <span class="badge bad" title="${esc(t('Camera control goes through the relay: onvif = … in relay.toml, relay 0.58.0 or newer'))}">${esc(t('relay control not connected'))}</span>` : ''}${c.audio ? ` <span class="badge" title="${esc(t('Sound'))}: ${esc(c.status.audio || '')}${c.audio_record === false ? ' · ' + esc(t('live only')) : ''}">🔊${c.audio_record === false ? ' ' + esc(t('live')) : ''}${c.status.audio && !/^(AAC|Opus|G\.711)/.test(c.status.audio) ? ' ⚠' : ''}</span>` : ''}${c.motion_detect ? ` <span class="badge" title="${esc(t('Motion detection on the server'))}: ${esc(t(c.status.motion || ''))}">${esc(t('motion'))}${c.status.motion && !c.status.motion.startsWith('watching') && c.status.motion !== 'starting' ? ' ⚠' : ''}</span>` : ''}</td><td class="num" data-bytes="${c.id}"></td>
     <td class="actions-cell"><a class="btn small" href="/video/cameras/${c.id}">Open</a><button class="btn small" data-cedit="${c.id}" type="button">Edit</button>${c.source === 'push' ? `<button class="btn small" data-secret="${c.id}" type="button">New secret</button>` : ''}<button class="btn small" data-cdel="${c.id}" type="button">Delete</button></td></tr>`).join('');
   for (const b of document.querySelectorAll('[data-cedit]')) b.onclick = () => camDialog(CAMS.find(c => c.id === b.dataset.cedit));
   for (const b of document.querySelectorAll('[data-secret]')) b.onclick = async () => {
@@ -266,10 +270,13 @@ $('#profBtn').onclick = async () => {
   const body = {url: f.onvif_url.value, username: f.username.value};
   if (f.password.value) body.password = f.password.value;
   if (EDIT) body.id = EDIT.id;
+  const push = f.source.value === 'push';
+  if (push && !EDIT) { out.textContent = t('Save the camera first: the server reaches a camera behind a relay only through its relay.'); return; }
   try {
     const r = await api('POST', '/api/v1/video/onvif/profiles', body);
     const ps = r.profiles.filter(p => p.uri).sort((a, b) => b.width * b.height - a.width * a.height);
-    if (ps.length) { f.url.value = ps[0].uri; if (ps.length > 1) f.sub_url.value = ps[ps.length - 1].uri; }
+    // the relay reads the streams of a camera behind it: only the answer is shown
+    if (ps.length && !push) { f.url.value = ps[0].uri; if (ps.length > 1) f.sub_url.value = ps[ps.length - 1].uri; }
     out.className = 'ok'; out.textContent = `✓ ${ps.map(p => `${p.name} ${p.encoding} ${p.width}×${p.height}`).join(', ')}${r.events ? ' · ' + t('events') : ''}${r.ptz ? ' · PTZ' : ''}`;
   } catch (x) { out.className = 'bad'; out.textContent = x.status === 401 ? t('The camera refused the user name or password.') : x.message; }
 };
@@ -368,7 +375,8 @@ $('#camForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $(
     audio: f.audio.checked, audio_record: f.audio_record.value === '1', motion_detect: f.motion_detect.checked, motion_sensitivity: +f.motion_sensitivity.value, snapshot_url: f.snapshot_url.value.trim()};
   if (EDIT) { body.privacy_masks = MASKS; body.motion_zones = ZONES; }
   if (f.password.value) body.password = f.password.value;
-  if (body.source === 'push') { delete body.url; delete body.sub_url; delete body.username; delete body.transport; delete body.password; body.onvif_url = ''; body.snapshot_url = ''; }
+  // a camera behind a relay keeps only its ONVIF address (reached through the relay) and account
+  if (body.source === 'push') { delete body.url; delete body.sub_url; delete body.transport; body.snapshot_url = ''; }
   try { const r = EDIT ? await api('PUT', '/api/v1/video/cameras/' + EDIT.id, body) : await api('POST', '/api/v1/video/cameras', body);
     $('#camDlg').close(); ctrl32.toast(t('camera saved'), 'ok'); load(); if (r.push_secret) showSecret(r); } catch (x) { $('#camErr').textContent = x.message; } };
 
@@ -474,6 +482,9 @@ async function refreshStatus() {
 }
 $('#tileSize').onchange = e => { $('#liveGrid').style.gridTemplateColumns = `repeat(auto-fill, minmax(${e.target.value}px, 1fr))`; try { localStorage.setItem('ctrl32.video.tile', e.target.value); } catch (x) { /* ignore */ } };
 try { const v = localStorage.getItem('ctrl32.video.tile'); if (v) { $('#tileSize').value = v; $('#liveGrid').style.gridTemplateColumns = `repeat(auto-fill, minmax(${v}px, 1fr))`; } } catch (x) { /* ignore */ }
+// stream information on the tiles (off by default, remembered in this browser)
+try { $('#tileStats').checked = localStorage.getItem('ctrl32.video.stats') === '1'; } catch (x) { /* ignore */ }
+$('#tileStats').onchange = e => { for (const p of players) p.stats(e.target.checked); try { localStorage.setItem('ctrl32.video.stats', e.target.checked ? '1' : '0'); } catch (x) { /* ignore */ } };
 ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(({me}) => {
   ME = me;
   SECTION = ctrl32.section('live', ['live', 'walls', 'manage', 'evidence', 'settings']);

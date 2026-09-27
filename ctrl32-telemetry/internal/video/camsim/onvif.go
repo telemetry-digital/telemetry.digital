@@ -15,7 +15,8 @@ import (
 
 // ONVIF simulates the ONVIF side of the cameras (spec 013): device, media, events (motion) and PTZ services at
 // http://host/onvif/<label>/…, WS-Security digest authentication and WS-Discovery answers. PTZ moves the simulated
-// picture, motion can be switched on and off (POST /sim/motion/<label>?on=1) or toggled periodically.
+// picture, motion can be switched on and off (POST /sim/motion/<label>?on=1) or toggled periodically; GET
+// /sim/ptz/<label> reports the PTZ position.
 type ONVIF struct {
 	RTSPHost    string // host:port of the RTSP simulator, for stream addresses
 	HTTPHost    string // host:port where this handler is reachable, for service addresses
@@ -202,6 +203,13 @@ func between(s, a, b string) string {
 
 // ServeHTTP implements the services.
 func (o *ONVIF) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/sim/ptz/") {
+		// the simulated PTZ position, for tests: {"pan":…,"tilt":…,"zoom":…}
+		p, t, z := o.View(strings.TrimPrefix(r.URL.Path, "/sim/ptz/"))
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"pan":%.3f,"tilt":%.3f,"zoom":%.3f}`, p, t, z)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/sim/motion/") {
 		o.SetMotion(strings.TrimPrefix(r.URL.Path, "/sim/motion/"), r.URL.Query().Get("on") == "1")
 		return

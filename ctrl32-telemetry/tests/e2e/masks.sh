@@ -27,7 +27,7 @@ SUF=$RANDOM
 cat > "$TMP/ws.js" <<'EOF'
 const [url, jar, secs] = process.argv.slice(2);
 const fs = require('fs'), http = require('http'), crypto = require('crypto');
-const cookie = fs.readFileSync(jar, 'utf8').split('\n').map(l => l.replace('#HttpOnly_', '')).filter(l => l && !l.startsWith('#')).map(l => l.split('\t')).filter(p => p.length >= 7).map(p => p[5] + '=' + p[6]).join('; ');
+const cookie = fs.readFileSync(jar, 'utf8').split(/\r?\n/).map(l => l.replace('#HttpOnly_', '')).filter(l => l && !l.startsWith('#')).map(l => l.split('\t')).filter(p => p.length >= 7).map(p => p[5] + '=' + p[6]).join('; ');
 const u = new URL(url);
 const out = { init: null, types: {}, bin: 0, bytes: 0, boxes: [], jpeg: 0, times: [] };
 const req = http.request({ host: u.hostname, port: u.port, path: u.pathname + u.search, headers: { Cookie: cookie, Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': crypto.randomBytes(16).toString('base64') } });
