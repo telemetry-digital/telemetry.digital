@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -89,5 +90,68 @@ func TestTrustedKeysEmbedded(t *testing.T) {
 	defer func() { extraKey = "" }()
 	if _, ok := TrustedKeys()["build"]; !ok {
 		t.Fatal("build key")
+	}
+}
+
+func TestOnlineKeyLimit(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	keys := map[string]ed25519.PublicKey{"online": pub}
+	limits := map[string]int{"online": 31}
+	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
+	sign := func(l License) string {
+		l.ID, l.Licensee, l.Features = "T-1", "Acme", []string{WhiteLabel}
+		tok, err := Sign(l, priv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tok
+	}
+	if l, err := ParseLimited(sign(License{Issued: now, Expires: now.AddDate(0, 0, 30)}), keys, limits); err != nil || l.KeyID != "online" {
+		t.Fatalf("30-day online license refused: %v", err)
+	}
+	if _, err := ParseLimited(sign(License{Issued: now, Expires: now.AddDate(0, 0, 31)}), keys, limits); err != nil {
+		t.Fatalf("31-day online license refused: %v", err)
+	}
+	for name, l := range map[string]License{
+		"perpetual":  {Issued: now},
+		"32 days":    {Issued: now, Expires: now.AddDate(0, 0, 32)},
+		"a year":     {Issued: now, Expires: now.AddDate(1, 0, 0)},
+		"no issue":   {Expires: now.AddDate(0, 0, 10)},
+		"back-dated": {Issued: now.AddDate(0, 0, -400), Expires: now.AddDate(0, 0, 20)},
+	} {
+		if _, err := ParseLimited(sign(l), keys, limits); !errors.Is(err, ErrOnlineTerm) {
+			t.Fatalf("%s: online key accepted it (%v)", name, err)
+		}
+	}
+	// the same perpetual token is fine from a key without a limit (the master key)
+	if _, err := ParseLimited(sign(License{Issued: now}), keys, nil); err != nil {
+		t.Fatalf("perpetual from the master key: %v", err)
+	}
+}
+
+func TestTrustedOnlineKeyDeclared(t *testing.T) {
+	if got := KeyLimits()["telemetry-online-2026"]; got != OnlineMaxDays {
+		t.Fatalf("telemetry-online-2026 max-days = %d, want %d", got, OnlineMaxDays)
+	}
+	if _, ok := KeyLimits()["telemetry-digital-2026"]; ok {
+		t.Fatal("the master key must have no limit")
+	}
+	if _, ok := TrustedKeys()["telemetry-online-2026"]; !ok {
+		t.Fatal("online key not embedded")
+	}
+	pub, _, _ := ed25519.GenerateKey(rand.Reader)
+	extraOnlineKey = base64.StdEncoding.EncodeToString(pub)
+	defer func() { extraOnlineKey = "" }()
+	if KeyLimits()["build-online"] != OnlineMaxDays {
+		t.Fatal("build-online key without a limit")
+	}
+	for _, bad := range []string{"", "# max-days: x\nKj2BjPNu72LggB4XsC7ZKL9vxzGDpD0YOmdPRSirCjI=", "# max-days: 0\nKj2BjPNu72LggB4XsC7ZKL9vxzGDpD0YOmdPRSirCjI=", "nope"} {
+		if _, err := ParseKeyFile([]byte(bad)); err == nil {
+			t.Fatalf("ParseKeyFile accepted %q", bad)
+		}
+	}
+	kf, err := ParseKeyFile([]byte("# x\n#  max-days: 7\nKj2BjPNu72LggB4XsC7ZKL9vxzGDpD0YOmdPRSirCjI=\n"))
+	if err != nil || kf.MaxDays != 7 {
+		t.Fatalf("key file %+v %v", kf, err)
 	}
 }

@@ -98,6 +98,9 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux := http.NewServeMux()
 	s.mux = mux
 	s.tiles = openTiles(cfg.Map, s.log)
+	if pool != nil {
+		go s.licenseRenewLoop() // daily renewal of an activated license (license_activation.go)
+	}
 	sub, _ := fs.Sub(static, "static")
 	files := http.FileServer(http.FS(sub))
 	if rep != nil {
@@ -368,6 +371,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("GET /api/v1/server/license", s.require("system.admin", s.getLicense))
 	mux.Handle("PUT /api/v1/server/license", s.require("system.admin", s.putLicense))
 	mux.Handle("DELETE /api/v1/server/license", s.require("system.admin", s.deleteLicense))
+	mux.Handle("POST /api/v1/server/license/activate", s.require("system.admin", s.activateLicense))
+	mux.Handle("POST /api/v1/server/license/renew", s.require("system.admin", s.renewLicenseNow))
 	mux.Handle("POST /api/v1/server/restart", s.require("system.admin", s.serverRestart))
 	mux.Handle("PUT /api/v1/server/caddy", s.require("system.admin", s.serverCaddy))
 	mux.Handle("GET /api/v1/server/wireguard", s.require("system.admin", s.serverWireGuard))

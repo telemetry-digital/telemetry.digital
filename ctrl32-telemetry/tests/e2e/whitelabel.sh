@@ -77,6 +77,83 @@ curl -s "$BASE/manifest.webmanifest" > "$TMP/b"; check "manifest back" "$(jx j.n
 check "icon falls back" "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/v1/branding/icon")" 302
 req GET /api/v1/branding/white-label; check "settings kept, not active" "$(jx 'j.enabled + " " + j.active')" "true false"
 
+echo "== online activation (order number)"
+# A local stand-in for lic.ctrl32.com (licfake.mjs); tests/run-all.sh points license.activation_url at it. Against a
+# server configured otherwise the section is skipped (the fake then receives no request).
+LICFAKE_PORT=${LICFAKE_PORT:-18790}; FAKE=http://127.0.0.1:$LICFAKE_PORT
+LICFAKE_PORT=$LICFAKE_PORT node tests/e2e/licfake.mjs & FAKE_PID=$!
+trap 'kill $FAKE_PID 2>/dev/null; rm -rf "$TMP"' EXIT
+for _ in $(seq 40); do curl -s -o /dev/null "$FAKE/requests" && break; sleep 0.1; done
+mode() { curl -s -o /dev/null -X POST -H 'Content-Type: application/json' --data "{\"order\":\"$1\",\"mode\":\"$2\",\"days\":${3:-30}}" "$FAKE/control"; }
+fakereq() { curl -s "$FAKE/requests" > "$TMP/b"; jx "$1"; }
+ORDER="E2E-ORDER-$SUF"
+req DELETE "/api/v1/server/license?reason=e2e"
+req POST /api/v1/server/license/activate "{\"order\":\"$ORDER\"}"; check "activation needs a reason" "$(st)" 400
+req POST /api/v1/server/license/activate '{"order":"","reason":"e2e"}'; check "empty order refused" "$(st)" 400
+mode "$ORDER" starter 10
+req POST /api/v1/server/license/activate "{\"order\":\"$ORDER\",\"reason\":\"e2e activate\"}"; ACT=$(st)
+if [[ "$(fakereq 'j.length')" == "0" ]]; then
+  echo "  skipped: the server does not use the local activation stand-in (license.activation_url = $FAKE/telemetry/activate)"
+else
+  check "activated with the order number" "$ACT" 200
+  check "request carried order and host" "$(fakereq 'j[j.length-1].order + " " + j[j.length-1].host')" "$ORDER localhost"
+  req GET /api/v1/server/license
+  check "30-day online license installed" "$(jx 'j.valid + " " + j.white_label + " " + j.online + " " + j.perpetual')" "true true true false"
+  check "order stored, renewing" "$(jx 'j.activation.order + " " + j.activation.kind + " " + j.auto_renew + " " + j.activation.refused')" "$ORDER starter true false"
+  check "buy link" "$(jx j.buy_url)" "https://ctrl32.com/pricing/"
+  EXP1=$(jx j.expires)
+  req PUT /api/v1/branding "{\"white_label\":{\"enabled\":true,\"product_name\":\"Online $SUF\"},\"reason\":\"e2e\"}"; check "white labeling unlocked by the activation" "$(st)" 200
+
+  echo "== renewal"
+  req POST /api/v1/server/license/renew '{}'; check "renew needs a reason" "$(st)" 400
+  mode "$ORDER" starter 30
+  req POST /api/v1/server/license/renew '{"reason":"e2e renew"}'; check "renewed (longer license)" "$(st) $(jx j.renewed)" "200 true"
+  [[ "$(jx j.expires)" > "$EXP1" ]] && ok "expiry moved forward" || bad "expiry $(jx j.expires) not after $EXP1"
+  mode "$ORDER" starter 20
+  req POST /api/v1/server/license/renew '{"reason":"e2e renew shorter"}'; check "a shorter license is not installed" "$(st) $(jx j.renewed)" "200 false"
+  mode "$ORDER" rogue
+  req POST /api/v1/server/license/renew '{"reason":"e2e rogue"}'; check "perpetual license from the ONLINE key refused" "$(st)" 502
+  [[ "$(jx j.error)" == *"online activation key"* ]] && ok "reason: online key limit" || bad "error $(jx j.error)"
+  req GET /api/v1/server/license; check "still the 30-day license" "$(jx 'j.online + " " + j.perpetual + " " + j.activation.refused')" "true false false"
+  mode "$ORDER" pending
+  req POST /api/v1/server/license/renew '{"reason":"e2e pending"}'; check "service busy: temporary error" "$(st)" 502
+  req GET /api/v1/server/license; check "temporary error keeps renewing" "$(jx 'j.auto_renew + " " + j.activation.refused + " " + (j.activation.last_error ? "error" : "none")')" "true false error"
+  mode "$ORDER" permanent
+  req POST /api/v1/server/license/renew '{"reason":"e2e permanent"}'; check "perpetual license from the master key installed" "$(st) $(jx j.renewed) $(jx j.perpetual)" "200 true true"
+  check "no renewal needed any more" "$(jx 'j.auto_renew + " " + j.activation.kind + " " + (j.activation.last_error ? "error" : "none")')" "false permanent none"
+  mode "$ORDER" starter 30
+  req POST /api/v1/server/license/activate "{\"order\":\"$ORDER\",\"reason\":\"e2e downgrade\"}"; check "a starter does not replace a perpetual license" "$(st)" 409
+
+  echo "== refusals"
+  req DELETE "/api/v1/server/license?reason=e2e%20refusals"
+  for m in refunded claimed-by-editor host-cap unknown-order; do
+    mode "E2E-$m-$SUF" "$m"
+    req POST /api/v1/server/license/activate "{\"order\":\"E2E-$m-$SUF\",\"reason\":\"e2e\"}"; check "refused: $m" "$(st)" 409
+  done
+  [[ "$(jx j.error)" == *"order number"* ]] && ok "unknown order explained" || bad "error $(jx j.error)"
+  mode "E2E-claimed-by-editor-$SUF" claimed-by-editor
+  req POST /api/v1/server/license/activate "{\"order\":\"E2E-claimed-by-editor-$SUF\",\"reason\":\"e2e\"}"
+  [[ "$(jx j.error)" == *"editor"* ]] && ok "used for the editor explained" || bad "error $(jx j.error)"
+  req GET /api/v1/server/license; check "nothing installed after refusals" "$(jx 'j.installed + " " + (j.activation ? "stored" : "none")')" "false none"
+  mode "$ORDER-2" rogue
+  req POST /api/v1/server/license/activate "{\"order\":\"$ORDER-2\",\"reason\":\"e2e rogue\"}"; check "rogue perpetual online license not installed" "$(st)" 502
+  req GET /api/v1/server/license; check "still nothing installed" "$(jx j.installed)" "false"
+
+  echo "== refusal stops the automatic renewal"
+  mode "$ORDER-3" starter 15
+  req POST /api/v1/server/license/activate "{\"order\":\"$ORDER-3\",\"reason\":\"e2e\"}"; check "activated" "$(st)" 200
+  mode "$ORDER-3" refunded
+  req POST /api/v1/server/license/renew '{"reason":"e2e refund"}'; check "renewal refused" "$(st)" 409
+  req GET /api/v1/server/license
+  check "refusal shown, renewal stopped, license kept until it expires" "$(jx 'j.activation.refused + " " + j.auto_renew + " " + j.valid')" "true false true"
+  [[ "$(jx j.activation.last_error)" == *refunded* ]] && ok "refusal reason stored" || bad "last_error $(jx j.activation.last_error)"
+  req GET "/api/v1/export/audit?format=csv"
+  for a in license.activate license.renew; do grep -q "$a" "$TMP/b" && ok "audit $a" || bad "audit $a missing"; done
+  req DELETE "/api/v1/server/license?reason=e2e%20remove%20activated"; check "removed" "$(st)" 200
+  check "order number forgotten with the license" "$(jx 'j.installed + " " + (j.activation ? "stored" : "none")')" "false none"
+  req POST /api/v1/server/license/renew '{"reason":"e2e"}'; check "renew without an order" "$(st)" 409
+fi
+
 echo "== cleanup"
 req PUT /api/v1/branding '{"white_label":{"enabled":false,"product_name":"","clear_icon":true},"reason":"e2e cleanup"}'; check "white label cleared" "$(st)" 200
 echo; echo "passed $pass, failed $fail"; [[ $fail -eq 0 ]]

@@ -5523,6 +5523,26 @@ export class Ctrl32Client {
    * 
    * Requires permission `system.admin`. */
   getServerLicense(): Promise<{
+    activation?: {
+      activated_at?: string;
+      activated_by?: string;
+      host?: string;
+      /** starter | permanent */
+      kind?: string;
+      last_attempt?: string;
+      last_error?: string;
+      last_ok?: string;
+      /** order number of the ctrl32 licence */
+      order?: string;
+      /** the licence service refused the order; automatic renewal stopped */
+      refused?: boolean;
+    };
+    /** server name sent with the order number */
+    activation_host?: string;
+    /** the stored order renews the license automatically */
+    auto_renew?: boolean;
+    /** where the ctrl32 licence is sold (license.buy_url) */
+    buy_url?: string;
     domains?: string[];
     email?: string;
     /** absent = perpetual */
@@ -5534,6 +5554,8 @@ export class Ctrl32Client {
     installed_by?: string;
     issued?: string;
     licensee?: string;
+    /** a 30-day license of the online activation (signed with the online key) */
+    online?: boolean;
     /** the license never expires */
     perpetual?: boolean;
     /** why not */
@@ -5547,6 +5569,26 @@ export class Ctrl32Client {
     white_label?: boolean;
   }> {
     return this.request<{
+    activation?: {
+      activated_at?: string;
+      activated_by?: string;
+      host?: string;
+      /** starter | permanent */
+      kind?: string;
+      last_attempt?: string;
+      last_error?: string;
+      last_ok?: string;
+      /** order number of the ctrl32 licence */
+      order?: string;
+      /** the licence service refused the order; automatic renewal stopped */
+      refused?: boolean;
+    };
+    /** server name sent with the order number */
+    activation_host?: string;
+    /** the stored order renews the license automatically */
+    auto_renew?: boolean;
+    /** where the ctrl32 licence is sold (license.buy_url) */
+    buy_url?: string;
     domains?: string[];
     email?: string;
     /** absent = perpetual */
@@ -5558,6 +5600,8 @@ export class Ctrl32Client {
     installed_by?: string;
     issued?: string;
     licensee?: string;
+    /** a 30-day license of the online activation (signed with the online key) */
+    online?: boolean;
     /** the license never expires */
     perpetual?: boolean;
     /** why not */
@@ -5586,9 +5630,43 @@ export class Ctrl32Client {
 
   /** Remove the product license
    *
+   * Also forgets the stored order number, so nothing is renewed.
+   * 
    * Requires permission `system.admin`. */
   deleteServerLicense(query?: { reason?: string; /** required */ }): Promise<Record<string, unknown>> {
     return this.request<Record<string, unknown>>('DELETE', `/api/v1/server/license`, query, undefined, false);
+  }
+
+  /** Activate the license with an order number
+   *
+   * Sends the order number of the ctrl32 licence (bought on ctrl32.com; it unlocks either the ctrl32 editor or white labeling on one server) and the host name of http.base_url to the licence service (license.activation_url), verifies the license it returns and installs it. Inside the 14-day refund period the license runs 30 days and is renewed daily while it expires within 20 days; afterwards the perpetual license is returned. 409 = refused by the service (refunded, used for the editor, server limit) or a perpetual license is already installed; 502 = the service is not reachable or its answer was not accepted.
+   * 
+   * Requires permission `system.admin`. */
+  postServerLicenseActivate(body: {
+    /** order number (Paddle transaction id or ctrl32.com order id) */
+    order: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/server/license/activate`, undefined, body, false);
+  }
+
+  /** Renew the activated license now
+   *
+   * Asks the licence service for the stored order now (the server does it daily on its own) and installs the answer when it is better than the installed license; renewed tells whether it did.
+   * 
+   * Requires permission `system.admin`. */
+  postServerLicenseRenew(body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** a new license was installed */
+    renewed?: boolean;
+  }> {
+    return this.request<{
+    /** a new license was installed */
+    renewed?: boolean;
+  }>('POST', `/api/v1/server/license/renew`, undefined, body, false);
   }
 
   /** Restart the service (through the agent)

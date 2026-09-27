@@ -25,6 +25,7 @@
 | 0.55.0 | Zvuk G.711 (TP-Link Tapo a väčšina kamier) ako PCM cez WebAudio; predvoľby výrobcov kamier vo formulári (Tapo, Hikvision, Dahua, Reolink, Axis, Uniview, EZVIZ) | e2e 137, unit |
 | 0.56.0 | Zvuk len naživo — počúvanie bez nahrávania (šetrí disk), odhad miesta vo formulári | e2e 140 |
 | 0.57.0 | Platený white labeling (39 EUR jednorazovo, navždy): trvalé licenčné kľúče overované offline (Ed25519, `licgen` predvolene bez vypršania), produkčný kľúč licencora v binárke, Systém → Licencia („navždy“), vlastný názov produktu, pätička, ikona, názov aplikácie, úvod, e-maily, 2FA, PDF; bez licencie pevná pätička ctrl32; migrácia 0039 (vetva `feature/paid-white-label`, spec 007, ADR-0016) | e2e 34, unit |
+| 0.59.0 | Online aktivácia white labelingu číslom objednávky (vetva `feature/license-activation`): licencia ctrl32 z ctrl32.com (39 EUR, Paddle) odomkne **buď** editor ctrl32, **alebo** white labeling na jednom serveri; Systém → Licencia → „Aktivácia číslom objednávky“ pošle číslo a názov servera na `lic.ctrl32.com/telemetry/activate`, v lehote na vrátenie 30-dňová licencia z online kľúča (`telemetry-online-2026`, binárka ho prijme najviac na 31 dní), potom trvalá z hlavného kľúča; denné automatické obnovovanie (zastaví ho odmietnutie), „Obnoviť teraz“, odkaz „Kúpiť“; `licgen batch` (fronta workera → trvalé licencie → /telemetry/minted); config `[license]`; migrácia 0040; licenčný worker v repozitári ctrl32 (`server/lic-worker`, trasy `/telemetry/*`, jedna objednávka = jeden produkt) — **nenasadený** | e2e whitelabel 72, unit, worker 56 + 24 |
 
 Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (`tests/run-all.sh`) pre 0.54.0 (27. 9. 2026): všetko prešlo okrem 3 kontrol času NTP v `ops`, ktoré potrebujú internet (v tomto kontajneri nedostupný) — nesúvisí s kódom.
 
@@ -55,6 +56,11 @@ Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (
 - white labeling: zlúčenie vetvy `feature/paid-white-label` do `main` (pull request na požiadanie); súkromný kľúč
   licencora `C:\Users\PavolKRNÁČ\.ctrl32-license\telemetry-digital-2026.key` zálohovať offline (kto ho má, vydáva
   licencie; nikdy nie do repozitára); právna kontrola výnimky v podmienke 2 `LICENSE`; spôsob objednávky a fakturácie
+- online aktivácia (0.59.0): skontrolovať a nasadiť worker (`server/lic-worker` v repozitári ctrl32, príkazy v jeho README
+  „ctrl32 telemetry“: `wrangler secret put TELEMETRY_KEY_SEED` zo súkromného kľúča
+  `C:UsersPavolKRNÁČ.ctrl32-license	elemetry-online-2026.key`, potom `wrangler deploy`); tento online kľúč zálohovať
+  ako hlavný; na ctrl32.com uviesť, že licencia odomkne editor alebo white labeling; odkaz „Kúpiť“ (`license.buy_url`)
+  zmeniť na adresu košíka, keď bude; trvalé licencie raz za čas: `go run ./tools/licgen batch -apply`
 - test so skutočnými kamerami TP-Link Tapo (návod: `ctrl32-telemetry/docs/video.md`, časť „Camera makes“)
 - nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.57.0 root@2.29.5.17 -i <kľúč>` alebo
   GitHub workflow (secrets `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS` a workflow na `main`)
