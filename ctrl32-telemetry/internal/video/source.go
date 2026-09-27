@@ -33,6 +33,7 @@ type Status struct {
 	Events     string   `json:"events,omitempty"`      // connected, connecting or the last error of the event connection
 	Active     []string `json:"active,omitempty"`      // kinds of events going on now
 	Motion     string   `json:"motion,omitempty"`      // motion detection on the server: watching (…) or the problem
+	Audio      string   `json:"audio,omitempty"`       // the sound (codec, rate) or why there is none (spec 020)
 }
 
 // Source is one camera stream (main or sub). It connects while it is kept (recording) or watched, reconnects with a
@@ -43,6 +44,7 @@ type Source struct {
 	Transport string   // auto, tcp, udp
 	Log       *slog.Logger
 	Linger    time.Duration // how long an unwatched on-demand stream stays connected
+	Audio     bool          // take the camera's sound too (spec 020)
 
 	mu     sync.Mutex
 	subs   map[*Sub]struct{}
@@ -55,6 +57,8 @@ type Source struct {
 	idleT  *time.Timer
 	last   *Sample // last MJPEG picture (snapshot)
 	push   chan *pushConn
+	audio  *AudioTrack // sound of the current connection
+	aInfo  string      // what the sound is, or why there is none
 
 	// statistics over the last few seconds
 	winStart time.Time
@@ -275,9 +279,12 @@ func (s *Source) publish(ctx context.Context, t *Track, smp *Sample) {
 		if !smp.Key {
 			return
 		}
+		if t.Audio == nil {
+			t.Audio = s.audio // the picture track carries the sound of its connection
+		}
 		s.track = t
 		s.gop, s.gopLen = nil, 0
-		s.status = Status{State: "online", Codec: t.Codec, Width: t.Width, Height: t.Height, Since: time.Now()}
+		s.status = Status{State: "online", Codec: t.Codec, Width: t.Width, Height: t.Height, Since: time.Now(), Audio: s.aInfo}
 		s.winStart, s.winN, s.winBytes, s.lastFPS, s.lastKbps = time.Now(), 0, 0, 0, 0
 	}
 	if t.Codec == MJPEG {

@@ -51,6 +51,14 @@ func (s *Source) rtsp(ctx context.Context) error {
 		return err
 	}
 	c.OnPacketRTP(medi, forma, onPacket)
+	if am, af, aon := s.withSound(ctx, desc, c.PacketPTS); am != nil {
+		if _, err := c.Setup(desc.BaseURL, am, 0, 0); err == nil {
+			c.OnPacketRTP(am, af, aon)
+		} else {
+			s.setAudio(nil)
+			s.soundNote("sound: " + err.Error())
+		}
+	}
 	if _, err := c.Play(nil); err != nil {
 		return err
 	}

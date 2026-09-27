@@ -85,6 +85,24 @@ The events have kind `motion` and source `server` and behave like the camera's o
 small MJPEG sub-stream (320 × 180 is enough); the camera's own detection (ONVIF) stays the better choice where it
 exists.
 
+## Sound
+
+A camera's sound is **off by default**: recording sound (conversations) is regulated more strictly than pictures. Switch
+it on per camera (*Camera management → camera → Sound*) only where it is lawful, and inform people (a sign).
+
+- The camera must send **AAC** (or Opus) — set it in the camera's audio settings (Hikvision: *Audio encoding AAC*,
+  Dahua: *AAC*). G.711 and G.726 cannot be played in browsers; the camera list then shows ⚠ with the reason. The
+  sound is never decoded or re-encoded.
+- It is recorded as the second track of the recording files (the main stream), so exports and evidence packages are
+  ordinary MP4 files with sound for VLC or any player.
+- The camera page shows a speaker button to people with `video.audio`. The sound is requested only after it is
+  switched on (and then with the main stream); each listening is audited (`video.listen`). Walls, widgets and
+  displays never play sound. At speeds other than 1× there is no sound.
+- Exports (MP4 and evidence packages) contain the sound only for people with `video.audio`.
+- In the browser the sound is a separate stream played next to the picture on the same time line, so a gap in the
+  sound never stops the picture.
+- A relay forwards the sound only with `audio = true` in its `relay.toml`.
+
 ## Video settings
 
 **Cameras → Settings** holds the server-wide settings (anyone with `video.manage` sees them, a system administrator
@@ -309,6 +327,7 @@ as the web interface, with the same sign-in, MFA and permissions.
 | `video.ptz` | PTZ control and presets | operator, engineer, org_admin |
 | `video.evidence` | hold recordings as evidence, signed evidence packages | engineer, org_admin |
 | `video.unmask` | see and export pictures without privacy masks | org_admin |
+| `video.audio` | hear camera sound live and recorded, export it | org_admin |
 | `display.control` | send cameras and commands to displays | operator, engineer, org_admin |
 | `display.manage` | pair, change and disconnect displays | engineer, org_admin |
 
@@ -333,6 +352,7 @@ label, a clock and moving shapes; H.264 uses raw (I_PCM) macroblocks, so it need
 encodes 50 frames once and repeats them, for load tests of many cameras (`-fps 25`). `-onvif BRANA,VRATNICA` adds
 ONVIF devices at `http://127.0.0.1:8555/onvif/<label>/device_service` (user `admin`, password `admin`) with PTZ that
 moves the picture, `-motion-every 45s` reports motion periodically, `/sim/motion/<label>?on=1|0` switches it by hand,
-and `-discovery 127.0.0.1:3702` answers WS-Discovery. Cameras labelled `STILL…` show a standing scene until
+and `-discovery 127.0.0.1:3702` answers WS-Discovery. A path ending in `/opus` adds silent Opus sound, `/g711`
+announces G.711 (for the unsupported-codec message). Cameras labelled `STILL…` show a standing scene until
 motion is switched on (for motion detection on the server), and `http://127.0.0.1:8555/snapshot/<label>/<W>x<H>`
 returns one JPEG picture like the snapshot address of an IP camera.

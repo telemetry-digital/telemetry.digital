@@ -43,7 +43,7 @@ req.on('upgrade', (res, sock, head) => {
     if (buf.length < off + len) return;
     const p = buf.subarray(off, off + len); buf = buf.subarray(off + len);
     if (op === 1) { const j = JSON.parse(p.toString()); out.types[j.type] = (out.types[j.type] || 0) + 1; if (j.type === 'init' && !out.init) out.init = j; if (j.type === 'time') out.times.push(j.t); }
-    else if (op === 2) { out.bin++; out.bytes += p.length; if (p[0] === 0xff && p[1] === 0xd8) out.jpeg++; else if (out.boxes.length < 3) out.boxes.push(p.subarray(4, 8).toString('latin1')); }
+    else if (op === 2) { if (p[0] === 0x41) { out.abin = (out.abin || 0) + 1; if (!out.abox) out.abox = p.subarray(5, 9).toString('latin1'); continue; } out.bin++; out.bytes += p.length; if (p[0] === 0xff && p[1] === 0xd8) out.jpeg++; else if (out.boxes.length < 3) out.boxes.push(p.subarray(4, 8).toString('latin1')); }
   } });
 });
 req.end();
@@ -251,6 +251,34 @@ curl -s -X POST "http://127.0.0.1:$HP/sim/motion/STILL-S$SUF?on=0" >/dev/null
 NO=$(mcam "{\"name\":\"Motion h264 $SUF\",\"url\":\"$SIM/nosnap$SUF/h264/160x96\",\"motion_detect\":true,\"reason\":\"e2e\"}")
 waitfor '(mstat $NO; [[ "$(jx j.status.motion)" == needs* ]])' 20 && ok "an H.264 camera without a snapshot address is explained" || bad "status: $(jx j.status.motion)"
 for c in $MJ $ZN $SN $NO; do req DELETE "/api/v1/video/cameras/$c?reason=e2e"; done; check "motion cameras removed" "$(st)" 200
+
+echo "== sound (spec 020)"
+req GET /api/v1/auth/me; check "admin may hear sound" "$(jx 'j.permissions.includes("video.audio")')" true
+SND=$(mcam "{\"name\":\"Sound $SUF\",\"url\":\"$SIM/snd$SUF/h264/160x96/opus\",\"record\":\"continuous\",\"audio\":true,\"reason\":\"e2e\"}")
+check "camera with sound" "$(jx j.audio)" true
+waitfor '(mstat $SND; [[ "$(jx j.status.audio)" == Opus ]])' 20 && ok "the camera's Opus sound is taken" || bad "sound status: $(jx j.status.audio)"
+ws "/api/v1/video/cameras/$SND/live?quality=main" 3; check "no sound unless asked for" "$(jx '(j.abin || 0) + " " + (j.types.audio || 0)')" "0 0"
+ws "/api/v1/video/cameras/$SND/live?quality=main&audio=1" 3; check "sound as a separate stream next to the picture" "$(jx 'j.types.audio + " " + (j.abin > 10) + " " + j.abox + " " + (j.bin > 5)')" "1 true ftyp true"
+FROMS=$(iso '-60 sec'); sleep 2
+ws "/api/v1/video/cameras/$SND/playback?from=$FROMS&audio=1" 3; check "recorded sound plays back" "$(jx '(j.abin > 5) + " " + (j.bin > 5)')" "true true"
+ws "/api/v1/video/cameras/$SND/playback?from=$FROMS&speed=4&audio=1" 2; check "no sound at another speed" "$(jx 'j.abin || 0')" 0
+curl -s -b "$JAR" -o "$TMP/snd.mp4" "$BASE/api/v1/video/cameras/$SND/export?from=$FROMS&to=$(iso '-1 sec')"
+check "export holds picture and sound" "$(python3 -c "d=open('$TMP/snd.mp4','rb').read(); print(d.count(b'trak'), b'Opus' in d[:4000])")" "2 True"
+# a user without video.audio sees the picture, hears nothing and exports no sound
+J2="$TMP/jar2"; OU=$(req POST /api/v1/users "{\"username\":\"ear_$SUF\",\"full_name\":\"Engineer\",\"email\":\"ear$SUF@example.com\",\"roles\":[\"engineer\"],\"reason\":\"e2e\"}"; cat "$TMP/b")
+OPW=$(echo "$OU" | node -pe 'JSON.parse(require("fs").readFileSync(0)).initial_password'); OUID=$(echo "$OU" | node -pe 'JSON.parse(require("fs").readFileSync(0)).user.id')
+curl -s -c "$J2" -b "$J2" -H 'Content-Type: application/json' -d "{\"username\":\"ear_$SUF\",\"password\":\"$OPW\"}" "$BASE/api/v1/auth/login" >/dev/null
+C2=$(curl -s -b "$J2" "$BASE/api/v1/auth/me" | node -pe 'JSON.parse(require("fs").readFileSync(0)).csrf_token')
+curl -s -c "$J2" -b "$J2" -H 'Content-Type: application/json' -H "X-CSRF-Token: $C2" -d "{\"current\":\"$OPW\",\"new\":\"Ear-Operator-Passw0rd-$SUF\"}" "$BASE/api/v1/auth/password" >/dev/null
+curl -s -c "$J2" -b "$J2" -H 'Content-Type: application/json' -d "{\"username\":\"ear_$SUF\",\"password\":\"Ear-Operator-Passw0rd-$SUF\"}" "$BASE/api/v1/auth/login" >/dev/null
+node "$TMP/ws.js" "${BASE/http/ws}/api/v1/video/cameras/$SND/live?quality=main&audio=1" "$J2" 3 > "$TMP/b"; check "without video.audio: picture, no sound" "$(jx '(j.bin > 5) + " " + (j.abin || 0)')" "true 0"
+curl -s -b "$J2" -o "$TMP/snd2.mp4" "$BASE/api/v1/video/cameras/$SND/export?from=$FROMS&to=$(iso '-1 sec')"
+check "without video.audio: export without sound" "$(python3 -c "d=open('$TMP/snd2.mp4','rb').read(); print(d.count(b'trak'), b'Opus' in d[:4000])")" "1 False"
+req DELETE "/api/v1/users/$OUID?reason=e2e"
+G7=$(mcam "{\"name\":\"G711 $SUF\",\"url\":\"$SIM/g7$SUF/h264/160x96/g711\",\"audio\":true,\"reason\":\"e2e\"}")
+waitfor '(mstat $G7; [[ "$(jx j.status.audio)" == *AAC* ]])' 20 && ok "G.711 is explained (choose AAC)" || bad "G.711 status: $(jx j.status.audio)"
+req GET "/api/v1/export/audit?format=csv"; check "listening audited" "$(grep -c 'video.listen' "$TMP/b" | awk '{print ($1 >= 2)}')" 1
+for c in $SND $G7; do req DELETE "/api/v1/video/cameras/$c?reason=e2e"; done
 
 echo "== video settings"
 req GET /api/v1/video/settings; check "settings with defaults" "$(st) $(jx 'j.defaults.segment_seconds + " " + j.defaults.event_merge_seconds + " " + j.can_edit')" "200 60 5 true"

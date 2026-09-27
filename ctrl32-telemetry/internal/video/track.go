@@ -10,6 +10,8 @@ import (
 
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/h264"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/h265"
+	"github.com/bluenviron/mediacommon/v2/pkg/codecs/mpeg4audio"
+	"github.com/bluenviron/mediacommon/v2/pkg/formats/fmp4"
 	"github.com/bluenviron/mediacommon/v2/pkg/formats/mp4/codecs"
 )
 
@@ -29,9 +31,58 @@ type Track struct {
 	Codec         string
 	VPS, SPS, PPS []byte
 	Width, Height int
+	Audio         *AudioTrack // the camera's sound, when it is enabled and supported (spec 020)
 }
 
-// Sample is one video frame. DTS runs at ClockRate and grows monotonically within one Track.
+// Audio codec names.
+const (
+	AAC  = "aac"
+	Opus = "opus"
+)
+
+// AudioTrack describes the sound of a connection: AAC (MPEG-4 Audio) or Opus, both playable in browsers and stored
+// unchanged as the second track of the MP4 files.
+type AudioTrack struct {
+	Codec      string
+	Config     []byte // AAC AudioSpecificConfig
+	SampleRate int    // also the MP4 timescale of the track
+	Channels   int
+}
+
+// Same reports whether two audio descriptions can continue one MP4 stream.
+func (a *AudioTrack) Same(o *AudioTrack) bool {
+	if a == nil || o == nil {
+		return a == o
+	}
+	return a.Codec == o.Codec && bytes.Equal(a.Config, o.Config) && a.SampleRate == o.SampleRate && a.Channels == o.Channels
+}
+
+// MIME is the Media Source Extensions type of the sound alone, e.g. `audio/mp4; codecs="mp4a.40.2"`.
+func (a *AudioTrack) MIME() string {
+	if a == nil {
+		return ""
+	}
+	if a.Codec == Opus {
+		return `audio/mp4; codecs="opus"`
+	}
+	var c mpeg4audio.AudioSpecificConfig
+	ot := 2
+	if c.Unmarshal(a.Config) == nil {
+		ot = int(c.Type)
+	}
+	return fmt.Sprintf(`audio/mp4; codecs="mp4a.40.%d"`, ot)
+}
+
+func (a *AudioTrack) mp4Codec() codecs.Codec {
+	if a.Codec == Opus {
+		return &codecs.Opus{ChannelCount: a.Channels}
+	}
+	var c mpeg4audio.AudioSpecificConfig
+	_ = c.Unmarshal(a.Config)
+	return &codecs.MPEG4Audio{Config: c}
+}
+
+// Sample is one video frame, or one audio frame when Audio is set. DTS runs at ClockRate and grows monotonically within one Track.
 type Sample struct {
 	Time      time.Time // wall clock of the frame
 	DTS       int64
@@ -39,11 +90,13 @@ type Sample struct {
 	Key       bool
 	AU        [][]byte // H.264/H.265 NAL units
 	JPEG      []byte   // MJPEG picture
+	Audio     []byte   // one AAC access unit or Opus packet; Key is false, DTS at ClockRate
+	ADur      uint32   // duration of an audio frame in samples of the audio track
 }
 
 // Size is the payload size in bytes.
 func (s *Sample) Size() int {
-	n := len(s.JPEG)
+	n := len(s.JPEG) + len(s.Audio)
 	for _, u := range s.AU {
 		n += len(u)
 	}
@@ -53,7 +106,7 @@ func (s *Sample) Size() int {
 // SameParams reports whether two tracks can continue one MP4 stream.
 func (t *Track) SameParams(o *Track) bool {
 	return t != nil && o != nil && t.Codec == o.Codec && bytes.Equal(t.SPS, o.SPS) && bytes.Equal(t.PPS, o.PPS) &&
-		bytes.Equal(t.VPS, o.VPS) && t.Width == o.Width && t.Height == o.Height
+		bytes.Equal(t.VPS, o.VPS) && t.Width == o.Width && t.Height == o.Height && t.Audio.Same(o.Audio)
 }
 
 // Browser reports whether browsers can play the track through Media Source Extensions (MJPEG is shown as pictures).
@@ -114,7 +167,40 @@ func (t *Track) mp4Codec() codecs.Codec {
 	}
 }
 
-// trackFromMP4 rebuilds a Track from a recorded file's initialization.
+// trackFromInit rebuilds a Track from a recorded file's initialization: the video track and, if present, the sound.
+func trackFromInit(tracks []*fmp4.InitTrack) (*Track, int, int, error) {
+	vid, aid := 0, 0
+	var t *Track
+	for _, it := range tracks {
+		if it.Codec.IsVideo() && t == nil {
+			nt, err := trackFromMP4(it.Codec)
+			if err != nil {
+				return nil, 0, 0, err
+			}
+			t, vid = nt, it.ID
+		}
+	}
+	if t == nil {
+		return nil, 0, 0, fmt.Errorf("no video track")
+	}
+	for _, it := range tracks {
+		switch c := it.Codec.(type) {
+		case *codecs.MPEG4Audio:
+			cfg, err := c.Config.Marshal()
+			if err == nil {
+				t.Audio, aid = &AudioTrack{Codec: AAC, Config: cfg, SampleRate: int(it.TimeScale), Channels: c.Config.ChannelCount}, it.ID
+			}
+		case *codecs.Opus:
+			t.Audio, aid = &AudioTrack{Codec: Opus, SampleRate: int(it.TimeScale), Channels: c.ChannelCount}, it.ID
+		}
+		if aid != 0 {
+			break
+		}
+	}
+	return t, vid, aid, nil
+}
+
+// trackFromMP4 rebuilds a video Track from a recorded file's initialization.
 func trackFromMP4(c codecs.Codec) (*Track, error) {
 	switch c := c.(type) {
 	case *codecs.H264:

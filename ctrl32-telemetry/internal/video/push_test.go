@@ -95,7 +95,7 @@ func TestPushRefusesWrongSecretAndBlocks(t *testing.T) {
 	defer ps.Close()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	for i := 0; i < m.Settings().PushMaxFails; i++ {
-		err := relayOnce(context.Background(), "rtsp://"+sim+"/x/h264/160x96", "tcp", "rtsp://"+addr+"/"+pushCam, pushCam, "wrong-secret-0123456789", nil, log)
+		err := relayOnce(context.Background(), "rtsp://"+sim+"/x/h264/160x96", "tcp", "rtsp://"+addr+"/"+pushCam, pushCam, "wrong-secret-0123456789", nil, false, log)
 		if err == nil {
 			t.Fatal("wrong secret accepted")
 		}
@@ -104,7 +104,7 @@ func TestPushRefusesWrongSecretAndBlocks(t *testing.T) {
 		t.Fatal("address not blocked after repeated failures")
 	}
 	// even the right secret is refused while blocked
-	err = relayOnce(context.Background(), "rtsp://"+sim+"/x/h264/160x96", "tcp", "rtsp://"+addr+"/"+pushCam, pushCam, c.cfg.PushSecret, nil, log)
+	err = relayOnce(context.Background(), "rtsp://"+sim+"/x/h264/160x96", "tcp", "rtsp://"+addr+"/"+pushCam, pushCam, c.cfg.PushSecret, nil, false, log)
 	if err == nil {
 		t.Fatal("blocked address accepted")
 	}

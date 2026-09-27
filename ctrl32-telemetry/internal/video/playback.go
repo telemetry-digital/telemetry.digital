@@ -2,12 +2,14 @@ package video
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/binary"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/bluenviron/mediacommon/v2/pkg/formats/fmp4"
@@ -32,6 +34,8 @@ type Playback struct {
 	off     int64 // read position in the current file
 	seg     segRow
 	track   *Track
+	vid     int // MP4 track ids of the picture and the sound (0 = none) in the current file
+	aid     int
 	outBase int64 // output DTS of the current file's start
 	outEnd  int64 // output DTS after the last emitted sample
 	pending []Packet
@@ -245,7 +249,12 @@ func (p *Playback) readInit() (*Track, error) {
 	if len(in.Tracks) == 0 {
 		return nil, errors.New("no track")
 	}
-	return trackFromMP4(in.Tracks[0].Codec)
+	t, vid, aid, err := trackFromInit(in.Tracks)
+	if err != nil {
+		return nil, err
+	}
+	p.vid, p.aid = vid, aid
+	return t, nil
 }
 
 // readFragment reads one moof + mdat pair and queues its frames.
@@ -272,8 +281,24 @@ func (p *Playback) readFragment() error {
 	if err := parts.Unmarshal(frag); err != nil {
 		return err
 	}
+	var out []Packet
 	for _, part := range parts {
 		for _, pt := range part.Tracks {
+			if pt.ID == p.aid && p.aid != 0 {
+				// sound: its own time scale; the time line is the picture's (both start at the file's first picture)
+				sr := int64(p.track.Audio.SampleRate)
+				at := int64(pt.BaseTime)
+				for _, s := range pt.Samples {
+					dts := at * ClockRate / sr
+					out = append(out, Packet{Track: p.track, Sample: &Sample{
+						Time: p.seg.start.Add(time.Duration(dts) * time.Second / ClockRate), DTS: p.outBase + dts, Audio: s.Payload, ADur: s.Duration}})
+					at += int64(s.Duration)
+				}
+				continue
+			}
+			if pt.ID != p.vid {
+				continue
+			}
 			dts := int64(pt.BaseTime)
 			for _, s := range pt.Samples {
 				smp := &Sample{
@@ -296,10 +321,24 @@ func (p *Playback) readFragment() error {
 					}
 				}
 				dts += int64(s.Duration)
-				p.outEnd = p.outBase + dts
-				p.emit(Packet{Track: p.track, Sample: smp})
+				p.outEnd = max(p.outEnd, p.outBase+dts)
+				out = append(out, Packet{Track: p.track, Sample: smp})
 			}
 		}
+	}
+	// pictures and sound in time order (a fragment holds each track as one block); a key frame goes before sound
+	// of the same instant, so a player starts with a picture
+	slices.SortStableFunc(out, func(a, b Packet) int {
+		if a.Sample.DTS != b.Sample.DTS {
+			return cmp.Compare(a.Sample.DTS, b.Sample.DTS)
+		}
+		return cmp.Compare(btoi(a.Sample.Audio != nil), btoi(b.Sample.Audio != nil))
+	})
+	for _, pk := range out {
+		if pk.Sample.Audio != nil && !p.started && len(p.gop) == 0 {
+			continue // sound before the first picture
+		}
+		p.emit(pk)
 	}
 	return nil
 }

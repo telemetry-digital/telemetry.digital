@@ -34,6 +34,7 @@ type RelayCamera struct {
 	Source    string `toml:"source"`     // rtsp://user:pw@192.168.1.64/… main stream of the local camera
 	SubSource string `toml:"sub_source"` // optional smaller stream for tiles
 	Transport string `toml:"transport"`  // auto, tcp, udp (towards the local camera)
+	Audio     bool   `toml:"audio"`      // forward the camera's sound too (AAC or Opus; main stream only)
 }
 
 // Validate checks the configuration before the relay starts.
@@ -100,7 +101,7 @@ func RunRelay(ctx context.Context, cfg RelayConfig, log *slog.Logger) error {
 				backoff := time.Second
 				for ctx.Err() == nil {
 					began := time.Now()
-					err := relayOnce(ctx, src, cam.Transport, target, cam.ID, cam.Secret, tlsCfg, l)
+					err := relayOnce(ctx, src, cam.Transport, target, cam.ID, cam.Secret, tlsCfg, cam.Audio && !sub, l)
 					if ctx.Err() != nil {
 						return
 					}
@@ -142,6 +143,16 @@ func relayTLS(cfg RelayConfig) (*tls.Config, error) {
 	return tlsCfg, nil
 }
 
+// relayAudio finds the sound the server can use (AAC or Opus).
+func relayAudio(desc *description.Session) *description.Media {
+	var aac *format.MPEG4Audio
+	if m := desc.FindFormat(&aac); m != nil && aac.Config != nil {
+		return m
+	}
+	var op *format.Opus
+	return desc.FindFormat(&op)
+}
+
 func redactAll(err error, src, secret string) string {
 	if err == nil {
 		return "stream ended"
@@ -154,7 +165,7 @@ func redactAll(err error, src, secret string) string {
 }
 
 // relayOnce reads the local camera and publishes its video track unchanged (RTP packets are forwarded as they are).
-func relayOnce(ctx context.Context, src, transport, target, id, secret string, tlsCfg *tls.Config, log *slog.Logger) error {
+func relayOnce(ctx context.Context, src, transport, target, id, secret string, tlsCfg *tls.Config, audio bool, log *slog.Logger) error {
 	su, err := base.ParseURL(src)
 	if err != nil {
 		return err
@@ -197,6 +208,18 @@ func relayOnce(ctx context.Context, src, transport, target, id, secret string, t
 	if _, err := in.Setup(desc.BaseURL, medi, 0, 0); err != nil {
 		return err
 	}
+	var amedi *description.Media
+	if audio {
+		amedi = relayAudio(desc)
+		if amedi != nil {
+			if _, err := in.Setup(desc.BaseURL, amedi, 0, 0); err != nil {
+				log.Warn("relay: sound not available", "err", err)
+				amedi = nil
+			}
+		} else {
+			log.Warn("relay: the camera sends no AAC or Opus sound")
+		}
+	}
 
 	tu, err := url.Parse(target)
 	if err != nil {
@@ -205,7 +228,13 @@ func relayOnce(ctx context.Context, src, transport, target, id, secret string, t
 	tu.User = url.UserPassword(id, secret)
 	out := &gortsplib.Client{TLSConfig: tlsCfg, ReadTimeout: 15 * time.Second, WriteTimeout: 10 * time.Second, WriteQueueSize: 2048}
 	pm := &description.Media{Type: description.MediaTypeVideo, Formats: medi.Formats}
-	if err := out.StartRecording(tu.String(), &description.Session{Medias: []*description.Media{pm}}); err != nil {
+	medias := []*description.Media{pm}
+	var am *description.Media
+	if amedi != nil {
+		am = &description.Media{Type: description.MediaTypeAudio, Formats: amedi.Formats}
+		medias = append(medias, am)
+	}
+	if err := out.StartRecording(tu.String(), &description.Session{Medias: medias}); err != nil {
 		return err
 	}
 	defer out.Close()
@@ -215,8 +244,11 @@ func relayOnce(ctx context.Context, src, transport, target, id, secret string, t
 	defer stopOut()
 
 	in.OnPacketRTPAny(func(m *description.Media, _ format.Format, pkt *rtp.Packet) {
-		if m == medi {
+		switch {
+		case m == medi:
 			_ = out.WritePacketRTP(pm, pkt)
+		case am != nil && m == amedi:
+			_ = out.WritePacketRTP(am, pkt)
 		}
 	})
 	if _, err := in.Play(nil); err != nil {

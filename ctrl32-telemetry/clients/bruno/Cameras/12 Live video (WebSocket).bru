@@ -15,13 +15,14 @@ params:path {
 }
 
 params:query {
+  ~audio: 
   ~quality: 
 }
 
 docs {
   Live video (WebSocket)
   
-  Upgrade to a WebSocket. Text messages: `{type:"init", codec, mime, width, height}`, `{type:"time", t (ms), pos (s)}` at key frames, `{type:"status", state, error}`. Binary messages: for H.264/H.265 the MP4 initialization, then one fragment (moof+mdat) per frame, for Media Source Extensions; for MJPEG one JPEG picture each.
+  Upgrade to a WebSocket. Text messages: `{type:"init", codec, mime, width, height}`, `{type:"time", t (ms), pos (s)}` at key frames, `{type:"status", state, error}`, `{type:"audio", mime, codec}` when the sound comes (spec 020: `audio=1`, main stream, camera with sound, video.audio; audited as video.listen): binary messages starting with the byte `A` then carry the sound as its own fragmented MP4 stream on the picture's time line. Binary messages: for H.264/H.265 the MP4 initialization, then one fragment (moof+mdat) per frame, for Media Source Extensions; for MJPEG one JPEG picture each.
   
   Requires permission `video.view`.
 }

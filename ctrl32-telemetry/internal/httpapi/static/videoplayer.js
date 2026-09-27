@@ -1,7 +1,10 @@
 // ctrl32 telemetry — camera video player (spec 010). One WebSocket per player: H.264/H.265 arrive as fragmented MP4 and
 // play through Media Source Extensions; MJPEG arrives as single JPEG pictures drawn on a canvas. Text messages:
 // {type:"init", codec, mime, width, height}, {type:"time", t (ms), pos (s in the player's timeline)},
-// {type:"status", state, error}, {type:"end"}.
+// {type:"status", state, error}, {type:"end"}, {type:"audio", mime} (spec 020).
+// The sound comes only when the URL asks for it (audio=1) and the user may hear it: binary messages starting with 'A'
+// carry it as a separate fragmented MP4 stream, played by its own <audio> element that follows the picture's clock, so
+// a gap in the sound never stalls the picture. It starts muted; p.sound(true) switches it on (a user gesture).
 //
 //   const p = ctrl32Player(element, {url, live: true, zoom: true, onTime(ms), onState(state, error), onEnd()});
 //   p.open(url, live);   // another source in the same player (keeps the zoom)
@@ -15,6 +18,49 @@
     host.appendChild(box);
     const video = box.querySelector('video'), canvas = box.querySelector('canvas'), msg = box.querySelector('.vp-msg'), stage = box.querySelector('.vp-stage'), zlabel = box.querySelector('.vp-zoom');
     let ws = null, ms = null, sb = null, queue = [], closed = false, retry = null, mode = '', lastT = null, drawing = false, pendingJpeg = null, stallTimer = null;
+    // the sound (spec 020)
+    let audio = null, ams = null, asb = null, aqueue = [], soundOn = false;
+    function resetAudio() {
+      if (ams) { try { if (ams.readyState === 'open') ams.endOfStream(); } catch (e) { /* closing */ } }
+      if (audio) { if (audio.src) URL.revokeObjectURL(audio.src); audio.removeAttribute('src'); audio.load(); }
+      ams = null; asb = null; aqueue = []; box.dataset.audio = '';
+    }
+    function apump() {
+      if (!asb || asb.updating || !aqueue.length) return;
+      try { asb.appendBuffer(aqueue.shift()); } catch (e) {
+        if (e.name === 'QuotaExceededError' && audio.buffered.length) { try { asb.remove(audio.buffered.start(0), Math.max(audio.buffered.start(0), audio.currentTime - 5)); } catch (x) { /* busy */ } }
+      }
+    }
+    function initAudio(m) {
+      resetAudio();
+      const MSImpl = window.MediaSource || window.ManagedMediaSource;
+      if (!MSImpl || !MSImpl.isTypeSupported(m.mime)) { box.dataset.audio = 'unsupported'; if (opts.onAudio) opts.onAudio('unsupported'); return; }
+      if (!audio) { audio = document.createElement('audio'); audio.hidden = true; box.appendChild(audio); }
+      audio.muted = !soundOn;
+      ams = new MSImpl();
+      if (!window.MediaSource) audio.disableRemotePlayback = true;
+      audio.src = URL.createObjectURL(ams);
+      ams.addEventListener('sourceopen', () => {
+        try { asb = ams.addSourceBuffer(m.mime); } catch (e) { box.dataset.audio = 'unsupported'; return; }
+        asb.mode = 'segments';
+        asb.addEventListener('updateend', () => { if (audio.buffered.length && audio.currentTime - audio.buffered.start(0) > 20) { try { asb.remove(audio.buffered.start(0), audio.currentTime - 10); } catch (x) { /* busy */ } } apump(); });
+        apump();
+      }, { once: true });
+      box.dataset.audio = '1';
+      if (opts.onAudio) opts.onAudio('on');
+    }
+    // the sound follows the picture: same time line (the server starts both at the first picture)
+    function syncAudio() {
+      if (!audio || !asb || !audio.buffered.length) return;
+      const end = audio.buffered.end(audio.buffered.length - 1), start = audio.buffered.start(0);
+      let target = null;
+      if (mode === 'mse' && video.buffered.length) target = video.currentTime;
+      else if (opts.live) target = end - 0.3;
+      if (target !== null && target >= start && target <= end && Math.abs(audio.currentTime - target) > 0.25) audio.currentTime = target;
+      const runs = mode === 'jpeg' ? box.dataset.state === 'online' : !video.paused; // MJPEG is drawn, not played
+      if (soundOn && audio.paused && runs) audio.play().catch(() => {});
+      if (!soundOn && !audio.paused) audio.pause();
+    }
     const T = (s) => (window.ctrl32 && ctrl32.t ? ctrl32.t(s) : s);
     // privacy masks (spec 016): the server sends them before the first frame; they cover the picture area, which
     // "contain" letterboxes inside the stage, and zoom with it
@@ -110,12 +156,14 @@
         if (typeof e.data === 'string') {
           const m = JSON.parse(e.data);
           if (m.type === 'masks') { MASKS = Array.isArray(m.masks) ? m.masks : []; box.dataset.masked = MASKS.length ? '1' : ''; box.dataset.unmasked = m.unmasked ? '1' : ''; placeMasks(); if (opts.onMasks) opts.onMasks(m); }
-          else if (m.type === 'init') { say(''); state('online'); if (m.codec === 'mjpeg') initJPEG(); else initMSE(m); box.dataset.codec = m.codec; box.dataset.size = m.width + 'x' + m.height; }
+          else if (m.type === 'init') { say(''); state('online'); resetAudio(); if (m.codec === 'mjpeg') initJPEG(); else initMSE(m); box.dataset.codec = m.codec; box.dataset.size = m.width + 'x' + m.height; }
+          else if (m.type === 'audio') initAudio(m);
           else if (m.type === 'time') { lastT = { t: m.t, pos: m.pos, at: performance.now() }; if (mode === 'jpeg' && opts.onTime) opts.onTime(m.t); }
           else if (m.type === 'status') { if (m.state !== 'online') { say(m.state === 'offline' ? 'Camera offline' : 'Connecting…'); } state(m.state, m.error); }
           else if (m.type === 'end') { state('end'); if (opts.onEnd) opts.onEnd(); }
           return;
         }
+        if (new Uint8Array(e.data, 0, 1)[0] === 0x41) { if (ams) { aqueue.push(e.data.slice(1)); if (aqueue.length > 100) aqueue.splice(0, aqueue.length - 100); apump(); } return; }
         if (mode === 'jpeg') drawJPEG(e.data);
         else if (mode === 'mse') { queue.push(e.data); if (queue.length > 200) queue.splice(0, queue.length - 200); pump(); }
       };
@@ -171,6 +219,9 @@
     video.addEventListener('timeupdate', () => { const t = now(); if (t && opts.onTime) opts.onTime(t); });
     // a stalled live picture (e.g. the tab was in the background) jumps to the live edge
     stallTimer = setInterval(() => { if (!document.hidden) chase(); }, 2000);
+    const syncTimer = setInterval(syncAudio, 1000);
+    video.addEventListener('pause', () => { if (audio && mode === 'mse') audio.pause(); });
+    video.addEventListener('play', syncAudio);
     say('Connecting…');
     connect();
     return {
@@ -189,10 +240,13 @@
       zoomReset() { z = 1; applyZoom(); },
       // another source in the same player: the picture stays until the new one starts
       open(url, live) { stop(); opts.url = url; opts.live = !!live; lastT = null; box.dataset.state = ''; connect(); },
-      pause() { stop(); video.pause(); state('paused'); },
+      pause() { stop(); video.pause(); if (audio) audio.pause(); state('paused'); },
+      // switch the sound on or off (on needs a user gesture in browsers); true when there is sound to hear
+      sound(on) { soundOn = !!on; if (audio) { audio.muted = !soundOn; if (soundOn) { syncAudio(); audio.play().catch(() => {}); } else audio.pause(); } return box.dataset.audio === '1'; },
+      get hasSound() { return box.dataset.audio === '1'; },
       close() {
-        closed = true; stop(); clearInterval(stallTimer);
-        resetMedia(); box.remove();
+        closed = true; stop(); clearInterval(stallTimer); clearInterval(syncTimer);
+        resetMedia(); resetAudio(); box.remove();
       },
     };
   }

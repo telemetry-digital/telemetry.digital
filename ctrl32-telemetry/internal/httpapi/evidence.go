@@ -223,7 +223,7 @@ func (s *Server) cameraEvidence(w http.ResponseWriter, r *http.Request) {
 	}
 	defer os.Remove(tmp.Name())
 	defer tmp.Close()
-	man, err = s.video.WriteEvidence(r.Context(), tmp, man, func(out io.Writer) error { return writeMP4(r.Context(), pb, first, out) })
+	man, err = s.video.WriteEvidence(r.Context(), tmp, man, func(out io.Writer) error { return writeMP4(r.Context(), pb, first, out, s.exportsSound(r, c)) })
 	if err != nil {
 		writeErr(w, 500, "package failed: "+err.Error())
 		return

@@ -76,6 +76,7 @@ export type Branding = {
 };
 
 export type Camera = {
+  audio?: boolean;
   enabled?: boolean;
   /** camera group */
   group?: string;
@@ -5863,6 +5864,8 @@ export class Ctrl32Client {
    *
    * Requires permission `video.manage`. */
   postVideoCameras(body: {
+    /** record the camera's sound (AAC or Opus); spec 020 */
+    audio?: boolean;
     enabled?: boolean;
     event_kinds?: string[];
     /** 1–600 */
@@ -5935,6 +5938,8 @@ export class Ctrl32Client {
    *
    * Requires permission `video.manage`. */
   putVideoCamerasId(id: string, body: {
+    /** record the camera's sound (AAC or Opus); spec 020 */
+    audio?: boolean;
     enabled?: boolean;
     event_kinds?: string[];
     /** 1–600 */
@@ -6053,7 +6058,7 @@ export class Ctrl32Client {
 
   /** Download recorded video
    *
-   * One MP4 file (fragmented) of at most one hour; a change of resolution or codec ends it early. Written to the audit trail (video.export).
+   * One MP4 file (fragmented) of at most one hour; a change of resolution or codec ends it early. The recorded sound is the second track only for people with video.audio. Written to the audit trail (video.export).
    * 
    * Requires permission `video.playback`. */
   getVideoCamerasIdExport(id: string, query?: { from?: string; /** RFC 3339, required */ to?: string; /** RFC 3339, required */ }): Promise<Response> {
@@ -6062,10 +6067,10 @@ export class Ctrl32Client {
 
   /** Live video (WebSocket)
    *
-   * Upgrade to a WebSocket. Text messages: `{type:"init", codec, mime, width, height}`, `{type:"time", t (ms), pos (s)}` at key frames, `{type:"status", state, error}`. Binary messages: for H.264/H.265 the MP4 initialization, then one fragment (moof+mdat) per frame, for Media Source Extensions; for MJPEG one JPEG picture each.
+   * Upgrade to a WebSocket. Text messages: `{type:"init", codec, mime, width, height}`, `{type:"time", t (ms), pos (s)}` at key frames, `{type:"status", state, error}`, `{type:"audio", mime, codec}` when the sound comes (spec 020: `audio=1`, main stream, camera with sound, video.audio; audited as video.listen): binary messages starting with the byte `A` then carry the sound as its own fragmented MP4 stream on the picture's time line. Binary messages: for H.264/H.265 the MP4 initialization, then one fragment (moof+mdat) per frame, for Media Source Extensions; for MJPEG one JPEG picture each.
    * 
    * Requires permission `video.view`. */
-  getVideoCamerasIdLive(id: string, query?: { quality?: string; /** sub (default; falls back to main) or main */ }): Promise<unknown> {
+  getVideoCamerasIdLive(id: string, query?: { audio?: string; /** 1 = with the sound (needs video.audio) */ quality?: string; /** sub (default; falls back to main) or main */ }): Promise<unknown> {
     return this.request<unknown>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/live`, query, undefined, false);
   }
 
@@ -6074,7 +6079,7 @@ export class Ctrl32Client {
    * Same messages as live, paced by the recording from the key frame before `from`; periods without recording are skipped; `{type:"end"}` after the newest recording. Written to the audit trail (video.playback).
    * 
    * Requires permission `video.playback`. */
-  getVideoCamerasIdPlayback(id: string, query?: { from?: string; /** RFC 3339, required */ speed?: string; /** 0.25–16, default 1 */ }): Promise<unknown> {
+  getVideoCamerasIdPlayback(id: string, query?: { audio?: string; /** 1 = with the recorded sound at speed 1 (needs video.audio) */ from?: string; /** RFC 3339, required */ speed?: string; /** 0.25–16, default 1 */ }): Promise<unknown> {
     return this.request<unknown>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/playback`, query, undefined, false);
   }
 

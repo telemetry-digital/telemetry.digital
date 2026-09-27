@@ -271,7 +271,7 @@ func (m *Manager) motionStream(ctx context.Context, c *cam, examine func([]byte,
 			if !ok {
 				return errors.New("stream ended")
 			}
-			if p.Track == nil || p.Sample == nil {
+			if p.Track == nil || p.Sample == nil || p.Sample.Audio != nil {
 				continue
 			}
 			if p.Track.Codec != MJPEG {

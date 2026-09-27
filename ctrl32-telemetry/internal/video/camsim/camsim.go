@@ -47,9 +47,10 @@ type spec struct {
 	label string
 	codec string
 	w, h  int
+	audio string // "", "opus" (silent Opus frames) or "g711" (announced only, for the unsupported-codec path)
 }
 
-// parse reads "<label>/<codec>/<W>x<H>"; missing parts default to h264 and 320x240.
+// parse reads "<label>/<codec>/<W>x<H>[/opus|/g711]"; missing parts default to h264 and 320x240, no sound.
 func parse(path string) spec {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	sp := spec{label: parts[0], codec: "h264", w: 320, h: 240}
@@ -60,6 +61,8 @@ func parse(path string) spec {
 		switch {
 		case p == "h264" || p == "mjpeg":
 			sp.codec = p
+		case p == "opus" || p == "g711":
+			sp.audio = p
 		case strings.Contains(p, "x"):
 			a, b, _ := strings.Cut(p, "x")
 			w, e1 := strconv.Atoi(a)
@@ -112,6 +115,12 @@ func (s *Server) get(path string) (*stream, error) {
 		f = &format.H264{PayloadTyp: 96, PacketizationMode: 1, SPS: enc.SPS(), PPS: enc.PPS()}
 	}
 	desc := &description.Session{Medias: []*description.Media{{Type: description.MediaTypeVideo, Formats: []format.Format{f}}}}
+	switch sp.audio {
+	case "opus":
+		desc.Medias = append(desc.Medias, &description.Media{Type: description.MediaTypeAudio, Formats: []format.Format{&format.Opus{PayloadTyp: 111, ChannelCount: 1}}})
+	case "g711":
+		desc.Medias = append(desc.Medias, &description.Media{Type: description.MediaTypeAudio, Formats: []format.Format{&format.G711{PayloadTyp: 0, MULaw: true, SampleRate: 8000, ChannelCount: 1}}})
+	}
 	st := &gortsplib.ServerStream{Server: s.srv, Desc: desc}
 	if err := st.Initialize(); err != nil {
 		return nil, err
@@ -119,7 +128,41 @@ func (s *Server) get(path string) (*stream, error) {
 	out := &stream{st: st, desc: desc}
 	s.streams[key] = out
 	go s.produce(out, sp)
+	if sp.audio == "opus" {
+		go s.produceOpus(out)
+	}
 	return out, nil
+}
+
+// silentOpus is one 20 ms Opus frame of silence (what WebRTC sends for silence).
+var silentOpus = []byte{0xf8, 0xff, 0xfe}
+
+// produceOpus sends silent Opus frames every 20 ms while someone plays the stream.
+func (s *Server) produceOpus(out *stream) {
+	medi := out.desc.Medias[1]
+	enc, err := medi.Formats[0].(*format.Opus).CreateEncoder()
+	if err != nil {
+		return
+	}
+	tick := time.NewTicker(20 * time.Millisecond)
+	defer tick.Stop()
+	start := time.Now()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case now := <-tick.C:
+			if out.readers.Load() == 0 {
+				continue
+			}
+			pkt, err := enc.Encode(silentOpus)
+			if err != nil {
+				return
+			}
+			pkt.Timestamp += uint32(int64(now.Sub(start)) * 48000 / int64(time.Second))
+			_ = out.st.WritePacketRTP(medi, pkt)
+		}
+	}
 }
 
 // produce writes frames at the configured rate for as long as the server runs.

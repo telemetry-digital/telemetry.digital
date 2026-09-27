@@ -39,6 +39,7 @@ type Camera struct {
 	MotionSensitivity int
 	MotionZones       []MotionZone
 	SnapshotURL       string // JPEG snapshot address for cameras whose streams are H.264/H.265
+	Audio             bool   // record and play the camera's sound (spec 020)
 }
 
 // Manager runs the cameras of all organizations: recorders for cameras that record, on-demand streams for viewers,
@@ -225,10 +226,10 @@ func (m *Manager) load(ctx context.Context, id string) (Camera, bool) {
 	var sealed, source, pushSealed string
 	var zones []byte
 	err := m.pool.QueryRow(ctx, `SELECT id::text, org_id::text, name, url, sub_url, username, password_sealed, transport, record, retention_days, enabled, source, push_secret_sealed,
-		onvif_url, ptz_profile, event_pre_s, event_post_s, event_kinds, motion_detect, motion_sensitivity, motion_zones, snapshot_url
+		onvif_url, ptz_profile, event_pre_s, event_post_s, event_kinds, motion_detect, motion_sensitivity, motion_zones, snapshot_url, audio
 		FROM core.camera WHERE id = $1::uuid AND removed_at IS NULL`, id).
 		Scan(&c.ID, &c.OrgID, &c.Name, &c.URL, &c.SubURL, &c.Username, &sealed, &c.Transport, &c.Record, &c.RetentionDays, &c.Enabled, &source, &pushSealed,
-			&c.OnvifURL, &c.PTZProfile, &c.EventPre, &c.EventPost, &c.EventKinds, &c.MotionDetect, &c.MotionSensitivity, &zones, &c.SnapshotURL)
+			&c.OnvifURL, &c.PTZProfile, &c.EventPre, &c.EventPost, &c.EventKinds, &c.MotionDetect, &c.MotionSensitivity, &zones, &c.SnapshotURL, &c.Audio)
 	if err != nil {
 		return c, false
 	}
@@ -281,7 +282,7 @@ func (m *Manager) Reload(ctx context.Context, id string) {
 	}
 	if cfg.Push {
 		// the relay publishes main and (optionally) sub; both sources stay ready to accept it
-		c.main = &Source{URL: &url.URL{Scheme: "push"}, Log: m.log.With("camera", cfg.Name), Linger: linger}
+		c.main = &Source{URL: &url.URL{Scheme: "push"}, Log: m.log.With("camera", cfg.Name), Linger: linger, Audio: cfg.Audio}
 		c.sub = &Source{URL: &url.URL{Scheme: "push"}, Log: m.log.With("camera", cfg.Name+" (sub)"), Linger: linger}
 		c.main.Keep(true)
 		c.sub.Keep(true)
@@ -297,7 +298,7 @@ func (m *Manager) Reload(ctx context.Context, id string) {
 		m.log.Warn("camera URL invalid", "camera", id, "err", err)
 		return
 	}
-	c.main = &Source{URL: mu, Transport: cfg.Transport, Log: m.log.With("camera", cfg.Name), Linger: linger}
+	c.main = &Source{URL: mu, Transport: cfg.Transport, Log: m.log.With("camera", cfg.Name), Linger: linger, Audio: cfg.Audio}
 	if cfg.SubURL != "" {
 		if su, err := StreamURL(cfg.SubURL, cfg.Username, cfg.Password); err == nil {
 			c.sub = &Source{URL: su, Transport: cfg.Transport, Log: m.log.With("camera", cfg.Name+" (sub)"), Linger: linger}

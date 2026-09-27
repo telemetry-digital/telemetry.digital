@@ -55,6 +55,9 @@ func (s *Source) waitPush(ctx context.Context) error {
 	if err == nil {
 		// registered while OnRecord still waits for the reply, so before the session reads any packet
 		pc.sess.OnPacketRTP(medi, forma, onPacket)
+		if am, af, aon := s.withSound(ctx, pc.desc, pc.sess.PacketPTS); am != nil {
+			pc.sess.OnPacketRTP(am, af, aon)
+		}
 	}
 	pc.reply <- err
 	if err != nil {

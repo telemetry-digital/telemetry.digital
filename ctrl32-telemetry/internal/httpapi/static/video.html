@@ -113,6 +113,8 @@
       <div class="row" id="kinds" style="gap:10px;font-size:13px"></div>
     </div>
     <div class="row2"><label>Keep recordings (days) <input name="retention_days" type="number" min="1" max="3650" value="7"></label><label>Order <input name="sort" type="number" value="0"></label></div>
+    <label class="check"><input type="checkbox" name="audio"> Sound: record it and let permitted people hear it</label>
+    <div class="muted audio-only" style="font-size:13px">Recording sound (conversations) is regulated more strictly than pictures: switch it on only where it is lawful and people are informed (a sign). The camera must send AAC (or Opus) — set it in the camera's audio settings; G.711 cannot be played in browsers. Hearing and exporting sound needs the permission <code>video.audio</code> and is recorded in the audit trail. A relay forwards sound only with <code>audio = true</code>.</div>
     <label class="check"><input type="checkbox" name="motion_detect"> Motion detection on the server (cameras without ONVIF events)</label>
     <div class="motion-only">
       <div class="row2"><label>Sensitivity <span class="muted" id="sensOut"></span><input name="motion_sensitivity" type="range" min="1" max="100" value="50"></label>
@@ -213,7 +215,7 @@ function renderManage() {
   $('#cams tbody').innerHTML = CAMS.map(c => `<tr><td class="notranslate">${esc(c.name)}</td><td class="notranslate">${esc(c.location)}${c.group ? ` <span class="badge" title="${esc(t('Camera group'))}">${esc(c.group)}</span>` : ''}</td>
     <td class="notranslate" style="max-width:280px;overflow:hidden;text-overflow:ellipsis">${c.source === 'push' ? `<span class="badge primary">${esc(t('remote, sends via relay'))}</span>${c.push && !c.push.enabled ? ` <span class="badge bad" title="${esc(t('video.push_listen is not set in the server configuration'))}">${esc(t('receiving is off'))}</span>` : ''}` : esc(c.url || '') + (c.has_sub ? ' <span class="badge">+ sub</span>' : '')}</td>
     <td>${dot(c.status)} ${esc(t(c.enabled ? (c.status.state === 'idle' ? 'on demand' : c.status.state) : 'disabled'))}${c.status.codec ? ` <span class="muted">${esc(c.status.codec.toUpperCase())} ${c.status.width}×${c.status.height} · ${c.status.fps} fps · ${Math.round(c.status.kbps)} kbit/s</span>` : ''}${c.status.error ? `<br><span class="bad" style="font-size:12px">${esc(c.status.error)}</span>` : ''}</td>
-    <td>${c.record === 'off' ? esc(t('off')) : esc(t(c.record === 'events' ? 'on events' : 'continuous')) + ', ' + c.retention_days + ' ' + esc(t('days'))}${c.onvif ? ` <span class="badge" title="${esc(t('ONVIF events'))}: ${esc(c.status.events || '')}">ONVIF${c.status.events && c.status.events !== 'connected' && c.status.events !== 'connecting' ? ' ⚠' : ''}</span>` : ''}${c.motion_detect ? ` <span class="badge" title="${esc(t('Motion detection on the server'))}: ${esc(t(c.status.motion || ''))}">${esc(t('motion'))}${c.status.motion && !c.status.motion.startsWith('watching') && c.status.motion !== 'starting' ? ' ⚠' : ''}</span>` : ''}</td><td class="num" data-bytes="${c.id}"></td>
+    <td>${c.record === 'off' ? esc(t('off')) : esc(t(c.record === 'events' ? 'on events' : 'continuous')) + ', ' + c.retention_days + ' ' + esc(t('days'))}${c.onvif ? ` <span class="badge" title="${esc(t('ONVIF events'))}: ${esc(c.status.events || '')}">ONVIF${c.status.events && c.status.events !== 'connected' && c.status.events !== 'connecting' ? ' ⚠' : ''}</span>` : ''}${c.audio ? ` <span class="badge" title="${esc(t('Sound'))}: ${esc(c.status.audio || '')}">🔊${c.status.audio && !/^(AAC|Opus)/.test(c.status.audio) ? ' ⚠' : ''}</span>` : ''}${c.motion_detect ? ` <span class="badge" title="${esc(t('Motion detection on the server'))}: ${esc(t(c.status.motion || ''))}">${esc(t('motion'))}${c.status.motion && !c.status.motion.startsWith('watching') && c.status.motion !== 'starting' ? ' ⚠' : ''}</span>` : ''}</td><td class="num" data-bytes="${c.id}"></td>
     <td class="actions-cell"><a class="btn small" href="/video/cameras/${c.id}">Open</a><button class="btn small" data-cedit="${c.id}" type="button">Edit</button>${c.source === 'push' ? `<button class="btn small" data-secret="${c.id}" type="button">New secret</button>` : ''}<button class="btn small" data-cdel="${c.id}" type="button">Delete</button></td></tr>`).join('');
   for (const b of document.querySelectorAll('[data-cedit]')) b.onclick = () => camDialog(CAMS.find(c => c.id === b.dataset.cedit));
   for (const b of document.querySelectorAll('[data-secret]')) b.onclick = async () => {
@@ -239,6 +241,8 @@ const KINDS = [['motion', 'motion'], ['tamper', 'tampering'], ['line', 'line cro
 $('#kinds').innerHTML = KINDS.map(([k, l]) => `<label class="inline"><input type="checkbox" data-kind="${k}"><span>${esc(t(l))}</span></label>`).join('');
 function recordMode() { for (const el of document.querySelectorAll('#camForm .events-only')) el.hidden = $('#camForm').record.value !== 'events'; }
 $('#camForm').record.onchange = recordMode;
+function audioMode() { for (const el of document.querySelectorAll('#camForm .audio-only')) el.hidden = !$('#camForm').audio.checked; }
+$('#camForm').audio.onchange = audioMode;
 function motionMode() { const f = $('#camForm'); for (const el of document.querySelectorAll('#camForm .motion-only')) el.hidden = !f.motion_detect.checked; $('#sensOut').textContent = f.motion_sensitivity.value; }
 $('#camForm').motion_detect.onchange = motionMode; $('#camForm').motion_sensitivity.oninput = motionMode;
 $('#findBtn').onclick = async () => {
@@ -312,9 +316,9 @@ function camDialog(c) {
   $('#camTitle').textContent = t(c ? 'Edit camera' : 'Add camera');
   $('#found').innerHTML = ''; $('#onvifOut').textContent = '';
   for (const b of document.querySelectorAll('#kinds [data-kind]')) b.checked = (c ? c.event_kinds || [] : ['motion', 'tamper', 'line', 'intrusion', 'input', 'mark']).includes(b.dataset.kind);
-  if (c) { for (const k of ['source', 'name', 'location', 'group', 'url', 'onvif_url', 'event_pre_s', 'event_post_s', 'sub_url', 'username', 'transport', 'record', 'retention_days', 'sort']) f[k].value = c[k] ?? ''; f.enabled.checked = c.enabled; f.motion_detect.checked = !!c.motion_detect; f.motion_sensitivity.value = c.motion_sensitivity || 50; f.snapshot_url.value = c.snapshot_url || ''; f.password.placeholder = t(c.has_password ? 'unchanged' : 'none'); }
+  if (c) { for (const k of ['source', 'name', 'location', 'group', 'url', 'onvif_url', 'event_pre_s', 'event_post_s', 'sub_url', 'username', 'transport', 'record', 'retention_days', 'sort']) f[k].value = c[k] ?? ''; f.enabled.checked = c.enabled; f.audio.checked = !!c.audio; f.motion_detect.checked = !!c.motion_detect; f.motion_sensitivity.value = c.motion_sensitivity || 50; f.snapshot_url.value = c.snapshot_url || ''; f.password.placeholder = t(c.has_password ? 'unchanged' : 'none'); }
   else f.password.placeholder = '';
-  sourceMode(); recordMode(); motionMode();
+  sourceMode(); recordMode(); motionMode(); audioMode();
   $('#groupList').innerHTML = [...new Set(CAMS.map(x => x.group).filter(Boolean))].sort().map(g => `<option value="${esc(g)}">`).join('');
   $('#camDlg').showModal();
   maskEditor(c);
@@ -332,7 +336,7 @@ $('#camForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $(
   const body = {source: f.source.value, name: f.name.value, location: f.location.value, group: f.group.value, url: f.url.value, sub_url: f.sub_url.value, username: f.username.value, transport: f.transport.value,
     record: f.record.value, retention_days: +f.retention_days.value, sort: +f.sort.value, enabled: f.enabled.checked, reason: f.reason.value,
     onvif_url: f.onvif_url.value, event_pre_s: +f.event_pre_s.value, event_post_s: +f.event_post_s.value, event_kinds: [...document.querySelectorAll('#kinds [data-kind]:checked')].map(b => b.dataset.kind),
-    motion_detect: f.motion_detect.checked, motion_sensitivity: +f.motion_sensitivity.value, snapshot_url: f.snapshot_url.value.trim()};
+    audio: f.audio.checked, motion_detect: f.motion_detect.checked, motion_sensitivity: +f.motion_sensitivity.value, snapshot_url: f.snapshot_url.value.trim()};
   if (EDIT) { body.privacy_masks = MASKS; body.motion_zones = ZONES; }
   if (f.password.value) body.password = f.password.value;
   if (body.source === 'push') { delete body.url; delete body.sub_url; delete body.username; delete body.transport; delete body.password; body.onvif_url = ''; body.snapshot_url = ''; }
