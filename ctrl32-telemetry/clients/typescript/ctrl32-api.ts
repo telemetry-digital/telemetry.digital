@@ -362,6 +362,9 @@ export type Display = {
   last_agent?: string;
   last_ip?: string;
   last_seen_at?: string;
+  location?: string;
+  /** current message */
+  message?: Record<string, unknown>;
   name?: string;
   offline_alert?: boolean;
   /** reported within 90 s */
@@ -2456,6 +2459,30 @@ export class Ctrl32Client {
     return this.request<Display[]>('GET', `/api/v1/displays`, undefined, undefined, false);
   }
 
+  /** Send a command or message to several displays
+   *
+   * The same actions for the listed displays, those of a location, or all displays of the organization. One audit entry lists the displays.
+   * 
+   * Requires permission `display.control`. */
+  postDisplaysCommand(body: {
+    action: "camera" | "identify" | "reload" | "clear" | "message";
+    all?: boolean;
+    camera?: string;
+    ids?: string[];
+    level?: "info" | "warning" | "alarm";
+    location?: string;
+    seconds?: number;
+    text?: string;
+  }): Promise<{
+    /** how many got it */
+    displays?: number;
+  }> {
+    return this.request<{
+    /** how many got it */
+    displays?: number;
+  }>('POST', `/api/v1/displays/command`, undefined, body, false);
+  }
+
   /** Pair a display
    *
    * Enter the code the kiosk shows (case-insensitive; 10 wrong codes in 10 minutes block the user for a while). Returns the device's address and browser. Audited.
@@ -2465,6 +2492,8 @@ export class Ctrl32Client {
     /** XXXX-XXXX */
     code: string;
     content: DisplayContent;
+    /** hall, line ≤ 60 */
+    location?: string;
     /** ≤ 80 */
     name: string;
     /** default true */
@@ -2480,6 +2509,7 @@ export class Ctrl32Client {
    * Requires permission `display.manage`. */
   putDisplaysId(id: string, body: {
     content?: DisplayContent;
+    location?: string;
     name?: string;
     offline_alert?: boolean;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
@@ -2505,15 +2535,18 @@ export class Ctrl32Client {
 
   /** Send a command to a display
    *
-   * camera: show a camera the operator may see (seconds 5–3600); identify: show the display's name; reload; clear: back to the content. Audited.
+   * camera: show a camera the operator may see (seconds 5–3600); identify: show the display's name; reload; clear: back to the content (also ends a message); message: an announcement (info as a band at the bottom, warning at the top, alarm over the whole screen) shown apart from cameras. Audited.
    * 
    * Requires permission `display.control`. */
   postDisplaysIdCommand(id: string, body: {
-    action: "camera" | "identify" | "reload" | "clear";
+    action: "camera" | "identify" | "reload" | "clear" | "message";
     camera?: string;
+    level?: "info" | "warning" | "alarm";
     quality?: "main" | "sub";
     /** 5–3600, default 60 */
     seconds?: number;
+    /** message, 1–200 characters, shown as text */
+    text?: string;
   }): Promise<Record<string, unknown>> {
     return this.request<Record<string, unknown>>('POST', `/api/v1/displays/${encodeURIComponent(id)}/command`, undefined, body, false);
   }
