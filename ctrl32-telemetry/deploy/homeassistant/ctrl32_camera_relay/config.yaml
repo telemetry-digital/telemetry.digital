@@ -1,0 +1,25 @@
+name: ctrl32 camera relay
+version: "0.57.0"
+slug: ctrl32_camera_relay
+description: Sends the cameras on this network to a ctrl32 telemetry server over an encrypted connection (RTSPS)
+url: https://telemetry.digital
+arch:
+  - aarch64
+  - amd64
+  - armv7
+init: false
+startup: services
+boot: auto
+options:
+  server: "rtsps://telemetry.digital:8322"
+  cameras: []
+schema:
+  server: str
+  ca_file: "str?"
+  cameras:
+    - name: "str?"
+      id: str
+      secret: password
+      source: password
+      sub_source: "password?"
+      transport: "list(auto|tcp|udp)?"

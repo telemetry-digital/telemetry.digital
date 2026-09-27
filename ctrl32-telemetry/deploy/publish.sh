@@ -13,8 +13,8 @@ shift 2
 SSH_OPTS=("$@")
 OUT=dist/$VERSION
 mkdir -p "$OUT"
-for arch in amd64 arm64; do
-  GOOS=linux GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$OUT/ctrl32-telemetry-linux-$arch" ./cmd/ctrl32-telemetry
+for arch in amd64 arm64 arm; do   # arm = ARMv7 (32-bit Raspberry Pi OS / Home Assistant armv7), for the camera relay
+  GOOS=linux GOARCH=$arch GOARM=7 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$OUT/ctrl32-telemetry-linux-$arch" ./cmd/ctrl32-telemetry
 done
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$OUT/ctrl32-telemetry-windows-amd64.exe" ./cmd/ctrl32-telemetry
 # Authenticode signature when a code-signing certificate is available (CTRL32_SIGN_PFX + CTRL32_SIGN_PASS, Windows SDK signtool).
@@ -46,4 +46,5 @@ scp "${SSH_OPTS[@]}" "$OUT/install.sh" "$TARGET:/var/www/ctrl32/install.sh"
 scp "${SSH_OPTS[@]}" "$OUT/install.ps1" "$TARGET:/var/www/ctrl32/install.ps1"
 scp "${SSH_OPTS[@]}" "$OUT/install-relay.sh" "$OUT/install-relay.ps1" "$TARGET:/var/www/ctrl32/"
 ssh "${SSH_OPTS[@]}" "$TARGET" "chmod 0644 /var/www/ctrl32/install.sh /var/www/ctrl32/install.ps1 /var/www/ctrl32/install-relay.sh /var/www/ctrl32/install-relay.ps1 /var/www/ctrl32/dl/*; printf '%s\n' '$VERSION' > /var/www/ctrl32/dl/VERSION"
-echo "published $VERSION to $TARGET (/install.sh, /dl/)"
+bash deploy/homeassistant/publish-addon.sh "$VERSION" "$TARGET" "${SSH_OPTS[@]}"
+echo "published $VERSION to $TARGET (/install.sh, /dl/, /dl/ha-addons.git)"
