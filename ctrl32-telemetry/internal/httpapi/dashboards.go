@@ -540,6 +540,10 @@ func (s *Server) saveDashboard(w http.ResponseWriter, r *http.Request, org, slug
 		writeErr(w, 400, err.Error())
 		return
 	}
+	if msg := s.camerasVisible(r.Context(), org, specCameras(spec)); msg != "" {
+		writeErr(w, 403, msg)
+		return
+	}
 	if warnings == nil {
 		warnings = []string{}
 	}

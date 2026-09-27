@@ -208,13 +208,27 @@ func (m *Manager) SourceDown(ctx context.Context, org, sourceID, title, impact s
 }
 
 // Raise opens (once per key) a system incident, e.g. a camera that stopped recording (spec 014).
-func (m *Manager) Raise(ctx context.Context, org, kind, key, severity, title, impact string, detail map[string]any) {
+func (m *Manager) Raise(ctx context.Context, org, kind, key, severity, title, impact string, detail map[string]any) error {
 	if m == nil {
-		return
+		return errors.New("incident manager not configured")
 	}
 	if _, _, err := m.Open(ctx, Incident{OrgID: org, Kind: kind, Severity: severity, Title: title, Detail: detail, Impact: impact, DedupKey: key}); err != nil {
 		m.log.Error("could not open incident", "key", key, "err", err)
+		return err
 	}
+	return nil
+}
+
+// IsOpen reports whether an incident with the key is open or being investigated.
+func (m *Manager) IsOpen(ctx context.Context, key string) bool {
+	if m == nil {
+		return false
+	}
+	var n int
+	if err := m.pool.QueryRow(ctx, `SELECT count(*) FROM core.incident WHERE dedup_key = $1 AND status IN ('open', 'investigating')`, key).Scan(&n); err != nil {
+		return true // unknown: do not open a duplicate
+	}
+	return n > 0
 }
 
 // Resolve resolves the open incident with the key, if any, with the cause.

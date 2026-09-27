@@ -8,6 +8,7 @@ package httpapi
 //	PUT /api/v1/users/{id}/camera-groups        user.admin   {limited, groups, reason}
 
 import (
+	"context"
 	"net/http"
 	"slices"
 	"strings"
@@ -103,9 +104,9 @@ func (s *Server) putUserCameraGroups(w http.ResponseWriter, r *http.Request) {
 	var oldLimited bool
 	var oldGroups []string
 	_ = s.pool.QueryRow(r.Context(), `SELECT camera_groups IS NOT NULL, COALESCE(camera_groups, '{}') FROM core.user_account WHERE id = $1::uuid`, u.ID).Scan(&oldLimited, &oldGroups)
-	var arg any
+	var arg any // nil = NULL = all cameras
 	if in.Limited {
-		arg = groups
+		arg = groups // never nil: an empty list means no cameras
 	}
 	if _, err := s.pool.Exec(r.Context(), `UPDATE core.user_account SET camera_groups = $2::text[] WHERE id = $1::uuid`, u.ID, arg); err != nil {
 		writeErr(w, 500, "update failed")
@@ -114,4 +115,42 @@ func (s *Server) putUserCameraGroups(w http.ResponseWriter, r *http.Request) {
 	s.audit(r, "user.camera_groups", "user", u.ID, map[string]any{"limited": oldLimited, "groups": oldGroups},
 		map[string]any{"user": u.Username, "limited": in.Limited, "groups": groups}, in.Reason)
 	writeJSON(w, 200, map[string]any{"limited": in.Limited, "groups": groups})
+}
+
+// camerasVisible returns an error text when a camera among ids belongs to a group the principal in ctx may not see.
+// Walls, dashboards and displays call it, so a user limited to camera groups cannot route other cameras through them.
+func (s *Server) camerasVisible(ctx context.Context, org string, ids []string) string {
+	p := PrincipalFrom(ctx)
+	if p == nil || !p.CameraLimited || len(ids) == 0 {
+		return ""
+	}
+	rows, err := s.pool.Query(ctx, `SELECT id::text, camera_group FROM core.camera WHERE org_id = $1::uuid AND id::text = ANY($2::text[])`, org, ids)
+	if err != nil {
+		return "cameras could not be checked"
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, g string
+		if rows.Scan(&id, &g) == nil && !p.SeesCameraGroup(g) {
+			return "camera " + id + " is outside your camera groups"
+		}
+	}
+	return ""
+}
+
+// specCameras lists the cameras of the camera widgets of a dashboard spec.
+func specCameras(spec map[string]any) []string {
+	var ids []string
+	widgets, _ := spec["widgets"].([]any)
+	for _, x := range widgets {
+		w, _ := x.(map[string]any)
+		if t, _ := w["type"].(string); t != "camera" {
+			continue
+		}
+		params, _ := w["params"].(map[string]any)
+		if id, ok := params["camera"].(string); ok && id != "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids
 }

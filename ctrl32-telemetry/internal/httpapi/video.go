@@ -958,7 +958,8 @@ func (s *Server) videoStorage(w http.ResponseWriter, r *http.Request) {
 	}
 	var all int64
 	_ = s.pool.QueryRow(r.Context(), `SELECT COALESCE(sum(bytes), 0) FROM core.video_segment`).Scan(&all)
-	rows, err := s.pool.Query(r.Context(), `SELECT c.id::text, c.name, c.removed_at IS NOT NULL, COALESCE(sum(s.bytes), 0), count(s.id), min(s.started_at)
+	p := PrincipalFrom(r.Context())
+	rows, err := s.pool.Query(r.Context(), `SELECT c.id::text, c.name, c.removed_at IS NOT NULL, COALESCE(sum(s.bytes), 0), count(s.id), min(s.started_at), c.camera_group
 		FROM core.camera c LEFT JOIN core.video_segment s ON s.camera_id = c.id
 		WHERE c.org_id = $1::uuid GROUP BY c.id HAVING c.removed_at IS NULL OR count(s.id) > 0 ORDER BY c.name`, org)
 	if err != nil {
@@ -972,7 +973,8 @@ func (s *Server) videoStorage(w http.ResponseWriter, r *http.Request) {
 		var removed bool
 		var bytes, files int64
 		var oldest *time.Time
-		if rows.Scan(&id, &name, &removed, &bytes, &files, &oldest) == nil {
+		var group string
+		if rows.Scan(&id, &name, &removed, &bytes, &files, &oldest, &group) == nil && p.SeesCameraGroup(group) {
 			cams = append(cams, map[string]any{"id": id, "name": name, "removed": removed, "bytes": bytes, "files": files, "oldest": oldest})
 		}
 	}
@@ -1031,6 +1033,17 @@ func (s *Server) validateWall(ctx context.Context, org string, screens []WallScr
 				return "camera " + *t + " not found"
 			}
 		}
+	}
+	var ids []string
+	for _, sc := range screens {
+		for _, t := range sc.Tiles {
+			if t != nil {
+				ids = append(ids, *t)
+			}
+		}
+	}
+	if msg := s.camerasVisible(ctx, org, ids); msg != "" {
+		return msg
 	}
 	return ""
 }

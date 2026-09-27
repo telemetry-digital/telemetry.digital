@@ -8,8 +8,9 @@ import (
 
 // Incidents receives health problems (the incident log, spec 014); set Manager.Incidents before Run.
 type Incidents interface {
-	Raise(ctx context.Context, org, kind, key, severity, title, impact string, detail map[string]any)
+	Raise(ctx context.Context, org, kind, key, severity, title, impact string, detail map[string]any) error
 	Resolve(ctx context.Context, key, cause string)
+	IsOpen(ctx context.Context, key string) bool
 }
 
 // healthState remembers since when each problem lasts; used only by the Run goroutine.
@@ -19,7 +20,7 @@ type healthState struct {
 }
 
 // problem tracks one condition: an incident is raised once it lasts `after`, and resolved when it ends.
-func (m *Manager) problem(ctx context.Context, key string, bad bool, after time.Duration, raise func()) {
+func (m *Manager) problem(ctx context.Context, key string, bad bool, after time.Duration, raise func() error) {
 	h := &m.health
 	if !bad {
 		delete(h.since, key)
@@ -29,14 +30,23 @@ func (m *Manager) problem(ctx context.Context, key string, bad bool, after time.
 		}
 		return
 	}
+	if h.raised[key] && !m.Incidents.IsOpen(ctx, key) {
+		// resolved or closed by someone while the problem goes on: a new incident after the time again
+		delete(h.raised, key)
+		h.since[key] = time.Now()
+		return
+	}
 	first, ok := h.since[key]
 	if !ok {
 		h.since[key] = time.Now()
 		return
 	}
 	if after > 0 && !h.raised[key] && time.Since(first) >= after {
+		if err := raise(); err != nil {
+			m.log.Warn("health incident not opened; retrying next minute", "key", key, "err", err)
+			return
+		}
 		h.raised[key] = true
-		raise()
 	}
 }
 
@@ -82,8 +92,8 @@ func (m *Manager) checkHealth(ctx context.Context) {
 		offKey, recKey := "camera:"+c.id+":offline", "camera:"+c.id+":recording"
 		seen[offKey], seen[recKey] = true, true
 		detail := map[string]any{"camera_id": c.id, "camera": c.name, "state": st.State, "error": st.Error}
-		m.problem(ctx, offKey, st.State != "online", after, func() {
-			m.Incidents.Raise(ctx, c.org, "camera", offKey, "major", "Camera "+c.name+" is offline",
+		m.problem(ctx, offKey, st.State != "online", after, func() error {
+			return m.Incidents.Raise(ctx, c.org, "camera", offKey, "major", "Camera "+c.name+" is offline",
 				"Nothing is recorded from this camera until it is back.", detail)
 		})
 		// a continuously recording camera that is online must write; the last file write shows it does
@@ -92,8 +102,8 @@ func (m *Manager) checkHealth(ctx context.Context) {
 			last = time.Unix(0, n)
 		}
 		stalled := c.continuous && st.State == "online" && time.Since(last) > 2*time.Minute
-		m.problem(ctx, recKey, stalled, after, func() {
-			m.Incidents.Raise(ctx, c.org, "camera", recKey, "critical", "Camera "+c.name+" is not recording",
+		m.problem(ctx, recKey, stalled, after, func() error {
+			return m.Incidents.Raise(ctx, c.org, "camera", recKey, "critical", "Camera "+c.name+" is not recording",
 				"The camera sends video but no recording is written (storage full or not writable?).", detail)
 		})
 	}
@@ -105,8 +115,8 @@ func (m *Manager) checkHealth(ctx context.Context) {
 	}
 	if free, total, ok := diskFree(m.dir); ok && total > 0 && set.DiskFreePercent > 0 {
 		pct := float64(free) * 100 / float64(total)
-		m.problem(ctx, "video:disk", pct < float64(set.DiskFreePercent), time.Nanosecond, func() {
-			m.Incidents.Raise(ctx, "", "storage", "video:disk", "critical", "Video storage almost full",
+		m.problem(ctx, "video:disk", pct < float64(set.DiskFreePercent), time.Nanosecond, func() error {
+			return m.Incidents.Raise(ctx, "", "storage", "video:disk", "critical", "Video storage almost full",
 				fmt.Sprintf("Only %.1f %% (%.1f GB) is free on the disk of the recordings; recording stops when it is full.", pct, float64(free)/1e9),
 				map[string]any{"dir": m.dir, "free_bytes": free, "total_bytes": total})
 		})
@@ -139,8 +149,8 @@ func (m *Manager) checkDisplays(ctx context.Context, set Settings) {
 		key := "display:" + d.id
 		seen[key] = true
 		dark := d.seen == nil || time.Since(*d.seen) > time.Minute
-		m.problem(ctx, key, dark, after, func() {
-			m.Incidents.Raise(ctx, d.org, "display", key, "major", "Display "+d.name+" is not showing",
+		m.problem(ctx, key, dark, after, func() error {
+			return m.Incidents.Raise(ctx, d.org, "display", key, "major", "Display "+d.name+" is not showing",
 				"The display has not reported for a while: switched off, disconnected or the browser closed.",
 				map[string]any{"display_id": d.id, "display": d.name, "last_seen_at": d.seen})
 		})

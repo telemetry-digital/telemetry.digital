@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
+	"net"
 	"net/http"
 	"regexp"
 	"slices"
@@ -201,6 +202,12 @@ func (s *Server) displayHello(w http.ResponseWriter, r *http.Request) {
 				}
 				s.setDisplayCookie(w, r, displayCookie, raw, 400*24*3600)
 				s.log.Info("display paired", "display", *displayID, "remote", clientIP(r))
+				var org, name string
+				if s.pool.QueryRow(ctx, `SELECT org_id::text, name FROM core.display WHERE id = $1::uuid`, *displayID).Scan(&org, &name) == nil {
+					dp := &iam.Principal{OrgID: org, Username: "display:" + name}
+					s.audit(r.WithContext(context.WithValue(ctx, principalKey, dp)), "display.credential_issued", "display", *displayID, nil,
+						map[string]any{"display": name, "ip": clientIP(r), "agent": truncateStr(r.UserAgent(), 300)}, "the paired display collected its credential")
+				}
 				writeJSON(w, 200, map[string]any{"paired": true})
 				return
 			}
@@ -214,7 +221,8 @@ func (s *Server) displayHello(w http.ResponseWriter, r *http.Request) {
 	ip := clientIP(r)
 	var perIP, total int
 	_ = s.pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE ip = $1), count(*) FROM core.display_pairing`, ip).Scan(&perIP, &total)
-	if perIP >= 20 || total >= 500 {
+	// new pairings per address (IPv6 per /64) are rate limited, so a few addresses cannot fill the table for everyone
+	if !pairingRate(addrKey(ip)) || perIP >= 50 || total >= 5000 {
 		s.log.Warn("display pairing refused: too many pending", "security", true, "remote", ip)
 		writeErr(w, 429, "too many pairings waiting; try again later")
 		return
@@ -508,6 +516,25 @@ func (s *Server) validateDisplayContent(ctx context.Context, org string, c *disp
 	if c.Locale != "" && !localeRe.MatchString(c.Locale) {
 		return "locale: a language code such as sk or en"
 	}
+	// a user limited to camera groups cannot put other cameras on a display
+	if p := PrincipalFrom(ctx); p != nil && p.CameraLimited {
+		if c.Popup == "all" {
+			return "popup all: you are limited to some camera groups; use the cameras of the display's walls"
+		}
+		var ids []string
+		for _, it := range c.Items {
+			if it.Kind == "wall" {
+				ids = append(ids, s.wallTiles(ctx, org, it.Wall, it.Screen)...)
+			} else if si, ok := s.shareOf(ctx, org, it.Slug); ok {
+				for id := range si.Cams {
+					ids = append(ids, id)
+				}
+			}
+		}
+		if msg := s.camerasVisible(ctx, org, ids); msg != "" {
+			return msg
+		}
+	}
 	return ""
 }
 
@@ -527,13 +554,66 @@ func (s *Server) listDisplays(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer rows.Close()
-	out := []map[string]any{}
+	var list []*displayRow
 	for rows.Next() {
 		if d, err := scanDisplay(rows); err == nil {
-			out = append(out, d.json())
+			list = append(list, d)
 		}
 	}
+	rows.Close()
+	out := []map[string]any{}
+	for _, d := range list {
+		j := d.json()
+		// a camera sent by someone else stays unnamed for a user limited to other camera groups
+		if c, ok := j["command"].(*displayCommand); ok && c.Camera != "" {
+			if _, visible := s.cameraRow(r.Context(), org, c.Camera); !visible {
+				hidden := *c
+				hidden.Camera, hidden.Name = "", ""
+				j["command"] = &hidden
+			}
+		}
+		out = append(out, j)
+	}
 	writeJSON(w, 200, out)
+}
+
+// pairingStarts limits new pairings per address: 60 in 10 minutes (a site behind one NAT address may start many
+// kiosks at once; a kiosk asks for a new code every 15 minutes at most). The server itself is not limited.
+var pairingStarts = struct {
+	sync.Mutex
+	m map[string][]time.Time
+}{m: map[string][]time.Time{}}
+
+func pairingRate(key string) bool {
+	if a := net.ParseIP(key); a != nil && a.IsLoopback() {
+		return true
+	}
+	pairingStarts.Lock()
+	defer pairingStarts.Unlock()
+	if len(pairingStarts.m) > 100000 { // bounded memory
+		pairingStarts.m = map[string][]time.Time{}
+	}
+	var recent []time.Time
+	for _, t := range pairingStarts.m[key] {
+		if time.Since(t) < 10*time.Minute {
+			recent = append(recent, t)
+		}
+	}
+	if len(recent) >= 60 {
+		pairingStarts.m[key] = recent
+		return false
+	}
+	pairingStarts.m[key] = append(recent, time.Now())
+	return true
+}
+
+// addrKey groups IPv6 addresses by their /64 (one site or household), IPv4 addresses stay as they are.
+func addrKey(ip string) string {
+	a := net.ParseIP(ip)
+	if a == nil || a.To4() != nil {
+		return ip
+	}
+	return a.Mask(net.CIDRMask(64, 128)).String() + "/64"
 }
 
 // pairFails limits wrong pairing codes per user (10 in 10 minutes).
@@ -631,7 +711,11 @@ func (s *Server) pairDisplay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "display.pair", "display", id, nil, map[string]any{"name": in.Name, "location": in.Location, "content": in.Content, "device_ip": ip, "device_agent": agent}, in.Reason)
-	d, _ := s.loadDisplay(ctx, org, id)
+	d, ok := s.loadDisplay(ctx, org, id)
+	if !ok {
+		writeJSON(w, 201, map[string]any{"id": id, "name": in.Name, "device_ip": ip, "device_agent": agent})
+		return
+	}
 	out := d.json()
 	out["device_ip"], out["device_agent"] = ip, agent
 	writeJSON(w, 201, out)
@@ -694,7 +778,9 @@ func (s *Server) updateDisplay(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "display.update", "display", d.ID, map[string]any{"name": old["name"], "location": old["location"], "content": old["content"], "offline_alert": old["offline_alert"]},
 		map[string]any{"name": d.Name, "location": d.Location, "content": d.Content, "offline_alert": d.OfflineAlert}, in.Reason)
-	d, _ = s.loadDisplay(r.Context(), org, d.ID)
+	if fresh, ok := s.loadDisplay(r.Context(), org, d.ID); ok {
+		d = fresh
+	}
 	writeJSON(w, 200, d.json())
 }
 
@@ -812,11 +898,11 @@ func (s *Server) applyCommand(ctx context.Context, id string, cmd *displayComman
 	return err
 }
 
-func commandAudit(cmd *displayCommand, msg *displayMessage, seconds int) map[string]any {
+func commandAudit(cmd *displayCommand, msg *displayMessage, _ int) map[string]any {
 	if msg != nil {
-		return map[string]any{"action": "message", "text": msg.Text, "level": msg.Level, "seconds": seconds}
+		return map[string]any{"action": "message", "text": msg.Text, "level": msg.Level, "until": msg.Until}
 	}
-	return map[string]any{"action": cmd.Action, "camera": cmd.Name, "seconds": seconds}
+	return map[string]any{"action": cmd.Action, "camera": cmd.Name, "until": cmd.Until}
 }
 
 func (s *Server) commandDisplay(w http.ResponseWriter, r *http.Request) {

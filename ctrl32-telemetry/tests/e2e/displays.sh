@@ -109,6 +109,22 @@ req2 GET /api/v1/video/camera-groups; check "only its group listed" "$(jx "j.fil
 req2 POST "/api/v1/displays/$DID/command" "{\"action\":\"camera\",\"camera\":\"$YARD\"}"; check "operator cannot send a camera outside the groups" "$(st)" 404
 req2 POST "/api/v1/displays/$DID/command" "{\"action\":\"camera\",\"camera\":\"$GATE\"}"; check "operator sends a camera of the group" "$(st)" 200
 req2 POST /api/v1/displays/pair "{\"code\":\"ABCD-EFGH\",\"name\":\"x\",\"content\":$CONTENT,\"reason\":\"e2e\"}"; check "operator cannot pair displays" "$(st)" 403
+# a limited engineer (may manage displays, walls, dashboards, users of their own) cannot route other cameras anywhere
+J3="$TMP/jar3"; CSRF3=""; req3() { call "$J3" "$CSRF3" "$@"; }
+U3=$(req POST /api/v1/users "{\"username\":\"eng_$SUF\",\"full_name\":\"Limited engineer\",\"email\":\"eng$SUF@example.com\",\"roles\":[\"engineer\",\"org_admin\"],\"reason\":\"e2e\"}"; cat "$TMP/b")
+UID3=$(echo "$U3" | node -pe 'JSON.parse(require("fs").readFileSync(0)).user.id'); PW3=$(echo "$U3" | node -pe 'JSON.parse(require("fs").readFileSync(0)).initial_password')
+req PUT "/api/v1/users/$UID3/camera-groups" "{\"limited\":true,\"groups\":[\"gate $SUF\"],\"reason\":\"e2e\"}"
+req3 POST /api/v1/auth/login "{\"username\":\"eng_$SUF\",\"password\":\"$PW3\"}"; req3 GET /api/v1/auth/me; CSRF3=$(jx j.csrf_token)
+req3 POST /api/v1/auth/password "{\"current\":\"$PW3\",\"new\":\"Limited-Engineer-Passw0rd-$SUF\"}"
+req3 POST /api/v1/auth/login "{\"username\":\"eng_$SUF\",\"password\":\"Limited-Engineer-Passw0rd-$SUF\"}"; req3 GET /api/v1/auth/me; CSRF3=$(jx j.csrf_token)
+req3 POST /api/v1/video/walls "{\"name\":\"Sneak $SUF\",\"reason\":\"e2e\",\"screens\":[{\"cols\":1,\"rows\":1,\"tiles\":[\"$YARD\"]}]}"; check "limited: wall with another group's camera refused" "$(st)" 400
+req3 POST /api/v1/dashboards "${DW/CAMID/$YARD}"; check "limited: camera widget of another group refused" "$(st)" 403
+req3 POST /api/v1/displays/pair "{\"code\":\"ABCD-EFGH\",\"name\":\"x\",\"content\":{\"items\":[{\"kind\":\"wall\",\"wall\":\"$WALL\",\"screen\":0}],\"popup\":\"none\"},\"reason\":\"e2e\"}"; check "limited: display with another group's wall refused" "$(st) $(jx 'j.error.includes("outside your camera groups")')" "400 true"
+req3 POST /api/v1/displays/pair "{\"code\":\"ABCD-EFGH\",\"name\":\"x\",\"content\":{\"items\":[{\"kind\":\"dashboard\",\"slug\":\"$OTHER\"}],\"popup\":\"all\"},\"reason\":\"e2e\"}"; check "limited: popups of all cameras refused" "$(st)" 400
+req3 GET /api/v1/video/storage; check "limited: storage lists only own cameras" "$(jx "j.cameras.filter(c => c.name.endsWith(' $SUF')).map(c => c.id).join()")" "$GATE"
+req3 POST /api/v1/users "{\"username\":\"sub_$SUF\",\"full_name\":\"Sub\",\"email\":\"sub$SUF@example.com\",\"roles\":[\"viewer\"],\"reason\":\"e2e\"}"; SUB=$(jx j.user.id)
+req GET "/api/v1/users/$SUB/camera-groups"; check "a user created by a limited admin inherits the limit" "$(jx 'j.limited + " " + j.groups.join()')" "true gate $SUF"
+for u in $UID3 $SUB; do req PATCH "/api/v1/users/$u" '{"disabled":true,"reason":"e2e cleanup"}'; done
 req PUT "/api/v1/users/$UID2/camera-groups" '{"limited":false,"reason":"e2e"}'; req2 GET /api/v1/video/cameras
 check "unlimited again: all cameras at once" "$(jx "j.filter(c => c.name.endsWith(' $SUF')).length")" 3
 req PATCH "/api/v1/users/$UID2" '{"disabled":true,"reason":"e2e cleanup"}'
