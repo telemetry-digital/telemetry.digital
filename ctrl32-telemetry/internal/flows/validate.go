@@ -38,6 +38,7 @@ type Refs interface {
 	Entity(id string) bool
 	MQTTSource(id string) bool
 	Scene(id string) bool
+	Camera(id string) bool
 	// Subflow returns a subflow version (0 = current) of the organization.
 	Subflow(slug string, version int) (SubflowRef, bool)
 	HostAllowed(host string) bool
@@ -300,7 +301,7 @@ func checkSetting(st Setting, v any, refs Refs) (any, string) {
 			return nil, err
 		}
 		return s, ""
-	case "datastream", "device", "channel", "entity", "mqtt_source", "scene":
+	case "datastream", "device", "channel", "entity", "mqtt_source", "scene", "camera":
 		s, _ := v.(string)
 		if !uuidRe.MatchString(s) {
 			return nil, "choose one"
@@ -320,6 +321,8 @@ func checkSetting(st Setting, v any, refs Refs) (any, string) {
 				ok = refs.MQTTSource(s)
 			case "scene":
 				ok = refs.Scene(s)
+			case "camera":
+				ok = refs.Camera(s)
 			}
 		}
 		if !ok {

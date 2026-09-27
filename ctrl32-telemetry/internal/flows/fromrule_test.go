@@ -16,6 +16,7 @@ func (okRefs) Channel(string) bool                           { return true }
 func (okRefs) Entity(string) bool                            { return true }
 func (okRefs) MQTTSource(string) bool                        { return true }
 func (okRefs) Scene(string) bool                             { return true }
+func (okRefs) Camera(string) bool                            { return true }
 func (okRefs) Subflow(slug string, v int) (SubflowRef, bool) { return testSubflowRef(slug, v) }
 func (okRefs) HostAllowed(string) bool                       { return true }
 

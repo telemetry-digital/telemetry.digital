@@ -34,6 +34,10 @@ type Host interface {
 	// SceneActivate runs a scene's actions as entity commands with the flow as origin; it returns how many
 	// commands were issued and how many failed.
 	SceneActivate(ctx context.Context, org, sceneID, flowID, issuer, reason string) (ok, failed int, err error)
+	// CameraMark marks a camera's timeline and records on cameras that record on events (spec 013).
+	CameraMark(ctx context.Context, org, cameraID, label string, seconds int) (int64, error)
+	// CameraName is the display name of a camera.
+	CameraName(ctx context.Context, org, id string) string
 	// EntityName is the display name of an entity.
 	EntityName(ctx context.Context, org, id string) string
 	// SetAttribute sets one shared attribute of a device; issuer and reason name the flow as the origin.

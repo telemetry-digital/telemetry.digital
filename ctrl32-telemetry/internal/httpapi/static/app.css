@@ -644,3 +644,19 @@ body.wall .footer { display: none; }
 .lp-edit:empty::before { content: attr(data-placeholder) "…"; opacity: .4; }
 .lp-img-empty { display: flex; align-items: center; justify-content: center; min-height: 140px; border: 2px dashed color-mix(in srgb, var(--lp-fg) 25%, transparent); border-radius: 10px; font-size: 32px; opacity: .6; }
 body.has-landing main.container { max-width: none; padding: 0; }
+.cam-tile.cam-alert, .wall-grid .cell.cam-alert, .cam-live.cam-alert { box-shadow: inset 0 0 0 3px #f59e0b; }
+.cam-tile.cam-alert::after, .wall-grid .cell.cam-alert::after, .cam-live.cam-alert::after { content: attr(data-active); position: absolute; right: 6px; top: 6px; z-index: 3; background: #f59e0b; color: #111; font: 600 11px var(--font); padding: 1px 6px; border-radius: 4px; }
+.ptz { position: absolute; right: 10px; bottom: 10px; z-index: 3; display: grid; grid-template-columns: repeat(3, 34px); grid-template-rows: repeat(3, 34px); gap: 2px; opacity: .35; transition: opacity .2s; }
+.cam-live:hover .ptz, .ptz:focus-within { opacity: 1; }
+.ptz button { border: 0; border-radius: 6px; background: rgba(15,23,42,.8); color: #fff; font-size: 16px; cursor: pointer; touch-action: none; }
+.ptz button:active { background: var(--primary); }
+.ptz-extra { position: absolute; right: 10px; bottom: 120px; z-index: 3; display: flex; flex-direction: column; gap: 4px; opacity: .35; transition: opacity .2s; }
+.cam-live:hover .ptz-extra { opacity: 1; }
+.ptz-extra button, .ptz-extra select { border: 0; border-radius: 6px; background: rgba(15,23,42,.8); color: #fff; padding: 4px 8px; font-size: 13px; }
+.tl .ev { position: absolute; top: 2px; width: 3px; height: 8px; border-radius: 1px; background: #f59e0b; }
+.tl .ev.k-mark { background: #3b82f6; } .tl .ev.k-tamper, .tl .ev.k-intrusion { background: #dc2626; } .tl .ev.k-line { background: #a855f7; }
+.ev-list { max-height: 220px; overflow: auto; margin-top: 8px; font-size: 13px; }
+.ev-list div { display: flex; gap: 8px; padding: 3px 6px; border-radius: 4px; cursor: pointer; }
+.ev-list div:hover { background: var(--bg2); }
+.ev-kind { display: inline-block; min-width: 90px; font-weight: 600; }
+.cam-live.cam-alert::after { right: auto; left: 8px; top: 36px; }

@@ -123,6 +123,13 @@ func TestDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	mine := devs[:0]
+	for _, d := range devs { // other simulators in the network may answer the multicast probe too
+		if strings.Contains(d.Address, ov.HTTPHost) {
+			mine = append(mine, d)
+		}
+	}
+	devs = mine
 	if len(devs) != 2 || devs[0].Name == "" || !strings.HasSuffix(devs[0].Address, "/device_service") || devs[0].Hardware != "camsim" {
 		t.Fatalf("devices %+v", devs)
 	}

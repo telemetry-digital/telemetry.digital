@@ -28,6 +28,10 @@ type Status struct {
 	Since     time.Time `json:"since,omitzero"`
 	Viewers   int       `json:"viewers"`
 	Recording bool      `json:"recording"`
+	// event recording and ONVIF events (spec 013)
+	RecordMode string   `json:"record_mode,omitempty"` // "events" when the camera records only around events
+	Events     string   `json:"events,omitempty"`      // connected, connecting or the last error of the event connection
+	Active     []string `json:"active,omitempty"`      // kinds of events going on now
 }
 
 // Source is one camera stream (main or sub). It connects while it is kept (recording) or watched, reconnects with a

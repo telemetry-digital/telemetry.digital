@@ -1,0 +1,28 @@
+meta {
+  name: Media profiles of an ONVIF camera
+  type: http
+  seq: 19
+}
+
+post {
+  url: {{baseUrl}}/api/v1/video/onvif/profiles
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "password": "string",
+    "url": "string",
+    "username": "string"
+  }
+}
+
+docs {
+  Media profiles of an ONVIF camera
+  
+  With the stream addresses, so the camera form fills itself. With id and no password the stored password is used. 401 when the camera refuses the credentials.
+  
+  Requires permission `video.manage`.
+}

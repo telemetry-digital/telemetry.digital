@@ -1,17 +1,13 @@
 meta {
-  name: Change a video wall
+  name: Create a video wall
   type: http
-  seq: 17
+  seq: 22
 }
 
-put {
-  url: {{baseUrl}}/api/v1/video/walls/:id
+post {
+  url: {{baseUrl}}/api/v1/video/walls
   body: json
   auth: inherit
-}
-
-params:path {
-  id: 
 }
 
 body:json {
@@ -32,7 +28,7 @@ body:json {
 }
 
 docs {
-  Change a video wall
+  Create a video wall
   
   Requires permission `video.manage`.
 }

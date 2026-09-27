@@ -109,12 +109,17 @@ export type Camera = {
 };
 
 export type CameraStatus = {
+  active?: string[];
   codec?: "h264" | "h265" | "mjpeg";
   /** password removed */
   error?: string;
+  /** ONVIF event connection: connected, connecting or the error */
+  events?: string;
   fps?: number;
   height?: number;
   kbps?: number;
+  /** events when recording only around events */
+  record_mode?: string;
   recording?: boolean;
   since?: string;
   state?: "idle" | "connecting" | "online" | "offline" | "disabled";
@@ -2547,8 +2552,17 @@ export class Ctrl32Client {
    *
    * Requires permission `device.manage`. */
   patchEntitiesId(id: string, body: {
+    event_kinds?: string[];
+    /** 1–600 */
+    event_post_s?: number;
+    /** 0–60, record = events */
+    event_pre_s?: number;
     hidden?: boolean;
     name?: string;
+    /** http://camera/onvif/device_service: events and PTZ (spec 013) */
+    onvif_url?: string;
+    /** empty = the first profile with PTZ */
+    ptz_profile?: string;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
     room_id?: string;
@@ -4938,10 +4952,19 @@ export class Ctrl32Client {
   postScenes(body: {
     actions?: SceneAction[];
     capture?: string[];
+    event_kinds?: string[];
+    /** 1–600 */
+    event_post_s?: number;
+    /** 0–60, record = events */
+    event_pre_s?: number;
     /** icon name */
     icon?: string;
     /** ≤ 80 */
     name: string;
+    /** http://camera/onvif/device_service: events and PTZ (spec 013) */
+    onvif_url?: string;
+    /** empty = the first profile with PTZ */
+    ptz_profile?: string;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
     room_id?: string;
@@ -4958,8 +4981,17 @@ export class Ctrl32Client {
   putScenesId(id: string, body: {
     actions?: SceneAction[];
     capture?: string[];
+    event_kinds?: string[];
+    /** 1–600 */
+    event_post_s?: number;
+    /** 0–60, record = events */
+    event_pre_s?: number;
     icon?: string;
     name?: string;
+    /** http://camera/onvif/device_service: events and PTZ (spec 013) */
+    onvif_url?: string;
+    /** empty = the first profile with PTZ */
+    ptz_profile?: string;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
     room_id?: string;
@@ -5526,15 +5558,25 @@ export class Ctrl32Client {
    * Requires permission `video.manage`. */
   postVideoCameras(body: {
     enabled?: boolean;
+    event_kinds?: string[];
+    /** 1–600 */
+    event_post_s?: number;
+    /** 0–60, record = events */
+    event_pre_s?: number;
     /** ≤ 120 */
     location?: string;
     /** ≤ 80 */
     name: string;
+    /** http://camera/onvif/device_service: events and PTZ (spec 013) */
+    onvif_url?: string;
     /** stored encrypted; omit to keep, "" to clear */
     password?: string;
+    /** empty = the first profile with PTZ */
+    ptz_profile?: string;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
-    record?: "continuous" | "off";
+    /** continuous; events: only around events (pre- and post-roll); off */
+    record?: "continuous" | "events" | "off";
     /** 1–3650, default 7 */
     retention_days?: number;
     sort?: number;
@@ -5578,15 +5620,25 @@ export class Ctrl32Client {
    * Requires permission `video.manage`. */
   putVideoCamerasId(id: string, body: {
     enabled?: boolean;
+    event_kinds?: string[];
+    /** 1–600 */
+    event_post_s?: number;
+    /** 0–60, record = events */
+    event_pre_s?: number;
     /** ≤ 120 */
     location?: string;
     /** ≤ 80 */
     name?: string;
+    /** http://camera/onvif/device_service: events and PTZ (spec 013) */
+    onvif_url?: string;
     /** stored encrypted; omit to keep, "" to clear */
     password?: string;
+    /** empty = the first profile with PTZ */
+    ptz_profile?: string;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
-    record?: "continuous" | "off";
+    /** continuous; events: only around events (pre- and post-roll); off */
+    record?: "continuous" | "events" | "off";
     /** 1–3650, default 7 */
     retention_days?: number;
     sort?: number;
@@ -5617,6 +5669,53 @@ export class Ctrl32Client {
   }>('DELETE', `/api/v1/video/cameras/${encodeURIComponent(id)}`, query, undefined, false);
   }
 
+  /** Events of a camera
+   *
+   * Motion, tampering, line crossing, intrusion and inputs reported by the camera over ONVIF, and marks from flows and people.
+   * 
+   * Requires permission `video.playback`. */
+  getVideoCamerasIdEvents(id: string, query?: { from?: string; /** RFC 3339, required */ to?: string; /** RFC 3339 */ kind?: string; }): Promise<({
+    camera?: string;
+    camera_id?: string;
+    /** null while it lasts */
+    ended_at?: string | null;
+    id?: number;
+    kind?: "motion" | "tamper" | "line" | "intrusion" | "input" | "mark" | "other";
+    label?: string;
+    source?: "camera" | "flow" | "user";
+    started_at?: string;
+  })[]> {
+    return this.request<({
+    camera?: string;
+    camera_id?: string;
+    /** null while it lasts */
+    ended_at?: string | null;
+    id?: number;
+    kind?: "motion" | "tamper" | "line" | "intrusion" | "input" | "mark" | "other";
+    label?: string;
+    source?: "camera" | "flow" | "user";
+    started_at?: string;
+  })[]>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/events`, query, undefined, false);
+  }
+
+  /** Mark a camera
+   *
+   * A mark on the timeline; on a camera recording on events it records the given seconds with the pre-roll before. Audited.
+   * 
+   * Requires permission `video.view`. */
+  postVideoCamerasIdEvents(id: string, body: {
+    /** 1–200 characters */
+    label: string;
+    /** 0–3600 */
+    seconds?: number;
+  }): Promise<{
+    id?: number;
+  }> {
+    return this.request<{
+    id?: number;
+  }>('POST', `/api/v1/video/cameras/${encodeURIComponent(id)}/events`, undefined, body, false);
+  }
+
   /** Download recorded video
    *
    * One MP4 file (fragmented) of at most one hour; a change of resolution or codec ends it early. Written to the audit trail (video.export).
@@ -5642,6 +5741,41 @@ export class Ctrl32Client {
    * Requires permission `video.playback`. */
   getVideoCamerasIdPlayback(id: string, query?: { from?: string; /** RFC 3339, required */ speed?: string; /** 0.25–16, default 1 */ }): Promise<unknown> {
     return this.request<unknown>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/playback`, query, undefined, false);
+  }
+
+  /** Turn and zoom a PTZ camera
+   *
+   * move starts a continuous movement (speeds -1…1) until stop; preset goes to a stored position. Audited (moves once per 5 minutes per user and camera, presets always).
+   * 
+   * Requires permission `video.ptz`. */
+  postVideoCamerasIdPtz(id: string, body: {
+    action: "move" | "stop" | "preset";
+    pan?: number;
+    /** token */
+    preset?: string;
+    tilt?: number;
+    zoom?: number;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/video/cameras/${encodeURIComponent(id)}/ptz`, undefined, body, false);
+  }
+
+  /** PTZ presets
+   *
+   * Requires permission `video.ptz`. */
+  getVideoCamerasIdPtzPresets(id: string): Promise<({
+    name?: string;
+    token?: string;
+  })[]> {
+    return this.request<({
+    name?: string;
+    token?: string;
+  })[]>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/ptz/presets`, undefined, undefined, false);
   }
 
   /** New secret of a remote camera
@@ -5702,6 +5836,95 @@ export class Ctrl32Client {
    * Requires permission `video.view`. */
   getVideoCamerasIdSnapshot(id: string, query?: { quality?: string; /** sub or main */ }): Promise<Response> {
     return this.request<Response>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/snapshot`, query, undefined, true);
+  }
+
+  /** Find ONVIF cameras
+   *
+   * WS-Discovery in the server's network (3 s); extra IP addresses (other subnets) are probed directly.
+   * 
+   * Requires permission `video.manage`. */
+  postVideoDiscover(body: {
+    hosts?: string[];
+  }): Promise<({
+    /** device service */
+    address?: string;
+    hardware?: string;
+    host?: string;
+    name?: string;
+  })[]> {
+    return this.request<({
+    /** device service */
+    address?: string;
+    hardware?: string;
+    host?: string;
+    name?: string;
+  })[]>('POST', `/api/v1/video/discover`, undefined, body, false);
+  }
+
+  /** Events of all cameras
+   *
+   * Requires permission `video.playback`. */
+  getVideoEvents(query?: { from?: string; /** RFC 3339, required */ to?: string; /** RFC 3339 */ kind?: string; /** motion, tamper, line, intrusion, input, mark, other */ }): Promise<({
+    camera?: string;
+    camera_id?: string;
+    /** null while it lasts */
+    ended_at?: string | null;
+    id?: number;
+    kind?: "motion" | "tamper" | "line" | "intrusion" | "input" | "mark" | "other";
+    label?: string;
+    source?: "camera" | "flow" | "user";
+    started_at?: string;
+  })[]> {
+    return this.request<({
+    camera?: string;
+    camera_id?: string;
+    /** null while it lasts */
+    ended_at?: string | null;
+    id?: number;
+    kind?: "motion" | "tamper" | "line" | "intrusion" | "input" | "mark" | "other";
+    label?: string;
+    source?: "camera" | "flow" | "user";
+    started_at?: string;
+  })[]>('GET', `/api/v1/video/events`, query, undefined, false);
+  }
+
+  /** Media profiles of an ONVIF camera
+   *
+   * With the stream addresses, so the camera form fills itself. With id and no password the stored password is used. 401 when the camera refuses the credentials.
+   * 
+   * Requires permission `video.manage`. */
+  postVideoOnvifProfiles(body: {
+    id?: string;
+    password?: string;
+    /** http://camera/onvif/device_service */
+    url: string;
+    username?: string;
+  }): Promise<{
+    events?: boolean;
+    profiles?: ({
+      encoding?: string;
+      height?: number;
+      name?: string;
+      ptz?: boolean;
+      token?: string;
+      uri?: string;
+      width?: number;
+    })[];
+    ptz?: boolean;
+  }> {
+    return this.request<{
+    events?: boolean;
+    profiles?: ({
+      encoding?: string;
+      height?: number;
+      name?: string;
+      ptz?: boolean;
+      token?: string;
+      uri?: string;
+      width?: number;
+    })[];
+    ptz?: boolean;
+  }>('POST', `/api/v1/video/onvif/profiles`, undefined, body, false);
   }
 
   /** Space used by recordings

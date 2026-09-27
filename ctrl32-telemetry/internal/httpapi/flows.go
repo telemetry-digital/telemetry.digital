@@ -31,6 +31,7 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/notify"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/rules"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/smarthome"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/video"
 )
 
 // ---- references for validation ------------------------------------------------------------------------------------
@@ -63,6 +64,9 @@ func (f flowRefs) MQTTSource(id string) bool {
 }
 func (f flowRefs) Scene(id string) bool {
 	return f.exists(`SELECT EXISTS (SELECT 1 FROM core.scene WHERE id = $1::uuid AND org_id = $2::uuid AND removed_at IS NULL)`, id)
+}
+func (f flowRefs) Camera(id string) bool {
+	return f.exists(`SELECT EXISTS (SELECT 1 FROM core.camera WHERE id = $1::uuid AND org_id = $2::uuid AND removed_at IS NULL)`, id)
 }
 func (f flowRefs) Subflow(slug string, version int) (flows.SubflowRef, bool) {
 	var raw []byte
@@ -864,6 +868,28 @@ func (h *flowHost) RunCommand(ctx context.Context, org, dev, method string, args
 		return "", "", "", err
 	}
 	return res.ID, res.Status, res.Error, nil
+}
+
+// CameraMark marks a camera of the organization from a flow (spec 013).
+func (h *flowHost) CameraMark(ctx context.Context, org, cameraID, label string, seconds int) (int64, error) {
+	var n int
+	_ = h.s.pool.QueryRow(ctx, `SELECT count(*) FROM core.camera WHERE id = $1::uuid AND org_id = $2::uuid AND removed_at IS NULL`, cameraID, org).Scan(&n)
+	if n == 0 || h.s.video == nil {
+		return 0, video.ErrNoCamera
+	}
+	if len([]rune(label)) > 200 {
+		label = string([]rune(label)[:200])
+	}
+	return h.s.video.Mark(cameraID, "mark", "flow", label, seconds)
+}
+
+// CameraName is the display name of a camera.
+func (h *flowHost) CameraName(ctx context.Context, org, id string) string {
+	var name string
+	if err := h.s.pool.QueryRow(ctx, `SELECT name FROM core.camera WHERE id = $1::uuid AND org_id = $2::uuid`, id, org).Scan(&name); err != nil {
+		return id
+	}
+	return name
 }
 
 func (h *flowHost) EntityName(ctx context.Context, org, id string) string {

@@ -154,7 +154,7 @@ func (f *flow) process(n *rnode, m *Message, dry bool) {
 			n.st["last_at"] = time.Now()
 		}
 		f.emit(n, 0, m, dry)
-	case "alarm_event", "device_state", "schedule", "webhook", "entity", "command_result", "mqtt_in", "sub_in", "sub_out":
+	case "alarm_event", "device_state", "schedule", "webhook", "entity", "command_result", "mqtt_in", "sub_in", "sub_out", "camera_event":
 		f.emit(n, 0, m, dry)
 	case "split":
 		v, err := f.eval(n, "list", m)
@@ -622,6 +622,31 @@ func (f *flow) process(n *rnode, m *Message, dry bool) {
 			}
 			return map[string]Value{"command_id": id, "status": status}, nil
 		}, "entity "+service)
+	case "camera_mark":
+		cam := str("camera")
+		label, err := f.render(str("label"), m)
+		if err != nil {
+			f.fail(n, m, err)
+			return
+		}
+		if label == "" {
+			label = f.name
+		}
+		secs := 30
+		if v, ok := n.spec.Settings["seconds"].(float64); ok {
+			secs = int(v)
+		}
+		if dry || f.temp {
+			f.dryAction(n, m, "would mark the camera: "+label)
+			return
+		}
+		f.act(n, m, func(ctx context.Context) (map[string]Value, error) {
+			id, err := f.e.host.CameraMark(ctx, f.org, cam, label, secs)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]Value{"event_id": float64(id)}, nil
+		}, "camera marked")
 	case "scene":
 		sc := str("scene")
 		if dry || f.temp {
@@ -972,7 +997,7 @@ func (e *Engine) OnObservations(ctx context.Context, obs []ingest.Observation) {
 
 // OnEvent receives alarm and device events from the live hub (tap).
 func (e *Engine) OnEvent(ev live.Event) {
-	if ev.Type != "alarm" && ev.Type != "device" && ev.Type != "entity" && ev.Type != "command" {
+	if ev.Type != "alarm" && ev.Type != "device" && ev.Type != "entity" && ev.Type != "command" && ev.Type != "camera" {
 		return
 	}
 	if ev.Type == "command" && ev.Status != "acked" && ev.Status != "failed" && ev.Status != "expired" && ev.Status != "rejected" {
@@ -996,7 +1021,8 @@ func (e *Engine) OnEvent(ev live.Event) {
 				continue
 			}
 			if (ev.Type == "alarm" && n.spec.Type == "alarm_event") || (ev.Type == "device" && n.spec.Type == "device_state") ||
-				(ev.Type == "entity" && n.spec.Type == "entity") || (ev.Type == "command" && n.spec.Type == "command_result") {
+				(ev.Type == "entity" && n.spec.Type == "entity") || (ev.Type == "command" && n.spec.Type == "command_result") ||
+				(ev.Type == "camera" && n.spec.Type == "camera_event") {
 				targets = append(targets, trigRef{f, id})
 			}
 		}
@@ -1031,6 +1057,32 @@ func (e *Engine) OnEvent(ev live.Event) {
 			}
 			m = &Message{Topic: name, Value: v, TS: time.Now().UTC(), Source: &Source{Kind: "alarm", ID: ev.AlarmID, Name: name},
 				Fields: map[string]Value{"event": state, "severity": ev.Severity, "alarm_id": ev.AlarmID}, Trigger: "alarm " + state + " on " + name}
+		case "camera":
+			d, _ := ev.Detail.(map[string]any)
+			camID, _ := d["camera_id"].(string)
+			kind, _ := d["kind"].(string)
+			phase, _ := d["phase"].(string)
+			if cam, _ := s["camera"].(string); cam != "" && cam != camID {
+				continue
+			}
+			if kinds, _ := toStrings(s["kinds"]); !contains(kinds, kind) {
+				continue
+			}
+			ph := phase
+			if ph == "pulse" {
+				ph = "start"
+			}
+			if phases, _ := toStrings(s["phases"]); !contains(phases, ph) {
+				continue
+			}
+			name, _ := d["camera"].(string)
+			label, _ := d["label"].(string)
+			var eid Value
+			if id, ok := d["event_id"].(int64); ok {
+				eid = float64(id)
+			}
+			m = &Message{Topic: name, Value: ph == "start", TS: time.Now().UTC(), Source: &Source{Kind: "camera", ID: camID, Name: name},
+				Fields: map[string]Value{"kind": kind, "phase": phase, "camera_id": camID, "event_id": eid, "label": label}, Trigger: "camera " + name + " " + kind + " " + phase}
 		case "device":
 			if dev, _ := s["device"].(string); dev != "" && dev != ev.DeviceID {
 				continue

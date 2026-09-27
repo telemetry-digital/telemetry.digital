@@ -22,6 +22,7 @@ func (fakeRefs) Channel(id string) bool                        { return id == ch
 func (fakeRefs) Entity(id string) bool                         { return id == entA }
 func (fakeRefs) MQTTSource(id string) bool                     { return id == srcA }
 func (fakeRefs) Scene(id string) bool                          { return id == srcA }
+func (fakeRefs) Camera(id string) bool                         { return id == srcA }
 func (fakeRefs) Subflow(slug string, v int) (SubflowRef, bool) { return testSubflowRef(slug, v) }
 func (fakeRefs) HostAllowed(h string) bool                     { return h == "hooks.example.com" }
 

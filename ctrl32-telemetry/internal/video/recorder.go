@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -19,6 +20,43 @@ type recorder struct {
 	src    *Source
 	cancel context.CancelFunc
 	done   chan struct{}
+
+	// event recording: files are written only while armed; the last pre seconds are kept in memory so a file
+	// starts before the event
+	events bool
+	pre    time.Duration
+	mu     sync.Mutex
+	holds  map[string]bool
+	until  time.Time
+}
+
+// hold arms the recorder while an event lasts.
+func (r *recorder) hold(key string, on bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if on {
+		r.holds[key] = true
+	} else {
+		delete(r.holds, key)
+	}
+}
+
+// extend arms the recorder at least until t.
+func (r *recorder) extend(t time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if t.After(r.until) {
+		r.until = t
+	}
+}
+
+func (r *recorder) armed(now time.Time) bool {
+	if !r.events {
+		return true
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.holds) > 0 || now.Before(r.until)
 }
 
 type segment struct {
@@ -33,9 +71,9 @@ type segment struct {
 	flushed time.Time
 }
 
-func (m *Manager) startRecorder(camID string, src *Source) *recorder {
+func (m *Manager) startRecorder(camID string, src *Source, events bool, pre time.Duration) *recorder {
 	ctx, cancel := context.WithCancel(context.Background())
-	r := &recorder{m: m, camID: camID, src: src, cancel: cancel, done: make(chan struct{})}
+	r := &recorder{m: m, camID: camID, src: src, cancel: cancel, done: make(chan struct{}), events: events, pre: pre, holds: map[string]bool{}}
 	go r.run(ctx)
 	return r
 }
@@ -50,6 +88,7 @@ func (r *recorder) run(ctx context.Context) {
 	sub := r.src.Subscribe()
 	defer sub.Close()
 	var seg *segment
+	var buf []Packet
 	defer func() { r.close(seg) }()
 	tick := time.NewTicker(10 * time.Second)
 	defer tick.Stop()
@@ -65,34 +104,84 @@ func (r *recorder) run(ctx context.Context) {
 			if !ok {
 				return
 			}
-			s := p.Sample
-			if seg != nil && (p.Track != seg.track || (s.Key && s.Time.Sub(seg.first) >= SegmentLength) || s.Time.Sub(seg.last) > 10*time.Second) {
-				r.close(seg)
-				seg = nil
-			}
-			if seg == nil {
-				if !s.Key {
+			if r.events {
+				armed := r.armed(time.Now())
+				if seg == nil {
+					buf = r.preroll(buf, p)
+					if !armed || len(buf) == 0 {
+						continue
+					}
+					// start the file with the buffered frames (from a key frame up to pre before now)
+					for _, q := range buf[:len(buf)-1] {
+						seg = r.write(seg, q)
+					}
+					buf = buf[:0]
+				} else if !armed {
+					r.close(seg)
+					seg = nil
+					buf = r.preroll(buf[:0], p)
 					continue
 				}
-				var err error
-				if seg, err = r.open(p.Track, s); err != nil {
-					r.m.log.Error("recording not started", "camera", r.camID, "err", err)
-					continue
-				}
 			}
-			frag, err := seg.mux.Push(s)
-			if err == nil && frag != nil {
-				err = seg.write(frag)
-			}
-			if err != nil {
-				r.m.log.Error("recording write failed", "camera", r.camID, "err", err)
-				r.close(seg)
-				seg = nil
-				continue
-			}
-			seg.last = s.Time
+			seg = r.write(seg, p)
 		}
 	}
+}
+
+// preroll keeps the frames of the last pre seconds, starting at a key frame.
+func (r *recorder) preroll(buf []Packet, p Packet) []Packet {
+	if len(buf) > 0 && buf[len(buf)-1].Track != p.Track {
+		buf = buf[:0]
+	}
+	if len(buf) == 0 && !p.Sample.Key {
+		return buf
+	}
+	buf = append(buf, p)
+	cut := p.Sample.Time.Add(-r.pre)
+	// drop GOPs that end before the cut: keep the last key frame at or before it
+	last := 0
+	for i, q := range buf {
+		if q.Sample.Key && !q.Sample.Time.After(cut) {
+			last = i
+		}
+	}
+	if last > 0 {
+		buf = append(buf[:0], buf[last:]...)
+	}
+	if len(buf) > 20000 { // safety net for streams without key frames
+		buf = buf[len(buf)-20000:]
+	}
+	return buf
+}
+
+// write adds one frame, opening and rotating files as needed; it returns the current segment.
+func (r *recorder) write(seg *segment, p Packet) *segment {
+	s := p.Sample
+	if seg != nil && (p.Track != seg.track || (s.Key && s.Time.Sub(seg.first) >= SegmentLength) || s.Time.Sub(seg.last) > 10*time.Second) {
+		r.close(seg)
+		seg = nil
+	}
+	if seg == nil {
+		if !s.Key {
+			return nil
+		}
+		var err error
+		if seg, err = r.open(p.Track, s); err != nil {
+			r.m.log.Error("recording not started", "camera", r.camID, "err", err)
+			return nil
+		}
+	}
+	frag, err := seg.mux.Push(s)
+	if err == nil && frag != nil {
+		err = seg.write(frag)
+	}
+	if err != nil {
+		r.m.log.Error("recording write failed", "camera", r.camID, "err", err)
+		r.close(seg)
+		return nil
+	}
+	seg.last = s.Time
+	return seg
 }
 
 func (r *recorder) open(t *Track, s *Sample) (*segment, error) {

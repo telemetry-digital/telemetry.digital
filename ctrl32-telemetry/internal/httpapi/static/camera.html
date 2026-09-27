@@ -33,6 +33,7 @@
       <button type="button" class="pb" id="bZoomIn" title="Zoom in (+, mouse wheel)"></button>
       <button type="button" class="pb" id="bZoomReset" title="Whole picture (0, double click)"></button>
       <span class="pb-sep"></span>
+      <button type="button" class="pb" id="bMark" title="Mark this moment (records on cameras that record on events)"></button>
       <button type="button" class="pb" id="bSnap" title="Save picture"></button>
       <button type="button" class="pb" id="bFull" title="Full screen (F)"></button>
     </div>
@@ -51,8 +52,9 @@
       <span class="muted" style="font-size:12px">Detail of one hour: click to play, drag to select a part for download</span></div>
     <div class="tl" id="tl2" style="margin-top:6px"></div>
     <div class="tl-ax" id="ax2"></div>
-    <div class="row" style="margin-top:8px"><span class="grow"></span>
+    <div class="row" style="margin-top:8px"><span class="muted" style="font-size:12px" id="evLegend"></span><span class="grow"></span>
       <span class="muted" id="selInfo"></span><button class="btn small" type="button" id="export" disabled>Download selection (MP4)</button></div>
+    <div class="ev-list" id="evList"></div>
     <p class="muted" style="font-size:12px;margin-bottom:0">Viewing and downloading recordings is written to the audit trail. Recording continues while you watch or play back.</p>
   </div>
 </main>
@@ -73,8 +75,10 @@ const ICONS = {
   zoomReset: I('<path d="M4 8v-2a2 2 0 0 1 2 -2h2"/><path d="M4 16v2a2 2 0 0 0 2 2h2"/><path d="M16 4h2a2 2 0 0 1 2 2v2"/><path d="M16 20h2a2 2 0 0 0 2 -2v-2"/>'),
   snap: I('<path d="M5 7h1a2 2 0 0 0 2 -2a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2"/><circle cx="12" cy="13" r="3"/>'),
   full: I('<path d="M16 4h4v4"/><path d="M14 10l6 -6"/><path d="M8 20h-4v-4"/><path d="M4 20l6 -6"/>'),
+  mark: I('<path d="M5 5a5 5 0 0 1 7 0a5 5 0 0 0 7 0v9a5 5 0 0 1 -7 0a5 5 0 0 0 -7 0v-9z"/><path d="M5 21v-7"/>'),
 };
 const SPEEDS = [0.5, 1, 2, 4, 8, 16];
+let EVENTS = [];
 let CAM = null, P = null, MODE = 'live', PAUSED = false, DAY = new Date(), SPANS = [], CUR = null, SEL = null, ME = null, SPEED = 1;
 const can = p => !!(ME && (ME.permissions || []).includes(p));
 const dayStart = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
@@ -161,6 +165,47 @@ document.addEventListener('keydown', e => {
   else if (k === 'f' || k === 'F') $('#bFull').click();
 });
 
+// ---- events: list, marks and PTZ ---------------------------------------------------------------------------------
+const KIND = {motion: 'Motion', tamper: 'Tampering', line: 'Line crossing', intrusion: 'Intrusion', input: 'Input', mark: 'Mark', other: 'Event'};
+function evList() {
+  $('#evList').innerHTML = EVENTS.slice(0, 300).map((ev, i) => `<div data-ev="${i}"><span class="notranslate">${hm(ev.s)}</span><span class="ev-kind">${esc(t(KIND[ev.kind] || ev.kind))}</span><span class="muted notranslate">${esc(ev.label || '')}${ev.ended_at ? ' · ' + Math.max(1, Math.round((ev.e - ev.s) / 1000)) + ' s' : ev.kind !== 'mark' ? ' · ' + t('going on') : ''}</span></div>`).join('') ||
+    `<span class="muted">${esc(t('No events on this day.'))}</span>`;
+  $('#evLegend').textContent = EVENTS.length ? `${EVENTS.length} ${t('events')}` : '';
+  for (const d of document.querySelectorAll('[data-ev]')) d.onclick = () => { const ev = EVENTS[+d.dataset.ev]; playFrom(ev.s - ((CAM.event_pre_s || 5) * 1000)); };
+}
+$('#bMark').onclick = async () => {
+  const label = ctrl32.ask('What happened? (the mark is written to the timeline and the audit trail)'); if (!label) return;
+  try { await api('POST', `/api/v1/video/cameras/${ID}/events`, {label, seconds: 60}); ctrl32.toast(t('marked'), 'ok'); if (can('video.playback')) loadRecordings(); } catch (x) { ctrl32.toast(x.message, 'bad'); }
+};
+// PTZ: holding a direction moves the camera, letting go stops it
+function ptzUI() {
+  if (!CAM.onvif || !can('video.ptz')) return;
+  const pad = document.createElement('div'); pad.className = 'ptz';
+  const B = [['↖', -.5, .5], ['▲', 0, .6], ['↗', .5, .5], ['◀', -.6, 0], ['■', 0, 0], ['▶', .6, 0], ['↙', -.5, -.5], ['▼', 0, -.6], ['↘', .5, -.5]];
+  pad.innerHTML = B.map(([l, x, y], i) => `<button type="button" data-i="${i}" title="${esc(t(i === 4 ? 'Stop' : 'Hold to turn'))}">${l}</button>`).join('');
+  const extra = document.createElement('div'); extra.className = 'ptz-extra';
+  extra.innerHTML = `<button type="button" data-z="1" title="${esc(t('Hold to zoom in'))}">＋</button><button type="button" data-z="-1" title="${esc(t('Hold to zoom out'))}">－</button><select id="presets" title="${esc(t('Presets'))}"><option value="">${esc(t('Presets'))}</option></select>`;
+  $('#stage').append(pad, extra);
+  const send = (body) => api('POST', `/api/v1/video/cameras/${ID}/ptz`, body).catch(x => ctrl32.toast(x.message, 'bad'));
+  const hold = (btn, body) => {
+    const start = (e) => { e.preventDefault(); e.stopPropagation(); send(body); };
+    const stop = (e) => { e.stopPropagation(); send({action: 'stop'}); };
+    btn.addEventListener('pointerdown', start); btn.addEventListener('pointerup', stop); btn.addEventListener('pointerleave', (e) => { if (e.buttons) stop(e); });
+    btn.addEventListener('click', (e) => e.stopPropagation());
+  };
+  for (const b of pad.querySelectorAll('button')) { const [, x, y] = B[+b.dataset.i]; if (+b.dataset.i === 4) b.onclick = (e) => { e.stopPropagation(); send({action: 'stop'}); }; else hold(b, {action: 'move', pan: x, tilt: y, zoom: 0}); }
+  for (const b of extra.querySelectorAll('[data-z]')) hold(b, {action: 'move', pan: 0, tilt: 0, zoom: +b.dataset.z * .6});
+  api('GET', `/api/v1/video/cameras/${ID}/ptz/presets`).then(ps => { $('#presets').innerHTML += ps.map(p => `<option value="${esc(p.token)}">${esc(p.name || p.token)}</option>`).join(''); }).catch(() => {});
+  $('#presets').onchange = (e) => { if (e.target.value) send({action: 'preset', preset: e.target.value}); e.target.value = ''; };
+  $('#presets').onclick = (e) => e.stopPropagation();
+}
+// live activity from the camera's status
+async function activity() {
+  try { const c = await api('GET', '/api/v1/video/cameras/' + ID); const a = (c.status.active || []).map(k => t(KIND[k] || k));
+    $('#stage').classList.toggle('cam-alert', a.length > 0); $('#stage').dataset.active = a.join(', ');
+  } catch (x) { /* next time */ }
+}
+
 // ---- timeline: the day, and one hour in detail --------------------------------------------------------------------
 const DAYMS = 86400000, HOURMS = 3600000;
 let HOUR = null;
@@ -170,6 +215,8 @@ async function loadRecordings() {
   try {
     const r = await api('GET', `/api/v1/video/cameras/${ID}/recordings?from=${from.toISOString()}&to=${to.toISOString()}`);
     SPANS = r.spans.map(s => [Date.parse(s.from), Date.parse(s.to)]);
+    EVENTS = (await api('GET', `/api/v1/video/cameras/${ID}/events?from=${from.toISOString()}&to=${to.toISOString()}`).catch(() => [])).map(e => ({...e, s: Date.parse(e.started_at), e: e.ended_at ? Date.parse(e.ended_at) : Date.now()}));
+    evList();
     const mins = Math.round(SPANS.reduce((a, s) => a + (s[1] - s[0]), 0) / 60000);
     $('#recInfo').textContent = SPANS.length ? `${t('Recorded')}: ${Math.floor(mins / 60)} h ${mins % 60} min · ${r.files} ${t('files')}` : t('No recording on this day');
   } catch (x) { SPANS = []; $('#recInfo').textContent = x.message; }
@@ -182,6 +229,7 @@ function drawBar(id) {
   const nowX = Date.now() > w[0] && Date.now() < w[1] ? `<div class="now" style="left:${frac(Date.now(), w) * 100}%" title="${esc(t('now'))}"></div>` : '';
   el.innerHTML = SPANS.filter(([a, b]) => b > w[0] && a < w[1]).map(([a, b]) => `<div class="span" style="left:${frac(a, w) * 100}%;width:${Math.max(0.15, (frac(b, w) - frac(a, w)) * 100)}%"></div>`).join('') +
     (id === 'tl' ? `<div class="sel" style="left:${frac(HOUR, w) * 100}%;width:${100 / 24}%;background:transparent;border-color:var(--muted)"></div>` : '') +
+    EVENTS.filter(ev => ev.e >= w[0] && ev.s <= w[1]).map(ev => `<div class="ev k-${ev.kind}" style="left:${frac(ev.s, w) * 100}%;${id === 'tl2' ? `width:${Math.max(0.3, (frac(ev.e, w) - frac(ev.s, w)) * 100)}%;` : ''}" title="${esc(hm(ev.s) + ' ' + t(ev.kind) + (ev.label ? ': ' + ev.label : ''))}"></div>`).join('') +
     (id === 'tl2' && SEL ? `<div class="sel" style="left:${frac(Math.min(...SEL), w) * 100}%;width:${Math.abs(frac(SEL[1], w) - frac(SEL[0], w)) * 100}%"></div>` : '') + nowX + '<div class="cur" hidden></div>';
 }
 function drawTimeline() {
@@ -232,12 +280,13 @@ $('#day').onchange = e => { if (e.target.value) { DAY = new Date(e.target.value 
 ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(async ({me}) => {
   ME = me;
   for (const [id, ic] of [['bPrevSpan', ICONS.prevSpan], ['bBack60', ICONS.back('60')], ['bBack10', ICONS.back('10')], ['bFwd10', ICONS.fwd('10')], ['bFwd60', ICONS.fwd('60')],
-    ['bZoomIn', ICONS.zoomIn], ['bZoomOut', ICONS.zoomOut], ['bZoomReset', ICONS.zoomReset], ['bSnap', ICONS.snap], ['bFull', ICONS.full]]) $('#' + id).innerHTML = ic;
+    ['bZoomIn', ICONS.zoomIn], ['bZoomOut', ICONS.zoomOut], ['bZoomReset', ICONS.zoomReset], ['bSnap', ICONS.snap], ['bFull', ICONS.full], ['bMark', ICONS.mark]]) $('#' + id).innerHTML = ic;
   $('#speedGroup').innerHTML = SPEEDS.map(s => `<button type="button" data-s="${s}">${s}×</button>`).join('');
   for (const b of document.querySelectorAll('#speedGroup button')) b.onclick = () => { SPEED = +b.dataset.s; if (MODE === 'rec' && !PAUSED && CUR) playFrom(CUR); else ui(); };
   try { CAM = await api('GET', '/api/v1/video/cameras/' + ID); } catch (x) { $('main').innerHTML = `<div class="card">${esc(x.message)}</div>`; return; }
   $('#name').textContent = CAM.name; $('#loc').textContent = CAM.location; document.title = CAM.name;
   if (!CAM.enabled) $('#info').textContent = t('The camera is disabled.');
+  ptzUI(); activity(); setInterval(() => { if (!document.hidden) activity(); }, 3000);
   if (can('video.playback')) { $('#recPanel').hidden = false; await loadRecordings(); setInterval(() => { if (!document.hidden && dayStart(DAY).getTime() === dayStart(Date.now()).getTime()) loadRecordings(); }, 30000); }
   const q = new URLSearchParams(location.search);
   if (q.get('t') && can('video.playback')) playFrom(+q.get('t')); else live();

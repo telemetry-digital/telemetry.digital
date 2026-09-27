@@ -62,6 +62,7 @@
         case 'mqtt_in': return (s.topic || '') + ' · ' + (((lists.sources || []).find((x) => x.id === s.source) || {}).label || '');
         case 'mqtt_out': return (s.topic || '') + ' · ' + (((lists.sources || []).find((x) => x.id === s.source) || {}).label || '');
         case 'scene': return (((lists.scenes || []).find((x) => x.id === s.scene) || {}).label || '');
+        case 'camera_event': case 'camera_mark': return (((lists.cameras || []).find((x) => x.id === s.camera) || {}).label || (n.type === 'camera_event' ? 'any camera' : ''));
         case 'notify': return ((lists.channels.find((x) => x.id === s.channel) || {}).label || '');
         case 'aggregate': return `${s.fn || 'avg'} / ${s.window_s ?? ''} s`;
         case 'deadband': return `± ${s.band ?? ''}${s.percent ? ' %' : ''}`;
@@ -234,6 +235,7 @@
         case 'device': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.devices, v)}</select>${help}</label>`;
         case 'entity': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.entities || [], v)}</select>${help}</label>`;
         case 'scene': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.scenes || [], v)}</select>${help}</label>`;
+        case 'camera': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.cameras || [], v)}</select>${help}</label>`;
         case 'mqtt_source': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.sources || [], v)}</select>${help}</label>`;
         case 'channel': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.channels, v)}</select>${help}</label>`;
         case 'subflow': return `<label>${lab} <select data-s="${p.name}"><option value="">—</option>${opt(lists.subflows || [], v)}</select>${help}</label>`;

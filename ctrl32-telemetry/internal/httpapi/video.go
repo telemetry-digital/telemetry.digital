@@ -27,6 +27,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -37,42 +38,54 @@ import (
 )
 
 type cameraIn struct {
-	Name          *string `json:"name"`
-	Location      *string `json:"location"`
-	URL           *string `json:"url"`
-	SubURL        *string `json:"sub_url"`
-	Username      *string `json:"username"`
-	Password      *string `json:"password"`
-	Transport     *string `json:"transport"`
-	Record        *string `json:"record"`
-	RetentionDays *int    `json:"retention_days"`
-	Enabled       *bool   `json:"enabled"`
-	Sort          *int    `json:"sort"`
-	Source        *string `json:"source"` // pull (the server connects to the camera) or push (a relay sends the video)
-	Reason        string  `json:"reason"`
+	Name          *string   `json:"name"`
+	Location      *string   `json:"location"`
+	URL           *string   `json:"url"`
+	SubURL        *string   `json:"sub_url"`
+	Username      *string   `json:"username"`
+	Password      *string   `json:"password"`
+	Transport     *string   `json:"transport"`
+	Record        *string   `json:"record"`
+	RetentionDays *int      `json:"retention_days"`
+	Enabled       *bool     `json:"enabled"`
+	Sort          *int      `json:"sort"`
+	Source        *string   `json:"source"` // pull (the server connects to the camera) or push (a relay sends the video)
+	OnvifURL      *string   `json:"onvif_url"`
+	PTZProfile    *string   `json:"ptz_profile"`
+	EventPre      *int      `json:"event_pre_s"`
+	EventPost     *int      `json:"event_post_s"`
+	EventKinds    *[]string `json:"event_kinds"`
+	Reason        string    `json:"reason"`
 }
 
 type cameraRow struct {
 	id, name, location, url, subURL, username, sealed, transport, record string
 	source, pushSealed                                                   string
+	onvifURL, ptzProfile                                                 string
+	eventPre, eventPost                                                  int
+	eventKinds                                                           []string
 	retention, sort                                                      int
 	enabled                                                              bool
 }
 
 func (s *Server) cameraRow(ctx context.Context, org, id string) (cameraRow, bool) {
 	var c cameraRow
-	err := s.pool.QueryRow(ctx, `SELECT id::text, name, location, url, sub_url, username, password_sealed, transport, record, retention_days, sort, enabled, source, push_secret_sealed
+	err := s.pool.QueryRow(ctx, `SELECT id::text, name, location, url, sub_url, username, password_sealed, transport, record, retention_days, sort, enabled, source, push_secret_sealed,
+		onvif_url, ptz_profile, event_pre_s, event_post_s, event_kinds
 		FROM core.camera WHERE id = $1::uuid AND org_id = $2::uuid AND removed_at IS NULL`, id, org).
-		Scan(&c.id, &c.name, &c.location, &c.url, &c.subURL, &c.username, &c.sealed, &c.transport, &c.record, &c.retention, &c.sort, &c.enabled, &c.source, &c.pushSealed)
+		Scan(&c.id, &c.name, &c.location, &c.url, &c.subURL, &c.username, &c.sealed, &c.transport, &c.record, &c.retention, &c.sort, &c.enabled, &c.source, &c.pushSealed,
+			&c.onvifURL, &c.ptzProfile, &c.eventPre, &c.eventPost, &c.eventKinds)
 	return c, err == nil
 }
 
 // cameraJSON shows stream addresses only to managers (they reveal the network).
 func (s *Server) cameraJSON(r *http.Request, c cameraRow) map[string]any {
 	out := map[string]any{"id": c.id, "name": c.name, "location": c.location, "record": c.record, "retention_days": c.retention,
-		"sort": c.sort, "enabled": c.enabled, "has_sub": c.subURL != "" || c.source == "push", "source": c.source}
+		"sort": c.sort, "enabled": c.enabled, "has_sub": c.subURL != "" || c.source == "push", "source": c.source,
+		"onvif": c.onvifURL != "", "event_pre_s": c.eventPre, "event_post_s": c.eventPost, "event_kinds": c.eventKinds}
 	if p := PrincipalFrom(r.Context()); p.Has("video.manage") {
 		out["url"], out["sub_url"], out["username"], out["transport"], out["has_password"] = c.url, c.subURL, c.username, c.transport, c.sealed != ""
+		out["onvif_url"], out["ptz_profile"] = c.onvifURL, c.ptzProfile
 		if c.source == "push" {
 			base := ""
 			if s.video != nil {
@@ -221,8 +234,47 @@ func (s *Server) applyCamera(in *cameraIn, c *cameraRow, pw **string) string {
 	if in.Record != nil {
 		c.record = *in.Record
 	}
-	if c.record != "off" && c.record != "continuous" {
-		return "record: off or continuous"
+	if c.record != "off" && c.record != "continuous" && c.record != "events" {
+		return "record: off, continuous or events"
+	}
+	if in.OnvifURL != nil {
+		c.onvifURL = strings.TrimSpace(*in.OnvifURL)
+	}
+	if c.onvifURL != "" {
+		if u, err := url.Parse(c.onvifURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
+			return "onvif_url: http(s)://camera/onvif/device_service without credentials"
+		}
+		if c.source == "push" {
+			return "onvif_url: not for cameras that send their video through a relay"
+		}
+	}
+	if in.PTZProfile != nil {
+		c.ptzProfile = strings.TrimSpace(*in.PTZProfile)
+		if len(c.ptzProfile) > 64 {
+			return "ptz_profile: at most 64 characters"
+		}
+	}
+	if in.EventPre != nil {
+		c.eventPre = *in.EventPre
+	}
+	if in.EventPost != nil {
+		c.eventPost = *in.EventPost
+	}
+	if c.eventPre < 0 || c.eventPre > 60 || c.eventPost < 1 || c.eventPost > 600 {
+		return "event_pre_s 0 to 60, event_post_s 1 to 600"
+	}
+	if in.EventKinds != nil {
+		c.eventKinds = []string{}
+		for _, k := range *in.EventKinds {
+			switch k {
+			case "motion", "tamper", "line", "intrusion", "input", "mark", "other":
+				if !slices.Contains(c.eventKinds, k) {
+					c.eventKinds = append(c.eventKinds, k)
+				}
+			default:
+				return "event_kinds: motion, tamper, line, intrusion, input, mark, other"
+			}
+		}
 	}
 	if in.RetentionDays != nil {
 		c.retention = *in.RetentionDays
@@ -249,7 +301,8 @@ func (s *Server) createCamera(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err.Error())
 		return
 	}
-	c := cameraRow{transport: "auto", record: "continuous", retention: 7, enabled: true, source: "pull"}
+	c := cameraRow{transport: "auto", record: "continuous", retention: 7, enabled: true, source: "pull", eventPre: 10, eventPost: 20,
+		eventKinds: []string{"motion", "tamper", "line", "intrusion", "input", "mark"}}
 	var pw *string
 	if msg := s.applyCamera(&in, &c, &pw); msg != "" {
 		writeErr(w, 400, msg)
@@ -278,9 +331,11 @@ func (s *Server) createCamera(w http.ResponseWriter, r *http.Request) {
 		c.sealed = sealed
 	}
 	by := PrincipalFrom(r.Context()).Username
-	err := s.pool.QueryRow(r.Context(), `INSERT INTO core.camera (org_id, name, location, url, sub_url, username, password_sealed, transport, record, retention_days, enabled, sort, created_by, source, push_secret_sealed)
-		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id::text`,
-		org, c.name, c.location, c.url, c.subURL, c.username, c.sealed, c.transport, c.record, c.retention, c.enabled, c.sort, by, c.source, c.pushSealed).Scan(&c.id)
+	err := s.pool.QueryRow(r.Context(), `INSERT INTO core.camera (org_id, name, location, url, sub_url, username, password_sealed, transport, record, retention_days, enabled, sort, created_by, source, push_secret_sealed,
+		onvif_url, ptz_profile, event_pre_s, event_post_s, event_kinds)
+		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING id::text`,
+		org, c.name, c.location, c.url, c.subURL, c.username, c.sealed, c.transport, c.record, c.retention, c.enabled, c.sort, by, c.source, c.pushSealed,
+		c.onvifURL, c.ptzProfile, c.eventPre, c.eventPost, c.eventKinds).Scan(&c.id)
 	if err != nil {
 		writeErr(w, 500, "camera not stored")
 		return
@@ -349,7 +404,8 @@ func (s *Server) rotatePushSecret(w http.ResponseWriter, r *http.Request) {
 
 func cameraAudit(c cameraRow) map[string]any {
 	return map[string]any{"name": c.name, "location": c.location, "source": c.source, "url": c.url, "sub_url": c.subURL, "username": c.username,
-		"password_set": c.sealed != "", "transport": c.transport, "record": c.record, "retention_days": c.retention, "enabled": c.enabled}
+		"password_set": c.sealed != "", "transport": c.transport, "record": c.record, "retention_days": c.retention, "enabled": c.enabled,
+		"onvif_url": c.onvifURL, "ptz_profile": c.ptzProfile, "event_pre_s": c.eventPre, "event_post_s": c.eventPost, "event_kinds": c.eventKinds}
 }
 
 func (s *Server) updateCamera(w http.ResponseWriter, r *http.Request) {
@@ -391,8 +447,10 @@ func (s *Server) updateCamera(w http.ResponseWriter, r *http.Request) {
 		c.pushSealed = ""
 	}
 	_, err := s.pool.Exec(r.Context(), `UPDATE core.camera SET name = $3, location = $4, url = $5, sub_url = $6, username = $7, password_sealed = $8,
-		transport = $9, record = $10, retention_days = $11, enabled = $12, sort = $13, source = $14, push_secret_sealed = $15, updated_at = now() WHERE id = $1::uuid AND org_id = $2::uuid`,
-		c.id, org, c.name, c.location, c.url, c.subURL, c.username, c.sealed, c.transport, c.record, c.retention, c.enabled, c.sort, c.source, c.pushSealed)
+		transport = $9, record = $10, retention_days = $11, enabled = $12, sort = $13, source = $14, push_secret_sealed = $15,
+		onvif_url = $16, ptz_profile = $17, event_pre_s = $18, event_post_s = $19, event_kinds = $20, updated_at = now() WHERE id = $1::uuid AND org_id = $2::uuid`,
+		c.id, org, c.name, c.location, c.url, c.subURL, c.username, c.sealed, c.transport, c.record, c.retention, c.enabled, c.sort, c.source, c.pushSealed,
+		c.onvifURL, c.ptzProfile, c.eventPre, c.eventPost, c.eventKinds)
 	if err != nil {
 		writeErr(w, 500, "update failed")
 		return

@@ -58,7 +58,8 @@ check "admin has the video permissions" "$(jx '["video.view","video.playback","v
 go build -o "$TMP/camsim" ./tools/camsim || { echo "camsim build failed"; exit 1; }
 [[ -n "${BIN:-}" ]] || go build -o "$TMP/c32" ./cmd/ctrl32-telemetry || { echo "build failed"; exit 1; }
 RP=$((20000 + RANDOM % 20000))
-"$TMP/camsim" -rtsp 127.0.0.1:$RP -http "" -fps 10 > "$TMP/camsim.log" 2>&1 &
+HP=$((RP + 1)); DP=$((RP + 2))
+"$TMP/camsim" -rtsp 127.0.0.1:$RP -http 127.0.0.1:$HP -fps 10 -onvif ongate -onvif-user admin -onvif-pass onvifpw -onvif-codec h264 -discovery 127.0.0.1:$DP > "$TMP/camsim.log" 2>&1 &
 SIM_PID=$!
 sleep 1
 SIM=rtsp://127.0.0.1:$RP
@@ -155,6 +156,55 @@ else
 fi
 req POST /api/v1/video/cameras/$CAM/push-secret '{"reason":"e2e"}'; check "no secret for a pulled camera" "$(st)" 409
 req DELETE "/api/v1/video/cameras/$PUSH?reason=e2e"
+
+echo "== ONVIF: discovery, profiles, events, event recording, PTZ (spec 013)"
+ONV=http://127.0.0.1:$HP/onvif/ongate/device_service
+req POST /api/v1/video/discover "{\"hosts\":[\"127.0.0.1:$DP\"]}"; check "camera found by WS-Discovery" "$(jx "j.some(d => d.address === '$ONV' && d.name === 'ongate')")" true
+req POST /api/v1/video/discover '{"hosts":["example.com"]}'; check "discovery probes IP addresses only" "$(st)" 400
+req POST /api/v1/video/onvif/profiles "{\"url\":\"$ONV\",\"username\":\"admin\",\"password\":\"wrong\"}"; check "wrong ONVIF password" "$(st)" 401
+req POST /api/v1/video/onvif/profiles "{\"url\":\"$ONV\",\"username\":\"admin\",\"password\":\"onvifpw\"}"
+check "profiles with stream addresses" "$(jx 'j.profiles.length + " " + j.profiles[0].uri + " " + j.events + " " + j.ptz')" "2 rtsp://127.0.0.1:$RP/ongate/h264/640x352 true true"
+req POST /api/v1/video/cameras "{\"name\":\"x\",\"url\":\"$SIM/a\",\"onvif_url\":\"http://admin:pw@127.0.0.1/onvif\",\"reason\":\"e2e\"}"; check "credentials in the ONVIF address refused" "$(st)" 400
+req POST /api/v1/video/cameras "{\"name\":\"Events $SUF\",\"url\":\"$SIM/ongate/h264/160x96\",\"username\":\"admin\",\"password\":\"onvifpw\",\"onvif_url\":\"$ONV\",\"record\":\"events\",\"event_pre_s\":3,\"event_post_s\":4,\"reason\":\"e2e\"}"
+check "camera recording on events" "$(st) $(jx j.record)" "201 events"; EVC=$(jx j.id)
+waitfor '(req GET /api/v1/video/cameras/$EVC; [[ "$(jx "j.status.events + j.status.state")" == connectedonline ]])' 30 && ok "ONVIF events connected" || bad "status $(cat "$TMP/b")"
+check "not recording without an event" "$(jx 'j.status.recording + " " + j.status.record_mode')" "false events"
+sleep 4
+EF=$(iso '-2 min')
+req GET "/api/v1/video/cameras/$EVC/recordings?from=$EF"; check "no files without an event" "$(jx j.files)" 0
+curl -s -X POST "http://127.0.0.1:$HP/sim/motion/ongate?on=1"
+waitfor '(req GET /api/v1/video/cameras/$EVC; [[ "$(jx "(j.status.active || []).join() + j.status.recording")" == motiontrue ]])' 20 && ok "motion reported, recording" || bad "status $(cat "$TMP/b")"
+req GET "/api/v1/video/cameras/$EVC/events?from=$EF"; check "motion event open" "$(jx 'j.length + " " + j[0].kind + " " + j[0].source + " " + (j[0].ended_at === null)')" "1 motion camera true"
+MSTART=$(jx j[0].started_at)
+sleep 3
+curl -s -X POST "http://127.0.0.1:$HP/sim/motion/ongate?on=0"
+waitfor '(req GET "/api/v1/video/cameras/$EVC/events?from=$EF"; [[ "$(jx "j[0].ended_at !== null")" == true ]])' 20 && ok "motion event closed" || bad "events $(cat "$TMP/b")"
+waitfor '(req GET /api/v1/video/cameras/$EVC; [[ "$(jx j.status.recording)" == false ]])' 20 && ok "recording stops after the post-roll" || bad "still recording"
+sleep 11
+req GET "/api/v1/video/cameras/$EVC/recordings?from=$EF"
+check "recording starts before the event (pre-roll)" "$(jx "j.spans.length === 1 && Date.parse(j.spans[0].from) <= Date.parse('$MSTART') - 1500")" true
+check "and ends after it (post-roll)" "$(jx "(Date.parse(j.spans[0].to) - Date.parse(j.spans[0].from)) >= 8000")" true
+req POST /api/v1/video/cameras/$EVC/events '{"label":"door opened","seconds":5}'; check "manual mark" "$(st)" 201
+req GET "/api/v1/video/cameras/$EVC/events?from=$EF&kind=mark"; check "mark listed" "$(jx 'j[0].source + " " + j[0].label')" "user door opened"
+req POST /api/v1/video/cameras/$EVC/events '{"label":""}'; check "mark needs a label" "$(st)" 400
+req GET "/api/v1/video/cameras/$EVC/ptz/presets"; check "PTZ presets" "$(jx 'j.map(p => p.name).join()')" "Home,Gate,Parking"
+req POST "/api/v1/video/cameras/$EVC/ptz" '{"action":"move","pan":0.5,"tilt":0,"zoom":0}'; check "PTZ move" "$(st)" 200
+req POST "/api/v1/video/cameras/$EVC/ptz" '{"action":"stop"}'; check "PTZ stop" "$(st)" 200
+req POST "/api/v1/video/cameras/$EVC/ptz" '{"action":"move","pan":5}'; check "PTZ speed validated" "$(st)" 400
+req POST "/api/v1/video/cameras/$EVC/ptz" '{"action":"preset","preset":"2"}'; check "PTZ preset" "$(st)" 200
+req POST "/api/v1/video/cameras/$CAM/ptz" '{"action":"stop"}'; check "no PTZ without ONVIF" "$(st)" 409
+
+echo "== camera events in flows"
+FLOW="{\"nodes\":[{\"id\":\"c\",\"type\":\"camera_event\",\"x\":0,\"y\":0,\"settings\":{\"camera\":\"$EVC\",\"kinds\":[\"motion\"]}},{\"id\":\"m\",\"type\":\"camera_mark\",\"x\":200,\"y\":0,\"settings\":{\"camera\":\"$CAM\",\"label\":\"motion at {{topic}}\",\"seconds\":10}}],\"wires\":[{\"from\":\"c\",\"port\":0,\"to\":\"m\"}]}"
+req POST /api/v1/flows "{\"name\":\"Camera flow $SUF\",\"reason\":\"e2e\",\"spec\":$FLOW}"; check "flow with camera nodes" "$(st) $(jx 'j.problems.length')" "201 0"
+FSLUG=$(jx j.flow.slug)
+req POST "/api/v1/flows/$FSLUG/deploy" '{"reason":"e2e"}'; check "deployed" "$(st)" 200
+curl -s -X POST "http://127.0.0.1:$HP/sim/motion/ongate?on=1"
+waitfor '(req GET "/api/v1/video/cameras/$CAM/events?from=$EF&kind=mark"; [[ "$(jx "j.some(e => e.source === \"flow\" && e.label === \"motion at Events $SUF\")")" == true ]])' 30 && ok "motion on one camera marks another through a flow" || bad "marks $(cat "$TMP/b")"
+curl -s -X POST "http://127.0.0.1:$HP/sim/motion/ongate?on=0"
+req DELETE "/api/v1/flows/$FSLUG?reason=e2e"
+req GET "/api/v1/export/audit?format=csv"; check "marks and PTZ audited" "$(grep -c 'camera.mark\|camera.ptz' "$TMP/b" | awk '{print ($1 >= 3)}')" 1
+req DELETE "/api/v1/video/cameras/$EVC?reason=e2e"
 
 echo "== video walls"
 WALL="{\"name\":\"Control room $SUF\",\"reason\":\"e2e\",\"screens\":[{\"name\":\"Left\",\"cols\":5,\"rows\":4,\"tiles\":[\"$CAM\",null,\"$DOOR\"]},{\"name\":\"Right\",\"cols\":5,\"rows\":4,\"tiles\":[\"$DOOR\"]}]}"

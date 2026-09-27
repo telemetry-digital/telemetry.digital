@@ -8,12 +8,14 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/iam"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/video/onvif"
 )
 
 // Camera is the configuration of one camera (core.camera).
@@ -26,6 +28,11 @@ type Camera struct {
 	Enabled            bool
 	Push               bool   // the camera (its relay) sends the video to the server
 	PushSecret         string // plaintext, only in memory
+	OnvifURL           string // device service; events and PTZ
+	PTZProfile         string
+	EventPre           int      // seconds recorded before an event (record = "events")
+	EventPost          int      // seconds recorded after it
+	EventKinds         []string // kinds that start event recording
 }
 
 // Manager runs the cameras of all organizations: recorders for cameras that record, on-demand streams for viewers,
@@ -41,12 +48,18 @@ type Manager struct {
 	cams    map[string]*cam
 	push    *PushServer
 	pushURL string
+
+	// OnEvent receives camera events (flows, live stream); set before Run.
+	OnEvent func(CameraEvent)
 }
 
 type cam struct {
-	cfg       Camera
-	main, sub *Source
-	rec       *recorder
+	cfg        Camera
+	main, sub  *Source
+	rec        *recorder
+	onvif      *onvif.Client
+	ev         camEvents
+	stopEvents context.CancelFunc
 }
 
 // New prepares the manager; Start loads the cameras.
@@ -170,6 +183,9 @@ func (m *Manager) stopAll() {
 }
 
 func (c *cam) stop() {
+	if c.stopEvents != nil {
+		c.stopEvents()
+	}
 	if c.rec != nil {
 		c.rec.stop()
 	}
@@ -183,9 +199,11 @@ func (c *cam) stop() {
 func (m *Manager) load(ctx context.Context, id string) (Camera, bool) {
 	var c Camera
 	var sealed, source, pushSealed string
-	err := m.pool.QueryRow(ctx, `SELECT id::text, org_id::text, name, url, sub_url, username, password_sealed, transport, record, retention_days, enabled, source, push_secret_sealed
+	err := m.pool.QueryRow(ctx, `SELECT id::text, org_id::text, name, url, sub_url, username, password_sealed, transport, record, retention_days, enabled, source, push_secret_sealed,
+		onvif_url, ptz_profile, event_pre_s, event_post_s, event_kinds
 		FROM core.camera WHERE id = $1::uuid AND removed_at IS NULL`, id).
-		Scan(&c.ID, &c.OrgID, &c.Name, &c.URL, &c.SubURL, &c.Username, &sealed, &c.Transport, &c.Record, &c.RetentionDays, &c.Enabled, &source, &pushSealed)
+		Scan(&c.ID, &c.OrgID, &c.Name, &c.URL, &c.SubURL, &c.Username, &sealed, &c.Transport, &c.Record, &c.RetentionDays, &c.Enabled, &source, &pushSealed,
+			&c.OnvifURL, &c.PTZProfile, &c.EventPre, &c.EventPost, &c.EventKinds)
 	if err != nil {
 		return c, false
 	}
@@ -223,20 +241,22 @@ func (m *Manager) Reload(ctx context.Context, id string) {
 	m.mu.Unlock()
 	if old != nil {
 		old.stop()
+		m.closeOpen(old, time.Now())
 	}
 	if !ok || !cfg.Enabled {
 		return
 	}
-	c := &cam{cfg: cfg}
+	c := &cam{cfg: cfg, ev: camEvents{open: map[string]int64{}, lastClose: map[string]closed{}}}
+	if cfg.OnvifURL != "" && !cfg.Push {
+		c.onvif = &onvif.Client{Device: cfg.OnvifURL, Username: cfg.Username, Password: cfg.Password}
+	}
 	if cfg.Push {
 		// the relay publishes main and (optionally) sub; both sources stay ready to accept it
 		c.main = &Source{URL: &url.URL{Scheme: "push"}, Log: m.log.With("camera", cfg.Name), Linger: 30 * time.Second}
 		c.sub = &Source{URL: &url.URL{Scheme: "push"}, Log: m.log.With("camera", cfg.Name+" (sub)"), Linger: 30 * time.Second}
 		c.main.Keep(true)
 		c.sub.Keep(true)
-		if cfg.Record == "continuous" {
-			c.rec = m.startRecorder(id, c.main)
-		}
+		c.rec = m.recorderFor(c)
 		m.mu.Lock()
 		m.cams[id] = c
 		m.mu.Unlock()
@@ -253,12 +273,21 @@ func (m *Manager) Reload(ctx context.Context, id string) {
 			c.sub = &Source{URL: su, Transport: cfg.Transport, Log: m.log.With("camera", cfg.Name+" (sub)"), Linger: 30 * time.Second}
 		}
 	}
-	if cfg.Record == "continuous" {
-		c.rec = m.startRecorder(id, c.main)
-	}
+	c.rec = m.recorderFor(c)
 	m.mu.Lock()
 	m.cams[id] = c
 	m.mu.Unlock()
+	m.startEvents(c)
+}
+
+func (m *Manager) recorderFor(c *cam) *recorder {
+	switch c.cfg.Record {
+	case "continuous":
+		return m.startRecorder(c.cfg.ID, c.main, false, 0)
+	case "events":
+		return m.startRecorder(c.cfg.ID, c.main, true, time.Duration(c.cfg.EventPre)*time.Second)
+	}
+	return nil
 }
 
 // Source returns the live stream of a camera; sub asks for the smaller stream (tiles) and falls back to the main one.
@@ -301,7 +330,24 @@ func (m *Manager) Status(id string) (Status, bool) {
 		return Status{State: "disabled"}, false
 	}
 	st := c.main.Status()
-	st.Recording = c.rec != nil && st.State == "online"
+	st.Recording = c.rec != nil && st.State == "online" && (!c.rec.events || c.rec.armed(time.Now()))
+	if c.rec != nil && c.rec.events {
+		st.RecordMode = "events"
+	}
+	if c.onvif != nil {
+		c.ev.mu.Lock()
+		st.Events = c.ev.status
+		if st.Events == "" {
+			st.Events = "connecting"
+		}
+		for k := range c.ev.open {
+			kind, _, _ := cutKey(k)
+			if !slices.Contains(st.Active, kind) {
+				st.Active = append(st.Active, kind)
+			}
+		}
+		c.ev.mu.Unlock()
+	}
 	if c.sub != nil {
 		st.Viewers += c.sub.Status().Viewers
 	}
@@ -341,6 +387,7 @@ func Probe(ctx context.Context, u *url.URL, transport string) (Status, []byte) {
 func (m *Manager) Retention(ctx context.Context) {
 	m.deleteWhere(ctx, `SELECT s.id, s.path, s.bytes FROM core.video_segment s JOIN core.camera c ON c.id = s.camera_id
 		WHERE s.ended_at < now() - make_interval(days => c.retention_days) ORDER BY s.started_at LIMIT 500`)
+	_, _ = m.pool.Exec(ctx, `DELETE FROM core.camera_event e USING core.camera c WHERE c.id = e.camera_id AND e.started_at < now() - make_interval(days => c.retention_days)`)
 	var total int64
 	if err := m.pool.QueryRow(ctx, `SELECT COALESCE(sum(bytes), 0) FROM core.video_segment`).Scan(&total); err != nil {
 		return

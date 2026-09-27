@@ -27,7 +27,17 @@ type fakeHost struct {
 	mqttOut  []string
 	mqttSubs map[string]func(string, []byte)
 	scenes   []string
+	marks    []string
 }
+
+func (h *fakeHost) CameraMark(_ context.Context, _, cam, label string, seconds int) (int64, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.marks = append(h.marks, fmt.Sprintf("%s | %s | %d", cam, label, seconds))
+	return int64(len(h.marks)), nil
+}
+
+func (h *fakeHost) CameraName(context.Context, string, string) string { return "Gate" }
 
 func (h *fakeHost) DatastreamName(_ context.Context, _, id string) (string, string) {
 	return "Mixer / temp", "temp"
@@ -452,4 +462,30 @@ func TestFlowScene(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "dry", func() bool { return len(debugTexts(e, "dry_action")) == 1 })
+}
+
+// Camera events start flows; the camera mark node records on a camera (spec 013).
+func TestCameraEventAndMark(t *testing.T) {
+	js := `{"nodes":[{"id":"c","type":"camera_event","settings":{"camera":"` + srcA + `","kinds":["motion"],"phases":["start","end"]}},
+	 {"id":"d","type":"debug","settings":{"expr":"msg.kind + ' ' + msg.phase + ' ' + value + ' ' + topic"}},
+	 {"id":"mk","type":"camera_mark","settings":{"camera":"` + srcA + `","label":"{{topic}} {{msg.kind}}","seconds":45}}],
+	 "wires":[{"from":"c","port":0,"to":"d"},{"from":"c","port":0,"to":"mk"}]}`
+	e, _, h, cancel := testEngine(t, js)
+	defer cancel()
+	ev := func(cam, kind, phase string) {
+		e.OnEvent(live.Event{Type: "camera", Org: "org", State: phase, Detail: map[string]any{"camera_id": cam, "camera": "Gate", "kind": kind, "phase": phase, "event_id": int64(7)}})
+	}
+	ev(srcA, "tamper", "start")                                   // other kind
+	ev("00000000-0000-4000-8000-000000000000", "motion", "start") // other camera
+	ev(srcA, "motion", "start")
+	ev(srcA, "motion", "end")
+	waitFor(t, "camera events", func() bool { return len(debugTexts(e, "debug")) >= 2 })
+	got := strings.Join(debugTexts(e, "debug"), " | ")
+	if got != "motion start true Gate | motion end false Gate" {
+		t.Fatalf("debug: %s", got)
+	}
+	waitFor(t, "marks", func() bool { h.mu.Lock(); defer h.mu.Unlock(); return len(h.marks) == 2 })
+	if h.marks[0] != srcA+" | Gate motion | 45" {
+		t.Fatalf("marks %v", h.marks)
+	}
 }

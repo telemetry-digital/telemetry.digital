@@ -209,8 +209,12 @@ func (c *Client) sync(ctx context.Context) {
 	if err := c.call(ctx, c.Device, "", `<tds:GetSystemDateAndTime/>`, &r, "", false); err == nil && r.T.UTC.Date.Year > 2000 {
 		d, t := r.T.UTC.Date, r.T.UTC.Time
 		cam := time.Date(d.Year, time.Month(d.Month), d.Day, t.Hour, t.Minute, t.Second, 0, time.UTC)
+		off := time.Until(cam)
+		if off.Abs() < 2*time.Second {
+			off = 0 // the camera reports whole seconds: smaller differences are noise
+		}
 		c.mu.Lock()
-		c.offset = time.Until(cam)
+		c.offset = off
 		c.mu.Unlock()
 	}
 	c.mu.Lock()

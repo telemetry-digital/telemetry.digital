@@ -47,9 +47,17 @@
     <div class="row2"><label>User name <input name="username" autocomplete="off"></label><label>Password <input name="password" type="password" autocomplete="new-password" placeholder="unchanged"></label></div>
     <label>Transport <select name="transport"><option value="auto">automatic</option><option value="tcp">TCP</option><option value="udp">UDP</option></select></label>
     <div class="row"><button class="btn" type="button" id="testBtn">Test connection</button><span id="testOut" class="muted"></span></div>
+    <label>ONVIF address (motion and other events, PTZ; optional) <input name="onvif_url" placeholder="http://192.168.1.64/onvif/device_service" class="notranslate"></label>
+    <div class="row"><button class="btn small" type="button" id="findBtn">Find cameras in the network</button><button class="btn small" type="button" id="profBtn">Fill in from ONVIF</button><span id="onvifOut" class="muted" style="font-size:13px"></span></div>
+    <div id="found" class="row" style="gap:6px"></div>
     </div>
     <div class="row2">
-      <label>Recording <select name="record"><option value="continuous">continuous</option><option value="off">off</option></select></label></div>
+      <label>Recording <select name="record"><option value="continuous">continuous</option><option value="events">on events (motion, marks)</option><option value="off">off</option></select></label></div>
+    <div class="events-only">
+      <div class="row2"><label>Record before the event (s) <input name="event_pre_s" type="number" min="0" max="60" value="10"></label><label>Record after the event (s) <input name="event_post_s" type="number" min="1" max="600" value="20"></label></div>
+      <div style="font-size:13px">Events that start recording</div>
+      <div class="row" id="kinds" style="gap:10px;font-size:13px"></div>
+    </div>
     <div class="row2"><label>Keep recordings (days) <input name="retention_days" type="number" min="1" max="3650" value="7"></label><label>Order <input name="sort" type="number" value="0"></label></div>
     <label class="check"><input type="checkbox" name="enabled" checked> Enabled</label>
     <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
@@ -134,7 +142,7 @@ function renderManage() {
   $('#cams tbody').innerHTML = CAMS.map(c => `<tr><td class="notranslate">${esc(c.name)}</td><td class="notranslate">${esc(c.location)}</td>
     <td class="notranslate" style="max-width:280px;overflow:hidden;text-overflow:ellipsis">${c.source === 'push' ? `<span class="badge primary">${esc(t('remote, sends via relay'))}</span>${c.push && !c.push.enabled ? ` <span class="badge bad" title="${esc(t('video.push_listen is not set in the server configuration'))}">${esc(t('receiving is off'))}</span>` : ''}` : esc(c.url || '') + (c.has_sub ? ' <span class="badge">+ sub</span>' : '')}</td>
     <td>${dot(c.status)} ${esc(t(c.enabled ? (c.status.state === 'idle' ? 'on demand' : c.status.state) : 'disabled'))}${c.status.codec ? ` <span class="muted">${esc(c.status.codec.toUpperCase())} ${c.status.width}×${c.status.height} · ${c.status.fps} fps · ${Math.round(c.status.kbps)} kbit/s</span>` : ''}${c.status.error ? `<br><span class="bad" style="font-size:12px">${esc(c.status.error)}</span>` : ''}</td>
-    <td>${c.record === 'continuous' ? esc(t('continuous')) + ', ' + c.retention_days + ' ' + esc(t('days')) : esc(t('off'))}</td><td class="num" data-bytes="${c.id}"></td>
+    <td>${c.record === 'off' ? esc(t('off')) : esc(t(c.record === 'events' ? 'on events' : 'continuous')) + ', ' + c.retention_days + ' ' + esc(t('days'))}${c.onvif ? ` <span class="badge" title="${esc(t('ONVIF events'))}: ${esc(c.status.events || '')}">ONVIF${c.status.events && c.status.events !== 'connected' && c.status.events !== 'connecting' ? ' ⚠' : ''}</span>` : ''}</td><td class="num" data-bytes="${c.id}"></td>
     <td class="actions-cell"><a class="btn small" href="/video/cameras/${c.id}">Open</a><button class="btn small" data-cedit="${c.id}" type="button">Edit</button>${c.source === 'push' ? `<button class="btn small" data-secret="${c.id}" type="button">New secret</button>` : ''}<button class="btn small" data-cdel="${c.id}" type="button">Delete</button></td></tr>`).join('');
   for (const b of document.querySelectorAll('[data-cedit]')) b.onclick = () => camDialog(CAMS.find(c => c.id === b.dataset.cedit));
   for (const b of document.querySelectorAll('[data-secret]')) b.onclick = async () => {
@@ -155,14 +163,42 @@ function renderManage() {
 let EDIT = null;
 function showSecret(c) { $('#relayCfg').value = c.relay_config || ''; $('#secretDlg').showModal(); }
 $('#copyCfg').onclick = async () => { try { await navigator.clipboard.writeText($('#relayCfg').value); ctrl32.toast(t('copied'), 'ok'); } catch (x) { $('#relayCfg').select(); } };
+const KINDS = [['motion', 'motion'], ['tamper', 'tampering'], ['line', 'line crossing'], ['intrusion', 'intrusion'], ['input', 'input'], ['mark', 'marks (flows, people)'], ['other', 'other']];
+$('#kinds').innerHTML = KINDS.map(([k, l]) => `<label class="inline"><input type="checkbox" data-kind="${k}"><span>${esc(t(l))}</span></label>`).join('');
+function recordMode() { for (const el of document.querySelectorAll('#camForm .events-only')) el.hidden = $('#camForm').record.value !== 'events'; }
+$('#camForm').record.onchange = recordMode;
+$('#findBtn').onclick = async () => {
+  const out = $('#onvifOut'); out.textContent = t('Searching…'); $('#found').innerHTML = '';
+  try {
+    const list = await api('POST', '/api/v1/video/discover', {});
+    out.textContent = list.length ? `${list.length} ${t('found')}:` : t('No ONVIF camera answered in this network.');
+    $('#found').innerHTML = list.map((d, i) => `<button class="btn small" type="button" data-found="${i}">${esc(d.name || d.host)} <span class="muted">${esc(d.host)}${d.hardware ? ' · ' + esc(d.hardware) : ''}</span></button>`).join('');
+    for (const b of document.querySelectorAll('[data-found]')) b.onclick = () => { const d = list[+b.dataset.found], f = $('#camForm'); f.onvif_url.value = d.address; if (!f.name.value) f.name.value = d.name || d.host; $('#profBtn').click(); };
+  } catch (x) { out.textContent = x.message; }
+};
+$('#profBtn').onclick = async () => {
+  const f = $('#camForm'), out = $('#onvifOut');
+  if (!f.onvif_url.value) { out.textContent = t('Enter the ONVIF address first.'); return; }
+  out.textContent = t('Connecting…');
+  const body = {url: f.onvif_url.value, username: f.username.value};
+  if (f.password.value) body.password = f.password.value; if (EDIT) body.id = EDIT.id;
+  try {
+    const r = await api('POST', '/api/v1/video/onvif/profiles', body);
+    const ps = r.profiles.filter(p => p.uri).sort((a, b) => b.width * b.height - a.width * a.height);
+    if (ps.length) { f.url.value = ps[0].uri; if (ps.length > 1) f.sub_url.value = ps[ps.length - 1].uri; }
+    out.className = 'ok'; out.textContent = `✓ ${ps.map(p => `${p.name} ${p.encoding} ${p.width}×${p.height}`).join(', ')}${r.events ? ' · ' + t('events') : ''}${r.ptz ? ' · PTZ' : ''}`;
+  } catch (x) { out.className = 'bad'; out.textContent = x.status === 401 ? t('The camera refused the user name or password.') : x.message; }
+};
 function sourceMode() { const push = $('#camForm').source.value === 'push'; for (const el of document.querySelectorAll('#camForm .pull-only')) el.hidden = push; for (const el of document.querySelectorAll('#camForm .push-only')) el.hidden = !push; $('#camForm').url.required = !push; }
 $('#camForm').source.onchange = sourceMode;
 function camDialog(c) {
   EDIT = c || null; const f = $('#camForm'); f.reset(); $('#camErr').textContent = ''; $('#testOut').textContent = '';
   $('#camTitle').textContent = t(c ? 'Edit camera' : 'Add camera');
-  if (c) { for (const k of ['source', 'name', 'location', 'url', 'sub_url', 'username', 'transport', 'record', 'retention_days', 'sort']) f[k].value = c[k] ?? ''; f.enabled.checked = c.enabled; f.password.placeholder = t(c.has_password ? 'unchanged' : 'none'); }
+  $('#found').innerHTML = ''; $('#onvifOut').textContent = '';
+  for (const b of document.querySelectorAll('#kinds [data-kind]')) b.checked = (c ? c.event_kinds || [] : ['motion', 'tamper', 'line', 'intrusion', 'input', 'mark']).includes(b.dataset.kind);
+  if (c) { for (const k of ['source', 'name', 'location', 'url', 'onvif_url', 'event_pre_s', 'event_post_s', 'sub_url', 'username', 'transport', 'record', 'retention_days', 'sort']) f[k].value = c[k] ?? ''; f.enabled.checked = c.enabled; f.password.placeholder = t(c.has_password ? 'unchanged' : 'none'); }
   else f.password.placeholder = '';
-  sourceMode();
+  sourceMode(); recordMode();
   $('#camDlg').showModal();
 }
 $('#testBtn').onclick = async () => {
@@ -176,9 +212,10 @@ $('#testBtn').onclick = async () => {
 };
 $('#camForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#camErr').textContent = '';
   const body = {source: f.source.value, name: f.name.value, location: f.location.value, url: f.url.value, sub_url: f.sub_url.value, username: f.username.value, transport: f.transport.value,
-    record: f.record.value, retention_days: +f.retention_days.value, sort: +f.sort.value, enabled: f.enabled.checked, reason: f.reason.value};
+    record: f.record.value, retention_days: +f.retention_days.value, sort: +f.sort.value, enabled: f.enabled.checked, reason: f.reason.value,
+    onvif_url: f.onvif_url.value, event_pre_s: +f.event_pre_s.value, event_post_s: +f.event_post_s.value, event_kinds: [...document.querySelectorAll('#kinds [data-kind]:checked')].map(b => b.dataset.kind)};
   if (f.password.value) body.password = f.password.value;
-  if (body.source === 'push') { delete body.url; delete body.sub_url; delete body.username; delete body.transport; delete body.password; }
+  if (body.source === 'push') { delete body.url; delete body.sub_url; delete body.username; delete body.transport; delete body.password; body.onvif_url = ''; }
   try { const r = EDIT ? await api('PUT', '/api/v1/video/cameras/' + EDIT.id, body) : await api('POST', '/api/v1/video/cameras', body);
     $('#camDlg').close(); ctrl32.toast(t('camera saved'), 'ok'); load(); if (r.push_secret) showSecret(r); } catch (x) { $('#camErr').textContent = x.message; } };
 
@@ -228,7 +265,10 @@ async function refreshStatus() {
   if (SECTION !== 'manage' && SECTION !== 'live') return;
   try { const list = await api('GET', '/api/v1/video/cameras');
     if (SECTION === 'manage') { CAMS = list; renderManage(); return; }
-    for (const c of list) { const el = document.querySelector(`.cam-tile[data-id="${c.id}"] .cam-dot`); if (el && c.status.recording) el.outerHTML = dot(c.status); }
+    for (const c of list) {
+      const el = document.querySelector(`.cam-tile[data-id="${c.id}"] .cam-dot`); if (el && c.status.recording) el.outerHTML = dot(c.status);
+      const tile = document.querySelector(`.cam-tile[data-id="${c.id}"]`); if (tile) { tile.classList.toggle('cam-alert', !!(c.status.active || []).length); tile.dataset.active = (c.status.active || []).map(k => t(k)).join(', '); }
+    }
   } catch (x) { /* next time */ }
 }
 $('#tileSize').onchange = e => { $('#liveGrid').style.gridTemplateColumns = `repeat(auto-fill, minmax(${e.target.value}px, 1fr))`; try { localStorage.setItem('ctrl32.video.tile', e.target.value); } catch (x) { /* ignore */ } };
