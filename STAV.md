@@ -54,8 +54,8 @@ Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (
 
 ## Čaká na používateľa
 
-- **Produkcia 27. 9. 2026 22:57: telemetry.digital beží 0.58.0.** Kamery Tapo C210 („Byt“, 192.168.0.21) a C225
-  (192.168.0.197) cez prenášač na PC používateľa (`%USERPROFILE%\ctrl32-relay`, naplánovaná úloha „ctrl32 camera
+- **Produkcia 27. 9. 2026 23:20: telemetry.digital beží 0.59.0; lic.ctrl32.com nasadený s telemetry.** Kamery Tapo C210 („Byt“, 192.168.0.21) a C225 („Pivnica“,
+  192.168.0.197) cez prenášač na PC používateľa (`%USERPROFILE%\ctrl32-relay`, naplánovaná úloha „ctrl32 camera
   relay“): obraz, nahrávanie v slučke (limit 15 GB), zvuk G.711 len naživo, PTZ cez tunel (predvoľby C210 načítané).
   Používateľ má ešte vyskúšať PTZ a zvuk v prehliadači. Prenášač presunúť na Raspberry Pi (192.168.0.53) po nahratí
   Raspberry Pi OS Lite (bez Home Assistanta; SSH alias `ctrl32-relay`, kľúč `~/.ssh/telemetry_relay_rpi`).
