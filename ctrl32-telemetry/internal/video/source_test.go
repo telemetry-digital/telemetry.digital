@@ -5,9 +5,14 @@ import (
 	"net"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/bluenviron/gortsplib/v5"
+	"github.com/bluenviron/gortsplib/v5/pkg/base"
 	"github.com/bluenviron/mediacommon/v2/pkg/formats/fmp4"
 
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/video/camsim"
@@ -146,4 +151,43 @@ func TestOfflineRedactsPassword(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	t.Fatalf("status %+v", src.Status())
+}
+
+// The CI failure (GitHub runners, net.core.rmem_max 208 KB): asking for a bigger UDP buffer than the system grants
+// makes every UDP port fail; asking for what the system allows works.
+func TestUDPBufferAboveTheLimitFails(t *testing.T) {
+	b, err := os.ReadFile("/proc/sys/net/core/rmem_max")
+	if err != nil {
+		t.Skip("no rmem_max on this system")
+	}
+	max, _ := strconv.Atoi(strings.TrimSpace(string(b)))
+	addr := startSim(t)
+	try := func(size int) error {
+		u, _ := base.ParseURL("rtsp://" + addr + "/gate/h264/160x96")
+		c := &gortsplib.Client{Scheme: u.Scheme, Host: u.Host, ReadTimeout: 5 * time.Second, UDPReadBufferSize: size}
+		if err := c.Start(); err != nil {
+			return err
+		}
+		defer c.Close()
+		desc, _, err := c.Describe(u)
+		if err != nil {
+			return err
+		}
+		_, err = c.Setup(desc.BaseURL, desc.Medias[0], 0, 0)
+		return err
+	}
+	if err := try(max * 2); err == nil || !strings.Contains(err.Error(), "UDP") {
+		t.Fatalf("a buffer above rmem_max: %v", err)
+	}
+	if err := try(udpBufferFor(max)); err != nil {
+		t.Fatalf("the buffer the system allows: %v", err)
+	}
+}
+
+func TestUDPBufferFollowsTheSystemLimit(t *testing.T) {
+	for _, c := range []struct{ max, want int }{{8 << 20, 4 << 20}, {4 << 20, 4 << 20}, {1 << 20, 1 << 20}, {212992, 0}} {
+		if got := udpBufferFor(c.max); got != c.want {
+			t.Errorf("rmem_max %d: asked %d, want %d", c.max, got, c.want)
+		}
+	}
 }

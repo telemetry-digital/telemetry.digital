@@ -339,6 +339,11 @@ are personal data (GDPR): set the retention to what the purpose needs and mark t
 
 ## Network and security notes
 
+- RTP over UDP: the server asks for a 4 MB receive buffer when Linux allows it (`net.core.rmem_max`); with the
+  common default of 208 KB it keeps the system default, which can drop packets of large key frames. For many or
+  high-resolution cameras over UDP set `sysctl -w net.core.rmem_max=4194304` (and in `/etc/sysctl.d/`), or use
+  transport TCP.
+
 - The server connects to the camera addresses the administrator enters (like connectors); keep cameras in a separate
   network reachable only from the server.
 - Browsers receive video over a WebSocket on the same address as the UI (`/api/v1/video/...`); a reverse proxy must

@@ -170,7 +170,7 @@ func relayOnce(ctx context.Context, src, transport, target, id, secret string, t
 	if err != nil {
 		return err
 	}
-	in := &gortsplib.Client{Scheme: su.Scheme, Host: su.Host, ReadTimeout: 10 * time.Second, UDPReadBufferSize: 4 << 20}
+	in := &gortsplib.Client{Scheme: su.Scheme, Host: su.Host, ReadTimeout: 10 * time.Second, UDPReadBufferSize: udpBufferSize()}
 	switch transport {
 	case "tcp":
 		p := gortsplib.ProtocolTCP

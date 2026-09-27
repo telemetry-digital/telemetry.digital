@@ -23,7 +23,7 @@ func (s *Source) rtsp(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	c := &gortsplib.Client{Scheme: u.Scheme, Host: u.Host, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, UDPReadBufferSize: 4 << 20}
+	c := &gortsplib.Client{Scheme: u.Scheme, Host: u.Host, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, UDPReadBufferSize: udpBufferSize()}
 	switch s.Transport {
 	case "tcp":
 		p := gortsplib.ProtocolTCP
