@@ -12,7 +12,9 @@
   let PUBLIC = '';
   const P = (path) => PUBLIC ? path.replace('/api/v1/', '/api/v1/public/' + encodeURIComponent(PUBLIC) + '/') : path;
   function setPublic(token) { PUBLIC = token || ''; }
-  const RANGE_MS = { '1h': 3600e3, '6h': 6 * 3600e3, '24h': 24 * 3600e3, '7d': 7 * 86400e3, '30d': 30 * 86400e3, '90d': 90 * 86400e3 };
+  // "today" runs from local midnight (production screens: output of the day)
+  const RANGE_MS = { '1h': 3600e3, '6h': 6 * 3600e3, '8h': 8 * 3600e3, '12h': 12 * 3600e3, '24h': 24 * 3600e3, '7d': 7 * 86400e3, '30d': 30 * 86400e3, '90d': 90 * 86400e3,
+    get today() { const d = new Date(); d.setHours(0, 0, 0, 0); return Math.max(60e3, Date.now() - d.getTime()); } };
   const COLORS = ['#e30613', '#2563eb', '#059669', '#d97706', '#7c3aed', '#db2777', '#0891b2', '#65a30d', '#ea580c', '#4b5563', '#0d9488', '#9333ea'];
   const num = (v, d) => (v == null || isNaN(v)) ? '—' : Number(v).toFixed(d == null ? 2 : d);
   const color = (i) => COLORS[i % COLORS.length];
@@ -325,7 +327,7 @@
   }
   // Viewer filters (spec 002): the author enables them per widget (params.filters); the viewer switches time range,
   // aggregation, interval and series on the widget itself. Choices are remembered per widget in this browser.
-  const FILTER_OPTS = { range: ['', '1h', '6h', '24h', '7d', '30d', '90d'], agg: ['auto', 'none', 'avg', 'min', 'max', 'sum', 'count'], agg_interval: ['auto', '1m', '5m', '15m', '1h', '6h', '1d'] };
+  const FILTER_OPTS = { range: ['', '1h', '6h', '8h', '12h', 'today', '24h', '7d', '30d', '90d'], agg: ['auto', 'none', 'avg', 'min', 'max', 'sum', 'count'], agg_interval: ['auto', '1m', '5m', '15m', '1h', '6h', '1d'] };
   const FILTER_LBL = { range: 'Range', agg: 'Aggregation', agg_interval: 'Interval' };
   const fKey = (w) => 'ctrl32.wf.' + location.pathname + '.' + (w.id || '');
   function filterBar(card, w, redraw) {

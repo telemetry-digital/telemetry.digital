@@ -24,6 +24,7 @@
   <div id="stage" class="kiosk-stage" hidden></div>
   <div id="overlay" class="kiosk-overlay" hidden></div>
   <div id="ident" class="kiosk-ident" hidden></div>
+  <div id="msg" class="kiosk-msg" hidden><div class="kiosk-msg-text notranslate"></div><div class="kiosk-msg-by"></div></div>
   <div class="kiosk-status" id="status" hidden></div>
   <div class="kiosk-title" id="title"></div>
 </main>
@@ -157,6 +158,15 @@ function handleCommand(c) {
   else if (c.action === 'clear') { for (const p of popups.values()) p.player.close(); popups.clear(); renderOverlay(); $('#ident').hidden = true; }
 }
 
+// announcements: info and warning as a band, alarm over the whole screen (text only, never HTML)
+function handleMessage(m) {
+  const el = $('#msg');
+  if (!m || new Date(m.until) < Date.now()) { el.hidden = true; return; }
+  el.className = 'kiosk-msg ' + m.level; el.hidden = false;
+  el.querySelector('.kiosk-msg-text').textContent = m.text;
+  el.querySelector('.kiosk-msg-by').textContent = `${m.by} · ${new Date(m.seq / 1e6).toLocaleTimeString()}`;
+}
+
 // ---- state ----
 async function poll() {
   clearTimeout(pollT);
@@ -167,7 +177,7 @@ async function poll() {
     STATE = s; window.ctrl32DisplayCameras = s.cameras || {};
     document.title = s.name;
     if (s.version !== VERSION) { VERSION = s.version; IDX = 0; rotate(); }
-    markActive(); handleEvents(); handleCommand(s.command); renderOverlay();
+    markActive(); handleEvents(); handleCommand(s.command); handleMessage(s.message); renderOverlay();
   } catch (x) {
     if (x.status === 401) { stopContent(); STATE = null; VERSION = null; codeKnown = false; hello(); return; }
     $('#status').hidden = false; $('#status').textContent = t('Connection to the server lost — retrying…');

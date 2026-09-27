@@ -11,9 +11,9 @@
 <body>
 <header class="topbar"></header>
 <main class="container">
-  <div class="page-head"><h1>Displays</h1><span class="grow"></span><button class="btn primary" type="button" id="pairBtn" hidden>Pair display</button></div>
+  <div class="page-head"><h1>Displays</h1><span class="grow"></span><select id="locFilter" aria-label="Location"></select><button class="btn" type="button" id="msgBtn">Message to displays</button><button class="btn primary" type="button" id="pairBtn" hidden>Pair display</button></div>
   <p class="muted">A display is a screen at a wall — a PC, a mini-PC or a smart TV with a browser — that shows dashboards, process screens and video walls in turn, without anyone signed in. It shows only what it is given, changes nothing and can be disconnected at any time. Cameras with an event can enlarge themselves on it, and an operator can send a camera to it.</p>
-  <div class="table-wrap"><table id="list"><thead><tr><th>Display</th><th>Shows</th><th>State</th><th>Last seen</th><th></th></tr></thead><tbody></tbody></table></div>
+  <div class="table-wrap"><table id="list"><thead><tr><th style="width:28px"><input type="checkbox" id="selAll" aria-label="Select all"></th><th>Display</th><th>Shows</th><th>State</th><th>Last seen</th><th></th></tr></thead><tbody></tbody></table></div>
   <div class="card muted" id="empty" hidden><p>No displays yet. Open <code id="kioskUrl"></code> on the computer at the wall and pair it with the code it shows.</p></div>
 
   <div class="card" style="margin-top:16px"><h2 style="margin-top:0">Setting up a display computer</h2>
@@ -30,7 +30,8 @@
   <dialog id="dlg" style="max-width:min(760px,96vw)"><form class="form" id="form">
     <h2 style="margin-top:0" id="dlgTitle">Pair display</h2>
     <label id="codeRow">Code shown on the display <input name="code" class="notranslate" placeholder="ABCD-EFGH" maxlength="12" autocomplete="off" style="font:600 22px var(--mono);letter-spacing:.08em;text-transform:uppercase"></label>
-    <label>Name <input name="name" required maxlength="80" placeholder="Control room – left monitor"></label>
+    <div class="row2"><label>Name <input name="name" required maxlength="80" placeholder="Control room – left monitor"></label>
+      <label>Location (hall, line; optional) <input name="location" maxlength="60" list="locList" placeholder="Hall A"><datalist id="locList"></datalist></label></div>
     <div class="row"><b>Shows (in turn)</b><span class="grow"></span>
       <button class="btn small" type="button" id="addDash">Add dashboard or process screen</button><button class="btn small" type="button" id="addWall">Add video wall screen</button></div>
     <div id="items"></div>
@@ -42,6 +43,16 @@
     <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
     <div class="err" id="err"></div>
     <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form></dialog>
+
+  <dialog id="msgDlg" style="max-width:min(640px,96vw)"><form class="form" id="msgForm">
+    <h2 style="margin-top:0">Message to displays</h2>
+    <label>To <select name="target"></select></label>
+    <label>Text <textarea name="text" rows="3" maxlength="200" required placeholder="Meeting at 10:00 in the canteen"></textarea></label>
+    <div class="row2"><label>Kind <select name="level"><option value="info">information (band at the bottom)</option><option value="warning">warning (band at the top)</option><option value="alarm">alarm (whole screen, flashing)</option></select></label>
+      <label>For (min) <input name="minutes" type="number" min="1" max="60" value="10"></label></div>
+    <div class="err" id="msgErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Send</button><button class="btn" type="button" id="msgEnd">End messages</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
   </form></dialog>
 
   <dialog id="camDlg"><form class="form" id="camForm">
@@ -67,12 +78,21 @@ function describe(c) {
     return esc(w ? `${w.name} · ${sc && sc.name ? sc.name : t('Screen') + ' ' + (it.screen + 1)}` : t('video wall'));
   }).join(' → ') + (c.items && c.items.length > 1 ? ` <span class="muted">(${esc(t('in turn'))})</span>` : '');
 }
+let LOC = '';
+try { LOC = localStorage.getItem('ctrl32.displays.loc') || ''; } catch (x) { /* ignore */ }
+const locations = () => [...new Set(LIST.map(d => d.location).filter(Boolean))].sort();
 function render() {
   $('#empty').hidden = LIST.length > 0;
-  $('#list tbody').innerHTML = LIST.map(d => `<tr>
-    <td><b class="notranslate">${esc(d.name)}</b>${d.content.popup !== 'none' ? ` <span class="badge" title="${esc(t('Enlarges cameras with an event'))}">${esc(t('alarms'))}</span>` : ''}</td>
+  const locs = locations(); if (LOC && !locs.includes(LOC)) LOC = '';
+  $('#locFilter').innerHTML = `<option value="">${esc(t('All locations'))}</option>` + locs.map(l => `<option${l === LOC ? ' selected' : ''}>${esc(l)}</option>`).join('');
+  $('#locFilter').hidden = !locs.length;
+  const sel = new Set([...document.querySelectorAll('.dsel:checked')].map(i => i.value));
+  $('#list tbody').innerHTML = LIST.filter(d => !LOC || d.location === LOC).map(d => `<tr>
+    <td><input type="checkbox" class="dsel" value="${d.id}" ${sel.has(d.id) ? 'checked' : ''} aria-label="Select"></td>
+    <td><b class="notranslate">${esc(d.name)}</b>${d.location ? `<div class="muted notranslate" style="font-size:12px">${esc(d.location)}</div>` : ''}${d.content.popup !== 'none' ? ` <span class="badge" title="${esc(t('Enlarges cameras with an event'))}">${esc(t('alarms'))}</span>` : ''}</td>
     <td>${describe(d.content)}</td>
     <td>${!d.paired ? `<span class="badge warn">${esc(t('waiting for the device'))}</span>` : d.online ? `<span class="badge ok">${esc(t('showing'))}</span>` : `<span class="badge bad">${esc(t('not showing'))}</span>`}
+      ${d.message ? `<div style="font-size:12px"><span class="badge ${d.message.level === 'alarm' ? 'bad' : d.message.level === 'warning' ? 'warn' : 'primary'}">${esc(t('message'))}</span> <span class="notranslate">${esc(d.message.text)}</span></div>` : ''}
       ${d.command ? `<div class="muted" style="font-size:12px">${esc(d.command.action === 'camera' ? t('camera') + ': ' + d.command.name : t(d.command.action))} · ${esc(d.command.by)}</div>` : ''}</td>
     <td>${d.last_seen_at ? esc(ctrl32.fmt(d.last_seen_at)) + `<div class="muted notranslate" style="font-size:12px">${esc(d.last_ip)}</div>` : '—'}</td>
     <td class="actions-cell">
@@ -123,14 +143,16 @@ function dialog(d) {
   const names = Object.fromEntries((ctrl32.langs.supported || []).map(l => [l.code, l.name]));
   $('#localeSel').innerHTML = `<option value="">${esc(t('as the browser'))}</option>` + (ctrl32.langs.enabled || []).map(c => `<option value="${c}">${esc(names[c] || c)}</option>`).join('');
   f.locale.value = d ? (d.content.locale || '') : ctrl32.locale;
+  $('#locList').innerHTML = locations().map(l => `<option value="${esc(l)}">`).join('');
+  f.location.value = d ? d.location || '' : LOC;
   if (d) { f.name.value = d.name; f.popup.value = d.content.popup; f.popup_seconds.value = d.content.popup_seconds; f.offline_alert.checked = d.offline_alert; }
   renderItems(); $('#dlg').showModal();
 }
 $('#form').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#err').textContent = '';
   const content = {items: ITEMS, popup: f.popup.value, popup_seconds: +f.popup_seconds.value, locale: f.locale.value};
   try {
-    if (EDIT) await api('PUT', '/api/v1/displays/' + EDIT.id, {name: f.name.value, content, offline_alert: f.offline_alert.checked, reason: f.reason.value});
-    else { const r = await api('POST', '/api/v1/displays/pair', {code: f.code.value, name: f.name.value, content, offline_alert: f.offline_alert.checked, reason: f.reason.value});
+    if (EDIT) await api('PUT', '/api/v1/displays/' + EDIT.id, {name: f.name.value, location: f.location.value, content, offline_alert: f.offline_alert.checked, reason: f.reason.value});
+    else { const r = await api('POST', '/api/v1/displays/pair', {code: f.code.value, name: f.name.value, location: f.location.value, content, offline_alert: f.offline_alert.checked, reason: f.reason.value});
       ctrl32.toast(`${t('paired')}: ${r.device_ip}`, 'ok'); }
     $('#dlg').close(); load();
   } catch (x) { $('#err').textContent = x.message; } };
@@ -143,6 +165,23 @@ function camDialog(d) {
 $('#camForm').onsubmit = async e => { e.preventDefault(); const f = e.target;
   try { await api('POST', `/api/v1/displays/${CAMFOR.id}/command`, {action: 'camera', camera: f.camera.value, seconds: +f.seconds.value, quality: f.quality.value}); $('#camDlg').close(); ctrl32.toast(t('sent to the display'), 'ok'); load(); }
   catch (x) { $('#camErr').textContent = x.message; } };
+
+// ---- messages to many displays ----
+$('#locFilter').onchange = e => { LOC = e.target.value; try { localStorage.setItem('ctrl32.displays.loc', LOC); } catch (x) { /* ignore */ } render(); };
+$('#selAll').onchange = e => { for (const i of document.querySelectorAll('.dsel')) i.checked = e.target.checked; };
+function targetOf(v) { if (v === 'all') return {all: true}; if (v === 'sel') return {ids: [...document.querySelectorAll('.dsel:checked')].map(i => i.value)}; return {location: v.slice(4)}; }
+$('#msgBtn').onclick = () => {
+  const f = $('#msgForm'); $('#msgErr').textContent = '';
+  const n = document.querySelectorAll('.dsel:checked').length;
+  f.target.innerHTML = `<option value="all">${esc(t('all displays'))} (${LIST.length})</option>` + locations().map(l => `<option value="loc:${esc(l)}">${esc(l)} (${LIST.filter(d => d.location === l).length})</option>`).join('') + (n ? `<option value="sel" selected>${esc(t('selected displays'))} (${n})</option>` : '');
+  if (!n && LOC) f.target.value = 'loc:' + LOC;
+  $('#msgDlg').showModal();
+};
+$('#msgForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#msgErr').textContent = '';
+  try { const r = await api('POST', '/api/v1/displays/command', {...targetOf(f.target.value), action: 'message', text: f.text.value, level: f.level.value, seconds: +f.minutes.value * 60});
+    $('#msgDlg').close(); ctrl32.toast(`${t('sent to displays')}: ${r.displays}`, 'ok'); load(); } catch (x) { $('#msgErr').textContent = x.message; } };
+$('#msgEnd').onclick = async () => { const f = $('#msgForm');
+  try { const r = await api('POST', '/api/v1/displays/command', {...targetOf(f.target.value), action: 'clear'}); $('#msgDlg').close(); ctrl32.toast(`${t('ended on displays')}: ${r.displays}`, 'ok'); load(); } catch (x) { $('#msgErr').textContent = x.message; } };
 
 async function load() {
   try { LIST = await api('GET', '/api/v1/displays'); render(); } catch (x) { ctrl32.toast(x.message, 'bad'); }

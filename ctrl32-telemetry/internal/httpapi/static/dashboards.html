@@ -140,7 +140,7 @@ $('#newForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $(
 async function loadView(){
   DASH = await api('GET', `/api/v1/dashboards/${encodeURIComponent(SLUG)}`); SPEC = DASH.spec;
   $('#vTitle').textContent = DASH.name; document.title = DASH.name + ' — Dashboards'; $('#vMeta').textContent = `v${DASH.version}${DASH.is_default ? ' · default' : ''}`;
-  $('#vRange').innerHTML = ['1h','6h','24h','7d','30d','90d'].map(r => `<option ${r === SPEC.range ? 'selected' : ''}>${r}</option>`).join('');
+  $('#vRange').innerHTML = ['1h','6h','8h','12h','today','24h','7d','30d','90d'].map(r => `<option ${r === SPEC.range ? 'selected' : ''}>${r}</option>`).join('');
   if(ctrl32.can('content.write')){ $('#vEdit').hidden = false; $('#vEdit').href = `/dashboards/${SLUG}/edit`; }
   const run = async () => { refreshFn = await WG.render($('#vGrid'), SPEC, {range: $('#vRange').value}); };
   $('#vRange').onchange = run; $('#vRefresh').onclick = () => refreshFn && refreshFn();

@@ -30,6 +30,17 @@ A display reads only its own dashboards and walls, and plays only the cameras on
 public links cameras are never shown), a camera an operator sent, or cameras with an active event when it enlarges all
 cameras. Its cookie opens no other API.
 
+## Production screens
+
+A display is not only for cameras: any dashboard or process screen can be on it — for example a screen per line in
+production with the pieces made in the shift (*Aggregated value*, sum), the plan fulfilment (*Progress bar* with the
+plan as maximum), pieces per hour (*Bars over time*, sum per hour), the machine states (*Status*, *State timeline*),
+speeds and temperatures (charts, gauges) and the process screen of the line. The time ranges *8 h*, *12 h* (a shift)
+and *today* (since local midnight) exist for exactly this. The values refresh live.
+
+Many displays: give each a **location** (hall, line) — the list can be filtered by it, and a message or command can
+go to all displays of a location at once.
+
 ## Operator commands
 
 On **Displays** (permission `display.control`, operators have it) or from a camera's page (*show on display*):
@@ -40,6 +51,7 @@ On **Displays** (permission `display.control`, operators have it) or from a came
 | Identify | the display shows its name in large letters for a few seconds |
 | Back to content | closes cameras sent or enlarged |
 | Reload | the display reloads its page |
+| Message | text on the display: *information* (band at the bottom), *warning* (band at the top) or *alarm* (the whole screen, flashing), for 1–60 minutes; to one display, the selected ones, all of a location, or all |
 
 Pairing, changing and disconnecting displays needs `display.manage` (engineers and administrators).
 

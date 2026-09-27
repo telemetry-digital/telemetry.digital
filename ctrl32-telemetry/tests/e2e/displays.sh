@@ -80,6 +80,15 @@ req POST "/api/v1/displays/$DID/command" '{"action":"camera","camera":"00000000-
 req POST "/api/v1/displays/$DID/command" '{"action":"clear"}'
 kiosk GET "/api/v1/display/cameras/$ODD/live"; check "after clear the camera is refused again" "$(st)" 403
 req PUT "/api/v1/displays/$DID" "{\"name\":\"Renamed $SUF\",\"reason\":\"e2e\"}"; check "renamed" "$(st) $(jx j.name)" "200 Renamed $SUF"
+req PUT "/api/v1/displays/$DID" "{\"location\":\"Hall $SUF\",\"reason\":\"e2e\"}"; check "location set" "$(jx j.location)" "Hall $SUF"
+req POST /api/v1/displays/command "{\"location\":\"Hall $SUF\",\"action\":\"message\",\"text\":\"<b>Meeting</b> at 10:00\",\"level\":\"warning\",\"seconds\":600}"; check "message to all displays of a location" "$(st) $(jx j.displays)" "200 1"
+kiosk GET /api/v1/display/state; check "the display shows the message as text" "$(jx 'j.message.level + " " + j.message.text')" "warning <b>Meeting</b> at 10:00"
+req POST /api/v1/displays/command '{"all":true,"action":"message","text":"x","level":"panic"}'; check "message level validated" "$(st)" 400
+req POST /api/v1/displays/command '{"all":true,"action":"message","text":"  "}'; check "empty message refused" "$(st)" 400
+req POST /api/v1/displays/command '{"action":"identify"}'; check "a target is required" "$(st)" 400
+req POST /api/v1/displays/command '{"location":"nowhere-'$SUF'","action":"identify"}'; check "no display in the location" "$(st)" 404
+req POST /api/v1/displays/command "{\"ids\":[\"$DID\"],\"action\":\"clear\"}"; check "clear by id" "$(st) $(jx j.displays)" "200 1"
+kiosk GET /api/v1/display/state; check "clear ends the message" "$(jx '!j.message')" true
 req GET /api/v1/displays; check "listed as showing" "$(jx "j.find(d => d.id === '$DID').online")" true
 
 echo "== camera groups"

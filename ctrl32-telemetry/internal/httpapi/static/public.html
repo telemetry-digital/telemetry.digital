@@ -30,7 +30,7 @@ ctrl32.ready({}).then(async () => {
     ctrl32Widgets.setPublic(token);
     const d = await ctrl32.api('GET', `/api/v1/public/${encodeURIComponent(token)}`);
     $('#pTitle').textContent = d.name; document.title = d.name;
-    $('#pRange').innerHTML = ['1h','6h','24h','7d','30d','90d'].map(r => `<option ${r === d.spec.range ? 'selected' : ''}>${r}</option>`).join('');
+    $('#pRange').innerHTML = ['1h','6h','8h','12h','today','24h','7d','30d','90d'].map(r => `<option ${r === d.spec.range ? 'selected' : ''}>${r}</option>`).join('');
     const run = async () => { fn = await ctrl32Widgets.render($('#pGrid'), d.spec, {range: $('#pRange').value}); };
     $('#pRange').onchange = run; $('#pRefresh').onclick = () => fn && fn();
     await run();

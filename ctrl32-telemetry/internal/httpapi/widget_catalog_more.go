@@ -13,7 +13,7 @@ var (
 	pMethod    = ScreenParam{Name: "method", Label: "Command method", Kind: "text", Default: "write"}
 	pConfirm   = ScreenParam{Name: "confirm", Label: "Ask for confirmation", Kind: "bool", Default: true}
 	pUnit      = ScreenParam{Name: "unit", Label: "Unit (empty = datastream)", Kind: "text"}
-	pRangeAll  = ScreenParam{Name: "range", Label: "Range (empty = dashboard range)", Kind: "select", Options: []string{"", "1h", "6h", "24h", "7d", "30d", "90d"}}
+	pRangeAll  = ScreenParam{Name: "range", Label: "Range (empty = dashboard range)", Kind: "select", Options: []string{"", "1h", "6h", "8h", "12h", "today", "24h", "7d", "30d", "90d"}}
 	pStates    = ScreenParam{Name: "states", Label: "States (value=Label:#colour, comma separated)", Kind: "list", Default: []string{"0=Stopped:#94a3b8", "1=Running:#16a34a", "2=Fault:#dc2626"}}
 	pColorBar  = ScreenParam{Name: "bar_color", Label: "Bar colour (empty = series colour)", Kind: "color"}
 )

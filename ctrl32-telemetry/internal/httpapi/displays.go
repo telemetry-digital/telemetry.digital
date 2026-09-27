@@ -16,7 +16,8 @@ package httpapi
 //	POST /api/v1/displays/pair                    display.manage  {code, name, content, reason}
 //	PUT  /api/v1/displays/{id}                    display.manage  {name, content, offline_alert, reason}
 //	DELETE /api/v1/displays/{id}?reason=          display.manage  revoke
-//	POST /api/v1/displays/{id}/command            display.control {action: camera|identify|reload|clear, camera, seconds, quality}
+//	POST /api/v1/displays/{id}/command            display.control {action: camera|identify|reload|clear|message, camera, seconds, quality, text, level}
+//	POST /api/v1/displays/command                 display.control the same for {ids} | {location} | {all: true}
 
 import (
 	"context"
@@ -81,25 +82,36 @@ type displayRow struct {
 	LastAgent     string
 	OfflineAlert  bool
 	Created       time.Time
+	Location      string
+	Message       *displayMessage
 }
 
 func (d *displayRow) json() map[string]any {
 	out := map[string]any{"id": d.ID, "name": d.Name, "content": d.Content, "paired": d.Paired, "last_seen_at": d.LastSeen,
-		"last_ip": d.LastIP, "last_agent": d.LastAgent, "offline_alert": d.OfflineAlert, "created_at": d.Created, "updated_at": d.Updated,
+		"last_ip": d.LastIP, "last_agent": d.LastAgent, "offline_alert": d.OfflineAlert, "created_at": d.Created, "updated_at": d.Updated, "location": d.Location,
 		"online": d.LastSeen != nil && time.Since(*d.LastSeen) < 90*time.Second}
 	if d.Command != nil && d.Command.Until.After(time.Now()) {
 		out["command"] = d.Command
 	}
+	if d.Message != nil && d.Message.Until.After(time.Now()) {
+		out["message"] = d.Message
+	}
 	return out
 }
 
-const displayCols = `id::text, org_id::text, name, content, command, updated_at, token_hash IS NOT NULL, last_seen_at, COALESCE(last_ip, ''), COALESCE(last_agent, ''), offline_alert, created_at`
+const displayCols = `id::text, org_id::text, name, content, command, updated_at, token_hash IS NOT NULL, last_seen_at, COALESCE(last_ip, ''), COALESCE(last_agent, ''), offline_alert, created_at, location, message`
 
 func scanDisplay(row pgx.Row) (*displayRow, error) {
 	d := &displayRow{}
-	var content, cmd []byte
-	if err := row.Scan(&d.ID, &d.Org, &d.Name, &content, &cmd, &d.Updated, &d.Paired, &d.LastSeen, &d.LastIP, &d.LastAgent, &d.OfflineAlert, &d.Created); err != nil {
+	var content, cmd, msg []byte
+	if err := row.Scan(&d.ID, &d.Org, &d.Name, &content, &cmd, &d.Updated, &d.Paired, &d.LastSeen, &d.LastIP, &d.LastAgent, &d.OfflineAlert, &d.Created, &d.Location, &msg); err != nil {
 		return nil, err
+	}
+	if len(msg) > 0 {
+		d.Message = &displayMessage{}
+		if json.Unmarshal(msg, d.Message) != nil {
+			d.Message = nil
+		}
 	}
 	_ = json.Unmarshal(content, &d.Content)
 	if len(cmd) > 0 {
@@ -366,6 +378,9 @@ func (s *Server) displayState(w http.ResponseWriter, r *http.Request) {
 	if d.Command != nil && d.Command.Until.After(time.Now()) {
 		out["command"] = d.Command
 	}
+	if d.Message != nil && d.Message.Until.After(time.Now()) {
+		out["message"] = d.Message
+	}
 	writeJSON(w, 200, out)
 }
 
@@ -506,7 +521,7 @@ func (s *Server) listDisplays(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rows, err := s.pool.Query(r.Context(), `SELECT `+displayCols+` FROM core.display WHERE org_id = $1::uuid AND revoked_at IS NULL ORDER BY name`, org)
+	rows, err := s.pool.Query(r.Context(), `SELECT `+displayCols+` FROM core.display WHERE org_id = $1::uuid AND revoked_at IS NULL ORDER BY location, name`, org)
 	if err != nil {
 		writeErr(w, 500, "query failed")
 		return
@@ -554,6 +569,7 @@ func (s *Server) pairDisplay(w http.ResponseWriter, r *http.Request) {
 		Name         string         `json:"name"`
 		Content      displayContent `json:"content"`
 		OfflineAlert *bool          `json:"offline_alert"`
+		Location     string         `json:"location"`
 		Reason       string         `json:"reason"`
 	}
 	if err := decodeJSON(r, &in, 16<<10); err != nil {
@@ -561,6 +577,11 @@ func (s *Server) pairDisplay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !reasonOf(w, in.Reason) {
+		return
+	}
+	in.Location = strings.TrimSpace(in.Location)
+	if len([]rune(in.Location)) > 60 {
+		writeErr(w, 400, "location: at most 60 characters")
 		return
 	}
 	if pairLimited(p.UserID, false) {
@@ -595,8 +616,8 @@ func (s *Server) pairDisplay(w http.ResponseWriter, r *http.Request) {
 	content, _ := json.Marshal(in.Content)
 	alert := in.OfflineAlert == nil || *in.OfflineAlert
 	var id string
-	if err := tx.QueryRow(ctx, `INSERT INTO core.display (org_id, name, content, created_by, offline_alert) VALUES ($1::uuid, $2, $3::jsonb, NULLIF($4, '')::uuid, $5) RETURNING id::text`,
-		org, in.Name, string(content), p.UserID, alert).Scan(&id); err != nil {
+	if err := tx.QueryRow(ctx, `INSERT INTO core.display (org_id, name, content, created_by, offline_alert, location) VALUES ($1::uuid, $2, $3::jsonb, NULLIF($4, '')::uuid, $5, $6) RETURNING id::text`,
+		org, in.Name, string(content), p.UserID, alert, in.Location).Scan(&id); err != nil {
 		writeErr(w, 500, "display not stored")
 		return
 	}
@@ -609,7 +630,7 @@ func (s *Server) pairDisplay(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "commit failed")
 		return
 	}
-	s.audit(r, "display.pair", "display", id, nil, map[string]any{"name": in.Name, "content": in.Content, "device_ip": ip, "device_agent": agent}, in.Reason)
+	s.audit(r, "display.pair", "display", id, nil, map[string]any{"name": in.Name, "location": in.Location, "content": in.Content, "device_ip": ip, "device_agent": agent}, in.Reason)
 	d, _ := s.loadDisplay(ctx, org, id)
 	out := d.json()
 	out["device_ip"], out["device_agent"] = ip, agent
@@ -630,6 +651,7 @@ func (s *Server) updateDisplay(w http.ResponseWriter, r *http.Request) {
 		Name         *string         `json:"name"`
 		Content      *displayContent `json:"content"`
 		OfflineAlert *bool           `json:"offline_alert"`
+		Location     *string         `json:"location"`
 		Reason       string          `json:"reason"`
 	}
 	if err := decodeJSON(r, &in, 16<<10); err != nil {
@@ -657,14 +679,21 @@ func (s *Server) updateDisplay(w http.ResponseWriter, r *http.Request) {
 	if in.OfflineAlert != nil {
 		d.OfflineAlert = *in.OfflineAlert
 	}
+	if in.Location != nil {
+		d.Location = strings.TrimSpace(*in.Location)
+		if len([]rune(d.Location)) > 60 {
+			writeErr(w, 400, "location: at most 60 characters")
+			return
+		}
+	}
 	content, _ := json.Marshal(d.Content)
-	if _, err := s.pool.Exec(r.Context(), `UPDATE core.display SET name = $2, content = $3::jsonb, offline_alert = $4, updated_at = now() WHERE id = $1::uuid`,
-		d.ID, d.Name, string(content), d.OfflineAlert); err != nil {
+	if _, err := s.pool.Exec(r.Context(), `UPDATE core.display SET name = $2, content = $3::jsonb, offline_alert = $4, location = $5, updated_at = now() WHERE id = $1::uuid`,
+		d.ID, d.Name, string(content), d.OfflineAlert, d.Location); err != nil {
 		writeErr(w, 500, "update failed")
 		return
 	}
-	s.audit(r, "display.update", "display", d.ID, map[string]any{"name": old["name"], "content": old["content"], "offline_alert": old["offline_alert"]},
-		map[string]any{"name": d.Name, "content": d.Content, "offline_alert": d.OfflineAlert}, in.Reason)
+	s.audit(r, "display.update", "display", d.ID, map[string]any{"name": old["name"], "location": old["location"], "content": old["content"], "offline_alert": old["offline_alert"]},
+		map[string]any{"name": d.Name, "location": d.Location, "content": d.Content, "offline_alert": d.OfflineAlert}, in.Reason)
 	d, _ = s.loadDisplay(r.Context(), org, d.ID)
 	writeJSON(w, 200, d.json())
 }
@@ -694,6 +723,102 @@ func (s *Server) revokeDisplay(w http.ResponseWriter, r *http.Request) {
 
 var errNoCamera = errors.New("camera not found")
 
+type commandIn struct {
+	Action  string `json:"action"`
+	Camera  string `json:"camera"`
+	Seconds int    `json:"seconds"`
+	Quality string `json:"quality"`
+	Text    string `json:"text"`
+	Level   string `json:"level"`
+	// bulk: the displays to address (ids, a location, or all)
+	IDs      []string `json:"ids"`
+	Location *string  `json:"location"`
+	All      bool     `json:"all"`
+}
+
+// displayMessage is an announcement on displays (info, warning, alarm), shown apart from camera commands.
+type displayMessage struct {
+	Seq   int64     `json:"seq"`
+	Text  string    `json:"text"`
+	Level string    `json:"level"`
+	Until time.Time `json:"until"`
+	By    string    `json:"by"`
+}
+
+// buildCommand validates a command; msg is set for a message, cmd for the other actions.
+func (s *Server) buildCommand(r *http.Request, org string, in commandIn) (cmd *displayCommand, msg *displayMessage, code int, errText string) {
+	if in.Seconds == 0 {
+		in.Seconds = 60
+	}
+	if in.Seconds < 5 || in.Seconds > 3600 {
+		return nil, nil, 400, "seconds: 5 to 3600"
+	}
+	p := PrincipalFrom(r.Context())
+	now := time.Now()
+	c := displayCommand{Seq: now.UnixNano(), Action: in.Action, Until: now.Add(time.Duration(in.Seconds) * time.Second), By: p.Username}
+	switch in.Action {
+	case "camera":
+		// the operator may send only cameras they may see themselves
+		row, ok := s.cameraRow(r.Context(), org, in.Camera)
+		if !ok {
+			return nil, nil, 404, errNoCamera.Error()
+		}
+		if !p.Has("video.view") {
+			return nil, nil, 403, "permission denied: video.view"
+		}
+		c.Camera, c.Name = row.id, row.name
+		c.Quality = "main"
+		if in.Quality == "sub" {
+			c.Quality = "sub"
+		}
+	case "identify":
+		if in.Seconds > 60 {
+			c.Until = now.Add(time.Minute)
+		}
+	case "reload", "clear":
+		c.Until = now.Add(2 * time.Minute)
+	case "message":
+		text := strings.TrimSpace(in.Text)
+		if text == "" || len([]rune(text)) > 200 {
+			return nil, nil, 400, "text: 1 to 200 characters"
+		}
+		switch in.Level {
+		case "":
+			in.Level = "info"
+		case "info", "warning", "alarm":
+		default:
+			return nil, nil, 400, "level: info, warning or alarm"
+		}
+		return nil, &displayMessage{Seq: c.Seq, Text: text, Level: in.Level, Until: c.Until, By: p.Username}, 0, ""
+	default:
+		return nil, nil, 400, "action: camera, identify, reload, clear or message"
+	}
+	return &c, nil, 0, ""
+}
+
+// applyCommand stores a command or a message on a display; clear also ends the message.
+func (s *Server) applyCommand(ctx context.Context, id string, cmd *displayCommand, msg *displayMessage) error {
+	if msg != nil {
+		raw, _ := json.Marshal(msg)
+		_, err := s.pool.Exec(ctx, `UPDATE core.display SET message = $2::jsonb WHERE id = $1::uuid`, id, string(raw))
+		return err
+	}
+	raw, _ := json.Marshal(cmd)
+	q := `UPDATE core.display SET command = $2::jsonb WHERE id = $1::uuid`
+	if cmd.Action == "clear" {
+		q = `UPDATE core.display SET command = $2::jsonb, message = NULL WHERE id = $1::uuid`
+	}
+	_, err := s.pool.Exec(ctx, q, id, string(raw))
+	return err
+}
+
+func commandAudit(cmd *displayCommand, msg *displayMessage, seconds int) map[string]any {
+	if msg != nil {
+		return map[string]any{"action": "message", "text": msg.Text, "level": msg.Level, "seconds": seconds}
+	}
+	return map[string]any{"action": cmd.Action, "camera": cmd.Name, "seconds": seconds}
+}
+
 func (s *Server) commandDisplay(w http.ResponseWriter, r *http.Request) {
 	org, ok := s.mustOrg(w, r)
 	if !ok {
@@ -704,59 +829,87 @@ func (s *Server) commandDisplay(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "display not found")
 		return
 	}
-	var in struct {
-		Action  string `json:"action"`
-		Camera  string `json:"camera"`
-		Seconds int    `json:"seconds"`
-		Quality string `json:"quality"`
-	}
-	if err := decodeJSON(r, &in, 1024); err != nil {
+	var in commandIn
+	if err := decodeJSON(r, &in, 2048); err != nil {
 		writeErr(w, 400, err.Error())
 		return
 	}
-	if in.Seconds == 0 {
-		in.Seconds = 60
-	}
-	if in.Seconds < 5 || in.Seconds > 3600 {
-		writeErr(w, 400, "seconds: 5 to 3600")
+	cmd, msg, code, errText := s.buildCommand(r, org, in)
+	if code != 0 {
+		writeErr(w, code, errText)
 		return
 	}
-	p := PrincipalFrom(r.Context())
-	cmd := displayCommand{Seq: time.Now().UnixNano(), Action: in.Action, Until: time.Now().Add(time.Duration(in.Seconds) * time.Second), By: p.Username}
-	switch in.Action {
-	case "camera":
-		// the operator may send only cameras they may see themselves
-		c, ok := s.cameraRow(r.Context(), org, in.Camera)
-		if !ok {
-			writeErr(w, 404, errNoCamera.Error())
-			return
-		}
-		if !p.Has("video.view") {
-			writeErr(w, 403, "permission denied: video.view")
-			return
-		}
-		cmd.Camera, cmd.Name = c.id, c.name
-		cmd.Quality = "main"
-		if in.Quality == "sub" {
-			cmd.Quality = "sub"
-		}
-	case "identify", "reload":
-		if in.Action == "reload" {
-			cmd.Until = time.Now().Add(2 * time.Minute)
-		} else if in.Seconds > 60 {
-			cmd.Until = time.Now().Add(time.Minute)
-		}
-	case "clear":
-		cmd.Until = time.Now().Add(2 * time.Minute)
-	default:
-		writeErr(w, 400, "action: camera, identify, reload or clear")
-		return
-	}
-	raw, _ := json.Marshal(cmd)
-	if _, err := s.pool.Exec(r.Context(), `UPDATE core.display SET command = $2::jsonb WHERE id = $1::uuid`, d.ID, string(raw)); err != nil {
+	if err := s.applyCommand(r.Context(), d.ID, cmd, msg); err != nil {
 		writeErr(w, 500, "command not stored")
 		return
 	}
-	s.audit(r, "display.command", "display", d.ID, nil, map[string]any{"display": d.Name, "action": cmd.Action, "camera": cmd.Name, "seconds": in.Seconds}, "operator command")
+	a := commandAudit(cmd, msg, in.Seconds)
+	a["display"] = d.Name
+	s.audit(r, "display.command", "display", d.ID, nil, a, "operator command")
+	if msg != nil {
+		writeJSON(w, 200, msg)
+		return
+	}
 	writeJSON(w, 200, cmd)
+}
+
+// commandDisplays sends one command or message to several displays: the listed ones, those of a location, or all.
+func (s *Server) commandDisplays(w http.ResponseWriter, r *http.Request) {
+	org, ok := s.mustOrg(w, r)
+	if !ok {
+		return
+	}
+	var in commandIn
+	if err := decodeJSON(r, &in, 16<<10); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	if !in.All && in.Location == nil && len(in.IDs) == 0 {
+		writeErr(w, 400, "ids, location or all required")
+		return
+	}
+	if len(in.IDs) > 500 {
+		writeErr(w, 400, "ids: at most 500")
+		return
+	}
+	cmd, msg, code, errText := s.buildCommand(r, org, in)
+	if code != 0 {
+		writeErr(w, code, errText)
+		return
+	}
+	loc := ""
+	if in.Location != nil {
+		loc = *in.Location
+	}
+	rows, err := s.pool.Query(r.Context(), `SELECT id::text, name FROM core.display WHERE org_id = $1::uuid AND revoked_at IS NULL
+		AND ($2 OR ($3 AND location = $4) OR id::text = ANY($5::text[]))`, org, in.All, in.Location != nil, loc, in.IDs)
+	if err != nil {
+		writeErr(w, 500, "query failed")
+		return
+	}
+	type target struct{ id, name string }
+	var list []target
+	for rows.Next() {
+		var t target
+		if rows.Scan(&t.id, &t.name) == nil {
+			list = append(list, t)
+		}
+	}
+	rows.Close()
+	if len(list) == 0 {
+		writeErr(w, 404, "no display matches")
+		return
+	}
+	names := make([]string, 0, len(list))
+	for _, t := range list {
+		if err := s.applyCommand(r.Context(), t.id, cmd, msg); err != nil {
+			writeErr(w, 500, "command not stored")
+			return
+		}
+		names = append(names, t.name)
+	}
+	a := commandAudit(cmd, msg, in.Seconds)
+	a["displays"] = names
+	s.audit(r, "display.command", "display", "", nil, a, "operator command")
+	writeJSON(w, 200, map[string]any{"displays": len(list)})
 }

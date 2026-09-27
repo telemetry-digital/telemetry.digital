@@ -290,6 +290,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("PUT /api/v1/displays/{id}", s.require("display.manage", s.updateDisplay))
 	mux.Handle("DELETE /api/v1/displays/{id}", s.require("display.manage", s.revokeDisplay))
 	mux.Handle("POST /api/v1/displays/{id}/command", s.require("display.control", s.commandDisplay))
+	mux.Handle("POST /api/v1/displays/command", s.require("display.control", s.commandDisplays))
 	mux.Handle("GET /api/v1/video/camera-groups", s.require("video.view", s.cameraGroups))
 	mux.Handle("GET /api/v1/video/settings", s.require("video.manage", s.videoSettings))
 	mux.Handle("PUT /api/v1/video/settings", s.require("system.admin", s.putVideoSettings))

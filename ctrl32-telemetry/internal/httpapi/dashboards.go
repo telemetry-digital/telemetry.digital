@@ -60,7 +60,7 @@ type WidgetDef struct {
 }
 
 var (
-	pRange    = ScreenParam{Name: "range", Label: "Range (empty = dashboard range)", Kind: "select", Options: []string{"", "1h", "6h", "24h", "7d", "30d", "90d"}}
+	pRange    = ScreenParam{Name: "range", Label: "Range (empty = dashboard range)", Kind: "select", Options: []string{"", "1h", "6h", "8h", "12h", "today", "24h", "7d", "30d", "90d"}}
 	pDecimals = ScreenParam{Name: "decimals", Label: "Decimals", Kind: "number", Default: 2}
 	pYMin     = ScreenParam{Name: "y_min", Label: "Axis minimum (empty = auto)", Kind: "number"}
 	pYMax     = ScreenParam{Name: "y_max", Label: "Axis maximum (empty = auto)", Kind: "number"}
@@ -110,7 +110,7 @@ func widgetDefOf(t string) *WidgetDef {
 	return nil
 }
 
-var ranges = map[string]bool{"1h": true, "6h": true, "24h": true, "7d": true, "30d": true, "90d": true}
+var ranges = map[string]bool{"1h": true, "6h": true, "8h": true, "12h": true, "today": true, "24h": true, "7d": true, "30d": true, "90d": true}
 
 type screenSpec struct {
 	Version int    `json:"version"`
@@ -473,7 +473,7 @@ func (s *Server) listDashboards(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) dashboardCatalog(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, map[string]any{"widgets": widgetCatalog, "ranges": []string{"1h", "6h", "24h", "7d", "30d", "90d"}, "format": "screen/v1", "layouts": []string{"grid"}})
+	writeJSON(w, 200, map[string]any{"widgets": widgetCatalog, "ranges": []string{"1h", "6h", "8h", "12h", "today", "24h", "7d", "30d", "90d"}, "format": "screen/v1", "layouts": []string{"grid"}})
 }
 
 func (s *Server) getDashboard(w http.ResponseWriter, r *http.Request) {
