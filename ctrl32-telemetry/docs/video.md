@@ -36,6 +36,30 @@ max_disk_gb = 50                                  # the oldest recordings are de
 Retention runs every minute: first each camera's days, then the disk limit for all cameras together. Size guide: a
 2 Mbit/s camera needs about 21 GB a day. Removing a camera keeps its recordings until its retention ends.
 
+## Events, motion and PTZ (ONVIF)
+
+Enter the camera's ONVIF address (`http://camera/onvif/device_service`, the same user name and password as the stream).
+**Find cameras in the network** sends a WS-Discovery probe (multicast, and unicast to the addresses you list, IP
+addresses only); **Fill in from ONVIF** reads the profiles and fills the main and sub stream addresses.
+
+- **Events without decoding**: the server subscribes to the camera's events (PullPoint, WS-Security digest, the
+  camera's clock offset is measured) and stores motion, tamper, line crossing, intrusion and digital inputs with their
+  start and end. Motion that starts again within 5 s joins the same event. The server never decodes video, so event
+  detection costs nothing per camera — the camera's own analytics does the work; set its sensitivity and zones in the
+  camera. Events of a disconnected camera, a changed camera and a restarted server are closed.
+- **Recording on events**: record mode *on events* records only around the chosen kinds: the pre-roll (0–30 s, kept
+  in memory from the last key frame) and the post-roll (1–600 s) after the event ends. Continuous recording stores
+  events too, as marks on the timeline.
+- **Marks**: the flag button on the camera page (or a flow) marks the camera with a label; on a camera recording on
+  events it also records the chosen number of seconds. Marks are audited (`camera.mark`).
+- **PTZ**: hold an arrow or +/− to move, release to stop; presets from the camera. Needs `video.ptz`; moves are
+  audited once per 5 minutes per user and camera (`camera.ptz`), preset changes always.
+- **Flows**: the trigger *Camera event* (camera, kind, start/end) and the action *Mark on camera* — for example a door
+  contact opens → mark "Door opened" and record 30 s.
+
+Active events outline the tile in the camera list and on video walls. `GET /api/v1/video/events` lists events of all
+cameras (`video.playback`).
+
 ## Camera settings for quality at low load
 
 The server records exactly what the camera sends, so quality and size are set in the camera:
@@ -154,7 +178,8 @@ as the web interface, with the same sign-in, MFA and permissions.
 |---|---|---|
 | `video.view` | live view, video walls | operator, engineer, org_admin |
 | `video.playback` | recordings, playback, export | engineer, org_admin |
-| `video.manage` | cameras, walls, storage | engineer, org_admin |
+| `video.manage` | cameras, walls, storage, discovery | engineer, org_admin |
+| `video.ptz` | PTZ control and presets | operator, engineer, org_admin |
 
 Camera and wall changes need a reason and are audited (`camera.*`, `video_wall.*`). Every playback (`video.playback`)
 and export (`video.export`) is written to the audit trail with the camera and the time range — recordings of people
@@ -172,4 +197,7 @@ are personal data (GDPR): set the retention to what the purpose needs and mark t
 `go run ./tools/camsim -rtsp :8554 -http :8555` serves test cameras:
 `rtsp://127.0.0.1:8554/<label>/<h264|mjpeg>/<W>x<H>` and `http://127.0.0.1:8555/<label>/<W>x<H>` — a picture with the
 label, a clock and moving shapes; H.264 uses raw (I_PCM) macroblocks, so it needs a lot of bandwidth. `-loop 50`
-encodes 50 frames once and repeats them, for load tests of many cameras (`-fps 25`).
+encodes 50 frames once and repeats them, for load tests of many cameras (`-fps 25`). `-onvif BRANA,VRATNICA` adds
+ONVIF devices at `http://127.0.0.1:8555/onvif/<label>/device_service` (user `admin`, password `admin`) with PTZ that
+moves the picture, `-motion-every 45s` reports motion periodically, `/sim/motion/<label>?on=1|0` switches it by hand,
+and `-discovery 127.0.0.1:3702` answers WS-Discovery.
