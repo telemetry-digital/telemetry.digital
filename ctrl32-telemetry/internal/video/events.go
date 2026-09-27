@@ -24,7 +24,6 @@ type CameraEvent struct {
 	At       time.Time `json:"at"`
 }
 
-
 // camEvents is the event state of one camera.
 type camEvents struct {
 	mu        sync.Mutex
