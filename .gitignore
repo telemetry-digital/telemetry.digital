@@ -11,3 +11,6 @@ node_modules/
 __pycache__/
 pio-*.log
 ctrl32-telemetry-c/ci/gen/
+
+# AI assistant personal settings
+.local/settings.local.json
