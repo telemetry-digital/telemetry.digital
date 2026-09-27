@@ -124,6 +124,10 @@ func (s *Server) require(perm string, fn http.HandlerFunc) http.Handler {
 // audit records a change performed by the current principal (URS I-01).
 func (s *Server) audit(r *http.Request, action, entityType, entityID string, old, new any, reason string) {
 	p := PrincipalFrom(r.Context())
+	if entityID != "" && !uuidRe.MatchString(strings.ToLower(entityID)) {
+		// the trail keys entities by uuid; a name ("caddy", a backup file) goes with the type so the entry is never lost
+		entityType, entityID = entityType+":"+entityID, ""
+	}
 	e := audit.Entry{Action: action, EntityType: entityType, EntityID: entityID, Old: old, New: new, Reason: reason, RequestID: RequestID(r.Context())}
 	if p != nil {
 		e.OrgID, e.ActorID, e.ActorName = p.OrgID, p.UserID, p.Username
