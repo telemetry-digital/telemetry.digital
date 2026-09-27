@@ -112,6 +112,8 @@ func (m *Manager) Run(ctx context.Context) error {
 		m.log.Error("video storage not writable; recording is off", "dir", m.dir, "err", err)
 	}
 	m.repair(ctx)
+	// events left open by a crash end when the server started again
+	_, _ = m.pool.Exec(ctx, `UPDATE core.camera_event SET ended_at = now() WHERE ended_at IS NULL`)
 	rows, err := m.pool.Query(ctx, `SELECT id::text FROM core.camera WHERE removed_at IS NULL`)
 	if err != nil {
 		return err
@@ -179,6 +181,7 @@ func (m *Manager) stopAll() {
 	m.mu.Unlock()
 	for _, c := range cams {
 		c.stop()
+		m.closeOpen(c, time.Now())
 	}
 }
 
