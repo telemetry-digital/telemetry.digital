@@ -60,6 +60,31 @@ addresses only); **Fill in from ONVIF** reads the profiles and fills the main an
 Active events outline the tile in the camera list and on video walls. `GET /api/v1/video/events` lists events of all
 cameras (`video.playback`).
 
+## Motion detection on the server
+
+Cameras without ONVIF events (cheap cameras, MJPEG cameras, older models) get motion events from the server:
+*Camera management → camera → Motion detection on the server*. The server never decodes H.264 or H.265, so it looks
+at JPEG pictures only:
+
+- a camera with an **MJPEG stream** (main or sub; the sub-stream is tried first): its frames, at most 2.5 a second;
+- an **H.264/H.265 camera**: its **snapshot address** (one JPEG picture, e.g. Hikvision
+  `http://camera/ISAPI/Streaming/channels/101/picture`, Dahua `http://camera/cgi-bin/snapshot.cgi`, Axis
+  `http://camera/axis-cgi/jpg/image.cgi`), polled once a second with the camera's user name and password (basic or
+  digest authentication; never put them into the address).
+
+Each picture becomes a 64 × 36 grid of brightness cells compared with a slowly learning background and with the
+previous picture. Motion is a share of changed cells above a threshold set by the **sensitivity** (1–100), in three
+pictures in a row; it ends 4 s after the last change. An object that stops (a parked car) becomes background; a
+change of almost the whole picture (lights, infrared switching, exposure) resets the background instead of raising an
+event. **Motion zones** (green rectangles drawn over the picture in the camera form, next to the privacy masks) limit
+where motion counts — e.g. the gate, not the road or the trees behind it.
+
+The events have kind `motion` and source `server` and behave like the camera's own: they start recording on events
+(with the pre-event time), show on walls, floor plans and displays, and reach flows. The camera list shows the state
+(*watching (MJPEG)*, *watching (snapshots)*, or what is missing). Detection costs the server little CPU with a
+small MJPEG sub-stream (320 × 180 is enough); the camera's own detection (ONVIF) stays the better choice where it
+exists.
+
 ## Video settings
 
 **Cameras → Settings** holds the server-wide settings (anyone with `video.manage` sees them, a system administrator
@@ -308,4 +333,6 @@ label, a clock and moving shapes; H.264 uses raw (I_PCM) macroblocks, so it need
 encodes 50 frames once and repeats them, for load tests of many cameras (`-fps 25`). `-onvif BRANA,VRATNICA` adds
 ONVIF devices at `http://127.0.0.1:8555/onvif/<label>/device_service` (user `admin`, password `admin`) with PTZ that
 moves the picture, `-motion-every 45s` reports motion periodically, `/sim/motion/<label>?on=1|0` switches it by hand,
-and `-discovery 127.0.0.1:3702` answers WS-Discovery.
+and `-discovery 127.0.0.1:3702` answers WS-Discovery. Cameras labelled `STILL…` show a standing scene until
+motion is switched on (for motion detection on the server), and `http://127.0.0.1:8555/snapshot/<label>/<W>x<H>`
+returns one JPEG picture like the snapshot address of an IP camera.

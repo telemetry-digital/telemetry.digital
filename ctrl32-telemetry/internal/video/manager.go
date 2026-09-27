@@ -3,6 +3,7 @@ package video
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/url"
@@ -33,6 +34,11 @@ type Camera struct {
 	EventPre           int      // seconds recorded before an event (record = "events")
 	EventPost          int      // seconds recorded after it
 	EventKinds         []string // kinds that start event recording
+	// motion detection on the server (spec 019)
+	MotionDetect      bool
+	MotionSensitivity int
+	MotionZones       []MotionZone
+	SnapshotURL       string // JPEG snapshot address for cameras whose streams are H.264/H.265
 }
 
 // Manager runs the cameras of all organizations: recorders for cameras that record, on-demand streams for viewers,
@@ -64,6 +70,8 @@ type cam struct {
 	onvif      *onvif.Client
 	ev         camEvents
 	stopEvents context.CancelFunc
+	motion     *motionState
+	stopMotion context.CancelFunc
 }
 
 // New prepares the manager; Start loads the cameras.
@@ -199,6 +207,9 @@ func (c *cam) stop() {
 	if c.stopEvents != nil {
 		c.stopEvents()
 	}
+	if c.stopMotion != nil {
+		c.stopMotion()
+	}
 	if c.rec != nil {
 		c.rec.stop()
 	}
@@ -212,15 +223,17 @@ func (c *cam) stop() {
 func (m *Manager) load(ctx context.Context, id string) (Camera, bool) {
 	var c Camera
 	var sealed, source, pushSealed string
+	var zones []byte
 	err := m.pool.QueryRow(ctx, `SELECT id::text, org_id::text, name, url, sub_url, username, password_sealed, transport, record, retention_days, enabled, source, push_secret_sealed,
-		onvif_url, ptz_profile, event_pre_s, event_post_s, event_kinds
+		onvif_url, ptz_profile, event_pre_s, event_post_s, event_kinds, motion_detect, motion_sensitivity, motion_zones, snapshot_url
 		FROM core.camera WHERE id = $1::uuid AND removed_at IS NULL`, id).
 		Scan(&c.ID, &c.OrgID, &c.Name, &c.URL, &c.SubURL, &c.Username, &sealed, &c.Transport, &c.Record, &c.RetentionDays, &c.Enabled, &source, &pushSealed,
-			&c.OnvifURL, &c.PTZProfile, &c.EventPre, &c.EventPost, &c.EventKinds)
+			&c.OnvifURL, &c.PTZProfile, &c.EventPre, &c.EventPost, &c.EventKinds, &c.MotionDetect, &c.MotionSensitivity, &zones, &c.SnapshotURL)
 	if err != nil {
 		return c, false
 	}
 	c.Password = m.OpenPassword(sealed)
+	_ = json.Unmarshal(zones, &c.MotionZones)
 	c.Push, c.PushSecret = source == "push", m.OpenPassword(pushSealed)
 	return c, true
 }
@@ -276,6 +289,7 @@ func (m *Manager) Reload(ctx context.Context, id string) {
 		m.mu.Lock()
 		m.cams[id] = c
 		m.mu.Unlock()
+		m.startMotion(c)
 		return
 	}
 	mu, err := StreamURL(cfg.URL, cfg.Username, cfg.Password)
@@ -294,6 +308,7 @@ func (m *Manager) Reload(ctx context.Context, id string) {
 	m.cams[id] = c
 	m.mu.Unlock()
 	m.startEvents(c)
+	m.startMotion(c)
 }
 
 func (m *Manager) recorderFor(c *cam) *recorder {
@@ -350,11 +365,16 @@ func (m *Manager) Status(id string) (Status, bool) {
 	if c.rec != nil && c.rec.events {
 		st.RecordMode = "events"
 	}
-	if c.onvif != nil {
+	if c.motion != nil {
+		st.Motion = c.motion.get()
+	}
+	if c.onvif != nil || c.motion != nil {
 		c.ev.mu.Lock()
-		st.Events = c.ev.status
-		if st.Events == "" {
-			st.Events = "connecting"
+		if c.onvif != nil {
+			st.Events = c.ev.status
+			if st.Events == "" {
+				st.Events = "connecting"
+			}
 		}
 		for k := range c.ev.open {
 			kind, _, _ := cutKey(k)

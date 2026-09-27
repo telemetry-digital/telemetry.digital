@@ -84,6 +84,9 @@ export type Camera = {
   has_sub?: boolean;
   id?: string;
   location?: string;
+  motion_detect?: boolean;
+  motion_sensitivity?: number;
+  motion_zones?: number[][][];
   name?: string;
   privacy_masks?: number[][][];
   push?: {
@@ -98,6 +101,8 @@ export type Camera = {
   };
   record?: "continuous" | "off";
   retention_days?: number;
+  /** video.manage only */
+  snapshot_url?: string;
   sort?: number;
   source?: "pull" | "push";
   status?: CameraStatus;
@@ -5868,6 +5873,11 @@ export class Ctrl32Client {
     group?: string;
     /** ≤ 120 */
     location?: string;
+    /** motion detection on the server (spec 019) */
+    motion_detect?: boolean;
+    /** 1 to 100, default 50 */
+    motion_sensitivity?: number;
+    motion_zones?: number[][][];
     /** ≤ 80 */
     name: string;
     /** http://camera/onvif/device_service: events and PTZ (spec 013) */
@@ -5883,6 +5893,8 @@ export class Ctrl32Client {
     record?: "continuous" | "events" | "off";
     /** 1–3650, default 7 */
     retention_days?: number;
+    /** http(s) address of one JPEG picture, for H.264/H.265 cameras; without credentials */
+    snapshot_url?: string;
     sort?: number;
     /** pull: the server connects to the camera; push: a relay at a remote site sends the video (secret returned once as push_secret with relay_config) */
     source?: "pull" | "push";
@@ -5933,6 +5945,11 @@ export class Ctrl32Client {
     group?: string;
     /** ≤ 120 */
     location?: string;
+    /** motion detection on the server (spec 019) */
+    motion_detect?: boolean;
+    /** 1 to 100, default 50 */
+    motion_sensitivity?: number;
+    motion_zones?: number[][][];
     /** ≤ 80 */
     name?: string;
     /** http://camera/onvif/device_service: events and PTZ (spec 013) */
@@ -5948,6 +5965,8 @@ export class Ctrl32Client {
     record?: "continuous" | "events" | "off";
     /** 1–3650, default 7 */
     retention_days?: number;
+    /** http(s) address of one JPEG picture, for H.264/H.265 cameras; without credentials */
+    snapshot_url?: string;
     sort?: number;
     /** pull: the server connects to the camera; push: a relay at a remote site sends the video (secret returned once as push_secret with relay_config) */
     source?: "pull" | "push";

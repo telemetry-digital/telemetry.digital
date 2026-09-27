@@ -206,7 +206,32 @@ func (s *Server) produce(out *stream, sp spec) {
 
 func (s *Server) picture(sp spec, now time.Time, n int) *image.RGBA {
 	pan, tilt, zoom := s.ONVIF.View(sp.label)
-	return PictureView(sp.label, sp.w, sp.h, now, n, pan, tilt, zoom)
+	return PictureView(sp.label, sp.w, sp.h, now, StillFrame(sp.label, n, s.ONVIF), pan, tilt, zoom)
+}
+
+// StillFrame keeps the scene of a camera labelled STILL… standing (only the clock runs) until motion is switched on
+// (POST /sim/motion/<label>?on=1), for testing motion detection on the server.
+func StillFrame(label string, n int, o *ONVIF) int {
+	if strings.HasPrefix(strings.ToUpper(label), "STILL") && !o.Motion(label) {
+		return 0
+	}
+	return n
+}
+
+// SnapshotHandler serves /<label>/<W>x<H> as one JPEG picture, like the snapshot address of an IP camera.
+func SnapshotHandler(o *ONVIF) http.Handler {
+	var n atomic.Int64
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sp := parse(r.URL.Path)
+		pan, tilt, zoom := o.View(sp.label)
+		var b bytes.Buffer
+		if err := jpeg.Encode(&b, PictureView(sp.label, sp.w, sp.h, time.Now(), StillFrame(sp.label, int(n.Add(3)), o), pan, tilt, zoom), &jpeg.Options{Quality: 80}); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.Header().Set("Content-Type", "image/jpeg")
+		_, _ = w.Write(b.Bytes())
+	})
 }
 
 // OnDescribe implements gortsplib.ServerHandlerOnDescribe.

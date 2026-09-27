@@ -113,8 +113,14 @@
       <div class="row" id="kinds" style="gap:10px;font-size:13px"></div>
     </div>
     <div class="row2"><label>Keep recordings (days) <input name="retention_days" type="number" min="1" max="3650" value="7"></label><label>Order <input name="sort" type="number" value="0"></label></div>
+    <label class="check"><input type="checkbox" name="motion_detect"> Motion detection on the server (cameras without ONVIF events)</label>
+    <div class="motion-only">
+      <div class="row2"><label>Sensitivity <span class="muted" id="sensOut"></span><input name="motion_sensitivity" type="range" min="1" max="100" value="50"></label>
+        <label class="pull-only">Snapshot address for H.264/H.265 cameras (optional) <input name="snapshot_url" placeholder="http://192.168.1.64/ISAPI/Streaming/channels/101/picture" class="notranslate"></label></div>
+      <div class="muted" style="font-size:13px">The server compares the pictures of an MJPEG stream (the sub-stream first), or the camera's JPEG snapshot once a second — it does not decode H.264/H.265. Motion zones (below, after saving) limit where motion counts. Events look like the camera's own: they show on walls and plans, start recording on events and flows.</div>
+    </div>
     <div id="maskSec" hidden>
-      <div class="row"><b>Privacy masks (GDPR)</b><span class="grow"></span><button class="btn small" type="button" id="maskClear">Remove all</button></div>
+      <div class="row"><b>Draw over the picture:</b><span class="seg" id="drawMode"><button type="button" class="on" data-dm="mask">Privacy masks (GDPR)</button><button type="button" data-dm="zone">Motion zones</button></span><span class="grow"></span><button class="btn small" type="button" id="maskClear">Remove all</button></div>
       <div class="muted" style="font-size:13px">Drag over the picture to cover an area (a neighbour's window, a cash desk, a public street). The areas are covered wherever the picture is shown; the recording stays complete and only people with the permission to see unmasked pictures can see or export it. Masks set in the camera itself keep the areas out of the recording.</div>
       <div class="mask-edit" id="maskBox"><div class="mask-draw" id="maskDraw"></div></div>
     </div>
@@ -207,7 +213,7 @@ function renderManage() {
   $('#cams tbody').innerHTML = CAMS.map(c => `<tr><td class="notranslate">${esc(c.name)}</td><td class="notranslate">${esc(c.location)}${c.group ? ` <span class="badge" title="${esc(t('Camera group'))}">${esc(c.group)}</span>` : ''}</td>
     <td class="notranslate" style="max-width:280px;overflow:hidden;text-overflow:ellipsis">${c.source === 'push' ? `<span class="badge primary">${esc(t('remote, sends via relay'))}</span>${c.push && !c.push.enabled ? ` <span class="badge bad" title="${esc(t('video.push_listen is not set in the server configuration'))}">${esc(t('receiving is off'))}</span>` : ''}` : esc(c.url || '') + (c.has_sub ? ' <span class="badge">+ sub</span>' : '')}</td>
     <td>${dot(c.status)} ${esc(t(c.enabled ? (c.status.state === 'idle' ? 'on demand' : c.status.state) : 'disabled'))}${c.status.codec ? ` <span class="muted">${esc(c.status.codec.toUpperCase())} ${c.status.width}×${c.status.height} · ${c.status.fps} fps · ${Math.round(c.status.kbps)} kbit/s</span>` : ''}${c.status.error ? `<br><span class="bad" style="font-size:12px">${esc(c.status.error)}</span>` : ''}</td>
-    <td>${c.record === 'off' ? esc(t('off')) : esc(t(c.record === 'events' ? 'on events' : 'continuous')) + ', ' + c.retention_days + ' ' + esc(t('days'))}${c.onvif ? ` <span class="badge" title="${esc(t('ONVIF events'))}: ${esc(c.status.events || '')}">ONVIF${c.status.events && c.status.events !== 'connected' && c.status.events !== 'connecting' ? ' ⚠' : ''}</span>` : ''}</td><td class="num" data-bytes="${c.id}"></td>
+    <td>${c.record === 'off' ? esc(t('off')) : esc(t(c.record === 'events' ? 'on events' : 'continuous')) + ', ' + c.retention_days + ' ' + esc(t('days'))}${c.onvif ? ` <span class="badge" title="${esc(t('ONVIF events'))}: ${esc(c.status.events || '')}">ONVIF${c.status.events && c.status.events !== 'connected' && c.status.events !== 'connecting' ? ' ⚠' : ''}</span>` : ''}${c.motion_detect ? ` <span class="badge" title="${esc(t('Motion detection on the server'))}: ${esc(t(c.status.motion || ''))}">${esc(t('motion'))}${c.status.motion && !c.status.motion.startsWith('watching') && c.status.motion !== 'starting' ? ' ⚠' : ''}</span>` : ''}</td><td class="num" data-bytes="${c.id}"></td>
     <td class="actions-cell"><a class="btn small" href="/video/cameras/${c.id}">Open</a><button class="btn small" data-cedit="${c.id}" type="button">Edit</button>${c.source === 'push' ? `<button class="btn small" data-secret="${c.id}" type="button">New secret</button>` : ''}<button class="btn small" data-cdel="${c.id}" type="button">Delete</button></td></tr>`).join('');
   for (const b of document.querySelectorAll('[data-cedit]')) b.onclick = () => camDialog(CAMS.find(c => c.id === b.dataset.cedit));
   for (const b of document.querySelectorAll('[data-secret]')) b.onclick = async () => {
@@ -233,6 +239,8 @@ const KINDS = [['motion', 'motion'], ['tamper', 'tampering'], ['line', 'line cro
 $('#kinds').innerHTML = KINDS.map(([k, l]) => `<label class="inline"><input type="checkbox" data-kind="${k}"><span>${esc(t(l))}</span></label>`).join('');
 function recordMode() { for (const el of document.querySelectorAll('#camForm .events-only')) el.hidden = $('#camForm').record.value !== 'events'; }
 $('#camForm').record.onchange = recordMode;
+function motionMode() { const f = $('#camForm'); for (const el of document.querySelectorAll('#camForm .motion-only')) el.hidden = !f.motion_detect.checked; $('#sensOut').textContent = f.motion_sensitivity.value; }
+$('#camForm').motion_detect.onchange = motionMode; $('#camForm').motion_sensitivity.oninput = motionMode;
 $('#findBtn').onclick = async () => {
   const out = $('#onvifOut'); out.textContent = t('Searching…'); $('#found').innerHTML = '';
   try {
@@ -248,7 +256,7 @@ $('#profBtn').onclick = async () => {
   out.textContent = t('Connecting…');
   const body = {url: f.onvif_url.value, username: f.username.value};
   if (f.password.value) body.password = f.password.value;
-  if (EDIT) body.privacy_masks = MASKS; if (EDIT) body.id = EDIT.id;
+  if (EDIT) body.id = EDIT.id;
   try {
     const r = await api('POST', '/api/v1/video/onvif/profiles', body);
     const ps = r.profiles.filter(p => p.uri).sort((a, b) => b.width * b.height - a.width * a.height);
@@ -259,7 +267,8 @@ $('#profBtn').onclick = async () => {
 function sourceMode() { const push = $('#camForm').source.value === 'push'; for (const el of document.querySelectorAll('#camForm .pull-only')) el.hidden = push; for (const el of document.querySelectorAll('#camForm .push-only')) el.hidden = !push; $('#camForm').url.required = !push; }
 $('#camForm').source.onchange = sourceMode;
 // ---- privacy mask editor: rectangles in picture coordinates 0..1 over the live picture ----
-let MASKS = [], maskPlayer = null;
+let MASKS = [], ZONES = [], DRAW = 'mask', maskPlayer = null;
+for (const b of document.querySelectorAll('#drawMode [data-dm]')) b.onclick = () => { DRAW = b.dataset.dm; for (const x of document.querySelectorAll('#drawMode [data-dm]')) x.classList.toggle('on', x === b); };
 function maskRect() {
   // the picture area inside the player (object-fit: contain)
   const box = $('#maskBox'), el = maskPlayer && maskPlayer.el, size = (el && el.dataset.size || '').split('x').map(Number);
@@ -270,28 +279,31 @@ function maskRect() {
 }
 function drawMasks() {
   const r = maskRect();
-  $('#maskDraw').innerHTML = MASKS.map((p, i) => { const xs = p.map(q => q[0]), ys = p.map(q => q[1]); const x0 = Math.min(...xs), y0 = Math.min(...ys), x1 = Math.max(...xs), y1 = Math.max(...ys);
-    return `<div class="mask-r" style="left:${r.x + x0 * r.w}px;top:${r.y + y0 * r.h}px;width:${(x1 - x0) * r.w}px;height:${(y1 - y0) * r.h}px"><button type="button" data-mi="${i}" title="${esc(t('Remove'))}">✕</button></div>`; }).join('');
+  const box = (list, cls, key) => list.map((p, i) => { const xs = p.map(q => q[0]), ys = p.map(q => q[1]); const x0 = Math.min(...xs), y0 = Math.min(...ys), x1 = Math.max(...xs), y1 = Math.max(...ys);
+    return `<div class="${cls}" style="left:${r.x + x0 * r.w}px;top:${r.y + y0 * r.h}px;width:${(x1 - x0) * r.w}px;height:${(y1 - y0) * r.h}px"><button type="button" data-${key}="${i}" title="${esc(t('Remove'))}">✕</button></div>`; }).join('');
+  $('#maskDraw').innerHTML = box(ZONES, 'mask-r zone-r', 'zi') + box(MASKS, 'mask-r', 'mi');
   for (const b of document.querySelectorAll('[data-mi]')) b.onpointerdown = e => { e.stopPropagation(); MASKS.splice(+b.dataset.mi, 1); drawMasks(); };
+  for (const b of document.querySelectorAll('[data-zi]')) b.onpointerdown = e => { e.stopPropagation(); ZONES.splice(+b.dataset.zi, 1); drawMasks(); };
 }
 function maskEditor(c) {
   if (maskPlayer) { maskPlayer.close(); maskPlayer = null; }
   $('#maskSec').hidden = !c;
   if (!c) return;
-  MASKS = JSON.parse(JSON.stringify(c.privacy_masks || []));
+  MASKS = JSON.parse(JSON.stringify(c.privacy_masks || [])); ZONES = JSON.parse(JSON.stringify(c.motion_zones || []));
   // the editor shows the picture without masks when permitted (audited), so the areas can be placed exactly
   maskPlayer = ctrl32Player($('#maskBox'), {url: `/api/v1/video/cameras/${c.id}/live?quality=sub&unmask=1`, live: true, onMasks: () => {}});
   $('#maskBox').prepend(maskPlayer.el);
   const layer = $('#maskDraw'); let start = null, ghost = null;
   const pt = e => { const b = $('#maskBox').getBoundingClientRect(), r = maskRect(); return [Math.min(1, Math.max(0, (e.clientX - b.left - r.x) / r.w)), Math.min(1, Math.max(0, (e.clientY - b.top - r.y) / r.h))]; };
-  layer.onpointerdown = e => { start = pt(e); ghost = document.createElement('div'); ghost.className = 'mask-r ghost'; layer.appendChild(ghost); layer.setPointerCapture(e.pointerId); };
+  layer.onpointerdown = e => { start = pt(e); ghost = document.createElement('div'); ghost.className = 'mask-r ghost' + (DRAW === 'zone' ? ' zone-r' : ''); layer.appendChild(ghost); layer.setPointerCapture(e.pointerId); };
   layer.onpointermove = e => { if (!start) return; const p = pt(e), r = maskRect(); Object.assign(ghost.style, {left: r.x + Math.min(start[0], p[0]) * r.w + 'px', top: r.y + Math.min(start[1], p[1]) * r.h + 'px', width: Math.abs(p[0] - start[0]) * r.w + 'px', height: Math.abs(p[1] - start[1]) * r.h + 'px'}); };
   layer.onpointerup = e => { if (!start) return; const p = pt(e), x0 = Math.min(start[0], p[0]), x1 = Math.max(start[0], p[0]), y0 = Math.min(start[1], p[1]), y1 = Math.max(start[1], p[1]); start = null;
-    if (x1 - x0 > 0.01 && y1 - y0 > 0.01 && MASKS.length < 16) MASKS.push([[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(q => q.map(v => Math.round(v * 10000) / 10000)));
+    const list = DRAW === 'zone' ? ZONES : MASKS;
+    if (x1 - x0 > 0.01 && y1 - y0 > 0.01 && list.length < 16) list.push([[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(q => q.map(v => Math.round(v * 10000) / 10000)));
     drawMasks(); };
   setTimeout(drawMasks, 800); setTimeout(drawMasks, 2500);
 }
-$('#maskClear').onclick = () => { MASKS = []; drawMasks(); };
+$('#maskClear').onclick = () => { if (DRAW === 'zone') ZONES = []; else MASKS = []; drawMasks(); };
 if (window.ResizeObserver) new ResizeObserver(() => { if (maskPlayer) drawMasks(); }).observe($('#maskBox'));
 $('#camDlg').addEventListener('close', () => { if (maskPlayer) { maskPlayer.close(); maskPlayer = null; } });
 
@@ -300,9 +312,9 @@ function camDialog(c) {
   $('#camTitle').textContent = t(c ? 'Edit camera' : 'Add camera');
   $('#found').innerHTML = ''; $('#onvifOut').textContent = '';
   for (const b of document.querySelectorAll('#kinds [data-kind]')) b.checked = (c ? c.event_kinds || [] : ['motion', 'tamper', 'line', 'intrusion', 'input', 'mark']).includes(b.dataset.kind);
-  if (c) { for (const k of ['source', 'name', 'location', 'group', 'url', 'onvif_url', 'event_pre_s', 'event_post_s', 'sub_url', 'username', 'transport', 'record', 'retention_days', 'sort']) f[k].value = c[k] ?? ''; f.enabled.checked = c.enabled; f.password.placeholder = t(c.has_password ? 'unchanged' : 'none'); }
+  if (c) { for (const k of ['source', 'name', 'location', 'group', 'url', 'onvif_url', 'event_pre_s', 'event_post_s', 'sub_url', 'username', 'transport', 'record', 'retention_days', 'sort']) f[k].value = c[k] ?? ''; f.enabled.checked = c.enabled; f.motion_detect.checked = !!c.motion_detect; f.motion_sensitivity.value = c.motion_sensitivity || 50; f.snapshot_url.value = c.snapshot_url || ''; f.password.placeholder = t(c.has_password ? 'unchanged' : 'none'); }
   else f.password.placeholder = '';
-  sourceMode(); recordMode();
+  sourceMode(); recordMode(); motionMode();
   $('#groupList').innerHTML = [...new Set(CAMS.map(x => x.group).filter(Boolean))].sort().map(g => `<option value="${esc(g)}">`).join('');
   $('#camDlg').showModal();
   maskEditor(c);
@@ -319,9 +331,11 @@ $('#testBtn').onclick = async () => {
 $('#camForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#camErr').textContent = '';
   const body = {source: f.source.value, name: f.name.value, location: f.location.value, group: f.group.value, url: f.url.value, sub_url: f.sub_url.value, username: f.username.value, transport: f.transport.value,
     record: f.record.value, retention_days: +f.retention_days.value, sort: +f.sort.value, enabled: f.enabled.checked, reason: f.reason.value,
-    onvif_url: f.onvif_url.value, event_pre_s: +f.event_pre_s.value, event_post_s: +f.event_post_s.value, event_kinds: [...document.querySelectorAll('#kinds [data-kind]:checked')].map(b => b.dataset.kind)};
+    onvif_url: f.onvif_url.value, event_pre_s: +f.event_pre_s.value, event_post_s: +f.event_post_s.value, event_kinds: [...document.querySelectorAll('#kinds [data-kind]:checked')].map(b => b.dataset.kind),
+    motion_detect: f.motion_detect.checked, motion_sensitivity: +f.motion_sensitivity.value, snapshot_url: f.snapshot_url.value.trim()};
+  if (EDIT) { body.privacy_masks = MASKS; body.motion_zones = ZONES; }
   if (f.password.value) body.password = f.password.value;
-  if (body.source === 'push') { delete body.url; delete body.sub_url; delete body.username; delete body.transport; delete body.password; body.onvif_url = ''; }
+  if (body.source === 'push') { delete body.url; delete body.sub_url; delete body.username; delete body.transport; delete body.password; body.onvif_url = ''; body.snapshot_url = ''; }
   try { const r = EDIT ? await api('PUT', '/api/v1/video/cameras/' + EDIT.id, body) : await api('POST', '/api/v1/video/cameras', body);
     $('#camDlg').close(); ctrl32.toast(t('camera saved'), 'ok'); load(); if (r.push_secret) showSecret(r); } catch (x) { $('#camErr').textContent = x.message; } };
 

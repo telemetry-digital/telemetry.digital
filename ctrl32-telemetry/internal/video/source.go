@@ -32,6 +32,7 @@ type Status struct {
 	RecordMode string   `json:"record_mode,omitempty"` // "events" when the camera records only around events
 	Events     string   `json:"events,omitempty"`      // connected, connecting or the last error of the event connection
 	Active     []string `json:"active,omitempty"`      // kinds of events going on now
+	Motion     string   `json:"motion,omitempty"`      // motion detection on the server: watching (…) or the problem
 }
 
 // Source is one camera stream (main or sub). It connects while it is kept (recording) or watched, reconnects with a
@@ -65,18 +66,21 @@ type Source struct {
 
 // Sub receives packets of a source. Close it when done.
 type Sub struct {
-	C       chan Packet
-	src     *Source
-	lagging bool
+	C        chan Packet
+	src      *Source
+	lagging  bool
+	internal bool // the server's own reader (motion detection), not counted as a viewer
 }
 
 const subQueue = 256
 
 // Subscribe starts the stream if needed and returns a subscriber primed with the current GOP.
-func (s *Source) Subscribe() *Sub {
+func (s *Source) Subscribe() *Sub { return s.subscribe(false) }
+
+func (s *Source) subscribe(internal bool) *Sub {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	sub := &Sub{C: make(chan Packet, subQueue+len(s.gop)), src: s}
+	sub := &Sub{C: make(chan Packet, subQueue+len(s.gop)), src: s, internal: internal}
 	if s.subs == nil {
 		s.subs = map[*Sub]struct{}{}
 	}
@@ -137,7 +141,11 @@ func (s *Source) Status() Status {
 	if st.State == "" {
 		st.State = "idle"
 	}
-	st.Viewers = len(s.subs)
+	for sub := range s.subs {
+		if !sub.internal {
+			st.Viewers++
+		}
+	}
 	if s.lastFPS > 0 {
 		st.FPS, st.Kbps = s.lastFPS, s.lastKbps
 	} else if !s.winStart.IsZero() {

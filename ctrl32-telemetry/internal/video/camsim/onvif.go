@@ -70,6 +70,17 @@ func (c *simCam) integrate() {
 	c.zm = max(0, min(1, c.zm+c.vz*dt*0.5))
 }
 
+// Motion reports whether motion is switched on for a camera.
+func (o *ONVIF) Motion(label string) bool {
+	if o == nil {
+		return false
+	}
+	c := o.cam(label)
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return c.motion
+}
+
 // SetMotion switches the motion state of a camera and notifies its subscribers.
 func (o *ONVIF) SetMotion(label string, on bool) {
 	c := o.cam(label)

@@ -720,6 +720,8 @@ body.kiosk .footer svg { width: 11px; height: 11px; }
 .mask-draw { position: absolute; inset: 0; z-index: 3; cursor: crosshair; touch-action: none; }
 .mask-r { position: absolute; background: rgba(0,0,0,.72); outline: 2px solid #f59e0b; }
 .mask-r.ghost { background: rgba(245,158,11,.35); }
+.mask-r.zone-r { background: rgba(22,163,74,.18); outline-color: #16a34a; } .mask-r.zone-r button { background: #16a34a; color: #fff; }
+.mask-r.ghost.zone-r { background: rgba(22,163,74,.35); }
 .mask-r button { position: absolute; right: 2px; top: 2px; border: 0; border-radius: 4px; background: #f59e0b; color: #111; font-size: 11px; cursor: pointer; padding: 0 5px; }
 /* camera on a plan (spec 017) */
 .cam-pin { width: 100%; height: 100%; overflow: visible; }

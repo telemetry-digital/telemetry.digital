@@ -219,6 +219,39 @@ req PUT /api/v1/video/walls/$WID '{"name":"Renamed","reason":"e2e"}'; check "wal
 req GET /api/v1/video/walls; check "wall listed" "$(jx "j.some(w => w.id === '$WID')")" true
 curl -s -o /dev/null -w '%{http_code}' "$BASE/video/walls/$WID" > "$TMP/s"; check "wall page served" "$(st)" 200
 
+echo "== motion detection on the server (spec 019)"
+mcam() { req POST /api/v1/video/cameras "$1"; jx j.id; }
+mstat() { req GET "/api/v1/video/cameras/$1"; }
+req POST /api/v1/video/cameras "{\"name\":\"M0 $SUF\",\"url\":\"$SIM/stillx/mjpeg/160x96\",\"motion_detect\":true,\"motion_sensitivity\":0,\"reason\":\"e2e\"}"; check "sensitivity validated" "$(st)" 400
+req POST /api/v1/video/cameras "{\"name\":\"M0 $SUF\",\"url\":\"$SIM/stillx/h264/160x96\",\"motion_detect\":true,\"snapshot_url\":\"http://admin:pw@127.0.0.1:$HP/snapshot/x/160x96\",\"reason\":\"e2e\"}"; check "snapshot address without credentials" "$(st)" 400
+req POST /api/v1/video/cameras "{\"name\":\"M0 $SUF\",\"source\":\"push\",\"motion_detect\":true,\"snapshot_url\":\"http://127.0.0.1:$HP/snapshot/x/160x96\",\"reason\":\"e2e\"}"; check "no snapshot address for a relayed camera" "$(st)" 400
+req POST /api/v1/video/cameras "{\"name\":\"M0 $SUF\",\"url\":\"$SIM/stillx/h264/160x96\",\"motion_zones\":[[[0,0],[2,0],[1,1]]],\"reason\":\"e2e\"}"; check "zones validated" "$(st)" 400
+MJ=$(mcam "{\"name\":\"Motion MJPEG $SUF\",\"url\":\"$SIM/STILL-M$SUF/h264/320x176\",\"sub_url\":\"$SIM/STILL-M$SUF/mjpeg/320x176\",\"record\":\"events\",\"motion_detect\":true,\"motion_sensitivity\":60,\"reason\":\"e2e\"}")
+check "camera with motion detection" "$(jx 'j.motion_detect + " " + j.motion_sensitivity')" "true 60"
+waitfor '(mstat $MJ; [[ "$(jx j.status.motion)" == "watching (MJPEG)" ]])' 20 && ok "watching the MJPEG sub-stream" || bad "motion status: $(jx j.status.motion)"
+check "the detector is not counted as a viewer" "$(jx j.status.viewers)" 0
+sleep 3; mstat $MJ; check "a still picture is no motion" "$(jx '(j.status.active || []).length')" 0
+curl -s -X POST "http://127.0.0.1:$HP/sim/motion/STILL-M$SUF?on=1" >/dev/null
+waitfor '(mstat $MJ; [[ "$(jx "(j.status.active || []).includes(\"motion\")")" == true ]])' 15 && ok "motion detected" || bad "no motion: $(head -c 300 "$TMP/b")"
+check "motion starts event recording" "$(jx j.status.recording)" true
+curl -s -X POST "http://127.0.0.1:$HP/sim/motion/STILL-M$SUF?on=0" >/dev/null
+waitfor '(mstat $MJ; [[ "$(jx "(j.status.active || []).length")" == 0 ]])' 20 && ok "motion ended" || bad "motion did not end"
+req GET "/api/v1/video/cameras/$MJ/events?from=$(iso '-2 min')"; check "event stored with source server" "$(jx 'j.filter(e => e.kind === "motion" && e.source === "server" && e.ended_at).length')" 1
+# a zone where nothing moves (bottom left corner): no motion although the scene moves
+ZN=$(mcam "{\"name\":\"Motion zone $SUF\",\"url\":\"$SIM/zone$SUF/mjpeg/320x176\",\"motion_detect\":true,\"motion_sensitivity\":80,\"motion_zones\":[[[0,0.85],[0.3,0.85],[0.3,1],[0,1]]],\"reason\":\"e2e\"}")
+waitfor '(mstat $ZN; [[ "$(jx j.status.motion)" == "watching (MJPEG)" ]])' 20; sleep 4; mstat $ZN; check "motion outside the zones is ignored" "$(jx '(j.status.active || []).length')" 0
+req PUT "/api/v1/video/cameras/$ZN" '{"motion_zones":[],"reason":"e2e"}'; check "zones removed" "$(st)" 200
+waitfor '(mstat $ZN; [[ "$(jx "(j.status.active || []).includes(\"motion\")")" == true ]])' 20 && ok "the whole picture: motion of the scene detected" || bad "no motion without zones"
+# an H.264 camera: snapshots from its snapshot address
+SN=$(mcam "{\"name\":\"Motion snapshot $SUF\",\"url\":\"$SIM/STILL-S$SUF/h264/320x176\",\"motion_detect\":true,\"snapshot_url\":\"http://127.0.0.1:$HP/snapshot/STILL-S$SUF/320x176\",\"reason\":\"e2e\"}")
+waitfor '(mstat $SN; [[ "$(jx j.status.motion)" == "watching (snapshots)" ]])' 20 && ok "watching snapshots of an H.264 camera" || bad "snapshot status: $(jx j.status.motion)"
+curl -s -X POST "http://127.0.0.1:$HP/sim/motion/STILL-S$SUF?on=1" >/dev/null
+waitfor '(mstat $SN; [[ "$(jx "(j.status.active || []).includes(\"motion\")")" == true ]])' 15 && ok "motion detected in snapshots" || bad "no motion in snapshots"
+curl -s -X POST "http://127.0.0.1:$HP/sim/motion/STILL-S$SUF?on=0" >/dev/null
+NO=$(mcam "{\"name\":\"Motion h264 $SUF\",\"url\":\"$SIM/nosnap$SUF/h264/160x96\",\"motion_detect\":true,\"reason\":\"e2e\"}")
+waitfor '(mstat $NO; [[ "$(jx j.status.motion)" == needs* ]])' 20 && ok "an H.264 camera without a snapshot address is explained" || bad "status: $(jx j.status.motion)"
+for c in $MJ $ZN $SN $NO; do req DELETE "/api/v1/video/cameras/$c?reason=e2e"; done; check "motion cameras removed" "$(st)" 200
+
 echo "== video settings"
 req GET /api/v1/video/settings; check "settings with defaults" "$(st) $(jx 'j.defaults.segment_seconds + " " + j.defaults.event_merge_seconds + " " + j.can_edit')" "200 60 5 true"
 OLD=$(cat "$TMP/b" | node -pe 'JSON.stringify(JSON.parse(require("fs").readFileSync(0)).settings)')
