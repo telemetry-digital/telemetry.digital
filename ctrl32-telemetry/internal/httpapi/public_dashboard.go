@@ -83,7 +83,7 @@ func (s *Server) shareOf(ctx context.Context, org, slug string) (*shareInfo, boo
 		if typ == "alarms" {
 			si.HasAlarms = true
 		}
-		if typ == "camera" {
+		if typ == "camera" || typ == "camera_pin" {
 			params, _ := w["params"].(map[string]any)
 			if id, ok := params["camera"].(string); ok && id != "" {
 				si.Cams[id] = true

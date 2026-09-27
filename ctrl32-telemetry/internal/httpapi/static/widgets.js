@@ -273,7 +273,7 @@
   const LABELS = { setpoint: 'Setpoint', switch: 'Switch', button: 'Button', chart: 'Trend', bars: 'Compare', donut: 'Share', heatmap: 'Heatmap', value: 'Latest value', gauge: 'Gauge', status: 'State', table: 'Values', alarms: 'Alarms', devices: 'Devices', map: 'Map', text: 'Text', tank: 'Tank', pump: 'Pump', valve: 'Valve', pipe: 'Pipe', instrument: 'Instrument' };
   const labelOf = (t) => LABELS[t] || t;
   const NEEDS_DS = new Set(['chart', 'bars', 'donut', 'heatmap', 'value', 'gauge', 'status', 'table', 'tank', 'pump', 'valve', 'instrument']);
-  const MIMIC_TYPES = new Set(['tank', 'pump', 'valve', 'pipe', 'instrument']);
+  const MIMIC_TYPES = new Set(['tank', 'pump', 'valve', 'pipe', 'instrument', 'camera_pin']);
   const isCanvas = (spec) => !!(spec.layout && spec.layout.type === 'canvas');
   const framed = (w) => MIMIC_TYPES.has(w.type) ? !!(w.params && w.params.frame) : !(w.params && w.params.frame === false);
   // ---- appearance, conditional formatting, click actions, full screen (spec 002) -------------------------------

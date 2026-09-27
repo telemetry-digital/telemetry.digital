@@ -154,7 +154,7 @@ func specCameras(spec map[string]any) []string {
 		}
 	}
 	for _, w := range widgets {
-		if t, _ := w["type"].(string); t != "camera" {
+		if t, _ := w["type"].(string); t != "camera" && t != "camera_pin" {
 			continue
 		}
 		params, _ := w["params"].(map[string]any)

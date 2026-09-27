@@ -275,6 +275,53 @@
     el._cam = { key, player };
   }, { label: 'Camera' });
 
+  // ---- camera on a plan (spec 017): field of view, state, events; a click shows the live picture ----------------
+  const pinCache = new Map(); // camera id → {at, cam} for signed-in users (one request per camera per 10 s)
+  async function pinInfo(id) {
+    if (WG.isDisplay && WG.isDisplay()) {
+      const a = (window.ctrl32DisplayActive || {})[id];
+      return { name: (window.ctrl32DisplayCameras || {})[id] || '', online: true, active: a ? a.kinds : [] };
+    }
+    const c = pinCache.get(id);
+    if (c && Date.now() - c.at < 10000) return c.info;
+    const cam = await api('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}`);
+    const info = { name: cam.name, online: cam.status.state === 'online' || cam.status.state === 'idle', active: cam.status.active || [] };
+    pinCache.set(id, { at: Date.now(), info });
+    return info;
+  }
+  function pinPopup(id, name) {
+    const display = WG.isDisplay && WG.isDisplay();
+    const ov = document.createElement('div'); ov.className = 'pin-pop';
+    ov.innerHTML = `<div class="pin-pop-box"><div class="pin-pop-head"><b class="notranslate">${esc(name)}</b><span class="grow"></span>${display ? '' : `<a class="btn small" href="/video/cameras/${encodeURIComponent(id)}">${esc(WG.tr('Open camera'))}</a>`}<button class="btn small" type="button" data-x>✕</button></div><div class="pin-pop-vid"></div></div>`;
+    document.body.appendChild(ov);
+    loadPlayer().then(() => {
+      const base = display ? '/api/v1/display/cameras/' : '/api/v1/video/cameras/';
+      const pl = window.ctrl32Player(ov.querySelector('.pin-pop-vid'), { url: `${base}${encodeURIComponent(id)}/live?quality=main`, live: true });
+      const close = () => { pl.close(); ov.remove(); document.removeEventListener('keydown', esc_); };
+      const esc_ = (e) => { if (e.key === 'Escape') close(); };
+      ov.querySelector('[data-x]').onclick = close; ov.onclick = (e) => { if (e.target === ov) close(); }; document.addEventListener('keydown', esc_);
+      if (display) setTimeout(close, 60000); // a display returns to its content by itself
+    });
+  }
+  reg('camera_pin', async (el, p) => {
+    const pub = WG.isPublic() && !(WG.isDisplay && WG.isDisplay());
+    if (!p.camera) { el.innerHTML = '<div class="dw-center muted">Choose a camera in the widget properties.</div>'; return; }
+    let info = { name: '', online: true, active: [] };
+    if (!pub) { try { info = await pinInfo(p.camera); } catch (e) { info = { name: '', online: false, active: [], error: e.status === 403 || e.status === 404 }; } }
+    if (info.error) { el.innerHTML = ''; return; } // a camera the user may not see is not on their plan
+    const dir = (+(p.direction ?? 90)) % 360, fov = Math.max(10, Math.min(180, +(p.fov ?? 70))), reach = Math.max(0, Math.min(100, +(p.reach ?? 80))) / 100 * 46;
+    const rad = (a) => (a - 90) * Math.PI / 180, pt = (a) => [50 + reach * Math.cos(rad(a)), 50 + reach * Math.sin(rad(a))];
+    const [x1, y1] = pt(dir - fov / 2), [x2, y2] = pt(dir + fov / 2);
+    const alarm = info.active.length > 0, off = !info.online;
+    const cone = reach > 0 ? `<path d="M50,50 L${x1.toFixed(2)},${y1.toFixed(2)} A${reach.toFixed(2)},${reach.toFixed(2)} 0 ${fov > 180 ? 1 : 0} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z" class="pin-cone${alarm ? ' alarm' : ''}"/>` : '';
+    const label = p.show_name !== false && info.name ? `<text x="50" y="97" text-anchor="middle" class="pin-label">${esc(p.title || info.name)}</text>` : '';
+    el.innerHTML = `<svg class="cam-pin${alarm ? ' alarm' : ''}${off ? ' off' : ''}${pub ? '' : ' click'}" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(info.name || 'camera')}">
+      <title>${esc((info.name || '') + (alarm ? ' · ' + info.active.map((k) => WG.tr(k)).join(', ') : off ? ' · ' + WG.tr('offline') : ''))}</title>
+      ${cone}<g transform="rotate(${dir} 50 50)"><rect x="41" y="44" width="18" height="12" rx="2" class="pin-body"/><rect x="47" y="38" width="6" height="7" rx="1" class="pin-body"/></g>
+      <circle cx="50" cy="50" r="3" class="pin-dot"/>${label}</svg>`;
+    if (!pub) el.firstElementChild.onclick = (e) => { e.stopPropagation(); pinPopup(p.camera, info.name || p.title || ''); };
+  }, { label: 'Camera on a plan' });
+
   // ---- controls: commands with reason, confirmation, permission and audit (FR-009) --------------------------------
   const ctlFoot = () => `<div class="row" style="gap:6px;align-items:center;flex-wrap:wrap">${u.reasonInput()}<button class="btn small primary ctl-send" type="button">Send</button></div><div class="ctl-out" style="font-size:12px;min-height:16px"></div>`;
   const snap = (v, p) => { const lo = p.min ?? 0, hi = p.max ?? 100, st = p.step > 0 ? p.step : 1; return clamp(Math.round((v - lo) / st) * st + lo, lo, hi); };

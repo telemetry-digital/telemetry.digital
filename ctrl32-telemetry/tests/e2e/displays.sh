@@ -31,11 +31,13 @@ req POST /api/v1/auth/login "{\"username\":\"$USER\",\"password\":\"$PASS\"}"; c
 req GET /api/v1/auth/me; CSRF=$(jx j.csrf_token)
 check "admin may pair and control displays" "$(jx '["display.manage","display.control"].every(p => j.permissions.includes(p))')" true
 DW="{\"name\":\"Kiosk $SUF\",\"reason\":\"e2e\",\"spec\":{\"version\":1,\"kind\":\"dashboard\",\"layout\":{\"type\":\"grid\",\"row_height\":96},\"range\":\"6h\",\"refresh_s\":30,\"widgets\":[{\"id\":\"c\",\"type\":\"camera\",\"geometry\":{\"x\":0,\"y\":0,\"w\":4,\"h\":3},\"bindings\":{},\"params\":{\"camera\":\"CAMID\"}}]}}"
+DP="{\"name\":\"Plan $SUF\",\"reason\":\"e2e\",\"spec\":{\"version\":1,\"kind\":\"dashboard\",\"layout\":{\"type\":\"grid\",\"row_height\":96},\"range\":\"6h\",\"refresh_s\":30,\"widgets\":[{\"id\":\"p\",\"type\":\"camera_pin\",\"geometry\":{\"x\":4,\"y\":0,\"w\":1,\"h\":1},\"bindings\":{},\"params\":{\"camera\":\"PINID\",\"direction\":180}}]}}"
 mk() { req POST /api/v1/video/cameras "{\"name\":\"$1 $SUF\",\"url\":\"rtsp://127.0.0.1:1/x\",\"record\":\"$3\",\"enabled\":$4,\"group\":\"$2\",\"reason\":\"e2e\"}"; jx j.id; }
-GATE=$(mk Gate "gate $SUF" off false); YARD=$(mk Yard "yard $SUF" off false); ODD=$(mk Other "" off false)
+GATE=$(mk Gate "gate $SUF" off false); YARD=$(mk Yard "yard $SUF" off false); ODD=$(mk Other "" off false); PIN=$(mk Pin "" off false)
 check "cameras with groups" "$(jx j.group)" ""
 req GET "/api/v1/video/cameras/$GATE"; check "group stored" "$(jx j.group)" "gate $SUF"
-req POST /api/v1/dashboards "${DW/CAMID/$GATE}"; check "dashboard with a camera" "$(st)" 201; SLUG=$(jx j.slug)
+D1=$(node -e 'const a=JSON.parse(process.argv[1]), b=JSON.parse(process.argv[2]); a.spec.widgets.push(...b.spec.widgets); console.log(JSON.stringify(a))' "${DW/CAMID/$GATE}" "${DP/PINID/$PIN}")
+req POST /api/v1/dashboards "$D1"; check "dashboard with a camera and a camera on a plan" "$(st)" 201; SLUG=$(jx j.slug)
 req POST /api/v1/dashboards "{\"name\":\"Other $SUF\",\"reason\":\"e2e\",\"spec\":{\"version\":1,\"kind\":\"dashboard\",\"layout\":{\"type\":\"grid\",\"row_height\":96},\"range\":\"6h\",\"refresh_s\":30,\"widgets\":[]}}"; OTHER=$(jx j.slug)
 req POST /api/v1/video/walls "{\"name\":\"Wall $SUF\",\"reason\":\"e2e\",\"screens\":[{\"cols\":2,\"rows\":1,\"tiles\":[\"$YARD\"]},{\"cols\":1,\"rows\":1,\"tiles\":[\"$ODD\"]}]}"; WALL=$(jx j.id)
 
@@ -60,13 +62,14 @@ grep -q 'ctrl32_display_pair' "$KJ" && [[ "$(grep -P '\tctrl32_display_pair\t' "
 
 echo "== what a display may read"
 kiosk GET /api/v1/display/state; check "state" "$(st) $(jx '[j.name, j.items.length, j.locale, j.items[1].screen].join(" ")')" "200 Control room $SUF 2 sk 0"
-check "camera names of its content only" "$(jx "Object.keys(j.cameras).sort().join(',')")" "$(echo -e "$GATE\n$YARD" | sort | paste -sd,)"
+check "camera names of its content only" "$(jx "Object.keys(j.cameras).sort().join(',')")" "$(echo -e "$GATE\n$PIN\n$YARD" | sort | paste -sd,)"
 kiosk GET "/api/v1/public/~$SLUG"; check "its dashboard" "$(st)" 200
 kiosk GET "/api/v1/public/~$OTHER"; check "another dashboard refused" "$(st)" 404
 curl -s -o /dev/null -w '%{http_code}' "$BASE/api/v1/public/~$SLUG" > "$TMP/s"; check "dashboard without the display cookie refused" "$(st)" 404
 kiosk GET "/api/v1/display/walls/$WALL"; check "its wall with camera names" "$(st) $(jx "Object.keys(j.cameras).length")" "200 2"
 kiosk GET "/api/v1/display/cameras/$ODD/live"; check "camera of another wall screen refused" "$(st)" 403
 kiosk GET "/api/v1/display/cameras/$GATE/live"; [[ "$(st)" != 403 && "$(st)" != 401 ]] && ok "camera of its dashboard allowed ($(st))" || bad "camera of its dashboard: $(st)"
+kiosk GET "/api/v1/display/cameras/$PIN/live"; [[ "$(st)" != 403 && "$(st)" != 401 ]] && ok "camera on a plan of its dashboard allowed ($(st))" || bad "camera on a plan: $(st)"
 kiosk GET /api/v1/video/cameras; check "no session API with a display cookie" "$(st)" 401
 kiosk GET /api/v1/displays; check "a display cannot list displays" "$(st)" 401
 
@@ -119,6 +122,7 @@ req3 POST /api/v1/auth/password "{\"current\":\"$PW3\",\"new\":\"Limited-Enginee
 req3 POST /api/v1/auth/login "{\"username\":\"eng_$SUF\",\"password\":\"Limited-Engineer-Passw0rd-$SUF\"}"; req3 GET /api/v1/auth/me; CSRF3=$(jx j.csrf_token)
 req3 POST /api/v1/video/walls "{\"name\":\"Sneak $SUF\",\"reason\":\"e2e\",\"screens\":[{\"cols\":1,\"rows\":1,\"tiles\":[\"$YARD\"]}]}"; check "limited: wall with another group's camera refused" "$(st)" 400
 D3="${DW/CAMID/$YARD}"; req3 POST /api/v1/dashboards "${D3/Kiosk /Sneak }"; check "limited: camera widget of another group refused" "$(st)" 403
+D4="${DP/PINID/$YARD}"; req3 POST /api/v1/dashboards "${D4/Plan /Sneak plan }"; check "limited: camera on a plan of another group refused" "$(st)" 403
 req3 POST /api/v1/displays/pair "{\"code\":\"ABCD-EFGH\",\"name\":\"x\",\"content\":{\"items\":[{\"kind\":\"wall\",\"wall\":\"$WALL\",\"screen\":0}],\"popup\":\"none\"},\"reason\":\"e2e\"}"; check "limited: display with another group's wall refused" "$(st) $(jx 'j.error.includes("outside your camera groups")')" "400 true"
 req3 POST /api/v1/displays/pair "{\"code\":\"ABCD-EFGH\",\"name\":\"x\",\"content\":{\"items\":[{\"kind\":\"dashboard\",\"slug\":\"$OTHER\"}],\"popup\":\"all\"},\"reason\":\"e2e\"}"; check "limited: popups of all cameras refused" "$(st)" 400
 req3 GET /api/v1/video/storage; check "limited: storage lists only own cameras" "$(jx "j.cameras.filter(c => c.name.endsWith(' $SUF')).map(c => c.id).join()")" "$GATE"
@@ -126,7 +130,7 @@ req3 POST /api/v1/users "{\"username\":\"sub_$SUF\",\"full_name\":\"Sub\",\"emai
 req GET "/api/v1/users/$SUB/camera-groups"; check "a user created by a limited admin inherits the limit" "$(jx 'j.limited + " " + j.groups.join()')" "true gate $SUF"
 for u in $UID3 $SUB; do req PATCH "/api/v1/users/$u" '{"disabled":true,"reason":"e2e cleanup"}'; done
 req PUT "/api/v1/users/$UID2/camera-groups" '{"limited":false,"reason":"e2e"}'; req2 GET /api/v1/video/cameras
-check "unlimited again: all cameras at once" "$(jx "j.filter(c => c.name.endsWith(' $SUF')).length")" 3
+check "unlimited again: all cameras at once" "$(jx "j.filter(c => c.name.endsWith(' $SUF')).length")" 4
 req PATCH "/api/v1/users/$UID2" '{"disabled":true,"reason":"e2e cleanup"}'
 
 echo "== revoke"
@@ -155,5 +159,5 @@ req PUT /api/v1/video/settings "$(node -e 'const o=JSON.parse(process.argv[1]); 
 echo "== cleanup"
 req DELETE "/api/v1/video/walls/$WALL?reason=e2e"
 for d in $SLUG $OTHER; do req DELETE "/api/v1/dashboards/$d?reason=e2e"; done
-for c in $GATE $YARD $ODD; do req DELETE "/api/v1/video/cameras/$c?reason=e2e"; done; check "cleaned up" "$(st)" 200
+for c in $GATE $YARD $ODD $PIN; do req DELETE "/api/v1/video/cameras/$c?reason=e2e"; done; check "cleaned up" "$(st)" 200
 echo; echo "passed $pass, failed $fail"; [[ $fail -eq 0 ]]

@@ -41,6 +41,7 @@ var commonParams = []ScreenParam{
 	{Name: "transparent", Label: "Transparent card", Kind: "bool", Group: "appearance"},
 	{Name: "tooltip", Label: "Tooltip", Kind: "text", Group: "appearance"},
 	{Name: "fullscreen", Label: "Full-screen button", Kind: "bool", Default: true, Group: "appearance"},
+	{Name: "frame", Label: "Framed card", Kind: "bool", Default: true, Group: "appearance"},
 	{Name: "click", Label: "On click", Kind: "select", Options: []string{"", "screen", "trend", "faceplate"}, Group: "actions"},
 	{Name: "click_target", Label: "Screen (slug) for On click = screen", Kind: "text", Group: "actions"},
 }

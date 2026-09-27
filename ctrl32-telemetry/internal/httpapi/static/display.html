@@ -160,6 +160,7 @@ let wasActive = {};
 function handleEvents() {
   if (STATE.popup !== 'none') {
     for (const [id, a] of Object.entries(STATE.active)) {
+      if (!a.popup) continue;
       if (!wasActive[id]) popup(id, a.name, a.kinds.map(k => t(k)).join(', '), STATE.popup_seconds || 30, 'main');
       else if (popups.has(id)) popups.get(id).until = Math.max(popups.get(id).until, Date.now() + (STATE.popup_seconds || 30) * 1000);
     }
@@ -194,7 +195,7 @@ async function poll() {
     $('#status').hidden = true;
     // switch only to a language the server has enabled (otherwise the page would reload forever)
     if (s.locale && s.locale !== ctrl32.locale && (ctrl32.langs.enabled || []).includes(s.locale)) { ctrl32.setLocale(s.locale); return; }
-    STATE = s; window.ctrl32DisplayCameras = s.cameras || {};
+    STATE = s; window.ctrl32DisplayCameras = s.cameras || {}; window.ctrl32DisplayActive = s.active || {};
     document.title = s.name;
     if (s.version !== VERSION) { VERSION = s.version; IDX = 0; rotate(); }
     markActive(); handleEvents(); handleCommand(s.command); handleMessage(s.message); renderOverlay();

@@ -201,6 +201,17 @@ the stream (sub for small widgets), whether to show the name and whether a click
 keeps its connection across dashboard refreshes and closes it when it leaves the page. It needs `video.view`;
 public (shared) dashboards never show cameras.
 
+## Cameras on a floor plan
+
+A floor plan or a site map is a process picture (*Dashboards → New → Process picture*) with the plan as an image
+from the library (*Library → Import SVG*, e.g. exported from a CAD drawing) and one *Camera on a plan* widget per
+camera (*Add widget → Process → Camera on a plan*). Each pin shows the camera, its view cone (direction 0° = up,
+clockwise; field of view; reach) and its name. The pin is green when the camera is online, red when it is offline and
+orange, pulsing, while an event (motion or another ONVIF event) is in progress. A click opens the live picture in a
+window (privacy masks apply) with a link to the camera page. Pins of cameras outside the viewer's camera groups are
+not drawn; a user limited to groups cannot place other cameras. On a display (kiosk) the plan works the same, the
+window closes by itself after a minute; shared public dashboards show the pins without state.
+
 ## Watching
 
 - **Live view** — all cameras as tiles (sub-stream), click for the camera page.

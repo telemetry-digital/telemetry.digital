@@ -350,26 +350,39 @@ func (s *Server) displayState(w http.ResponseWriter, r *http.Request) {
 		}
 		items = append(items, m)
 	}
-	// cameras with events: those of its walls, or all cameras of the organization
+	// cameras with events: every camera it shows (tiles, widgets, plan pins) is marked; "popup" says which ones the
+	// display enlarges — those of its walls, or all cameras of the organization
 	active := map[string]any{}
-	if s.video != nil && d.Content.Popup != "none" {
-		var ids []string
-		if d.Content.Popup == "all" {
-			ids = s.orgCameraIDs(ctx, d.Org)
-		} else {
+	allowed := s.displayCameras(ctx, d)
+	if s.video != nil {
+		popup := map[string]bool{}
+		switch d.Content.Popup {
+		case "all":
+			for _, id := range s.orgCameraIDs(ctx, d.Org) {
+				popup[id] = true
+			}
+		case "wall":
 			for _, it := range d.Content.Items {
 				if it.Kind == "wall" {
-					ids = append(ids, s.wallTiles(ctx, d.Org, it.Wall, it.Screen)...)
+					for _, id := range s.wallTiles(ctx, d.Org, it.Wall, it.Screen) {
+						popup[id] = true
+					}
 				}
 			}
 		}
-		for _, id := range ids {
-			if st, ok := s.video.Status(id); ok && len(st.Active) > 0 {
-				active[id] = map[string]any{"kinds": st.Active}
+		seen := map[string]bool{}
+		for _, set := range []map[string]bool{popup, allowed} {
+			for id := range set {
+				if seen[id] {
+					continue
+				}
+				seen[id] = true
+				if st, ok := s.video.Status(id); ok && len(st.Active) > 0 {
+					active[id] = map[string]any{"kinds": st.Active, "popup": popup[id]}
+				}
 			}
 		}
 	}
-	allowed := s.displayCameras(ctx, d)
 	ids := make([]string, 0, len(allowed))
 	for id := range allowed {
 		ids = append(ids, id)
