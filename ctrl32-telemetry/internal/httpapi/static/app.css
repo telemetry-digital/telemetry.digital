@@ -701,3 +701,4 @@ body.kiosk .footer svg { width: 11px; height: 11px; }
 .pbar { position: relative; }
 .send-menu { position: absolute; right: 8px; bottom: 52px; z-index: 6; display: flex; flex-direction: column; gap: 6px; min-width: 220px; padding: 10px; border-radius: 10px; background: #111827; color: #e5e7eb; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
 .send-menu .btn { justify-content: flex-start; }
+.send-menu .btn.ghost { color: #e5e7eb; background: transparent; border-color: rgba(255,255,255,.25); }
