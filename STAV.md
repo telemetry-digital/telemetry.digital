@@ -22,12 +22,13 @@
 | 0.52.0 | Prenášač vzdialených kamier ako služba: inštalátory pre Linux/Raspberry Pi a Windows, samokontrola pred spustením, stiahnutie relay.toml z rozhrania (spec 018) | e2e 101, unit |
 | 0.53.0 | Rozpoznanie pohybu na serveri pre kamery bez ONVIF (MJPEG alebo JPEG snímka, citlivosť, zóny); oprava ukladania masiek z formulára (spec 019) | e2e 120, unit |
 | 0.54.0 | Zvuk z kamier (AAC/Opus, predvolene vypnutý, oprávnenie `video.audio`, audit počúvania, samostatný prúd v prehliadači) (spec 020) | e2e 132, unit |
+| 0.55.0 | Zvuk G.711 (TP-Link Tapo a väčšina kamier) ako PCM cez WebAudio; predvoľby výrobcov kamier vo formulári (Tapo, Hikvision, Dahua, Reolink, Axis, Uniview, EZVIZ) | e2e 137, unit |
 
 Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (`tests/run-all.sh`) pre 0.54.0 (27. 9. 2026): všetko prešlo okrem 3 kontrol času NTP v `ops`, ktoré potrebujú internet (v tomto kontajneri nedostupný) — nesúvisí s kódom.
 
 ## Ďalšie možnosti (fáza 2)
 
-- kamery: zvuk G.711 (prevod v prehliadači cez WebAudio), sťahovanie záznamov z prenášača pri výpadku spojenia;
+- kamery: sťahovanie záznamov z prenášača pri výpadku spojenia;
   overiť H.264 + AAC v bežnom Chrome/Edge a inštalátory prenášača na skutočnom Linuxe/Windows
 - smart home: efekty svetiel na karte, Shelly Gen1, skupiny entít, plánovanie scén (časovač),
   energia: porovnanie s minulým obdobím, export CSV
@@ -47,6 +48,8 @@ Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (
 
 ## Čaká na používateľa
 
-- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.54.0 root@2.29.5.17 -i <kľúč>` alebo
+- test so skutočnými kamerami TP-Link Tapo (návod: `ctrl32-telemetry/docs/video.md`, časť „Camera makes“)
+
+- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.55.0 root@2.29.5.17 -i <kľúč>` alebo
   GitHub workflow (secrets `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS` a workflow na `main`)
 - potvrdenie ADR-0015 (SCADA editor v čistom JS nad SVG)

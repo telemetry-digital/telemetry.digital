@@ -38,6 +38,7 @@ type Track struct {
 const (
 	AAC  = "aac"
 	Opus = "opus"
+	PCM  = "pcm" // 16-bit big-endian samples (from G.711); browsers play it through WebAudio, not MSE
 )
 
 // AudioTrack describes the sound of a connection: AAC (MPEG-4 Audio) or Opus, both playable in browsers and stored
@@ -62,8 +63,11 @@ func (a *AudioTrack) MIME() string {
 	if a == nil {
 		return ""
 	}
-	if a.Codec == Opus {
+	switch a.Codec {
+	case Opus:
 		return `audio/mp4; codecs="opus"`
+	case PCM:
+		return ""
 	}
 	var c mpeg4audio.AudioSpecificConfig
 	ot := 2
@@ -74,8 +78,11 @@ func (a *AudioTrack) MIME() string {
 }
 
 func (a *AudioTrack) mp4Codec() codecs.Codec {
-	if a.Codec == Opus {
+	switch a.Codec {
+	case Opus:
 		return &codecs.Opus{ChannelCount: a.Channels}
+	case PCM:
+		return &codecs.LPCM{BitDepth: 16, SampleRate: a.SampleRate, ChannelCount: a.Channels}
 	}
 	var c mpeg4audio.AudioSpecificConfig
 	_ = c.Unmarshal(a.Config)
@@ -192,6 +199,10 @@ func trackFromInit(tracks []*fmp4.InitTrack) (*Track, int, int, error) {
 			}
 		case *codecs.Opus:
 			t.Audio, aid = &AudioTrack{Codec: Opus, SampleRate: int(it.TimeScale), Channels: c.ChannelCount}, it.ID
+		case *codecs.LPCM:
+			if c.BitDepth == 16 && !c.LittleEndian {
+				t.Audio, aid = &AudioTrack{Codec: PCM, SampleRate: int(it.TimeScale), Channels: c.ChannelCount}, it.ID
+			}
 		}
 		if aid != 0 {
 			break

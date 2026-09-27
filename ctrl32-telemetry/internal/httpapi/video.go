@@ -21,10 +21,12 @@ package httpapi
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"slices"
@@ -736,6 +738,7 @@ type videoConn struct {
 	ctx   context.Context
 	audio bool         // the player asked for the sound and may hear it (spec 020)
 	amux  *video.Muxer // the sound alone, sent as binary messages starting with 'A'
+	pcm   bool         // the sound is PCM (from G.711): binary messages starting with 'P'
 }
 
 func (s *Server) upgradeVideo(w http.ResponseWriter, r *http.Request) (*videoConn, context.CancelFunc, bool) {
@@ -789,9 +792,13 @@ func (v *videoConn) send(p video.Packet) error {
 	if p.Track != v.track {
 		v.track = p.Track
 		v.mux = &video.Muxer{Track: p.Track, NoAudio: true}
-		v.amux = nil
+		v.amux, v.pcm = nil, false
 		if v.audio && p.Track.Audio != nil {
-			v.amux = &video.Muxer{Track: p.Track, AudioOnly: true}
+			if p.Track.Audio.Codec == video.PCM {
+				v.pcm = true // G.711 expanded to PCM: WebAudio, not Media Source Extensions
+			} else {
+				v.amux = &video.Muxer{Track: p.Track, AudioOnly: true}
+			}
 		}
 		if err := v.json(map[string]any{"type": "init", "codec": p.Track.Codec, "mime": p.Track.MIME(), "width": p.Track.Width, "height": p.Track.Height}); err != nil {
 			return err
@@ -802,6 +809,12 @@ func (v *videoConn) send(p video.Packet) error {
 				return err
 			}
 			if err := v.binary(init); err != nil {
+				return err
+			}
+		}
+		if v.pcm {
+			a := p.Track.Audio
+			if err := v.json(map[string]any{"type": "audio", "codec": "pcm", "rate": a.SampleRate, "channels": a.Channels}); err != nil {
 				return err
 			}
 		}
@@ -819,6 +832,17 @@ func (v *videoConn) send(p video.Packet) error {
 		}
 	}
 	if p.Sample.Audio != nil {
+		if v.pcm {
+			// 'P', the position on the picture's time line (float64 seconds, big-endian), 16-bit big-endian samples
+			if !v.mux.Started() {
+				return nil
+			}
+			msg := make([]byte, 9+len(p.Sample.Audio))
+			msg[0] = 'P'
+			binary.BigEndian.PutUint64(msg[1:9], math.Float64bits(v.mux.Pos(p.Sample)))
+			copy(msg[9:], p.Sample.Audio)
+			return v.binary(msg)
+		}
 		if v.amux == nil {
 			return nil
 		}
@@ -828,6 +852,7 @@ func (v *videoConn) send(p video.Packet) error {
 		}
 		return v.binary(append([]byte{'A'}, frag...))
 	}
+	v.mux.Start(p.Sample.DTS) // time 0 is the first picture, also for MJPEG (drawn, not muxed) and its PCM sound
 	if v.amux != nil {
 		v.amux.Start(p.Sample.DTS) // the sound's time line is the picture's
 	}

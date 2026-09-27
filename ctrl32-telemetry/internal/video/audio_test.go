@@ -115,6 +115,45 @@ func TestMuxerAudio(t *testing.T) {
 	}
 }
 
+// G.711 becomes a 16-bit PCM track (ipcm) that reads back as PCM.
+func TestPCMTrack(t *testing.T) {
+	enc := &testsrc.Encoder{W: 64, H: 48}
+	tr := &Track{Codec: H264, SPS: enc.SPS(), PPS: enc.PPS(), Audio: &AudioTrack{Codec: PCM, SampleRate: 8000, Channels: 1}}
+	m := &Muxer{Track: tr, Batch: ClockRate}
+	init, err := m.Init()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var in fmp4.Init
+	if err := in.Unmarshal(bytes.NewReader(init)); err != nil {
+		t.Fatal(err)
+	}
+	back, _, aid, err := trackFromInit(in.Tracks)
+	if err != nil || aid != 2 || !back.Audio.Same(tr.Audio) {
+		t.Fatalf("PCM track: %v %d %+v", err, aid, back.Audio)
+	}
+	if tr.Audio.MIME() != "" {
+		t.Fatal("PCM is not for Media Source Extensions")
+	}
+	m.Push(&Sample{DTS: 0, Key: true, AU: enc.Frame()})
+	m.Push(&Sample{DTS: 0, Audio: make([]byte, 320), ADur: 160})
+	m.Push(&Sample{DTS: 9000, Key: true, AU: enc.Frame()})
+	frag, err := m.Flush()
+	var parts fmp4.Parts
+	if err != nil || parts.Unmarshal(frag) != nil {
+		t.Fatalf("fragment: %v", err)
+	}
+	found := false
+	for _, pt := range parts[0].Tracks {
+		if pt.ID == 2 && len(pt.Samples) == 1 && pt.Samples[0].Duration == 160 && len(pt.Samples[0].Payload) == 320 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("PCM samples not in the fragment")
+	}
+}
+
 func sortSamples(s []*Sample) {
 	for i := 1; i < len(s); i++ {
 		for j := i; j > 0 && (s[j].DTS < s[j-1].DTS || (s[j].DTS == s[j-1].DTS && s[j].Audio == nil && s[j-1].Audio != nil)); j-- {

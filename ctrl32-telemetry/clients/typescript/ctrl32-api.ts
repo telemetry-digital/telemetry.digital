@@ -6067,7 +6067,7 @@ export class Ctrl32Client {
 
   /** Live video (WebSocket)
    *
-   * Upgrade to a WebSocket. Text messages: `{type:"init", codec, mime, width, height}`, `{type:"time", t (ms), pos (s)}` at key frames, `{type:"status", state, error}`, `{type:"audio", mime, codec}` when the sound comes (spec 020: `audio=1`, main stream, camera with sound, video.audio; audited as video.listen): binary messages starting with the byte `A` then carry the sound as its own fragmented MP4 stream on the picture's time line. Binary messages: for H.264/H.265 the MP4 initialization, then one fragment (moof+mdat) per frame, for Media Source Extensions; for MJPEG one JPEG picture each.
+   * Upgrade to a WebSocket. Text messages: `{type:"init", codec, mime, width, height}`, `{type:"time", t (ms), pos (s)}` at key frames, `{type:"status", state, error}`, `{type:"audio", mime, codec}` when the sound comes (spec 020: `audio=1`, main stream, camera with sound, video.audio; audited as video.listen): binary messages starting with the byte `A` then carry the sound as its own fragmented MP4 stream on the picture's time line; for G.711 cameras `{type:"audio", codec:"pcm", rate, channels}` and binary messages `P` + float64 position (s, big-endian) + 16-bit big-endian samples, for WebAudio. Binary messages: for H.264/H.265 the MP4 initialization, then one fragment (moof+mdat) per frame, for Media Source Extensions; for MJPEG one JPEG picture each.
    * 
    * Requires permission `video.view`. */
   getVideoCamerasIdLive(id: string, query?: { audio?: string; /** 1 = with the sound (needs video.audio) */ quality?: string; /** sub (default; falls back to main) or main */ }): Promise<unknown> {

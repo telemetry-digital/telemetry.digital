@@ -95,6 +95,9 @@
     <label>Connection <select name="source"><option value="pull">The server connects to the camera (local network or VPN)</option><option value="push">The camera sends its video to the server (remote site with camera-relay)</option></select></label>
     <div class="muted push-only" style="font-size:13px">A relay at the remote site (<code>ctrl32-telemetry camera-relay</code>) reads the local camera and sends the video over an encrypted connection (RTSPS) that it opens itself — no open port and no VPN at the site. After saving you get the camera's secret and the relay configuration, once.</div>
     <div class="pull-only">
+    <div class="row2"><label>Camera make <select id="preset"><option value="">other / enter the addresses</option></select></label>
+      <label>Camera IP address <input id="presetIP" placeholder="192.168.1.64" class="notranslate" autocomplete="off"></label></div>
+    <div class="muted" id="presetTip" style="font-size:13px" hidden></div>
     <label>Main stream URL <input name="url" placeholder="rtsp://192.168.1.64:554/Streaming/Channels/101" class="notranslate"></label>
     <label>Sub-stream URL for tiles (optional, smaller picture) <input name="sub_url" placeholder="rtsp://192.168.1.64:554/Streaming/Channels/102" class="notranslate"></label>
     <div class="muted" style="font-size:13px">RTSP with H.264, H.265 or MJPEG, or an HTTP MJPEG address. User name and password may be part of the URL; they are stored separately and the password is encrypted.</div>
@@ -114,7 +117,7 @@
     </div>
     <div class="row2"><label>Keep recordings (days) <input name="retention_days" type="number" min="1" max="3650" value="7"></label><label>Order <input name="sort" type="number" value="0"></label></div>
     <label class="check"><input type="checkbox" name="audio"> Sound: record it and let permitted people hear it</label>
-    <div class="muted audio-only" style="font-size:13px">Recording sound (conversations) is regulated more strictly than pictures: switch it on only where it is lawful and people are informed (a sign). The camera must send AAC (or Opus) — set it in the camera's audio settings; G.711 cannot be played in browsers. Hearing and exporting sound needs the permission <code>video.audio</code> and is recorded in the audit trail. A relay forwards sound only with <code>audio = true</code>.</div>
+    <div class="muted audio-only" style="font-size:13px">Recording sound (conversations) is regulated more strictly than pictures: switch it on only where it is lawful and people are informed (a sign). The camera may send AAC, Opus or G.711 (TP-Link Tapo and most cameras). Hearing and exporting sound needs the permission <code>video.audio</code> and is recorded in the audit trail. A relay forwards sound only with <code>audio = true</code>.</div>
     <label class="check"><input type="checkbox" name="motion_detect"> Motion detection on the server (cameras without ONVIF events)</label>
     <div class="motion-only">
       <div class="row2"><label>Sensitivity <span class="muted" id="sensOut"></span><input name="motion_sensitivity" type="range" min="1" max="100" value="50"></label>
@@ -215,7 +218,7 @@ function renderManage() {
   $('#cams tbody').innerHTML = CAMS.map(c => `<tr><td class="notranslate">${esc(c.name)}</td><td class="notranslate">${esc(c.location)}${c.group ? ` <span class="badge" title="${esc(t('Camera group'))}">${esc(c.group)}</span>` : ''}</td>
     <td class="notranslate" style="max-width:280px;overflow:hidden;text-overflow:ellipsis">${c.source === 'push' ? `<span class="badge primary">${esc(t('remote, sends via relay'))}</span>${c.push && !c.push.enabled ? ` <span class="badge bad" title="${esc(t('video.push_listen is not set in the server configuration'))}">${esc(t('receiving is off'))}</span>` : ''}` : esc(c.url || '') + (c.has_sub ? ' <span class="badge">+ sub</span>' : '')}</td>
     <td>${dot(c.status)} ${esc(t(c.enabled ? (c.status.state === 'idle' ? 'on demand' : c.status.state) : 'disabled'))}${c.status.codec ? ` <span class="muted">${esc(c.status.codec.toUpperCase())} ${c.status.width}×${c.status.height} · ${c.status.fps} fps · ${Math.round(c.status.kbps)} kbit/s</span>` : ''}${c.status.error ? `<br><span class="bad" style="font-size:12px">${esc(c.status.error)}</span>` : ''}</td>
-    <td>${c.record === 'off' ? esc(t('off')) : esc(t(c.record === 'events' ? 'on events' : 'continuous')) + ', ' + c.retention_days + ' ' + esc(t('days'))}${c.onvif ? ` <span class="badge" title="${esc(t('ONVIF events'))}: ${esc(c.status.events || '')}">ONVIF${c.status.events && c.status.events !== 'connected' && c.status.events !== 'connecting' ? ' ⚠' : ''}</span>` : ''}${c.audio ? ` <span class="badge" title="${esc(t('Sound'))}: ${esc(c.status.audio || '')}">🔊${c.status.audio && !/^(AAC|Opus)/.test(c.status.audio) ? ' ⚠' : ''}</span>` : ''}${c.motion_detect ? ` <span class="badge" title="${esc(t('Motion detection on the server'))}: ${esc(t(c.status.motion || ''))}">${esc(t('motion'))}${c.status.motion && !c.status.motion.startsWith('watching') && c.status.motion !== 'starting' ? ' ⚠' : ''}</span>` : ''}</td><td class="num" data-bytes="${c.id}"></td>
+    <td>${c.record === 'off' ? esc(t('off')) : esc(t(c.record === 'events' ? 'on events' : 'continuous')) + ', ' + c.retention_days + ' ' + esc(t('days'))}${c.onvif ? ` <span class="badge" title="${esc(t('ONVIF events'))}: ${esc(c.status.events || '')}">ONVIF${c.status.events && c.status.events !== 'connected' && c.status.events !== 'connecting' ? ' ⚠' : ''}</span>` : ''}${c.audio ? ` <span class="badge" title="${esc(t('Sound'))}: ${esc(c.status.audio || '')}">🔊${c.status.audio && !/^(AAC|Opus|G\.711)/.test(c.status.audio) ? ' ⚠' : ''}</span>` : ''}${c.motion_detect ? ` <span class="badge" title="${esc(t('Motion detection on the server'))}: ${esc(t(c.status.motion || ''))}">${esc(t('motion'))}${c.status.motion && !c.status.motion.startsWith('watching') && c.status.motion !== 'starting' ? ' ⚠' : ''}</span>` : ''}</td><td class="num" data-bytes="${c.id}"></td>
     <td class="actions-cell"><a class="btn small" href="/video/cameras/${c.id}">Open</a><button class="btn small" data-cedit="${c.id}" type="button">Edit</button>${c.source === 'push' ? `<button class="btn small" data-secret="${c.id}" type="button">New secret</button>` : ''}<button class="btn small" data-cdel="${c.id}" type="button">Delete</button></td></tr>`).join('');
   for (const b of document.querySelectorAll('[data-cedit]')) b.onclick = () => camDialog(CAMS.find(c => c.id === b.dataset.cedit));
   for (const b of document.querySelectorAll('[data-secret]')) b.onclick = async () => {
@@ -268,6 +271,30 @@ $('#profBtn').onclick = async () => {
     out.className = 'ok'; out.textContent = `✓ ${ps.map(p => `${p.name} ${p.encoding} ${p.width}×${p.height}`).join(', ')}${r.events ? ' · ' + t('events') : ''}${r.ptz ? ' · PTZ' : ''}`;
   } catch (x) { out.className = 'bad'; out.textContent = x.status === 401 ? t('The camera refused the user name or password.') : x.message; }
 };
+// ---- camera makes: the usual stream, ONVIF and snapshot addresses, filled in from the IP address ----
+const PRESETS = {
+  tapo: {name: 'TP-Link Tapo', url: 'rtsp://{ip}:554/stream1', sub: 'rtsp://{ip}:554/stream2', onvif: 'http://{ip}:2020/onvif/device_service', snap: '',
+    tip: 'In the Tapo app: camera → Settings → Advanced settings → Camera account — that user name and password (not the Tapo app account). Sound is G.711. Motion comes over ONVIF; pan/tilt models (C200, C210, C500, C510W, C520WS) turn with PTZ. Battery cameras and doorbells (C400, C420, C425, D230) have no RTSP and cannot be added.'},
+  hikvision: {name: 'Hikvision (and HiLook)', url: 'rtsp://{ip}:554/Streaming/Channels/101', sub: 'rtsp://{ip}:554/Streaming/Channels/102', onvif: 'http://{ip}/onvif/device_service', snap: 'http://{ip}/ISAPI/Streaming/channels/101/picture',
+    tip: 'ONVIF has to be enabled in the camera (Network → Advanced → Integration protocol) with an ONVIF user. For sound choose AAC or G.711 in Video/Audio.'},
+  dahua: {name: 'Dahua (and Imou, Amcrest)', url: 'rtsp://{ip}:554/cam/realmonitor?channel=1&subtype=0', sub: 'rtsp://{ip}:554/cam/realmonitor?channel=1&subtype=1', onvif: 'http://{ip}/onvif/device_service', snap: 'http://{ip}/cgi-bin/snapshot.cgi', tip: ''},
+  reolink: {name: 'Reolink', url: 'rtsp://{ip}:554/h264Preview_01_main', sub: 'rtsp://{ip}:554/h264Preview_01_sub', onvif: 'http://{ip}:8000/onvif/device_service', snap: '',
+    tip: 'Enable RTSP and ONVIF in the camera (Network → Advanced → Server settings). 4K models send H.265 on the main stream; tiles use the H.264 sub-stream.'},
+  axis: {name: 'Axis', url: 'rtsp://{ip}/axis-media/media.amp', sub: 'rtsp://{ip}/axis-media/media.amp?resolution=640x360', onvif: 'http://{ip}/onvif/device_service', snap: 'http://{ip}/axis-cgi/jpg/image.cgi', tip: ''},
+  uniview: {name: 'Uniview', url: 'rtsp://{ip}:554/media/video1', sub: 'rtsp://{ip}:554/media/video2', onvif: 'http://{ip}/onvif/device_service', snap: '', tip: ''},
+  ezviz: {name: 'EZVIZ', url: 'rtsp://{ip}:554/h264/ch1/main/av_stream', sub: 'rtsp://{ip}:554/h264/ch1/sub/av_stream', onvif: '', snap: '',
+    tip: 'User name admin, password = the verification code on the camera label; RTSP has to be enabled in the EZVIZ app (LAN live view).'},
+};
+$('#preset').innerHTML += Object.entries(PRESETS).map(([k, p]) => `<option value="${k}">${esc(p.name)}</option>`).join('');
+function applyPreset() {
+  const p = PRESETS[$('#preset').value], ip = $('#presetIP').value.trim(), f = $('#camForm');
+  $('#presetTip').hidden = !(p && p.tip); $('#presetTip').textContent = p && p.tip ? t(p.tip) : '';
+  if (!p || !/^[A-Za-z0-9.\-:\[\]]+$/.test(ip)) return;
+  const at = (s) => s.replaceAll('{ip}', ip);
+  f.url.value = at(p.url); f.sub_url.value = at(p.sub); f.onvif_url.value = at(p.onvif); f.snapshot_url.value = at(p.snap);
+  if (!f.name.value) f.name.value = p.name.split(' (')[0] + ' ' + ip;
+}
+$('#preset').onchange = applyPreset; $('#presetIP').onchange = applyPreset;
 function sourceMode() { const push = $('#camForm').source.value === 'push'; for (const el of document.querySelectorAll('#camForm .pull-only')) el.hidden = push; for (const el of document.querySelectorAll('#camForm .push-only')) el.hidden = !push; $('#camForm').url.required = !push; }
 $('#camForm').source.onchange = sourceMode;
 // ---- privacy mask editor: rectangles in picture coordinates 0..1 over the live picture ----
@@ -314,7 +341,7 @@ $('#camDlg').addEventListener('close', () => { if (maskPlayer) { maskPlayer.clos
 function camDialog(c) {
   EDIT = c || null; const f = $('#camForm'); f.reset(); $('#camErr').textContent = ''; $('#testOut').textContent = '';
   $('#camTitle').textContent = t(c ? 'Edit camera' : 'Add camera');
-  $('#found').innerHTML = ''; $('#onvifOut').textContent = '';
+  $('#found').innerHTML = ''; $('#onvifOut').textContent = ''; $('#preset').value = ''; $('#presetIP').value = ''; $('#presetTip').hidden = true;
   for (const b of document.querySelectorAll('#kinds [data-kind]')) b.checked = (c ? c.event_kinds || [] : ['motion', 'tamper', 'line', 'intrusion', 'input', 'mark']).includes(b.dataset.kind);
   if (c) { for (const k of ['source', 'name', 'location', 'group', 'url', 'onvif_url', 'event_pre_s', 'event_post_s', 'sub_url', 'username', 'transport', 'record', 'retention_days', 'sort']) f[k].value = c[k] ?? ''; f.enabled.checked = c.enabled; f.audio.checked = !!c.audio; f.motion_detect.checked = !!c.motion_detect; f.motion_sensitivity.value = c.motion_sensitivity || 50; f.snapshot_url.value = c.snapshot_url || ''; f.password.placeholder = t(c.has_password ? 'unchanged' : 'none'); }
   else f.password.placeholder = '';
