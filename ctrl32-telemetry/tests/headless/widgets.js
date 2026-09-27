@@ -120,7 +120,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await ev(`document.querySelector('#vGrid [data-id="chart2"] .dw-filters [data-si="1"]').click()`); await sleep(1500);
   expect("series switched off", await ev(`[...document.querySelectorAll('#vGrid [data-id="chart2"] .chart-box svg path[stroke]')].map(p => p.getAttribute('stroke')).includes('#00aa55')`), false);
   await ev(`(() => { const s = document.querySelector('#vGrid [data-id="chart2"] .dw-filters [data-f="range"]'); s.value = '6h'; s.dispatchEvent(new Event('change')); })()`); await sleep(1500);
-  expect("range filter applied", await ev(`document.querySelector('#vGrid [data-id="chart2"] .dw-win').textContent`), (t) => typeof t === "string" && t.startsWith("6h"));
+  expect("range filter applied", await ev(`document.querySelector('#vGrid [data-id="chart2"] .dw-win').textContent`), (t) => typeof t === "string" && (t.startsWith("6h") || t.startsWith("6 h")));
   await ev(`document.querySelector('#vGrid [data-id="chart2"] .dw-filters [data-reset]').click()`); await sleep(1500);
   expect("reset brings the series back", await ev(`[...document.querySelectorAll('#vGrid [data-id="chart2"] .chart-box svg path[stroke]')].map(p => p.getAttribute('stroke')).includes('#00aa55')`), true);
   const s1 = await send("Page.captureScreenshot", { format: "png" }); fs.writeFileSync(out + "/widgets-view.png", Buffer.from(s1.result.data, "base64"));

@@ -24,7 +24,7 @@ SUF=$RANDOM
 echo "== login and catalog"
 req POST /api/v1/auth/login "{\"username\":\"$USER\",\"password\":\"$PASS\"}" >/dev/null; check "login" "$(st)" 200
 CSRF=$(req GET /api/v1/auth/me | jget csrf_token)
-req GET /api/v1/dashboards/catalog >/dev/null; check "catalog has the five process symbols" "$(jx "$TMP/b" 'j.widgets.filter(w=>w.group==="mimic").map(w=>w.type).sort().join(",")')" "instrument,pipe,pump,tank,valve"
+req GET /api/v1/dashboards/catalog >/dev/null; check "catalog has the process symbols (and the camera on a plan)" "$(jx "$TMP/b" 'j.widgets.filter(w=>w.group==="mimic").map(w=>w.type).sort().join(",")')" "camera_pin,instrument,pipe,pump,tank,valve"
 req GET /api/v1/datastreams >/dev/null; DS=$(jx "$TMP/b" 'j[0].id'); [[ -n "$DS" && "$DS" != "null" ]] && ok "a datastream to bind" || bad "no datastreams"
 
 echo "== validation"
