@@ -76,6 +76,22 @@ type Principal struct {
 	MustChange  bool
 	MFAEnabled  bool
 	MFARequired bool
+	// CameraLimited: the user sees only the cameras of CameraGroups (spec 014); otherwise all cameras.
+	CameraLimited bool
+	CameraGroups  []string
+}
+
+// SeesCameraGroup reports whether the principal may see cameras of the group ("" = cameras without a group).
+func (p *Principal) SeesCameraGroup(group string) bool {
+	if p == nil || !p.CameraLimited {
+		return true
+	}
+	for _, g := range p.CameraGroups {
+		if g == group {
+			return true
+		}
+	}
+	return false
 }
 
 // Has reports whether the principal holds a permission.
@@ -561,11 +577,11 @@ func (s *Service) Authenticate(ctx context.Context, sessionToken string) (*Princ
 	var orgSettings []byte
 	err := s.pool.QueryRow(ctx, `
 		SELECT u.id::text, u.org_id::text, COALESCE(u.customer_id::text,''), u.username, u.full_name, u.must_change_password, u.mfa_enabled,
-		       s.mfa_at IS NOT NULL, s.csrf_secret, o.settings->'security'
+		       s.mfa_at IS NOT NULL, s.csrf_secret, o.settings->'security', u.camera_groups IS NOT NULL, COALESCE(u.camera_groups, '{}')
 		FROM core.session s JOIN core.user_account u ON u.id = s.user_id JOIN core.organization o ON o.id = u.org_id
 		WHERE s.id = $1 AND s.revoked_at IS NULL AND NOT s.mfa_pending AND s.expires_at > now()
 		  AND (s.absolute_expires_at IS NULL OR s.absolute_expires_at > now()) AND u.disabled_at IS NULL`, h).
-		Scan(&p.UserID, &p.OrgID, &p.CustomerID, &p.Username, &p.FullName, &p.MustChange, &p.MFAEnabled, &p.MFAVerified, &p.CSRFSecret, &orgSettings)
+		Scan(&p.UserID, &p.OrgID, &p.CustomerID, &p.Username, &p.FullName, &p.MustChange, &p.MFAEnabled, &p.MFAVerified, &p.CSRFSecret, &orgSettings, &p.CameraLimited, &p.CameraGroups)
 	if err != nil {
 		return nil, ErrNoSession
 	}
@@ -663,10 +679,11 @@ func (s *Service) AuthenticateToken(ctx context.Context, raw string) (*Principal
 	var scopes []string
 	var expires *time.Time
 	err := s.pool.QueryRow(ctx, `
-		SELECT t.id::text, t.scopes, t.expires_at, u.id::text, u.org_id::text, COALESCE(u.customer_id::text,''), u.username, u.full_name
+		SELECT t.id::text, t.scopes, t.expires_at, u.id::text, u.org_id::text, COALESCE(u.customer_id::text,''), u.username, u.full_name,
+		       u.camera_groups IS NOT NULL, COALESCE(u.camera_groups, '{}')
 		FROM core.api_token t JOIN core.user_account u ON u.id = t.user_id
 		WHERE t.token_hash = $1 AND t.revoked_at IS NULL AND u.disabled_at IS NULL`, HashToken(raw)).
-		Scan(&p.TokenID, &scopes, &expires, &p.UserID, &p.OrgID, &p.CustomerID, &p.Username, &p.FullName)
+		Scan(&p.TokenID, &scopes, &expires, &p.UserID, &p.OrgID, &p.CustomerID, &p.Username, &p.FullName, &p.CameraLimited, &p.CameraGroups)
 	if err != nil {
 		return nil, ErrNoSession
 	}

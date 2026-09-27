@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Displays</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+  <div class="page-head"><h1>Displays</h1><span class="grow"></span><button class="btn primary" type="button" id="pairBtn" hidden>Pair display</button></div>
+  <p class="muted">A display is a screen at a wall — a PC, a mini-PC or a smart TV with a browser — that shows dashboards, process screens and video walls in turn, without anyone signed in. It shows only what it is given, changes nothing and can be disconnected at any time. Cameras with an event can enlarge themselves on it, and an operator can send a camera to it.</p>
+  <div class="table-wrap"><table id="list"><thead><tr><th>Display</th><th>Shows</th><th>State</th><th>Last seen</th><th></th></tr></thead><tbody></tbody></table></div>
+  <div class="card muted" id="empty" hidden><p>No displays yet. Open <code id="kioskUrl"></code> on the computer at the wall and pair it with the code it shows.</p></div>
+
+  <div class="card" style="margin-top:16px"><h2 style="margin-top:0">Setting up a display computer</h2>
+    <ol class="muted" style="line-height:1.7;margin:0;padding-left:20px">
+      <li>On the computer at the wall open <code class="notranslate" id="kioskUrl2"></code> in Chrome or Edge — it shows a code.</li>
+      <li>Here choose <b>Pair display</b>, enter the code, name the display and choose what it shows.</li>
+      <li>For permanent use start the browser in kiosk mode when the computer starts, for example
+        <code class="notranslate">chrome --kiosk --autoplay-policy=no-user-gesture-required <span class="kurl"></span></code>
+        (Windows: a shortcut in the Startup folder; Linux or Raspberry Pi: an autostart entry). The display stays paired over restarts.</li>
+      <li>Each display computer decodes its own video: for 20 camera tiles a mini-PC with Intel graphics is enough; the server only forwards the streams.</li>
+    </ol>
+  </div>
+
+  <dialog id="dlg" style="max-width:min(760px,96vw)"><form class="form" id="form">
+    <h2 style="margin-top:0" id="dlgTitle">Pair display</h2>
+    <label id="codeRow">Code shown on the display <input name="code" class="notranslate" placeholder="ABCD-EFGH" maxlength="12" autocomplete="off" style="font:600 22px var(--mono);letter-spacing:.08em;text-transform:uppercase"></label>
+    <label>Name <input name="name" required maxlength="80" placeholder="Control room – left monitor"></label>
+    <div class="row"><b>Shows (in turn)</b><span class="grow"></span>
+      <button class="btn small" type="button" id="addDash">Add dashboard or process screen</button><button class="btn small" type="button" id="addWall">Add video wall screen</button></div>
+    <div id="items"></div>
+    <div class="row2">
+      <label>Enlarge cameras with an event <select name="popup"><option value="none">no</option><option value="wall">cameras of its video walls</option><option value="all">all cameras</option></select></label>
+      <label>… for (s) <input name="popup_seconds" type="number" min="5" max="600" value="30"></label></div>
+    <label>Language of the display <select name="locale" id="localeSel"></select></label>
+    <label class="check"><input type="checkbox" name="offline_alert" checked> Incident when the display stops showing</label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="err"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form></dialog>
+
+  <dialog id="camDlg"><form class="form" id="camForm">
+    <h2 style="margin-top:0">Send a camera to <span id="camTo" class="notranslate"></span></h2>
+    <label>Camera <select name="camera" class="notranslate" required></select></label>
+    <div class="row2"><label>For (s) <input name="seconds" type="number" min="5" max="3600" value="120"></label>
+      <label>Stream <select name="quality"><option value="main">main stream (full quality)</option><option value="sub">sub-stream (smaller, saves bandwidth)</option></select></label></div>
+    <div class="err" id="camErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Send</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form></dialog>
+</main>
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, api = ctrl32.api, t = ctrl32.t;
+let LIST = [], DASH = [], WALLS = [], CAMS = [], EDIT = null, ITEMS = [], CAMFOR = null;
+const can = p => ctrl32.can(p);
+const kurl = location.origin + '/display';
+
+function describe(c) {
+  return (c.items || []).map(it => {
+    if (it.kind === 'dashboard') { const d = DASH.find(x => x.slug === it.slug); return esc(d ? d.name : it.slug); }
+    const w = WALLS.find(x => x.id === it.wall), sc = w && w.screens[it.screen];
+    return esc(w ? `${w.name} · ${sc && sc.name ? sc.name : t('Screen') + ' ' + (it.screen + 1)}` : t('video wall'));
+  }).join(' → ') + (c.items && c.items.length > 1 ? ` <span class="muted">(${esc(t('in turn'))})</span>` : '');
+}
+function render() {
+  $('#empty').hidden = LIST.length > 0;
+  $('#list tbody').innerHTML = LIST.map(d => `<tr>
+    <td><b class="notranslate">${esc(d.name)}</b>${d.content.popup !== 'none' ? ` <span class="badge" title="${esc(t('Enlarges cameras with an event'))}">${esc(t('alarms'))}</span>` : ''}</td>
+    <td>${describe(d.content)}</td>
+    <td>${!d.paired ? `<span class="badge warn">${esc(t('waiting for the device'))}</span>` : d.online ? `<span class="badge ok">${esc(t('showing'))}</span>` : `<span class="badge bad">${esc(t('not showing'))}</span>`}
+      ${d.command ? `<div class="muted" style="font-size:12px">${esc(d.command.action === 'camera' ? t('camera') + ': ' + d.command.name : t(d.command.action))} · ${esc(d.command.by)}</div>` : ''}</td>
+    <td>${d.last_seen_at ? esc(ctrl32.fmt(d.last_seen_at)) + `<div class="muted notranslate" style="font-size:12px">${esc(d.last_ip)}</div>` : '—'}</td>
+    <td class="actions-cell">
+      <button class="btn small" data-cam="${d.id}" type="button">Send camera</button>
+      <button class="btn small" data-cmd="identify" data-id="${d.id}" type="button" title="Shows the display's name on it for a few seconds">Identify</button>
+      <button class="btn small" data-cmd="clear" data-id="${d.id}" type="button">Back to content</button>
+      <button class="btn small" data-cmd="reload" data-id="${d.id}" type="button">Reload</button>
+      ${can('display.manage') ? `<button class="btn small" data-edit="${d.id}" type="button">Edit</button><button class="btn small" data-del="${d.id}" type="button">Disconnect</button>` : ''}</td></tr>`).join('');
+  for (const b of document.querySelectorAll('[data-cmd]')) b.onclick = () => command(b.dataset.id, {action: b.dataset.cmd, seconds: 10});
+  for (const b of document.querySelectorAll('[data-cam]')) b.onclick = () => camDialog(LIST.find(d => d.id === b.dataset.cam));
+  for (const b of document.querySelectorAll('[data-edit]')) b.onclick = () => dialog(LIST.find(d => d.id === b.dataset.edit));
+  for (const b of document.querySelectorAll('[data-del]')) b.onclick = async () => {
+    const r = ctrl32.ask('Reason for disconnecting the display (it must be paired again)'); if (!r) return;
+    try { await api('DELETE', `/api/v1/displays/${b.dataset.del}?reason=${encodeURIComponent(r)}`); load(); } catch (x) { ctrl32.toast(x.message, 'bad'); }
+  };
+}
+async function command(id, body) {
+  try { await api('POST', `/api/v1/displays/${id}/command`, body); ctrl32.toast(t('sent to the display'), 'ok'); load(); } catch (x) { ctrl32.toast(x.message, 'bad'); }
+}
+
+// ---- content editor ----
+function renderItems() {
+  $('#items').innerHTML = ITEMS.map((it, i) => `<div class="row disp-item" data-i="${i}">
+    <span class="muted">${i + 1}.</span>
+    ${it.kind === 'dashboard'
+      ? `<select data-f="slug" class="notranslate" style="flex:1">${DASH.map(d => `<option value="${esc(d.slug)}"${d.slug === it.slug ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}</select>`
+      : `<select data-f="wallscreen" class="notranslate" style="flex:1">${WALLS.flatMap(w => w.screens.map((s, k) => `<option value="${w.id}|${k}"${w.id === it.wall && k === it.screen ? ' selected' : ''}>${esc(w.name)} · ${esc(s.name || t('Screen') + ' ' + (k + 1))} (${s.cols}×${s.rows})</option>`)).join('')}</select>`}
+    <label class="inline">${esc(t('for'))} <input data-f="seconds" type="number" min="10" max="3600" value="${it.seconds || 60}" style="width:80px"> s</label>
+    <button class="btn small" type="button" data-up ${i ? '' : 'disabled'}>↑</button><button class="btn small" type="button" data-rm>✕</button></div>`).join('') || `<p class="muted">${esc(t('Add at least one dashboard or video wall screen.'))}</p>`;
+  for (const row of document.querySelectorAll('.disp-item')) {
+    const it = ITEMS[+row.dataset.i];
+    for (const el of row.querySelectorAll('[data-f]')) el.onchange = () => {
+      if (el.dataset.f === 'slug') it.slug = el.value;
+      else if (el.dataset.f === 'wallscreen') { const [w, k] = el.value.split('|'); it.wall = w; it.screen = +k; }
+      else it.seconds = +el.value;
+    };
+    row.querySelector('[data-rm]').onclick = () => { ITEMS.splice(+row.dataset.i, 1); renderItems(); };
+    row.querySelector('[data-up]').onclick = () => { const i = +row.dataset.i; [ITEMS[i - 1], ITEMS[i]] = [ITEMS[i], ITEMS[i - 1]]; renderItems(); };
+  }
+}
+$('#addDash').onclick = () => { if (!DASH.length) { ctrl32.toast(t('no dashboards yet'), 'bad'); return; } ITEMS.push({kind: 'dashboard', slug: DASH[0].slug, seconds: 60}); renderItems(); };
+$('#addWall').onclick = () => { if (!WALLS.length) { ctrl32.toast(t('no video walls yet'), 'bad'); return; } ITEMS.push({kind: 'wall', wall: WALLS[0].id, screen: 0, seconds: 60}); renderItems(); };
+function dialog(d) {
+  EDIT = d || null; const f = $('#form'); f.reset(); $('#err').textContent = '';
+  $('#dlgTitle').textContent = t(d ? 'Edit display' : 'Pair display');
+  $('#codeRow').hidden = !!d; f.code.required = !d;
+  ITEMS = d ? JSON.parse(JSON.stringify(d.content.items)) : [];
+  const names = Object.fromEntries((ctrl32.langs.supported || []).map(l => [l.code, l.name]));
+  $('#localeSel').innerHTML = `<option value="">${esc(t('as the browser'))}</option>` + (ctrl32.langs.enabled || []).map(c => `<option value="${c}">${esc(names[c] || c)}</option>`).join('');
+  f.locale.value = d ? (d.content.locale || '') : ctrl32.locale;
+  if (d) { f.name.value = d.name; f.popup.value = d.content.popup; f.popup_seconds.value = d.content.popup_seconds; f.offline_alert.checked = d.offline_alert; }
+  renderItems(); $('#dlg').showModal();
+}
+$('#form').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#err').textContent = '';
+  const content = {items: ITEMS, popup: f.popup.value, popup_seconds: +f.popup_seconds.value, locale: f.locale.value};
+  try {
+    if (EDIT) await api('PUT', '/api/v1/displays/' + EDIT.id, {name: f.name.value, content, offline_alert: f.offline_alert.checked, reason: f.reason.value});
+    else { const r = await api('POST', '/api/v1/displays/pair', {code: f.code.value, name: f.name.value, content, offline_alert: f.offline_alert.checked, reason: f.reason.value});
+      ctrl32.toast(`${t('paired')}: ${r.device_ip}`, 'ok'); }
+    $('#dlg').close(); load();
+  } catch (x) { $('#err').textContent = x.message; } };
+
+function camDialog(d) {
+  CAMFOR = d; const f = $('#camForm'); $('#camErr').textContent = ''; $('#camTo').textContent = d.name;
+  f.camera.innerHTML = CAMS.filter(c => c.enabled).map(c => `<option value="${c.id}">${esc(c.name)}${c.location ? ' · ' + esc(c.location) : ''}</option>`).join('');
+  $('#camDlg').showModal();
+}
+$('#camForm').onsubmit = async e => { e.preventDefault(); const f = e.target;
+  try { await api('POST', `/api/v1/displays/${CAMFOR.id}/command`, {action: 'camera', camera: f.camera.value, seconds: +f.seconds.value, quality: f.quality.value}); $('#camDlg').close(); ctrl32.toast(t('sent to the display'), 'ok'); load(); }
+  catch (x) { $('#camErr').textContent = x.message; } };
+
+async function load() {
+  try { LIST = await api('GET', '/api/v1/displays'); render(); } catch (x) { ctrl32.toast(x.message, 'bad'); }
+}
+ctrl32.ready({requireAuth: true, requirePerm: 'display.control'}).then(async () => {
+  for (const el of document.querySelectorAll('#kioskUrl, #kioskUrl2, .kurl')) el.textContent = kurl;
+  $('#pairBtn').hidden = !can('display.manage'); $('#pairBtn').onclick = () => dialog(null);
+  const [d, w, c] = await Promise.all([api('GET', '/api/v1/dashboards').catch(() => []), can('video.view') ? api('GET', '/api/v1/video/walls').catch(() => []) : [], can('video.view') ? api('GET', '/api/v1/video/cameras').catch(() => []) : []]);
+  DASH = d; WALLS = w; CAMS = c;
+  load(); setInterval(() => { if (!document.hidden && !document.querySelector('dialog[open]')) load(); }, 10000);
+});
+</script>
+</body>
+</html>

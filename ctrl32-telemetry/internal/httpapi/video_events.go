@@ -129,11 +129,13 @@ func (s *Server) cameraEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	kind := r.URL.Query().Get("kind")
+	p := PrincipalFrom(r.Context())
 	rows, err := s.pool.Query(r.Context(), `SELECT e.id, e.camera_id::text, c.name, e.kind, e.source, e.label, e.started_at, e.ended_at
 		FROM core.camera_event e JOIN core.camera c ON c.id = e.camera_id
 		WHERE e.org_id = $1::uuid AND ($2 = '' OR e.camera_id::text = $2) AND ($3 = '' OR e.kind = $3)
 		  AND e.started_at < $5 AND coalesce(e.ended_at, now()) >= $4
-		ORDER BY e.started_at DESC LIMIT 2000`, org, id, kind, from, to)
+		  AND (NOT $6::boolean OR c.camera_group = ANY($7::text[]))
+		ORDER BY e.started_at DESC LIMIT 2000`, org, id, kind, from, to, p.CameraLimited, p.CameraGroups)
 	if err != nil {
 		writeErr(w, 500, "query failed")
 		return

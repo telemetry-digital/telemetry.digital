@@ -1,0 +1,28 @@
+meta {
+  name: Recorded video (WebSocket)
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/v1/video/cameras/:id/playback
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~from: 
+  ~speed: 
+}
+
+docs {
+  Recorded video (WebSocket)
+  
+  Same messages as live, paced by the recording from the key frame before `from`; periods without recording are skipped; `{type:"end"}` after the newest recording. Written to the audit trail (video.playback).
+  
+  Requires permission `video.playback`.
+}

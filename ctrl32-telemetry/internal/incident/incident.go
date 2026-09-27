@@ -57,7 +57,7 @@ type Update struct {
 }
 
 var (
-	Kinds      = []string{"alarm_undelivered", "audit_chain", "backup_failed", "manual", "replica", "flow", "mqtt_source"}
+	Kinds      = []string{"alarm_undelivered", "audit_chain", "backup_failed", "manual", "replica", "flow", "mqtt_source", "camera", "display", "storage"}
 	Severities = []string{"minor", "major", "critical"}
 	Statuses   = []string{"open", "investigating", "resolved", "closed"}
 	// allowed transitions
@@ -206,6 +206,19 @@ func (m *Manager) SourceDown(ctx context.Context, org, sourceID, title, impact s
 		m.log.Error("could not open incident for MQTT source", "source", sourceID, "err", err)
 	}
 }
+
+// Raise opens (once per key) a system incident, e.g. a camera that stopped recording (spec 014).
+func (m *Manager) Raise(ctx context.Context, org, kind, key, severity, title, impact string, detail map[string]any) {
+	if m == nil {
+		return
+	}
+	if _, _, err := m.Open(ctx, Incident{OrgID: org, Kind: kind, Severity: severity, Title: title, Detail: detail, Impact: impact, DedupKey: key}); err != nil {
+		m.log.Error("could not open incident", "key", key, "err", err)
+	}
+}
+
+// Resolve resolves the open incident with the key, if any, with the cause.
+func (m *Manager) Resolve(ctx context.Context, key, cause string) { m.resolveByKey(ctx, key, cause) }
 
 // SourceRecovered resolves the open incident of an MQTT source, if any.
 func (m *Manager) SourceRecovered(ctx context.Context, sourceID string) {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -27,6 +28,9 @@ type recorder struct {
 	mu     sync.Mutex
 	holds  map[string]bool
 	until  time.Time
+
+	started time.Time
+	written atomic.Int64 // unix nanoseconds of the last fragment written (health, spec 014)
 }
 
 // hold arms the recorder while an event lasts.
@@ -72,7 +76,7 @@ type segment struct {
 
 func (m *Manager) startRecorder(camID string, src *Source, events bool, pre time.Duration) *recorder {
 	ctx, cancel := context.WithCancel(context.Background())
-	r := &recorder{m: m, camID: camID, src: src, cancel: cancel, done: make(chan struct{}), events: events, pre: pre, holds: map[string]bool{}}
+	r := &recorder{m: m, camID: camID, src: src, cancel: cancel, done: make(chan struct{}), events: events, pre: pre, holds: map[string]bool{}, started: time.Now()}
 	go r.run(ctx)
 	return r
 }
@@ -172,7 +176,9 @@ func (r *recorder) write(seg *segment, p Packet) *segment {
 	}
 	frag, err := seg.mux.Push(s)
 	if err == nil && frag != nil {
-		err = seg.write(frag)
+		if err = seg.write(frag); err == nil {
+			r.written.Store(time.Now().UnixNano())
+		}
 	}
 	if err != nil {
 		r.m.log.Error("recording write failed", "camera", r.camID, "err", err)

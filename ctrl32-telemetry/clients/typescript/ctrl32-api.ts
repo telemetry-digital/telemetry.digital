@@ -77,6 +77,8 @@ export type Branding = {
 
 export type Camera = {
   enabled?: boolean;
+  /** camera group */
+  group?: string;
   /** video.manage only */
   has_password?: boolean;
   has_sub?: boolean;
@@ -349,6 +351,44 @@ export type Device = {
   /** last_seen, fw, battery, rssi, last_values, … */
   status?: Record<string, unknown>;
   transport?: "mqtt" | "http" | "lorawan" | "opcua" | "modbus";
+};
+
+export type Display = {
+  /** current operator command */
+  command?: Record<string, unknown>;
+  content?: DisplayContent;
+  created_at?: string;
+  id?: string;
+  last_agent?: string;
+  last_ip?: string;
+  last_seen_at?: string;
+  name?: string;
+  offline_alert?: boolean;
+  /** reported within 90 s */
+  online?: boolean;
+  /** the device collected its credential */
+  paired?: boolean;
+  updated_at?: string;
+};
+
+export type DisplayContent = {
+  items: ({
+    kind: "dashboard" | "wall";
+    /** screen of the wall, from 0 */
+    screen?: number;
+    /** 10–3600, when shown in turn */
+    seconds?: number;
+    /** dashboard or process screen */
+    slug?: string;
+    /** video wall */
+    wall?: string;
+  })[];
+  /** language of the display */
+  locale?: string;
+  /** enlarge cameras with an event */
+  popup?: "none" | "wall" | "all";
+  /** 5–600 */
+  popup_seconds?: number;
 };
 
 export type Error = {
@@ -1004,7 +1044,10 @@ export type User = {
 };
 
 export type VideoSettings = {
+  camera_offline_minutes?: number;
   discovery_seconds?: number;
+  disk_free_percent?: number;
+  display_offline_minutes?: number;
   event_merge_seconds?: number;
   linger_seconds?: number;
   max_disk_gb?: number;
@@ -2328,6 +2371,153 @@ export class Ctrl32Client {
   }>('POST', `/api/v1/discovery/${encodeURIComponent(id)}/ignore`, undefined, body, false);
   }
 
+  /** Kiosk: live video
+   *
+   * WebSocket like /video/cameras/{id}/live, only for cameras on the display's walls, in camera widgets of its dashboards, sent by an operator, or (popup all) with an active event.
+   * 
+   * Requires permission `display`. */
+  getDisplayCamerasIdLive(id: string): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/display/cameras/${encodeURIComponent(id)}/live`, undefined, undefined, true);
+  }
+
+  /** Kiosk: paired, or a pairing code
+   *
+   * Called by the kiosk page. A paired kiosk (display cookie) gets paired = true. Otherwise a pairing is created (15 minutes, at most 20 waiting per address): the code to show is returned once and a secret is set as an HttpOnly cookie; after an administrator entered the code, the next call with that cookie sets the display cookie. With code_known the waiting pairing is kept. */
+  postDisplayHello(body: {
+    code_known?: boolean;
+  }): Promise<{
+    /** XXXX-XXXX, only when created */
+    code?: string;
+    expires_at?: string;
+    name?: string;
+    paired?: boolean;
+  }> {
+    return this.request<{
+    /** XXXX-XXXX, only when created */
+    code?: string;
+    expires_at?: string;
+    name?: string;
+    paired?: boolean;
+  }>('POST', `/api/v1/display/hello`, undefined, body, false);
+  }
+
+  /** Kiosk: content, command and camera events
+   *
+   * Display cookie only. Also records when the display was last seen.
+   * 
+   * Requires permission `display`. */
+  getDisplayState(): Promise<{
+    /** id → {name, kinds} of cameras with events */
+    active?: Record<string, unknown>;
+    /** id → name of the cameras it may show */
+    cameras?: Record<string, unknown>;
+    /** current command */
+    command?: Record<string, unknown>;
+    id?: string;
+    items?: (Record<string, unknown>)[];
+    locale?: string;
+    name?: string;
+    popup?: string;
+    popup_seconds?: number;
+    server_time?: string;
+    /** changes when the content changes */
+    version?: number;
+  }> {
+    return this.request<{
+    /** id → {name, kinds} of cameras with events */
+    active?: Record<string, unknown>;
+    /** id → name of the cameras it may show */
+    cameras?: Record<string, unknown>;
+    /** current command */
+    command?: Record<string, unknown>;
+    id?: string;
+    items?: (Record<string, unknown>)[];
+    locale?: string;
+    name?: string;
+    popup?: string;
+    popup_seconds?: number;
+    server_time?: string;
+    /** changes when the content changes */
+    version?: number;
+  }>('GET', `/api/v1/display/state`, undefined, undefined, false);
+  }
+
+  /** Kiosk: a video wall of its content
+   *
+   * Requires permission `display`. */
+  getDisplayWallsId(id: string): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('GET', `/api/v1/display/walls/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Displays
+   *
+   * Requires permission `display.control`. */
+  getDisplays(): Promise<Display[]> {
+    return this.request<Display[]>('GET', `/api/v1/displays`, undefined, undefined, false);
+  }
+
+  /** Pair a display
+   *
+   * Enter the code the kiosk shows (case-insensitive; 10 wrong codes in 10 minutes block the user for a while). Returns the device's address and browser. Audited.
+   * 
+   * Requires permission `display.manage`. */
+  postDisplaysPair(body: {
+    /** XXXX-XXXX */
+    code: string;
+    content: DisplayContent;
+    /** ≤ 80 */
+    name: string;
+    /** default true */
+    offline_alert?: boolean;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<Display> {
+    return this.request<Display>('POST', `/api/v1/displays/pair`, undefined, body, false);
+  }
+
+  /** Change a display
+   *
+   * Requires permission `display.manage`. */
+  putDisplaysId(id: string, body: {
+    content?: DisplayContent;
+    name?: string;
+    offline_alert?: boolean;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<Display> {
+    return this.request<Display>('PUT', `/api/v1/displays/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Disconnect a display
+   *
+   * The display is locked out at once and must be paired again.
+   * 
+   * Requires permission `display.manage`. */
+  deleteDisplaysId(id: string, query?: { reason?: string; /** required */ }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/displays/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Send a command to a display
+   *
+   * camera: show a camera the operator may see (seconds 5–3600); identify: show the display's name; reload; clear: back to the content. Audited.
+   * 
+   * Requires permission `display.control`. */
+  postDisplaysIdCommand(id: string, body: {
+    action: "camera" | "identify" | "reload" | "clear";
+    camera?: string;
+    quality?: "main" | "sub";
+    /** 5–3600, default 60 */
+    seconds?: number;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/displays/${encodeURIComponent(id)}/command`, undefined, body, false);
+  }
+
   /** Energy overview
    *
    * Consumption and production of energy meters (entities with device_class energy, datastreams in Wh/kWh/MWh) per hour (day), day (week, month) or month (year) in the organization's time zone, with cost.
@@ -2575,6 +2765,8 @@ export class Ctrl32Client {
     event_post_s?: number;
     /** 0–60, record = events */
     event_pre_s?: number;
+    /** camera group ≤ 60; users limited to groups see only their cameras (spec 014) */
+    group?: string;
     hidden?: boolean;
     name?: string;
     /** http://camera/onvif/device_service: events and PTZ (spec 013) */
@@ -4975,6 +5167,8 @@ export class Ctrl32Client {
     event_post_s?: number;
     /** 0–60, record = events */
     event_pre_s?: number;
+    /** camera group ≤ 60; users limited to groups see only their cameras (spec 014) */
+    group?: string;
     /** icon name */
     icon?: string;
     /** ≤ 80 */
@@ -5004,6 +5198,8 @@ export class Ctrl32Client {
     event_post_s?: number;
     /** 0–60, record = events */
     event_pre_s?: number;
+    /** camera group ≤ 60; users limited to groups see only their cameras (spec 014) */
+    group?: string;
     icon?: string;
     name?: string;
     /** http://camera/onvif/device_service: events and PTZ (spec 013) */
@@ -5492,6 +5688,41 @@ export class Ctrl32Client {
     return this.request<User>('PATCH', `/api/v1/users/${encodeURIComponent(id)}`, undefined, body, false);
   }
 
+  /** A user's camera access
+   *
+   * limited = false: all cameras; otherwise only the cameras of the groups ("" = cameras without a group).
+   * 
+   * Requires permission `user.admin`. */
+  getUsersIdCameraGroups(id: string): Promise<{
+    groups?: string[];
+    limited?: boolean;
+  }> {
+    return this.request<{
+    groups?: string[];
+    limited?: boolean;
+  }>('GET', `/api/v1/users/${encodeURIComponent(id)}/camera-groups`, undefined, undefined, false);
+  }
+
+  /** Limit a user to camera groups
+   *
+   * Applies at once to every camera endpoint. An administrator limited to some groups can hand out only those. Audited.
+   * 
+   * Requires permission `user.admin`. */
+  putUsersIdCameraGroups(id: string, body: {
+    groups?: string[];
+    limited: boolean;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    groups?: string[];
+    limited?: boolean;
+  }> {
+    return this.request<{
+    groups?: string[];
+    limited?: boolean;
+  }>('PUT', `/api/v1/users/${encodeURIComponent(id)}/camera-groups`, undefined, body, false);
+  }
+
   /** Remove a user's MFA enrolment
    *
    * Requires permission `user.admin`. */
@@ -5562,6 +5793,21 @@ export class Ctrl32Client {
   }>('POST', `/api/v1/users/${encodeURIComponent(id)}/unlock`, undefined, body, false);
   }
 
+  /** Camera groups in use
+   *
+   * Groups of the organization's cameras with their counts; a limited user sees only their groups.
+   * 
+   * Requires permission `video.view`. */
+  getVideoCameraGroups(): Promise<({
+    cameras?: number;
+    group?: string;
+  })[]> {
+    return this.request<({
+    cameras?: number;
+    group?: string;
+  })[]>('GET', `/api/v1/video/camera-groups`, undefined, undefined, false);
+  }
+
   /** Cameras
    *
    * Stream addresses, user name and transport only for video.manage.
@@ -5581,6 +5827,8 @@ export class Ctrl32Client {
     event_post_s?: number;
     /** 0–60, record = events */
     event_pre_s?: number;
+    /** camera group ≤ 60; users limited to groups see only their cameras (spec 014) */
+    group?: string;
     /** ≤ 120 */
     location?: string;
     /** ≤ 80 */
@@ -5643,6 +5891,8 @@ export class Ctrl32Client {
     event_post_s?: number;
     /** 0–60, record = events */
     event_pre_s?: number;
+    /** camera group ≤ 60; users limited to groups see only their cameras (spec 014) */
+    group?: string;
     /** ≤ 120 */
     location?: string;
     /** ≤ 80 */
@@ -5970,8 +6220,14 @@ export class Ctrl32Client {
    * 
    * Requires permission `system.admin`. */
   putVideoSettings(body: {
+    /** 0–1440, 0 = no incident */
+    camera_offline_minutes?: number;
     /** 1–15 */
     discovery_seconds?: number;
+    /** 0–50 */
+    disk_free_percent?: number;
+    /** 0–1440 */
+    display_offline_minutes?: number;
     /** 0–120 */
     event_merge_seconds?: number;
     /** 0–600 */

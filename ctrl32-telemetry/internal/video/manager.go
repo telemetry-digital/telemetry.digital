@@ -52,6 +52,9 @@ type Manager struct {
 
 	// OnEvent receives camera events (flows, live stream); set before Run.
 	OnEvent func(CameraEvent)
+	// Incidents receives health problems; set before Run.
+	Incidents Incidents
+	health    healthState
 }
 
 type cam struct {
@@ -145,6 +148,7 @@ func (m *Manager) Run(ctx context.Context) error {
 			return nil
 		case <-t.C:
 			m.Retention(ctx)
+			m.checkHealth(ctx)
 		}
 	}
 }

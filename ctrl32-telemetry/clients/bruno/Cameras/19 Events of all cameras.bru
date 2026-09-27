@@ -1,0 +1,23 @@
+meta {
+  name: Events of all cameras
+  type: http
+  seq: 19
+}
+
+get {
+  url: {{baseUrl}}/api/v1/video/events
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~from: 
+  ~to: 
+  ~kind: 
+}
+
+docs {
+  Events of all cameras
+  
+  Requires permission `video.playback`.
+}

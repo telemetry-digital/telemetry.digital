@@ -59,6 +59,12 @@
         <label>Video walls: sub-stream above (tiles) <input name="wall_sub_stream_above" type="number" min="0" max="64" required></label>
         <div class="hint">Screens set to "automatic" use the smaller sub-stream when they have more tiles than this.</div>
       </div>
+      <div class="card"><h2>Monitoring (incidents)</h2>
+        <label>Camera offline or not recording for (min) <input name="camera_offline_minutes" type="number" min="0" max="1440" required></label>
+        <label>Display not showing for (min) <input name="display_offline_minutes" type="number" min="0" max="1440" required></label>
+        <label>Free space of the video disk below (%) <input name="disk_free_percent" type="number" min="0" max="50" required></label>
+        <div class="hint">An incident is opened and administrators are notified; it resolves itself when the problem ends. 0 = no incident.</div>
+      </div>
       <div class="card"><h2>Remote cameras (relay) — security</h2>
         <label>Block an address after failed attempts <input name="push_max_fails" type="number" min="3" max="100" required></label>
         <label>… within (min) <input name="push_window_minutes" type="number" min="1" max="1440" required></label>
@@ -75,6 +81,7 @@
   <dialog id="camDlg"><form class="form" id="camForm">
     <h2 style="margin-top:0" id="camTitle">Camera</h2>
     <div class="row2"><label>Name <input name="name" required maxlength="80"></label><label>Location <input name="location" maxlength="120"></label></div>
+    <label>Camera group (who may see it; optional) <input name="group" maxlength="60" list="groupList" placeholder="e.g. Gatehouse"><datalist id="groupList"></datalist></label>
     <label>Connection <select name="source"><option value="pull">The server connects to the camera (local network or VPN)</option><option value="push">The camera sends its video to the server (remote site with camera-relay)</option></select></label>
     <div class="muted push-only" style="font-size:13px">A relay at the remote site (<code>ctrl32-telemetry camera-relay</code>) reads the local camera and sends the video over an encrypted connection (RTSPS) that it opens itself — no open port and no VPN at the site. After saving you get the camera's secret and the relay configuration, once.</div>
     <div class="pull-only">
@@ -176,7 +183,7 @@ async function openAll(w) {
   if (!screens && w.screens.length > 1) ctrl32.toast(t('Move each window to its monitor and press F11 (the browser did not allow placing windows)'), '');
 }
 function renderManage() {
-  $('#cams tbody').innerHTML = CAMS.map(c => `<tr><td class="notranslate">${esc(c.name)}</td><td class="notranslate">${esc(c.location)}</td>
+  $('#cams tbody').innerHTML = CAMS.map(c => `<tr><td class="notranslate">${esc(c.name)}</td><td class="notranslate">${esc(c.location)}${c.group ? ` <span class="badge" title="${esc(t('Camera group'))}">${esc(c.group)}</span>` : ''}</td>
     <td class="notranslate" style="max-width:280px;overflow:hidden;text-overflow:ellipsis">${c.source === 'push' ? `<span class="badge primary">${esc(t('remote, sends via relay'))}</span>${c.push && !c.push.enabled ? ` <span class="badge bad" title="${esc(t('video.push_listen is not set in the server configuration'))}">${esc(t('receiving is off'))}</span>` : ''}` : esc(c.url || '') + (c.has_sub ? ' <span class="badge">+ sub</span>' : '')}</td>
     <td>${dot(c.status)} ${esc(t(c.enabled ? (c.status.state === 'idle' ? 'on demand' : c.status.state) : 'disabled'))}${c.status.codec ? ` <span class="muted">${esc(c.status.codec.toUpperCase())} ${c.status.width}×${c.status.height} · ${c.status.fps} fps · ${Math.round(c.status.kbps)} kbit/s</span>` : ''}${c.status.error ? `<br><span class="bad" style="font-size:12px">${esc(c.status.error)}</span>` : ''}</td>
     <td>${c.record === 'off' ? esc(t('off')) : esc(t(c.record === 'events' ? 'on events' : 'continuous')) + ', ' + c.retention_days + ' ' + esc(t('days'))}${c.onvif ? ` <span class="badge" title="${esc(t('ONVIF events'))}: ${esc(c.status.events || '')}">ONVIF${c.status.events && c.status.events !== 'connected' && c.status.events !== 'connecting' ? ' ⚠' : ''}</span>` : ''}</td><td class="num" data-bytes="${c.id}"></td>
@@ -233,9 +240,10 @@ function camDialog(c) {
   $('#camTitle').textContent = t(c ? 'Edit camera' : 'Add camera');
   $('#found').innerHTML = ''; $('#onvifOut').textContent = '';
   for (const b of document.querySelectorAll('#kinds [data-kind]')) b.checked = (c ? c.event_kinds || [] : ['motion', 'tamper', 'line', 'intrusion', 'input', 'mark']).includes(b.dataset.kind);
-  if (c) { for (const k of ['source', 'name', 'location', 'url', 'onvif_url', 'event_pre_s', 'event_post_s', 'sub_url', 'username', 'transport', 'record', 'retention_days', 'sort']) f[k].value = c[k] ?? ''; f.enabled.checked = c.enabled; f.password.placeholder = t(c.has_password ? 'unchanged' : 'none'); }
+  if (c) { for (const k of ['source', 'name', 'location', 'group', 'url', 'onvif_url', 'event_pre_s', 'event_post_s', 'sub_url', 'username', 'transport', 'record', 'retention_days', 'sort']) f[k].value = c[k] ?? ''; f.enabled.checked = c.enabled; f.password.placeholder = t(c.has_password ? 'unchanged' : 'none'); }
   else f.password.placeholder = '';
   sourceMode(); recordMode();
+  $('#groupList').innerHTML = [...new Set(CAMS.map(x => x.group).filter(Boolean))].sort().map(g => `<option value="${esc(g)}">`).join('');
   $('#camDlg').showModal();
 }
 $('#testBtn').onclick = async () => {
@@ -248,7 +256,7 @@ $('#testBtn').onclick = async () => {
   } catch (x) { out.textContent = x.message; out.className = 'bad'; }
 };
 $('#camForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#camErr').textContent = '';
-  const body = {source: f.source.value, name: f.name.value, location: f.location.value, url: f.url.value, sub_url: f.sub_url.value, username: f.username.value, transport: f.transport.value,
+  const body = {source: f.source.value, name: f.name.value, location: f.location.value, group: f.group.value, url: f.url.value, sub_url: f.sub_url.value, username: f.username.value, transport: f.transport.value,
     record: f.record.value, retention_days: +f.retention_days.value, sort: +f.sort.value, enabled: f.enabled.checked, reason: f.reason.value,
     onvif_url: f.onvif_url.value, event_pre_s: +f.event_pre_s.value, event_post_s: +f.event_post_s.value, event_kinds: [...document.querySelectorAll('#kinds [data-kind]:checked')].map(b => b.dataset.kind)};
   if (f.password.value) body.password = f.password.value;
@@ -295,7 +303,7 @@ $('#wallForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $
 
 // ---- settings (server-wide; editing needs system.admin) ----
 let SETS = null;
-const SET_FIELDS = ['max_disk_gb', 'segment_seconds', 'event_merge_seconds', 'discovery_seconds', 'ptz_audit_minutes', 'linger_seconds', 'timeshift_seconds', 'wall_sub_stream_above', 'push_max_fails', 'push_window_minutes', 'push_block_minutes'];
+const SET_FIELDS = ['max_disk_gb', 'segment_seconds', 'event_merge_seconds', 'discovery_seconds', 'ptz_audit_minutes', 'linger_seconds', 'timeshift_seconds', 'wall_sub_stream_above', 'push_max_fails', 'push_window_minutes', 'push_block_minutes', 'camera_offline_minutes', 'display_offline_minutes', 'disk_free_percent'];
 function fillSettings(v) {
   const f = $('#setForm');
   for (const k of SET_FIELDS) f[k].value = v[k];

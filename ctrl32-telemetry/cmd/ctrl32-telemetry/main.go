@@ -243,6 +243,7 @@ func runServer(ctx context.Context, cfg *config.Config, cfgPath string, logger *
 	smart.Inc = inc
 	vids := video.New(pool, cfg.Video.StorageDir, cfg.Video.MaxDiskGB, cfg.Security.SecretKey, logger)
 	// camera events reach flows and pages through the live hub (spec 013)
+	vids.Incidents = inc
 	vids.OnEvent = func(e video.CameraEvent) {
 		hub.Publish(live.Event{Type: "camera", Org: e.OrgID, State: e.Phase, At: e.At,
 			Detail: map[string]any{"camera_id": e.CameraID, "camera": e.Camera, "kind": e.Kind, "source": e.Source, "label": e.Label, "phase": e.Phase, "event_id": e.ID}})

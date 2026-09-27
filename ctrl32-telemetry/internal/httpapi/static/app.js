@@ -3,6 +3,7 @@
 // of the product and is not configurable. Nothing user-specific is rendered before the session state is known.
 (function () {
   const ICON = {
+    display: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="1"/><path d="M7 20h10"/><path d="M9 16v4"/><path d="M15 16v4"/></svg>',
     bolt: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3l0 7l6 0l-8 11l0 -7l-6 0l8 -11"/></svg>',
     home: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l-2 0l9 -9l9 9l-2 0"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7"/><path d="M10 12h4v4h-4z"/></svg>',
     flow: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="6" height="5" rx="1"/><rect x="15" y="4" width="6" height="5" rx="1"/><rect x="15" y="15" width="6" height="5" rx="1"/><path d="M9 6.5h6"/><path d="M6 9v6.5a1 1 0 0 0 1 1h8"/></svg>',
@@ -98,6 +99,7 @@
       { href: '/energy', label: 'Energy', icon: ICON.bolt, show: can('data.read') },
       { href: '/video', label: 'Cameras', icon: ICON.camera, show: can('video.view'), children: [
         { href: '/video', label: 'Live view' }, { href: '/video/walls', label: 'Video walls' }, { href: '/video/manage', label: 'Camera management', show: can('video.manage') }] },
+      { href: '/displays', label: 'Displays', icon: ICON.display, show: can('display.control') },
       { href: '/flows', label: 'Flows', icon: ICON.flow, show: can('data.read') },
       { href: '/devices', label: 'Devices', icon: ICON.device, show: can('data.read') },
       { href: '/incidents', label: 'Incidents', icon: ICON.alert, show: can('data.read') },

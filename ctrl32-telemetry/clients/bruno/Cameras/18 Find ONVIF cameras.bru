@@ -1,0 +1,27 @@
+meta {
+  name: Find ONVIF cameras
+  type: http
+  seq: 18
+}
+
+post {
+  url: {{baseUrl}}/api/v1/video/discover
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "hosts": [
+      "string"
+    ]
+  }
+}
+
+docs {
+  Find ONVIF cameras
+  
+  WS-Discovery in the server's network (3 s); extra IP addresses (other subnets) are probed directly.
+  
+  Requires permission `video.manage`.
+}

@@ -1,0 +1,19 @@
+meta {
+  name: Camera groups in use
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/video/camera-groups
+  body: none
+  auth: inherit
+}
+
+docs {
+  Camera groups in use
+  
+  Groups of the organization's cameras with their counts; a limited user sees only their groups.
+  
+  Requires permission `video.view`.
+}

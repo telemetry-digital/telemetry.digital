@@ -1,0 +1,27 @@
+meta {
+  name: Disconnect a display
+  type: http
+  seq: 8
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/displays/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~reason: 
+}
+
+docs {
+  Disconnect a display
+  
+  The display is locked out at once and must be paired again.
+  
+  Requires permission `display.manage`.
+}

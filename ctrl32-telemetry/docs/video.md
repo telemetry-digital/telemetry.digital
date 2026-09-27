@@ -77,6 +77,12 @@ the server; **Default values** fills in the defaults.
 | Timeshift end | 20 s | 5–300 s | a following playback ends after this long without new video |
 | Video walls: sub-stream above | 4 tiles | 0–64 | for screens set to *automatic* |
 | Relay blocking | 10 attempts / 10 min → 15 min | 3–100 / 1–1440 min / 1–10080 min | failed relay attempts from one address |
+| Camera offline or not recording | 5 min | 0–1440 min | incident for a recording camera that is offline or writes nothing (0 = none) |
+| Display not showing | 5 min | 0–1440 min | incident for a paired display that stopped reporting |
+| Free space of the video disk | 5 % | 0–50 % | incident when the disk of the recordings is nearly full |
+
+Incidents open in the incident log (administrators are notified by e-mail and Web Push) and resolve themselves when
+the problem ends.
 
 Per camera (**Camera management → Edit**): addresses, transport, ONVIF, recording mode, pre- and post-roll, the event
 kinds that record, retention, order. Per video wall screen: layout, cameras and stream (automatic, sub-stream or main
@@ -186,6 +192,12 @@ Other browsers open the windows and you drag each to its monitor and press F11. 
 `/video/walls/<id>?screen=1` (e.g. a PC per monitor, kiosk mode). On the wall a click enlarges a camera to the whole
 monitor (main stream), Esc or another click returns; the toolbar hides after 3 s without mouse movement.
 
+## Displays at a wall
+
+For walls that run day and night without anyone signed in, pair the wall computer as a display
+(`docs/displays.md`): it shows wall screens and dashboards in turn, enlarges cameras with events and follows
+operators' commands.
+
 ## Phone and tablet (PWA)
 
 The web app installs on a phone or tablet (*Add to home screen*; shortcuts Cameras and Video walls) and shows live
@@ -202,6 +214,10 @@ as the web interface, with the same sign-in, MFA and permissions.
 | `video.playback` | recordings, playback, export | engineer, org_admin |
 | `video.manage` | cameras, walls, storage, discovery | engineer, org_admin |
 | `video.ptz` | PTZ control and presets | operator, engineer, org_admin |
+| `display.control` | send cameras and commands to displays | operator, engineer, org_admin |
+| `display.manage` | pair, change and disconnect displays | engineer, org_admin |
+
+Users can be limited to camera groups (see `docs/displays.md`).
 
 Camera and wall changes need a reason and are audited (`camera.*`, `video_wall.*`). Every playback (`video.playback`)
 and export (`video.export`) is written to the audit trail with the camera and the time range — recordings of people

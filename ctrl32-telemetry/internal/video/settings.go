@@ -21,12 +21,17 @@ type Settings struct {
 	PTZAuditMinutes    int `json:"ptz_audit_minutes"`     // PTZ moves are audited once per this per user and camera (0 = every move)
 	DiscoverySeconds   int `json:"discovery_seconds"`     // how long discovery waits for answers
 	WallSubStreamAbove int `json:"wall_sub_stream_above"` // wall screens with more tiles than this use the sub-stream
+	// health (spec 014): incidents after this long; 0 = no incident
+	CameraOfflineMinutes  int `json:"camera_offline_minutes"`  // a recording camera offline or not writing
+	DisplayOfflineMinutes int `json:"display_offline_minutes"` // a paired display not seen
+	DiskFreePercent       int `json:"disk_free_percent"`       // free space of the video storage below this
 }
 
 // DefaultSettings are used until an administrator saves settings.
 func DefaultSettings(maxDiskGB int) Settings {
 	return Settings{MaxDiskGB: maxDiskGB, SegmentSeconds: 60, EventMergeSeconds: 5, LingerSeconds: 30, TimeshiftSeconds: 20,
-		PushMaxFails: 10, PushWindowMinutes: 10, PushBlockMinutes: 15, PTZAuditMinutes: 5, DiscoverySeconds: 3, WallSubStreamAbove: 4}
+		PushMaxFails: 10, PushWindowMinutes: 10, PushBlockMinutes: 15, PTZAuditMinutes: 5, DiscoverySeconds: 3, WallSubStreamAbove: 4,
+		CameraOfflineMinutes: 5, DisplayOfflineMinutes: 5, DiskFreePercent: 5}
 }
 
 // Validate returns the first setting out of its bounds, "" when all are fine.
@@ -46,6 +51,9 @@ func (s Settings) Validate() string {
 		{"ptz_audit_minutes", s.PTZAuditMinutes, 0, 60},
 		{"discovery_seconds", s.DiscoverySeconds, 1, 15},
 		{"wall_sub_stream_above", s.WallSubStreamAbove, 0, 64},
+		{"camera_offline_minutes", s.CameraOfflineMinutes, 0, 1440},
+		{"display_offline_minutes", s.DisplayOfflineMinutes, 0, 1440},
+		{"disk_free_percent", s.DiskFreePercent, 0, 50},
 	} {
 		if b.v < b.lo || b.v > b.hi {
 			return fmt.Sprintf("%s: %d to %d", b.name, b.lo, b.hi)

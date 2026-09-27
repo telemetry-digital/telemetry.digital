@@ -1,0 +1,27 @@
+meta {
+  name: Remove a users MFA enrolment
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/v1/users/:id/mfa-reset
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Remove a user's MFA enrolment
+  
+  Requires permission `user.admin`.
+}

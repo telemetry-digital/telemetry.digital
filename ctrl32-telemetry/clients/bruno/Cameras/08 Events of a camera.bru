@@ -1,0 +1,29 @@
+meta {
+  name: Events of a camera
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/video/cameras/:id/events
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~from: 
+  ~to: 
+  ~kind: 
+}
+
+docs {
+  Events of a camera
+  
+  Motion, tampering, line crossing, intrusion and inputs reported by the camera over ONVIF, and marks from flows and people.
+  
+  Requires permission `video.playback`.
+}

@@ -1,0 +1,29 @@
+meta {
+  name: Test a stream
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/video/cameras/test
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "password": "string",
+    "transport": "auto",
+    "url": "string",
+    "username": "string"
+  }
+}
+
+docs {
+  Test a stream
+  
+  Connects once (at most 8 s) and reports codec and picture size or the error. With id and no password the stored password is used.
+  
+  Requires permission `video.manage`.
+}

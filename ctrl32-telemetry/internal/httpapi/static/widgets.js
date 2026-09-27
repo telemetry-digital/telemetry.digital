@@ -403,7 +403,7 @@
     if (opts.live !== false && window.EventSource) connectLive(container, spec, refreshOne, layer);
     return refresh;
   }
-  window.ctrl32Widgets = { isPublic: () => !!PUBLIC, apiPath: P, render, renderChart, setPublic, series, datastreams, latest, devices, loadLeaflet, makeMap, mapConfig, RANGE_MS, labelOf, isCanvas, fitMimic, placeCanvas, MIMIC_TYPES, register, condFormat, icon: ICON, get types() { return Object.keys(W); },
+  window.ctrl32Widgets = { isPublic: () => !!PUBLIC, isDisplay: () => PUBLIC.startsWith('~'), apiPath: P, render, renderChart, setPublic, series, datastreams, latest, devices, loadLeaflet, makeMap, mapConfig, RANGE_MS, labelOf, isCanvas, fitMimic, placeCanvas, MIMIC_TYPES, register, condFormat, icon: ICON, get types() { return Object.keys(W); },
     // helpers for renderers registered from other files (widgets-more.js)
     util: { esc, api, fmt, num, color, COLORS, dsInfo, sInfo, dsLabel, ids, level, lvlColor, niceTicks, timeTicks, sparkline, seriesWin, winOf, statsOf, hourly, ctlHead, ctlSend, ctlCurrent, reasonInput, canCmd, P } };
 })();

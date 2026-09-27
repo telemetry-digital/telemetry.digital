@@ -1,0 +1,27 @@
+meta {
+  name: Sign a user out everywhere
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{baseUrl}}/api/v1/users/:id/sessions/revoke
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Sign a user out everywhere
+  
+  Requires permission `user.admin`.
+}

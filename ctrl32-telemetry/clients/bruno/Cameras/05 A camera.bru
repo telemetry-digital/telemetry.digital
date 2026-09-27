@@ -1,0 +1,21 @@
+meta {
+  name: A camera
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/video/cameras/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  A camera
+  
+  Requires permission `video.view`.
+}
