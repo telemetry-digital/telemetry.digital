@@ -1,6 +1,6 @@
-# Development database for ctrl32 telemetry (phase 0). Not for production.
+# Development database for ctrl32 telemetry. Not for production. Normally started by deploy/dev/dev.sh up.
 # Usage:  docker compose -f deploy/dev/docker-compose.yml up -d
-#         docker exec -i ctrl32-pg-dev psql -U ctrl32 -d ctrl32 < db/migrations/0001_core.sql
+#         (the server applies the migrations: ctrl32-telemetry migrate)
 services:
   postgres:
     image: postgres:18

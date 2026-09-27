@@ -28,6 +28,7 @@ type recorder struct {
 	// starts before the event
 	events bool
 	pre    time.Duration
+	quiet  bool // the camera's sound is not recorded (only heard live)
 	mu     sync.Mutex
 	holds  map[string]bool
 	until  time.Time
@@ -78,9 +79,9 @@ type segment struct {
 	hash    hash.Hash // SHA-256 of everything written; stored when the file is closed (evidence, spec 015)
 }
 
-func (m *Manager) startRecorder(camID string, src *Source, events bool, pre time.Duration) *recorder {
+func (m *Manager) startRecorder(camID string, src *Source, events bool, pre time.Duration, quiet bool) *recorder {
 	ctx, cancel := context.WithCancel(context.Background())
-	r := &recorder{m: m, camID: camID, src: src, cancel: cancel, done: make(chan struct{}), events: events, pre: pre, holds: map[string]bool{}, started: time.Now()}
+	r := &recorder{m: m, camID: camID, src: src, cancel: cancel, done: make(chan struct{}), events: events, pre: pre, quiet: quiet, holds: map[string]bool{}, started: time.Now()}
 	go r.run(ctx)
 	return r
 }
@@ -204,7 +205,7 @@ func (r *recorder) open(t *Track, s *Sample) (*segment, error) {
 	if err != nil {
 		return nil, err
 	}
-	seg := &segment{path: filepath.ToSlash(rel), f: f, mux: &Muxer{Track: t, Batch: ClockRate}, track: t, first: s.Time, last: s.Time, flushed: time.Now(), hash: sha256.New()}
+	seg := &segment{path: filepath.ToSlash(rel), f: f, mux: &Muxer{Track: t, Batch: ClockRate, NoAudio: r.quiet}, track: t, first: s.Time, last: s.Time, flushed: time.Now(), hash: sha256.New()}
 	init, err := seg.mux.Init()
 	if err == nil {
 		err = seg.write(init)

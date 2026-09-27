@@ -42,8 +42,8 @@ req.on('upgrade', (res, sock, head) => {
     if (len === 126) { if (buf.length < 4) return; len = buf.readUInt16BE(2); off = 4; } else if (len === 127) { if (buf.length < 10) return; len = Number(buf.readBigUInt64BE(2)); off = 10; }
     if (buf.length < off + len) return;
     const p = buf.subarray(off, off + len); buf = buf.subarray(off + len);
-    if (op === 1) { const j = JSON.parse(p.toString()); out.types[j.type] = (out.types[j.type] || 0) + 1; if (j.type === 'init' && !out.init) out.init = j; if (j.type === 'time') out.times.push(j.t); }
-    else if (op === 2) { if (p[0] === 0x41) { out.abin = (out.abin || 0) + 1; if (!out.abox) out.abox = p.subarray(5, 9).toString('latin1'); continue; } out.bin++; out.bytes += p.length; if (p[0] === 0xff && p[1] === 0xd8) out.jpeg++; else if (out.boxes.length < 3) out.boxes.push(p.subarray(4, 8).toString('latin1')); }
+    if (op === 1) { const j = JSON.parse(p.toString()); out.types[j.type] = (out.types[j.type] || 0) + 1; if (j.type === 'init' && !out.init) out.init = j; if (j.type === 'audio') out.audio = j; if (j.type === 'time') out.times.push(j.t); }
+    else if (op === 2) { if (p[0] === 0x50) { out.pbin = (out.pbin || 0) + 1; continue; } if (p[0] === 0x41) { out.abin = (out.abin || 0) + 1; if (!out.abox) out.abox = p.subarray(5, 9).toString('latin1'); continue; } out.bin++; out.bytes += p.length; if (p[0] === 0xff && p[1] === 0xd8) out.jpeg++; else if (out.boxes.length < 3) out.boxes.push(p.subarray(4, 8).toString('latin1')); }
   } });
 });
 req.end();
@@ -275,10 +275,26 @@ node "$TMP/ws.js" "${BASE/http/ws}/api/v1/video/cameras/$SND/live?quality=main&a
 curl -s -b "$J2" -o "$TMP/snd2.mp4" "$BASE/api/v1/video/cameras/$SND/export?from=$FROMS&to=$(iso '-1 sec')"
 check "without video.audio: export without sound" "$(python3 -c "d=open('$TMP/snd2.mp4','rb').read(); print(d.count(b'trak'), b'Opus' in d[:4000])")" "1 False"
 req DELETE "/api/v1/users/$OUID?reason=e2e"
-G7=$(mcam "{\"name\":\"G711 $SUF\",\"url\":\"$SIM/g7$SUF/h264/160x96/g711\",\"audio\":true,\"reason\":\"e2e\"}")
-waitfor '(mstat $G7; [[ "$(jx j.status.audio)" == *AAC* ]])' 20 && ok "G.711 is explained (choose AAC)" || bad "G.711 status: $(jx j.status.audio)"
+G7=$(mcam "{\"name\":\"G711 $SUF\",\"url\":\"$SIM/g7$SUF/h264/160x96/g711\",\"record\":\"continuous\",\"audio\":true,\"reason\":\"e2e\"}")
+waitfor '(mstat $G7; [[ "$(jx j.status.audio)" == "G.711 8000 Hz (as PCM)" ]])' 20 && ok "G.711 (Tapo and others) taken as PCM" || bad "G.711 status: $(jx j.status.audio)"
+ws "/api/v1/video/cameras/$G7/live?quality=main&audio=1" 3; check "G.711 sound as PCM frames next to the picture" "$(jx 'j.audio.codec + " " + j.audio.rate + " " + (j.pbin > 50) + " " + (j.bin > 5) + " " + (j.abin || 0)')" "pcm 8000 true true 0"
+G7M=$(mcam "{\"name\":\"G711 MJPEG $SUF\",\"url\":\"$SIM/g7m$SUF/mjpeg/160x96/g711\",\"audio\":true,\"reason\":\"e2e\"}")
+ws "/api/v1/video/cameras/$G7M/live?quality=main&audio=1" 3; check "G.711 sound next to an MJPEG picture" "$(jx '(j.pbin > 50) + " " + (j.jpeg > 5)')" "true true"
+FROMG=$(iso '-20 sec'); sleep 3
+ws "/api/v1/video/cameras/$G7/playback?from=$FROMG&audio=1" 3; check "recorded G.711 sound plays back" "$(jx '(j.pbin > 20) + " " + (j.bin > 5)')" "true true"
+curl -s -b "$JAR" -o "$TMP/g7.mp4" "$BASE/api/v1/video/cameras/$G7/export?from=$FROMG&to=$(iso '-1 sec')"
+check "export holds picture and PCM sound" "$(python3 -c "d=open('$TMP/g7.mp4','rb').read(); print(d.count(b'trak'), b'ipcm' in d[:4000])")" "2 True"
+LV=$(mcam "{\"name\":\"Live sound $SUF\",\"url\":\"$SIM/lv$SUF/h264/160x96/g711\",\"record\":\"continuous\",\"audio\":true,\"audio_record\":false,\"reason\":\"e2e\"}")
+check "sound heard live only (saves disk space)" "$(jx 'j.audio + " " + j.audio_record')" "true false"
+waitfor '(mstat $LV; [[ "$(jx j.status.recording)" == true ]])' 20
+ws "/api/v1/video/cameras/$LV/live?quality=main&audio=1" 3; check "live-only sound is heard" "$(jx '(j.pbin > 50)')" true
+FROML=$(iso '-10 sec'); sleep 3
+curl -s -b "$JAR" -o "$TMP/lv.mp4" "$BASE/api/v1/video/cameras/$LV/export?from=$FROML&to=$(iso '-1 sec')"
+check "live-only sound is not recorded" "$(python3 -c "d=open('$TMP/lv.mp4','rb').read(); print(d.count(b'trak'), b'ipcm' in d[:4000])")" "1 False"
+G6=$(mcam "{\"name\":\"G726 $SUF\",\"url\":\"$SIM/g6$SUF/h264/160x96/g726\",\"audio\":true,\"reason\":\"e2e\"}")
+waitfor '(mstat $G6; [[ "$(jx j.status.audio)" == *"not supported"* ]])' 20 && ok "other codecs are explained (choose AAC or G.711)" || bad "G.726 status: $(jx j.status.audio)"
 req GET "/api/v1/export/audit?format=csv"; check "listening audited" "$(grep -c 'video.listen' "$TMP/b" | awk '{print ($1 >= 2)}')" 1
-for c in $SND $G7; do req DELETE "/api/v1/video/cameras/$c?reason=e2e"; done
+for c in $SND $G7 $G7M $G6 $LV; do req DELETE "/api/v1/video/cameras/$c?reason=e2e"; done
 
 echo "== video settings"
 req GET /api/v1/video/settings; check "settings with defaults" "$(st) $(jx 'j.defaults.segment_seconds + " " + j.defaults.event_merge_seconds + " " + j.can_edit')" "200 60 5 true"

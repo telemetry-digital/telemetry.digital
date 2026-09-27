@@ -25,6 +25,7 @@
   `video.listen`.
 - FR-005 Exports and evidence packages include the sound only for people with `video.audio`.
 - FR-006 The relay forwards the sound only with `audio = true`.
+- FR-008 (0.55.0) G.711 A-law/µ-law expanded to 16-bit PCM, recorded as an `ipcm` track; players get `{type:"audio", codec:"pcm"}` and `P` messages played through WebAudio at the picture's position.
 - FR-007 Player: a hidden `<audio>` element fed by its own MediaSource, synchronised to the picture every second,
   muted until the user switches the sound on; camera page speaker button (S); no sound on walls, widgets, displays.
 

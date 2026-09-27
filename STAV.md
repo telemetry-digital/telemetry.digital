@@ -22,12 +22,14 @@
 | 0.52.0 | Prenášač vzdialených kamier ako služba: inštalátory pre Linux/Raspberry Pi a Windows, samokontrola pred spustením, stiahnutie relay.toml z rozhrania (spec 018) | e2e 101, unit |
 | 0.53.0 | Rozpoznanie pohybu na serveri pre kamery bez ONVIF (MJPEG alebo JPEG snímka, citlivosť, zóny); oprava ukladania masiek z formulára (spec 019) | e2e 120, unit |
 | 0.54.0 | Zvuk z kamier (AAC/Opus, predvolene vypnutý, oprávnenie `video.audio`, audit počúvania, samostatný prúd v prehliadači) (spec 020) | e2e 132, unit |
+| 0.55.0 | Zvuk G.711 (TP-Link Tapo a väčšina kamier) ako PCM cez WebAudio; predvoľby výrobcov kamier vo formulári (Tapo, Hikvision, Dahua, Reolink, Axis, Uniview, EZVIZ) | e2e 137, unit |
+| 0.56.0 | Zvuk len naživo — počúvanie bez nahrávania (šetrí disk), odhad miesta vo formulári | e2e 140 |
 
-Celá sada testov (`tests/run-all.sh`) pre 0.54.0 (27. 9. 2026): všetko prešlo okrem 3 kontrol času NTP v `ops`, ktoré potrebujú internet (v tomto kontajneri nedostupný) — nesúvisí s kódom.
+Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (`tests/run-all.sh`) pre 0.54.0 (27. 9. 2026): všetko prešlo okrem 3 kontrol času NTP v `ops`, ktoré potrebujú internet (v tomto kontajneri nedostupný) — nesúvisí s kódom.
 
 ## Ďalšie možnosti (fáza 2)
 
-- kamery: zvuk G.711 (prevod v prehliadači cez WebAudio), sťahovanie záznamov z prenášača pri výpadku spojenia;
+- kamery: sťahovanie záznamov z prenášača pri výpadku spojenia;
   overiť H.264 + AAC v bežnom Chrome/Edge a inštalátory prenášača na skutočnom Linuxe/Windows
 - smart home: efekty svetiel na karte, Shelly Gen1, skupiny entít, plánovanie scén (časovač),
   energia: porovnanie s minulým obdobím, export CSV
@@ -36,9 +38,10 @@ Celá sada testov (`tests/run-all.sh`) pre 0.54.0 (27. 9. 2026): všetko prešlo
 
 ## Poznámka k prostrediu
 
-- Lokálna testovacia DB: PostgreSQL 16 na porte 5433 (rola `ctrl32`, dáta `/var/lib/pgtest/data`), po reštarte kontajnera ho
-  treba znova spustiť (`su postgres -c "pg_ctl -D /var/lib/pgtest/data -o '-p 5433 -k /tmp' -l /var/lib/pgtest/log start"`);
-  test zálohy potrebuje aj systémový klaster na 5432 (`pg_ctlcluster 16 main start`). Povolenie od používateľa: 26. 9. 2026.
+- Vývoj na PC: `ctrl32-telemetry/deploy/dev/README.md` — `bash deploy/dev/dev.sh up` (PostgreSQL 18 v Dockeri na porte
+  5433, databáza `ctrl32_dev`, server na http://127.0.0.1:8080, admin / admin1234), `camsim` (simulované kamery),
+  `demo` (40 kamier, 2 steny, výroba, pôdorys). Lokálne dáta v `ctrl32-telemetry/.dev/` (mimo gitu).
+- Celá sada testov: `bash tests/run-all.sh` (porty 8080, 1883, 1884 voľné; `SKIP="ops"`, keď je NTP blokované).
 
 ## Rozhodnutia
 
@@ -47,7 +50,8 @@ Celá sada testov (`tests/run-all.sh`) pre 0.54.0 (27. 9. 2026): všetko prešlo
 
 ## Čaká na používateľa
 
-- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.54.0 root@2.29.5.17 -i <kľúč>` alebo
+- test so skutočnými kamerami TP-Link Tapo (návod: `ctrl32-telemetry/docs/video.md`, časť „Camera makes“)
+
+- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.56.0 root@2.29.5.17 -i <kľúč>` alebo
   GitHub workflow (secrets `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS` a workflow na `main`)
-- zlúčenie vetvy do `main` (pull request na požiadanie)
 - potvrdenie ADR-0015 (SCADA editor v čistom JS nad SVG)

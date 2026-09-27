@@ -126,6 +126,9 @@ func (m *Muxer) pushAudio(s *Sample) ([]byte, error) {
 	return nil, nil
 }
 
+// Started reports whether the time line has its time 0 (the first picture).
+func (m *Muxer) Started() bool { return m.started }
+
 // Start sets time 0 of a sound-only muxer to a picture's time, so the sound and the picture share one time line.
 func (m *Muxer) Start(dts int64) {
 	if !m.started {

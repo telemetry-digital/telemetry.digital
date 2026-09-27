@@ -10,6 +10,7 @@ import (
 	"image"
 	"image/jpeg"
 	"log/slog"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
@@ -23,6 +24,7 @@ import (
 	"github.com/bluenviron/gortsplib/v5/pkg/base"
 	"github.com/bluenviron/gortsplib/v5/pkg/description"
 	"github.com/bluenviron/gortsplib/v5/pkg/format"
+	"github.com/bluenviron/mediacommon/v2/pkg/codecs/g711"
 
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/video/testsrc"
 )
@@ -47,7 +49,7 @@ type spec struct {
 	label string
 	codec string
 	w, h  int
-	audio string // "", "opus" (silent Opus frames) or "g711" (announced only, for the unsupported-codec path)
+	audio string // "", "opus" (silent Opus frames), "g711" (a 440 Hz tone in µ-law, like Tapo cameras) or "g726" (announced only)
 }
 
 // parse reads "<label>/<codec>/<W>x<H>[/opus|/g711]"; missing parts default to h264 and 320x240, no sound.
@@ -61,7 +63,7 @@ func parse(path string) spec {
 		switch {
 		case p == "h264" || p == "mjpeg":
 			sp.codec = p
-		case p == "opus" || p == "g711":
+		case p == "opus" || p == "g711" || p == "g726":
 			sp.audio = p
 		case strings.Contains(p, "x"):
 			a, b, _ := strings.Cut(p, "x")
@@ -120,6 +122,8 @@ func (s *Server) get(path string) (*stream, error) {
 		desc.Medias = append(desc.Medias, &description.Media{Type: description.MediaTypeAudio, Formats: []format.Format{&format.Opus{PayloadTyp: 111, ChannelCount: 1}}})
 	case "g711":
 		desc.Medias = append(desc.Medias, &description.Media{Type: description.MediaTypeAudio, Formats: []format.Format{&format.G711{PayloadTyp: 0, MULaw: true, SampleRate: 8000, ChannelCount: 1}}})
+	case "g726":
+		desc.Medias = append(desc.Medias, &description.Media{Type: description.MediaTypeAudio, Formats: []format.Format{&format.Generic{PayloadTyp: 97, RTPMa: "G726-32/8000", ClockRat: 8000}}})
 	}
 	st := &gortsplib.ServerStream{Server: s.srv, Desc: desc}
 	if err := st.Initialize(); err != nil {
@@ -128,10 +132,51 @@ func (s *Server) get(path string) (*stream, error) {
 	out := &stream{st: st, desc: desc}
 	s.streams[key] = out
 	go s.produce(out, sp)
-	if sp.audio == "opus" {
+	switch sp.audio {
+	case "opus":
 		go s.produceOpus(out)
+	case "g711":
+		go s.produceG711(out)
 	}
 	return out, nil
+}
+
+// produceG711 sends a 440 Hz tone as µ-law every 20 ms while someone plays the stream.
+func (s *Server) produceG711(out *stream) {
+	medi := out.desc.Medias[1]
+	enc, err := medi.Formats[0].(*format.G711).CreateEncoder()
+	if err != nil {
+		return
+	}
+	tick := time.NewTicker(20 * time.Millisecond)
+	defer tick.Stop()
+	start := time.Now()
+	n := 0
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case now := <-tick.C:
+			if out.readers.Load() == 0 {
+				continue
+			}
+			lpcm := make(g711.Mulaw, 320) // 160 samples of 16-bit big-endian PCM
+			for i := 0; i < 160; i++ {
+				v := int16(6000 * math.Sin(2*math.Pi*440*float64(n+i)/8000))
+				lpcm[i*2], lpcm[i*2+1] = byte(uint16(v)>>8), byte(v)
+			}
+			n += 160
+			samples, _ := lpcm.Marshal()
+			pkts, err := enc.Encode(samples)
+			if err != nil {
+				return
+			}
+			for _, p := range pkts {
+				p.Timestamp += uint32(int64(now.Sub(start)) * 8000 / int64(time.Second))
+				_ = out.st.WritePacketRTP(medi, p)
+			}
+		}
+	}
 }
 
 // silentOpus is one 20 ms Opus frame of silence (what WebRTC sends for silence).

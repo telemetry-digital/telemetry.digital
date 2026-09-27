@@ -5,6 +5,8 @@
 // The sound comes only when the URL asks for it (audio=1) and the user may hear it: binary messages starting with 'A'
 // carry it as a separate fragmented MP4 stream, played by its own <audio> element that follows the picture's clock, so
 // a gap in the sound never stalls the picture. It starts muted; p.sound(true) switches it on (a user gesture).
+// G.711 cameras (e.g. TP-Link Tapo): {type:"audio", codec:"pcm", rate, channels}, then binary messages 'P' + float64
+// position (s, big-endian) + 16-bit big-endian samples, scheduled through WebAudio at the picture's position.
 //
 //   const p = ctrl32Player(element, {url, live: true, zoom: true, onTime(ms), onState(state, error), onEnd()});
 //   p.open(url, live);   // another source in the same player (keeps the zoom)
@@ -24,6 +26,7 @@
       if (ams) { try { if (ams.readyState === 'open') ams.endOfStream(); } catch (e) { /* closing */ } }
       if (audio) { if (audio.src) URL.revokeObjectURL(audio.src); audio.removeAttribute('src'); audio.load(); }
       ams = null; asb = null; aqueue = []; box.dataset.audio = '';
+      pcm = null;
     }
     function apump() {
       if (!asb || asb.updating || !aqueue.length) return;
@@ -31,7 +34,37 @@
         if (e.name === 'QuotaExceededError' && audio.buffered.length) { try { asb.remove(audio.buffered.start(0), Math.max(audio.buffered.start(0), audio.currentTime - 5)); } catch (x) { /* busy */ } }
       }
     }
+    // PCM (from G.711): WebAudio. Each chunk plays when the picture reaches its position; late chunks are dropped.
+    // one AudioContext per player, made when the user switches the sound on (browsers allow sound after a gesture)
+    let pcm = null, actx = null; // pcm: {rate, ch, next}
+    function initPCM(m) {
+      resetAudio();
+      pcm = { rate: m.rate || 8000, ch: m.channels || 1, next: 0 };
+      box.dataset.audio = '1';
+      if (opts.onAudio) opts.onAudio('on');
+    }
+    function pcmCtx() {
+      if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; actx = new AC(); }
+      return actx;
+    }
+    function playPCM(buf) {
+      if (!pcm || !soundOn) return;
+      const ctx = pcmCtx(); if (!ctx) return;
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      const dv = new DataView(buf), pos = dv.getFloat64(1), n = Math.floor((buf.byteLength - 9) / 2 / pcm.ch);
+      if (n <= 0) return;
+      const ab = ctx.createBuffer(pcm.ch, n, pcm.rate);
+      for (let c = 0; c < pcm.ch; c++) { const d = ab.getChannelData(c); for (let i = 0; i < n; i++) d[i] = dv.getInt16(9 + (i * pcm.ch + c) * 2) / 32768; }
+      let at;
+      if (mode === 'mse' && video.buffered.length && !video.paused) at = ctx.currentTime + (pos - video.currentTime);
+      else at = Math.max(pcm.next, ctx.currentTime + 0.25); // MJPEG or live without a video clock: a short jitter buffer
+      if (at < ctx.currentTime - 0.05 || at > ctx.currentTime + 3) return; // too late, or far ahead of the picture
+      at = Math.max(at, pcm.next - 0.02, ctx.currentTime); // no overlap with the previous chunk
+      const src = ctx.createBufferSource(); src.buffer = ab; src.connect(ctx.destination); src.start(at);
+      pcm.next = at + ab.duration;
+    }
     function initAudio(m) {
+      if (m.codec === 'pcm') { initPCM(m); return; }
       resetAudio();
       const MSImpl = window.MediaSource || window.ManagedMediaSource;
       if (!MSImpl || !MSImpl.isTypeSupported(m.mime)) { box.dataset.audio = 'unsupported'; if (opts.onAudio) opts.onAudio('unsupported'); return; }
@@ -163,6 +196,7 @@
           else if (m.type === 'end') { state('end'); if (opts.onEnd) opts.onEnd(); }
           return;
         }
+        if (new Uint8Array(e.data, 0, 1)[0] === 0x50) { playPCM(e.data); return; }
         if (new Uint8Array(e.data, 0, 1)[0] === 0x41) { if (ams) { aqueue.push(e.data.slice(1)); if (aqueue.length > 100) aqueue.splice(0, aqueue.length - 100); apump(); } return; }
         if (mode === 'jpeg') drawJPEG(e.data);
         else if (mode === 'mse') { queue.push(e.data); if (queue.length > 200) queue.splice(0, queue.length - 200); pump(); }
@@ -240,13 +274,13 @@
       zoomReset() { z = 1; applyZoom(); },
       // another source in the same player: the picture stays until the new one starts
       open(url, live) { stop(); opts.url = url; opts.live = !!live; lastT = null; box.dataset.state = ''; connect(); },
-      pause() { stop(); video.pause(); if (audio) audio.pause(); state('paused'); },
+      pause() { stop(); video.pause(); if (audio) audio.pause(); if (actx) actx.suspend().catch(() => {}); state('paused'); },
       // switch the sound on or off (on needs a user gesture in browsers); true when there is sound to hear
-      sound(on) { soundOn = !!on; if (audio) { audio.muted = !soundOn; if (soundOn) { syncAudio(); audio.play().catch(() => {}); } else audio.pause(); } return box.dataset.audio === '1'; },
+      sound(on) { soundOn = !!on; if (soundOn) { const c = pcmCtx(); if (c) c.resume().catch(() => {}); } else if (actx) actx.suspend().catch(() => {}); if (audio) { audio.muted = !soundOn; if (soundOn) { syncAudio(); audio.play().catch(() => {}); } else audio.pause(); } return box.dataset.audio === '1'; },
       get hasSound() { return box.dataset.audio === '1'; },
       close() {
         closed = true; stop(); clearInterval(stallTimer); clearInterval(syncTimer);
-        resetMedia(); resetAudio(); box.remove();
+        resetMedia(); resetAudio(); if (actx) actx.close().catch(() => {}); box.remove();
       },
     };
   }

@@ -21,10 +21,12 @@ package httpapi
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"slices"
@@ -62,7 +64,8 @@ type cameraIn struct {
 	MotionSensitivity *int             `json:"motion_sensitivity"`
 	MotionZones       *json.RawMessage `json:"motion_zones"`
 	SnapshotURL       *string          `json:"snapshot_url"`
-	Audio             *bool            `json:"audio"` // record and play the camera's sound (spec 020)
+	Audio             *bool            `json:"audio"`        // take the camera's sound (spec 020)
+	AudioRecord       *bool            `json:"audio_record"` // and record it (false: live only, saves disk space)
 	Reason            string           `json:"reason"`
 }
 
@@ -78,7 +81,7 @@ type cameraRow struct {
 	motionSens                                                           int
 	zones                                                                []byte
 	snapshotURL                                                          string
-	audio                                                                bool // sound, spec 020
+	audio, audioRecord                                                   bool // sound, spec 020
 	retention, sort                                                      int
 	enabled                                                              bool
 }
@@ -86,10 +89,10 @@ type cameraRow struct {
 func (s *Server) cameraRow(ctx context.Context, org, id string) (cameraRow, bool) {
 	var c cameraRow
 	err := s.pool.QueryRow(ctx, `SELECT id::text, name, location, url, sub_url, username, password_sealed, transport, record, retention_days, sort, enabled, source, push_secret_sealed,
-		onvif_url, ptz_profile, event_pre_s, event_post_s, event_kinds, camera_group, privacy_masks, motion_detect, motion_sensitivity, motion_zones, snapshot_url, audio
+		onvif_url, ptz_profile, event_pre_s, event_post_s, event_kinds, camera_group, privacy_masks, motion_detect, motion_sensitivity, motion_zones, snapshot_url, audio, audio_record
 		FROM core.camera WHERE id = $1::uuid AND org_id = $2::uuid AND removed_at IS NULL`, id, org).
 		Scan(&c.id, &c.name, &c.location, &c.url, &c.subURL, &c.username, &c.sealed, &c.transport, &c.record, &c.retention, &c.sort, &c.enabled, &c.source, &c.pushSealed,
-			&c.onvifURL, &c.ptzProfile, &c.eventPre, &c.eventPost, &c.eventKinds, &c.group, &c.masks, &c.motion, &c.motionSens, &c.zones, &c.snapshotURL, &c.audio)
+			&c.onvifURL, &c.ptzProfile, &c.eventPre, &c.eventPost, &c.eventKinds, &c.group, &c.masks, &c.motion, &c.motionSens, &c.zones, &c.snapshotURL, &c.audio, &c.audioRecord)
 	if err != nil {
 		return c, false
 	}
@@ -105,7 +108,7 @@ func (s *Server) cameraJSON(r *http.Request, c cameraRow) map[string]any {
 	out := map[string]any{"id": c.id, "name": c.name, "location": c.location, "record": c.record, "retention_days": c.retention,
 		"sort": c.sort, "enabled": c.enabled, "has_sub": c.subURL != "" || c.source == "push", "source": c.source,
 		"onvif": c.onvifURL != "", "event_pre_s": c.eventPre, "event_post_s": c.eventPost, "event_kinds": c.eventKinds, "group": c.group, "privacy_masks": json.RawMessage(orEmpty(c.masks)),
-		"motion_detect": c.motion, "motion_sensitivity": c.motionSens, "motion_zones": json.RawMessage(orEmpty(c.zones)), "audio": c.audio}
+		"motion_detect": c.motion, "motion_sensitivity": c.motionSens, "motion_zones": json.RawMessage(orEmpty(c.zones)), "audio": c.audio, "audio_record": c.audioRecord}
 	if p := PrincipalFrom(r.Context()); p.Has("video.manage") {
 		out["snapshot_url"] = c.snapshotURL
 		out["url"], out["sub_url"], out["username"], out["transport"], out["has_password"] = c.url, c.subURL, c.username, c.transport, c.sealed != ""
@@ -341,7 +344,7 @@ func (s *Server) createCamera(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err.Error())
 		return
 	}
-	c := cameraRow{transport: "auto", record: "continuous", retention: 7, enabled: true, source: "pull", eventPre: 10, eventPost: 20, motionSens: 50,
+	c := cameraRow{transport: "auto", record: "continuous", retention: 7, enabled: true, source: "pull", eventPre: 10, eventPost: 20, motionSens: 50, audioRecord: true,
 		eventKinds: []string{"motion", "tamper", "line", "intrusion", "input", "mark"}}
 	var pw *string
 	if msg := s.applyCamera(&in, &c, &pw); msg != "" {
@@ -454,7 +457,7 @@ func cameraAudit(c cameraRow) map[string]any {
 	return map[string]any{"name": c.name, "location": c.location, "source": c.source, "url": c.url, "sub_url": c.subURL, "username": c.username,
 		"password_set": c.sealed != "", "transport": c.transport, "record": c.record, "retention_days": c.retention, "enabled": c.enabled,
 		"onvif_url": c.onvifURL, "ptz_profile": c.ptzProfile, "event_pre_s": c.eventPre, "event_post_s": c.eventPost, "event_kinds": c.eventKinds, "group": c.group, "privacy_masks": json.RawMessage(orEmpty(c.masks)),
-		"motion_detect": c.motion, "motion_sensitivity": c.motionSens, "motion_zones": json.RawMessage(orEmpty(c.zones)), "snapshot_url": c.snapshotURL, "audio": c.audio}
+		"motion_detect": c.motion, "motion_sensitivity": c.motionSens, "motion_zones": json.RawMessage(orEmpty(c.zones)), "snapshot_url": c.snapshotURL, "audio": c.audio, "audio_record": c.audioRecord}
 }
 
 func orEmpty(b []byte) []byte {
@@ -736,6 +739,7 @@ type videoConn struct {
 	ctx   context.Context
 	audio bool         // the player asked for the sound and may hear it (spec 020)
 	amux  *video.Muxer // the sound alone, sent as binary messages starting with 'A'
+	pcm   bool         // the sound is PCM (from G.711): binary messages starting with 'P'
 }
 
 func (s *Server) upgradeVideo(w http.ResponseWriter, r *http.Request) (*videoConn, context.CancelFunc, bool) {
@@ -789,9 +793,13 @@ func (v *videoConn) send(p video.Packet) error {
 	if p.Track != v.track {
 		v.track = p.Track
 		v.mux = &video.Muxer{Track: p.Track, NoAudio: true}
-		v.amux = nil
+		v.amux, v.pcm = nil, false
 		if v.audio && p.Track.Audio != nil {
-			v.amux = &video.Muxer{Track: p.Track, AudioOnly: true}
+			if p.Track.Audio.Codec == video.PCM {
+				v.pcm = true // G.711 expanded to PCM: WebAudio, not Media Source Extensions
+			} else {
+				v.amux = &video.Muxer{Track: p.Track, AudioOnly: true}
+			}
 		}
 		if err := v.json(map[string]any{"type": "init", "codec": p.Track.Codec, "mime": p.Track.MIME(), "width": p.Track.Width, "height": p.Track.Height}); err != nil {
 			return err
@@ -802,6 +810,12 @@ func (v *videoConn) send(p video.Packet) error {
 				return err
 			}
 			if err := v.binary(init); err != nil {
+				return err
+			}
+		}
+		if v.pcm {
+			a := p.Track.Audio
+			if err := v.json(map[string]any{"type": "audio", "codec": "pcm", "rate": a.SampleRate, "channels": a.Channels}); err != nil {
 				return err
 			}
 		}
@@ -819,6 +833,17 @@ func (v *videoConn) send(p video.Packet) error {
 		}
 	}
 	if p.Sample.Audio != nil {
+		if v.pcm {
+			// 'P', the position on the picture's time line (float64 seconds, big-endian), 16-bit big-endian samples
+			if !v.mux.Started() {
+				return nil
+			}
+			msg := make([]byte, 9+len(p.Sample.Audio))
+			msg[0] = 'P'
+			binary.BigEndian.PutUint64(msg[1:9], math.Float64bits(v.mux.Pos(p.Sample)))
+			copy(msg[9:], p.Sample.Audio)
+			return v.binary(msg)
+		}
 		if v.amux == nil {
 			return nil
 		}
@@ -828,6 +853,7 @@ func (v *videoConn) send(p video.Packet) error {
 		}
 		return v.binary(append([]byte{'A'}, frag...))
 	}
+	v.mux.Start(p.Sample.DTS) // time 0 is the first picture, also for MJPEG (drawn, not muxed) and its PCM sound
 	if v.amux != nil {
 		v.amux.Start(p.Sample.DTS) // the sound's time line is the picture's
 	}
@@ -942,7 +968,7 @@ func (s *Server) cameraPlayback(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "video.playback", "camera", c.id, nil, map[string]any{"camera": c.name, "from": from, "speed": speed}, "recording viewed")
 	unmasked := s.unmasked(r, c)
-	hears := speed == 1 && s.hears(r, c)
+	hears := speed == 1 && c.audioRecord && s.hears(r, c) // sound heard only live is not in the recording
 	vc, cancel, ok := s.upgradeVideo(w, r)
 	if !ok {
 		return

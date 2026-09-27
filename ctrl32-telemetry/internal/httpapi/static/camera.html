@@ -120,6 +120,7 @@ function ui() {
   const rec = can('video.playback');
   for (const id of ['bPrevSpan', 'bBack60', 'bBack10', 'bFwd10', 'bFwd60']) $('#' + id).disabled = !rec;
   $('#qualWrap').hidden = !(CAM && CAM.has_sub && MODE === 'live') || SOUND;
+  $('#bSound').disabled = MODE !== 'live' && CAM && CAM.audio_record === false; $('#bSound').title = t($('#bSound').disabled ? 'The sound of this camera is heard live only, it is not recorded' : 'Sound on / off (S) — listening is recorded in the audit trail');
   $('#bSound').innerHTML = SOUND ? ICONS.soundOn : ICONS.soundOff; $('#bSound').classList.toggle('on', SOUND);
 }
 function live() {
@@ -133,8 +134,9 @@ function playFrom(ms) {
   if (!can('video.playback')) return;
   if (ms >= Date.now() - 1500) { live(); return; }
   MODE = 'rec'; PAUSED = false; CUR = ms;
-  ensurePlayer().open(`/api/v1/video/cameras/${ID}/playback?from=${new Date(ms).toISOString()}&speed=${SPEED}${SOUND && SPEED === 1 ? '&audio=1' : ''}`, false);
-  P.sound(SOUND && SPEED === 1);
+  const recSound = SOUND && SPEED === 1 && CAM && CAM.audio_record !== false; // sound heard only live is not recorded
+  ensurePlayer().open(`/api/v1/video/cameras/${ID}/playback?from=${new Date(ms).toISOString()}&speed=${SPEED}${recSound ? '&audio=1' : ''}`, false);
+  P.sound(recSound);
   if (dayStart(ms).getTime() !== dayStart(DAY).getTime()) { DAY = new Date(ms); HOUR = null; loadRecordings(); }
   else if (ms < HOUR || ms >= HOUR + HOURMS) { HOUR = new Date(ms).setMinutes(0, 0, 0); drawTimeline(); }
   ui(); drawCursor();

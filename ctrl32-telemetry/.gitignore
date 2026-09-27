@@ -38,3 +38,5 @@ Thumbs.db
 /firmware/
 /e2e-*.log
 test-results/
+/.dev/
+__pycache__/

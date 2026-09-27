@@ -85,15 +85,39 @@ The events have kind `motion` and source `server` and behave like the camera's o
 small MJPEG sub-stream (320 × 180 is enough); the camera's own detection (ONVIF) stays the better choice where it
 exists.
 
+## Camera makes (TP-Link Tapo and others)
+
+*Add camera → Camera make* fills in the stream, ONVIF and snapshot addresses from the IP address for TP-Link Tapo,
+Hikvision (HiLook), Dahua (Imou, Amcrest), Reolink, Axis, Uniview and EZVIZ; *Test connection* checks them at once.
+
+**TP-Link Tapo** (C100, C110, C200, C210, C220, C225, C310, C320WS, C500, C510W, C520WS, TC60, TC70 …):
+
+1. In the Tapo app: camera → Settings → Advanced settings → **Camera account**: create a user name and password.
+   This is the account for RTSP and ONVIF, not the Tapo app account.
+2. Camera make *TP-Link Tapo*, the camera's IP address (give it a fixed address in the router), that user name and
+   password. Streams: `rtsp://IP:554/stream1` (main, 1080p/2K/4K) and `rtsp://IP:554/stream2` (sub, 640×360);
+   ONVIF `http://IP:2020/onvif/device_service`.
+3. Motion events come over ONVIF (turn on motion detection in the Tapo app); pan/tilt models (C200, C210, C500,
+   C510W, C520WS) turn and use presets with PTZ; the sound is G.711 (switch *Sound* on if it is lawful there).
+4. Battery cameras and doorbells (C400, C420, C425, D230, D235) have no RTSP/ONVIF and cannot be added.
+5. Tapo cameras serve few RTSP connections at a time: do not also watch them from another recorder.
+
+Tapo has no HTTP snapshot address, so motion detection on the server is not available for it; use the camera's
+motion events (ONVIF).
+
 ## Sound
 
 A camera's sound is **off by default**: recording sound (conversations) is regulated more strictly than pictures. Switch
 it on per camera (*Camera management → camera → Sound*) only where it is lawful, and inform people (a sign).
 
-- The camera must send **AAC** (or Opus) — set it in the camera's audio settings (Hikvision: *Audio encoding AAC*,
-  Dahua: *AAC*). G.711 and G.726 cannot be played in browsers; the camera list then shows ⚠ with the reason. The
-  sound is never decoded or re-encoded.
-- It is recorded as the second track of the recording files (the main stream), so exports and evidence packages are
+- The camera may send **AAC**, **Opus** or **G.711** (A-law/µ-law — TP-Link Tapo, most Hikvision and Dahua defaults).
+  AAC and Opus pass unchanged; G.711 is expanded to 16-bit PCM (a table lookup, no encoder), recorded as an
+  uncompressed track (`ipcm`, about 1.4 GB a day per camera at 8 kHz) and played in the browser through WebAudio.
+  Other codecs (G.726, MP2) show ⚠ with the advice to choose AAC or G.711. The sound is never re-encoded.
+- *Sound recording*: **record it with the picture**, or **live only** — heard live but not written to disk (sound
+  per camera and day: G.711 about 1.4 GB, AAC 0.2–0.7 GB; the picture 10–40 GB). Live-only sound is not in
+  recordings, playback or exports.
+- When recorded, it is the second track of the recording files (the main stream), so exports and evidence packages are
   ordinary MP4 files with sound for VLC or any player.
 - The camera page shows a speaker button to people with `video.audio`. The sound is requested only after it is
   switched on (and then with the main stream); each listening is audited (`video.listen`). Walls, widgets and

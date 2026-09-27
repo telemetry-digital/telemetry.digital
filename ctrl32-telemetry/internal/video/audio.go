@@ -1,8 +1,9 @@
 package video
 
-// The sound of a camera (spec 020). Like the picture it is never decoded or re-encoded: AAC and Opus go unchanged
-// into the recordings and to the browser, which plays both. Other codecs (G.711, G.726, LATM-framed AAC) are named in
-// the status so the camera can be switched to AAC.
+// The sound of a camera (spec 020). AAC and Opus go unchanged into the recordings and to the browser, which plays
+// both. G.711 (A-law, µ-law — TP-Link Tapo and many other cameras cannot send anything else) is expanded to 16-bit PCM
+// with a table lookup (no encoder involved): it is recorded as an uncompressed track (ipcm) and the browser plays it
+// through WebAudio. Other codecs (G.726, LATM-framed AAC) are named in the status.
 
 import (
 	"context"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/bluenviron/gortsplib/v5/pkg/description"
 	"github.com/bluenviron/gortsplib/v5/pkg/format"
+	g711codec "github.com/bluenviron/mediacommon/v2/pkg/codecs/g711"
 	"github.com/bluenviron/mediacommon/v2/pkg/codecs/opus"
 	"github.com/pion/rtp"
 )
@@ -20,8 +22,9 @@ import (
 // played; the picture works either way.
 func (s *Source) audioDecoder(ctx context.Context, desc *description.Session, ptsOf func(*description.Media, *rtp.Packet) (int64, bool)) (*description.Media, format.Format, func(*rtp.Packet), string) {
 	var (
-		aac *format.MPEG4Audio
-		op  *format.Opus
+		aac  *format.MPEG4Audio
+		op   *format.Opus
+		g711 *format.G711
 	)
 	switch {
 	case desc.FindFormat(&aac) != nil && aac.Config != nil:
@@ -76,13 +79,43 @@ func (s *Source) audioDecoder(ctx context.Context, desc *description.Session, pt
 			}
 			s.publishAudio(ctx, &Sample{Time: time.Now(), DTS: pts * ClockRate / 48000, Audio: p, ADur: uint32(d)})
 		}, "Opus"
+	case desc.FindFormat(&g711) != nil && g711.SampleRate > 0:
+		medi := desc.FindFormat(&g711)
+		dec, err := g711.CreateDecoder()
+		if err != nil {
+			return nil, nil, nil, "sound: " + err.Error()
+		}
+		sr, ch := g711.SampleRate, max(1, g711.ChannelCount)
+		s.setAudio(&AudioTrack{Codec: PCM, SampleRate: sr, Channels: ch})
+		mu := g711.MULaw
+		return medi, g711, func(pkt *rtp.Packet) {
+			pts, ok := ptsOf(medi, pkt)
+			if !ok {
+				return
+			}
+			enc, err := dec.Decode(pkt)
+			if err != nil || len(enc) == 0 {
+				return
+			}
+			var pcm []byte // 16-bit big-endian samples
+			if mu {
+				var m g711codec.Mulaw
+				m.Unmarshal(enc)
+				pcm = m
+			} else {
+				var a g711codec.Alaw
+				a.Unmarshal(enc)
+				pcm = a
+			}
+			s.publishAudio(ctx, &Sample{Time: time.Now(), DTS: pts * ClockRate / int64(sr), Audio: pcm, ADur: uint32(len(enc) / ch)})
+		}, fmt.Sprintf("G.711 %d Hz (as PCM)", sr)
 	}
 	for _, m := range desc.Medias {
 		if m.Type != description.MediaTypeAudio {
 			continue
 		}
 		for _, f := range m.Formats {
-			return nil, nil, nil, "sound " + strings.ToUpper(f.Codec()) + " cannot be played in browsers: choose AAC in the camera's audio settings"
+			return nil, nil, nil, "sound " + strings.ToUpper(f.Codec()) + " is not supported: choose AAC or G.711 in the camera's audio settings"
 		}
 	}
 	return nil, nil, nil, "the camera sends no sound"
