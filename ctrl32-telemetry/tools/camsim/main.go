@@ -8,6 +8,7 @@
 //
 //	POST http://127.0.0.1:8555/sim/motion/<label>?on=1        switches motion on (on=0 off)
 //	GET  http://127.0.0.1:8555/snapshot/<label>/<W>x<H>           one JPEG picture (snapshot address)
+//
 // Cameras labelled STILL… show a standing scene until motion is switched on (for motion detection on the server).
 package main
 
