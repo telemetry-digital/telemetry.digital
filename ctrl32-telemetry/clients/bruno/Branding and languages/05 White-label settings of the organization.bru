@@ -1,0 +1,19 @@
+meta {
+  name: White-label settings of the organization
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/branding/white-label
+  body: none
+  auth: inherit
+}
+
+docs {
+  White-label settings of the organization
+  
+  Stored settings (applied or not), whether the server is licensed and whether they are active.
+  
+  Requires permission `content.write`.
+}

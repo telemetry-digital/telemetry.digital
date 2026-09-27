@@ -19,7 +19,12 @@ ADDITIONAL CONDITIONS
 2. Attribution footer. The product footer displayed by the Software
    ("ctrl32 · telemetry", the link to the source repository and the link to
    this license) must remain visible and unchanged in every copy, modified
-   version and deployment of the Software.
+   version and deployment of the Software. The only exception is a
+   deployment covered by a valid white-label license issued by the Licensor
+   (a paid license key installed in the Software): while that license is
+   valid, the footer and product name may be replaced as the Software's
+   white-label settings allow. Removing or changing the footer in any other
+   way, including by modifying the Software, is not permitted.
 
 3. Notice. Any license notice or attribution required by the Apache License
    must also include these Additional Conditions.

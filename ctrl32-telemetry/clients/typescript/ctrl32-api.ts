@@ -63,8 +63,10 @@ export type Asset = {
 };
 
 export type Branding = {
-  /** fixed footer text, licence, github */
+  /** product footer: text, github, license, links, show_version, white_label, intro */
   footer?: Record<string, unknown>;
+  /** browser icon */
+  icon_url?: string;
   logo_custom?: boolean;
   logo_url?: string;
   map?: MapSettings;
@@ -73,6 +75,9 @@ export type Branding = {
   public_read?: boolean;
   theme?: Theme;
   version?: string;
+  white_label?: {
+    licensed?: boolean;
+  };
 };
 
 export type Camera = {
@@ -1501,6 +1506,32 @@ export class Ctrl32Client {
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
     theme?: Theme;
+    white_label?: {
+      clear_icon?: boolean;
+      /** needs a license with white_label (402 otherwise) */
+      enabled?: boolean;
+      footer_links?: ({
+        /** ≤ 40 */
+        label?: string;
+        /** http(s)://, mailto: or /path */
+        url?: string;
+      })[];
+      /** ≤ 120 */
+      footer_text?: string;
+      icon?: {
+        /** base64, ≤ 64 KiB */
+        data?: string;
+        /** image/png or image/svg+xml */
+        mime?: string;
+      } | null;
+      /** start page introduction, ≤ 400 */
+      intro?: string;
+      /** ≤ 64 */
+      product_name?: string;
+      /** PWA name, ≤ 24 */
+      short_name?: string;
+      show_version?: boolean;
+    };
   }): Promise<{
     /** true on success */
     ok?: boolean;
@@ -1511,9 +1542,55 @@ export class Ctrl32Client {
   }>('PUT', `/api/v1/branding`, undefined, body, false);
   }
 
+  /** Browser icon
+   *
+   * The white-label icon when active, otherwise a redirect to /favicon.svg. */
+  getBrandingIcon(): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/branding/icon`, undefined, undefined, true);
+  }
+
   /** Organization logo image */
   getBrandingLogo(): Promise<Response> {
     return this.request<Response>('GET', `/api/v1/branding/logo`, undefined, undefined, true);
+  }
+
+  /** White-label settings of the organization
+   *
+   * Stored settings (applied or not), whether the server is licensed and whether they are active.
+   * 
+   * Requires permission `content.write`. */
+  getBrandingWhiteLabel(): Promise<{
+    active?: boolean;
+    enabled?: boolean;
+    footer_links?: ({
+      label?: string;
+      url?: string;
+    })[];
+    footer_text?: string;
+    icon?: boolean;
+    icon_url?: string;
+    intro?: string;
+    licensed?: boolean;
+    product_name?: string;
+    short_name?: string;
+    show_version?: boolean;
+  }> {
+    return this.request<{
+    active?: boolean;
+    enabled?: boolean;
+    footer_links?: ({
+      label?: string;
+      url?: string;
+    })[];
+    footer_text?: string;
+    icon?: boolean;
+    icon_url?: string;
+    intro?: string;
+    licensed?: boolean;
+    product_name?: string;
+    short_name?: string;
+    show_version?: boolean;
+  }>('GET', `/api/v1/branding/white-label`, undefined, undefined, false);
   }
 
   /** Change requests waiting for a second person
@@ -5438,6 +5515,80 @@ export class Ctrl32Client {
     extra_domains?: string[];
     token_changed?: boolean;
   }>('PUT', `/api/v1/server/caddy`, undefined, body, false);
+  }
+
+  /** Installed product license
+   *
+   * Paid features (white labeling) need a license issued by the licensor and verified offline against the public keys built into the binary.
+   * 
+   * Requires permission `system.admin`. */
+  getServerLicense(): Promise<{
+    domains?: string[];
+    email?: string;
+    /** absent = perpetual */
+    expires?: string;
+    features?: string[];
+    id?: string;
+    installed?: boolean;
+    installed_at?: string;
+    installed_by?: string;
+    issued?: string;
+    licensee?: string;
+    /** the license never expires */
+    perpetual?: boolean;
+    /** why not */
+    problem?: string;
+    /** host of http.base_url */
+    server_host?: string;
+    /** licensor keys in this build */
+    trusted_keys?: number;
+    /** usable on this server now */
+    valid?: boolean;
+    white_label?: boolean;
+  }> {
+    return this.request<{
+    domains?: string[];
+    email?: string;
+    /** absent = perpetual */
+    expires?: string;
+    features?: string[];
+    id?: string;
+    installed?: boolean;
+    installed_at?: string;
+    installed_by?: string;
+    issued?: string;
+    licensee?: string;
+    /** the license never expires */
+    perpetual?: boolean;
+    /** why not */
+    problem?: string;
+    /** host of http.base_url */
+    server_host?: string;
+    /** licensor keys in this build */
+    trusted_keys?: number;
+    /** usable on this server now */
+    valid?: boolean;
+    white_label?: boolean;
+  }>('GET', `/api/v1/server/license`, undefined, undefined, false);
+  }
+
+  /** Install a product license
+   *
+   * Requires permission `system.admin`. */
+  putServerLicense(body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** c32l1.… */
+    token: string;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('PUT', `/api/v1/server/license`, undefined, body, false);
+  }
+
+  /** Remove the product license
+   *
+   * Requires permission `system.admin`. */
+  deleteServerLicense(query?: { reason?: string; /** required */ }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('DELETE', `/api/v1/server/license`, query, undefined, false);
   }
 
   /** Restart the service (through the agent)

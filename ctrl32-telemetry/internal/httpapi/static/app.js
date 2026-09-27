@@ -240,10 +240,40 @@
     if ($('.footer')) return;
     const f = document.createElement('footer');
     f.className = 'footer';
-    f.innerHTML = '<div class="container row"><span>ctrl32 · telemetry</span>' +
-      '<a href="' + brand.footer.github + '" target="_blank" rel="noopener noreferrer" title="Source on GitHub" aria-label="GitHub">' + ICON.github + '</a>' +
-      '<a href="' + brand.footer.license + '">License</a><span class="grow"></span><span>' + (brand.version ? 'v' + brand.version : '') + '</span></div>';
+    const ver = '<span class="grow"></span><span>' + (brand.version && brand.footer.show_version !== false ? 'v' + esc(brand.version) : '') + '</span>';
+    if (brand.footer.white_label) { // licensed white label (spec 007): the organization's own footer
+      f.innerHTML = '<div class="container row">' + (brand.footer.text ? '<span>' + esc(brand.footer.text) + '</span>' : '') +
+        (brand.footer.links || []).map((l) => '<a href="' + esc(l.url) + '"' + (/^https?:/.test(l.url) ? ' target="_blank" rel="noopener noreferrer"' : '') + '>' + esc(l.label) + '</a>').join('') + ver + '</div>';
+    } else {
+      f.innerHTML = '<div class="container row"><span>ctrl32 · telemetry</span>' +
+        '<a href="' + brand.footer.github + '" target="_blank" rel="noopener noreferrer" title="Source on GitHub" aria-label="GitHub">' + ICON.github + '</a>' +
+        '<a href="' + brand.footer.license + '">License</a>' + ver + '</div>';
+    }
     ($('.content') || document.body).appendChild(f);
+  }
+  // White label (spec 007): the product name replaces "ctrl32 telemetry" in visible texts, titles and the icon.
+  const PRODUCT_RE = /ctrl32 · telemetry|ctrl32 telemetry/g;
+  function rebrandNode(root) {
+    if (!brand.footer || !brand.footer.white_label || !root) return;
+    if (root.nodeType === 3) root = root.parentElement;
+    if (!root || !root.nodeType) return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const n = walker.currentNode;
+      if (n.nodeValue.includes('ctrl32') && !(n.parentElement && n.parentElement.closest('script,style,code,pre,textarea,.no-rebrand'))) n.nodeValue = n.nodeValue.replace(PRODUCT_RE, brand.product);
+    }
+    if (root.querySelectorAll) for (const el of root.querySelectorAll('[placeholder],[title],[alt],[aria-label]')) {
+      for (const a of ['placeholder', 'title', 'alt', 'aria-label']) { const v = el.getAttribute(a); if (v && v.includes('ctrl32')) el.setAttribute(a, v.replace(PRODUCT_RE, brand.product)); }
+    }
+  }
+  function applyWhiteLabel() {
+    if (!brand.footer || !brand.footer.white_label) return;
+    document.title = document.title.replace(PRODUCT_RE, brand.product);
+    for (const l of document.querySelectorAll('link[rel~="icon"],link[rel="apple-touch-icon"]')) l.href = brand.icon_url || l.href;
+    const intro = document.getElementById('intro');
+    if (intro && brand.footer.intro) intro.textContent = brand.footer.intro;
+    rebrandNode(document.body);
+    new MutationObserver((muts) => { for (const m of muts) for (const n of m.addedNodes) rebrandNode(n); }).observe(document.body, { childList: true, subtree: true });
   }
   async function loadBranding() {
     try {
@@ -314,7 +344,7 @@
   let readyPromise = null;
   function ready(opts) {
     opts = opts || {};
-    if (!readyPromise) readyPromise = Promise.all([loadBranding(), loadMe()]).then(loadI18n).then(() => { renderShell(); footer(); wireLang(); translateNode(document.body); if (document.title && catalog[document.title]) document.title = catalog[document.title]; observeI18n(); return { me, brand }; });
+    if (!readyPromise) readyPromise = Promise.all([loadBranding(), loadMe()]).then(loadI18n).then(() => { renderShell(); footer(); wireLang(); translateNode(document.body); if (document.title && catalog[document.title]) document.title = catalog[document.title]; observeI18n(); applyWhiteLabel(); return { me, brand }; });
     return readyPromise.then((r) => {
       if (opts.requireAuth && !me) { location.href = '/login'; return new Promise(() => {}); }
       if (opts.requirePerm && !can(opts.requirePerm)) { const m = $('main'); if (m) m.innerHTML = '<div class="card">Your role has no <code>' + esc(opts.requirePerm) + '</code> permission.</div>'; return new Promise(() => {}); }

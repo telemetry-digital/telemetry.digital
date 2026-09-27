@@ -40,3 +40,6 @@ Thumbs.db
 test-results/
 /.dev/
 __pycache__/
+
+# licensor private keys never belong in the repository (docs/whitelabel.md)
+internal/license/trusted/*.key

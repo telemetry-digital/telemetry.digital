@@ -12,7 +12,7 @@ func SampleData(kind, locale string) Data {
 	now := time.Now().UTC()
 	d := Data{
 		Kind: kind, Title: strings.ToUpper(kind[:1]) + kind[1:] + " report (preview)", Subtitle: "Sample data — not a record",
-		Org: "Sample organization", Locale: locale, GeneratedAt: now.Format(time.RFC3339), GeneratedBy: "preview",
+		Org: "Sample organization", Product: "ctrl32 · telemetry", Locale: locale, GeneratedAt: now.Format(time.RFC3339), GeneratedBy: "preview",
 		Period: Period{From: now.Add(-24 * time.Hour).Format(time.RFC3339), To: now.Format(time.RFC3339)},
 		Scope:  map[string]any{"asset": "Fridge 1", "datastream": "temp", "unit": "°C"}, Summary: map[string]any{}, Audit: AuditHead{Seq: 1234, Hash: strings.Repeat("ab", 32)},
 		System: map[string]any{"version": "preview"},
