@@ -23,13 +23,12 @@
 | 0.53.0 | Rozpoznanie pohybu na serveri pre kamery bez ONVIF (MJPEG alebo JPEG snímka, citlivosť, zóny); oprava ukladania masiek z formulára (spec 019) | e2e 120, unit |
 | 0.54.0 | Zvuk z kamier (AAC/Opus, predvolene vypnutý, oprávnenie `video.audio`, audit počúvania, samostatný prúd v prehliadači) (spec 020) | e2e 132, unit |
 
-Celá sada testov (`tests/run-all.sh`) prešla pre 0.49.0 (27. 9. 2026); po poslednej oprave (typ zoznamu widgetov) znova prešli e2e `displays` 76/76 a unit testy.
+Celá sada testov (`tests/run-all.sh`) pre 0.54.0 (27. 9. 2026): všetko prešlo okrem 3 kontrol času NTP v `ops`, ktoré potrebujú internet (v tomto kontajneri nedostupný) — nesúvisí s kódom.
 
 ## Ďalšie možnosti (fáza 2)
 
-- kamery: kamery na mape/pôdoryse,
-  zvuk, detekcia pohybu na serveri pre kamery bez ONVIF (dekódovanie podprúdu),
-  prenášač ako služba (inštalátor), sťahovanie záznamov z prenášača pri výpadku spojenia
+- kamery: zvuk G.711 (prevod v prehliadači cez WebAudio), sťahovanie záznamov z prenášača pri výpadku spojenia;
+  overiť H.264 + AAC v bežnom Chrome/Edge a inštalátory prenášača na skutočnom Linuxe/Windows
 - smart home: efekty svetiel na karte, Shelly Gen1, skupiny entít, plánovanie scén (časovač),
   energia: porovnanie s minulým obdobím, export CSV
 - toky: parametre inštancie podtoku, spúšťač pri zmene atribútu
