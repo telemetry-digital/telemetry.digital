@@ -24,8 +24,6 @@ type CameraEvent struct {
 	At       time.Time `json:"at"`
 }
 
-// mergeGap joins an event that starts again this soon after it ended (flapping motion) into one.
-const mergeGap = 5 * time.Second
 
 // camEvents is the event state of one camera.
 type camEvents struct {
@@ -130,7 +128,7 @@ func (m *Manager) event(c *cam, kind, source, label string, active, pulse bool, 
 			return id
 		}
 		var id int64
-		if lc, ok := ev.lastClose[key]; ok && at.Sub(lc.at) < mergeGap {
+		if lc, ok := ev.lastClose[key]; ok && at.Sub(lc.at) < m.mergeGap() {
 			id = lc.id
 			_, _ = m.pool.Exec(ctx, `UPDATE core.camera_event SET ended_at = NULL WHERE id = $1`, id)
 		} else if err := m.pool.QueryRow(ctx, `INSERT INTO core.camera_event (camera_id, org_id, kind, source, label, started_at, data) VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb) RETURNING id`,

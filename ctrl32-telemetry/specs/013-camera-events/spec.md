@@ -30,11 +30,14 @@ to flows and alarms.
   subscription with renew and unsubscribe; events classified motion/tamper/line/intrusion/input/other.
 - FR-002 Events stored (`core.camera_event`), merged within 5 s, closed on disconnect, reload and restart; event
   times never in the future.
-- FR-003 Record mode `events` with pre-roll 0–30 s, post-roll 1–600 s, trigger kinds.
+- FR-003 Record mode `events` with pre-roll 0–60 s, post-roll 1–600 s, trigger kinds.
 - FR-004 Marks by users (`video.view`, audited) and flows.
 - FR-005 PTZ continuous move, stop, presets; permission `video.ptz`; audit.
 - FR-006 WS-Discovery multicast and unicast; profiles endpoint for the camera form.
 - FR-007 Flows: trigger `camera_event`, action `camera_mark`.
+- FR-008 Everything adjustable in the UI: server-wide video settings (disk limit, file length, event merging,
+  discovery wait, PTZ audit interval, linger, timeshift end, wall sub-stream threshold, relay blocking) with bounds,
+  system.admin only, audited; stream per wall screen; PTZ speed per viewer.
 
 ## Success Criteria
 - SC-001 e2e `video` (89 checks) and unit tests of the ONVIF client pass; a restart leaves no event open.

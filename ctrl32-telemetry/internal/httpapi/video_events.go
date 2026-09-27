@@ -9,6 +9,8 @@ package httpapi
 //	GET  /api/v1/video/events                         video.playback ?from&to&kind: events of all cameras
 //	GET  /api/v1/video/cameras/{id}/ptz/presets       video.ptz
 //	POST /api/v1/video/cameras/{id}/ptz               video.ptz     {action: move|stop|preset, pan, tilt, zoom, preset}
+//	GET  /api/v1/video/settings                       video.manage  server-wide video settings with defaults and bounds
+//	PUT  /api/v1/video/settings                       system.admin  {settings…, reason}
 
 import (
 	"context"
@@ -50,7 +52,11 @@ func (s *Server) videoDiscover(w http.ResponseWriter, r *http.Request) {
 		}
 		extra = append(extra, h)
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	wait := 3 * time.Second
+	if s.video != nil {
+		wait = time.Duration(s.video.Settings().DiscoverySeconds) * time.Second
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), wait)
 	defer cancel()
 	devs, err := onvif.Discover(ctx, extra...)
 	if err != nil {
@@ -178,8 +184,8 @@ func (s *Server) markCamera(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 201, map[string]any{"id": id})
 }
 
-// ptzAudit remembers when a user last had a PTZ move audited per camera: moves are audited once per 5 minutes,
-// preset changes always.
+// ptzAudit remembers when a user last had a PTZ move audited per camera: moves are audited once per the configured
+// interval (every move with 0), preset changes always.
 var ptzAudit sync.Map
 
 func (s *Server) ptzPresets(w http.ResponseWriter, r *http.Request) {
@@ -244,7 +250,8 @@ func (s *Server) cameraPTZ(w http.ResponseWriter, r *http.Request) {
 		}
 		err = cl.Move(ctx, prof, in.Pan, in.Tilt, in.Zoom)
 		key := p.UserID + "|" + c.id
-		if last, ok := ptzAudit.Load(key); !ok || time.Since(last.(time.Time)) > 5*time.Minute {
+		every := time.Duration(s.video.Settings().PTZAuditMinutes) * time.Minute
+		if last, ok := ptzAudit.Load(key); !ok || time.Since(last.(time.Time)) >= every {
 			ptzAudit.Store(key, time.Now())
 			s.audit(r, "camera.ptz", "camera", c.id, nil, map[string]any{"camera": c.name, "action": "move"}, "PTZ control")
 		}
@@ -271,4 +278,45 @@ func (s *Server) cameraPTZ(w http.ResponseWriter, r *http.Request) {
 // cameraEventForFlows is what the live hub carries to flows and pages.
 func cameraEventDetail(e video.CameraEvent) map[string]any {
 	return map[string]any{"camera_id": e.CameraID, "camera": e.Camera, "kind": e.Kind, "source": e.Source, "label": e.Label, "phase": e.Phase, "event_id": e.ID}
+}
+
+func (s *Server) videoSettings(w http.ResponseWriter, r *http.Request) {
+	if s.video == nil {
+		writeErr(w, 503, "video is not running")
+		return
+	}
+	p := PrincipalFrom(r.Context())
+	writeJSON(w, 200, map[string]any{"settings": s.video.Settings(), "defaults": video.DefaultSettings(s.cfg.Video.MaxDiskGB),
+		"can_edit": p.Has("system.admin"), "storage_dir": s.video.Dir()})
+}
+
+func (s *Server) putVideoSettings(w http.ResponseWriter, r *http.Request) {
+	if s.video == nil {
+		writeErr(w, 503, "video is not running")
+		return
+	}
+	old := s.video.Settings()
+	in := struct {
+		video.Settings
+		Reason string `json:"reason"`
+	}{Settings: old}
+	if err := decodeJSON(r, &in, 4096); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	in.Reason = strings.TrimSpace(in.Reason)
+	if in.Reason == "" || len([]rune(in.Reason)) > 200 {
+		writeErr(w, 400, "reason required (at most 200 characters)")
+		return
+	}
+	if msg := in.Settings.Validate(); msg != "" {
+		writeErr(w, 400, msg)
+		return
+	}
+	if err := s.video.SaveSettings(r.Context(), in.Settings, PrincipalFrom(r.Context()).UserID); err != nil {
+		writeErr(w, 500, "settings not saved")
+		return
+	}
+	s.audit(r, "video.settings", "server", "video", old, in.Settings, in.Reason)
+	writeJSON(w, 200, in.Settings)
 }

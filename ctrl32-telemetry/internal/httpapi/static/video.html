@@ -15,7 +15,7 @@
   <div class="page-head"><h1>Cameras</h1><span class="grow"></span>
     <button class="btn primary" type="button" id="addCam" hidden>Add camera</button>
     <button class="btn primary" type="button" id="addWall" hidden>New video wall</button></div>
-  <nav class="subnav"><a href="/video" data-section="live">Live view</a><a href="/video/walls" data-section="walls">Video walls</a><a href="/video/manage" data-section="manage" id="manageTab" hidden>Camera management</a></nav>
+  <nav class="subnav"><a href="/video" data-section="live">Live view</a><a href="/video/walls" data-section="walls">Video walls</a><a href="/video/manage" data-section="manage" id="manageTab" hidden>Camera management</a><a href="/video/settings" data-section="settings" id="settingsTab" hidden>Settings</a></nav>
 
   <section data-section="live">
     <div class="row" style="margin-bottom:10px"><span class="muted" id="liveInfo"></span><span class="grow"></span>
@@ -33,6 +33,43 @@
   <section data-section="manage">
     <div class="table-wrap"><table id="cams"><thead><tr><th>Name</th><th>Location</th><th>Stream</th><th>State</th><th>Recording</th><th class="num">Stored</th><th></th></tr></thead><tbody></tbody></table></div>
     <div class="card" style="margin-top:12px"><h2 style="margin-top:0">Storage</h2><div id="storage" class="muted"></div></div>
+  </section>
+
+  <section data-section="settings">
+    <form class="form" id="setForm" style="max-width:none">
+      <p class="muted" id="setInfo">Settings for all cameras on this server. Every change is written to the audit trail with its reason.</p>
+      <div class="set-grid">
+      <div class="card"><h2>Storage and recording</h2>
+        <label>Disk space for recordings (GB) <input name="max_disk_gb" type="number" min="1" required></label>
+        <div class="hint" id="diskHint"></div>
+        <label>Length of one recorded file (s) <input name="segment_seconds" type="number" min="10" max="600" required></label>
+        <div class="hint">Shorter files: less is lost after a power cut, more files. Each file starts with a key frame.</div>
+      </div>
+      <div class="card"><h2>Events</h2>
+        <label>Join events that start again within (s) <input name="event_merge_seconds" type="number" min="0" max="120" required></label>
+        <div class="hint">Flapping motion becomes one event instead of many. 0 = never join.</div>
+        <label>Find cameras: wait for answers (s) <input name="discovery_seconds" type="number" min="1" max="15" required></label>
+        <label>Audit PTZ moves once per (min) <input name="ptz_audit_minutes" type="number" min="0" max="60" required></label>
+        <div class="hint">0 = every move is audited. Going to a preset is always audited.</div>
+      </div>
+      <div class="card"><h2>Viewing</h2>
+        <label>Keep an unwatched camera connected (s) <input name="linger_seconds" type="number" min="0" max="600" required></label>
+        <div class="hint">For cameras that do not record: switching back to a camera is instant within this time.</div>
+        <label>Timeshift: end playback without new video after (s) <input name="timeshift_seconds" type="number" min="5" max="300" required></label>
+        <label>Video walls: sub-stream above (tiles) <input name="wall_sub_stream_above" type="number" min="0" max="64" required></label>
+        <div class="hint">Screens set to "automatic" use the smaller sub-stream when they have more tiles than this.</div>
+      </div>
+      <div class="card"><h2>Remote cameras (relay) — security</h2>
+        <label>Block an address after failed attempts <input name="push_max_fails" type="number" min="3" max="100" required></label>
+        <label>… within (min) <input name="push_window_minutes" type="number" min="1" max="1440" required></label>
+        <label>Block for (min) <input name="push_block_minutes" type="number" min="1" max="10080" required></label>
+        <div class="hint" id="pushHint"></div>
+      </div>
+      </div>
+      <div class="row" id="setSave"><label style="flex:1">Reason (audit trail) <input name="reason" required maxlength="200"></label>
+        <button class="btn" type="button" id="setDefaults">Default values</button><button class="btn primary" type="submit">Save settings</button></div>
+      <div class="err" id="setErr"></div>
+    </form>
   </section>
 
   <dialog id="camDlg"><form class="form" id="camForm">
@@ -226,11 +263,13 @@ function renderScreens() {
   $('#screens').innerHTML = WSCREENS.map((s, i) => `<div class="card" style="margin:8px 0" data-si="${i}">
     <div class="row"><label>${esc(t('Screen'))} ${i + 1} <input data-sname value="${esc(s.name || '')}" maxlength="40" placeholder="${esc(t('Monitor') + ' ' + (i + 1))}"></label>
       <label>${esc(t('Layout'))} <select data-layout>${LAYOUTS.map(([c, r]) => `<option value="${c}x${r}"${c === s.cols && r === s.rows ? ' selected' : ''}>${c} × ${r} (${c * r})</option>`).join('')}</select></label>
+      <label>${esc(t('Stream'))} <select data-quality>${[['auto', 'automatic'], ['sub', 'sub-stream (smaller, saves bandwidth)'], ['main', 'main stream (full quality)']].map(([v, l]) => `<option value="${v}"${(s.quality || 'auto') === v ? ' selected' : ''}>${esc(t(l))}</option>`).join('')}</select></label>
       <span class="grow"></span>${WSCREENS.length > 1 ? `<button class="btn small" type="button" data-sdel>${esc(t('Remove screen'))}</button>` : ''}</div>
     <div class="wall-edit-grid" style="grid-template-columns:repeat(${s.cols},1fr)">${Array.from({length: s.cols * s.rows}, (_, k) => `<select data-tile="${k}" class="notranslate">${camOptions((s.tiles || [])[k])}</select>`).join('')}</div></div>`).join('');
   for (const card of document.querySelectorAll('#screens [data-si]')) {
     const s = WSCREENS[+card.dataset.si];
     card.querySelector('[data-sname]').oninput = e => { s.name = e.target.value; };
+    card.querySelector('[data-quality]').onchange = e => { s.quality = e.target.value; };
     card.querySelector('[data-layout]').onchange = e => { const [c, r] = e.target.value.split('x').map(Number); s.cols = c; s.rows = r; s.tiles = (s.tiles || []).slice(0, c * r); renderScreens(); };
     for (const sel of card.querySelectorAll('[data-tile]')) sel.onchange = () => { s.tiles = s.tiles || []; while (s.tiles.length < s.cols * s.rows) s.tiles.push(null); s.tiles[+sel.dataset.tile] = sel.value || null; };
     const d = card.querySelector('[data-sdel]'); if (d) d.onclick = () => { WSCREENS.splice(+card.dataset.si, 1); renderScreens(); };
@@ -249,16 +288,48 @@ $('#autoFill').onclick = () => {
   renderScreens();
 };
 $('#wallForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#wallErr').textContent = '';
-  const screens = WSCREENS.map(s => { const tiles = (s.tiles || []).slice(0, s.cols * s.rows); while (tiles.length && !tiles[tiles.length - 1]) tiles.pop(); return {name: s.name || '', cols: s.cols, rows: s.rows, tiles}; });
+  const screens = WSCREENS.map(s => { const tiles = (s.tiles || []).slice(0, s.cols * s.rows); while (tiles.length && !tiles[tiles.length - 1]) tiles.pop(); return {name: s.name || '', cols: s.cols, rows: s.rows, tiles, quality: s.quality && s.quality !== 'auto' ? s.quality : undefined}; });
   try { if (WEDIT) await api('PUT', '/api/v1/video/walls/' + WEDIT.id, {name: f.name.value, screens, reason: f.reason.value});
     else await api('POST', '/api/v1/video/walls', {name: f.name.value, screens, reason: f.reason.value});
     $('#wallDlg').close(); ctrl32.toast(t('video wall saved'), 'ok'); load(); } catch (x) { $('#wallErr').textContent = x.message; } };
+
+// ---- settings (server-wide; editing needs system.admin) ----
+let SETS = null;
+const SET_FIELDS = ['max_disk_gb', 'segment_seconds', 'event_merge_seconds', 'discovery_seconds', 'ptz_audit_minutes', 'linger_seconds', 'timeshift_seconds', 'wall_sub_stream_above', 'push_max_fails', 'push_window_minutes', 'push_block_minutes'];
+function fillSettings(v) {
+  const f = $('#setForm');
+  for (const k of SET_FIELDS) f[k].value = v[k];
+  updateHints();
+}
+function updateHints() {
+  const f = $('#setForm'), gb = +f.max_disk_gb.value || 0;
+  // 2 Mbit/s ≈ 21 GB a day; how many camera-days fit
+  $('#diskHint').textContent = SETS ? `${t('Stored now')}: ${fmtBytes(SETS.used || 0)} · ${t('about')} ${Math.max(0, Math.floor(gb / 21))} ${t('camera-days at 2 Mbit/s')} · ${SETS.storage_dir}` : '';
+  $('#pushHint').textContent = `${t('A relay with a wrong secret is blocked after')} ${f.push_max_fails.value} ${t('attempts within')} ${f.push_window_minutes.value} min ${t('for')} ${f.push_block_minutes.value} min.`;
+}
+async function loadSettings() {
+  try {
+    const [r, st] = await Promise.all([api('GET', '/api/v1/video/settings'), api('GET', '/api/v1/video/storage')]);
+    SETS = {...r, used: st.used_bytes};
+    fillSettings(r.settings);
+    const ro = !r.can_edit;
+    for (const el of $('#setForm').querySelectorAll('input')) el.disabled = ro;
+    $('#setSave').hidden = ro;
+    if (ro) $('#setInfo').textContent = t('Settings for all cameras on this server. Only a system administrator can change them.');
+  } catch (x) { $('#setErr').textContent = x.message; }
+}
+$('#setForm').oninput = updateHints;
+$('#setDefaults').onclick = () => { if (SETS) fillSettings(SETS.defaults); };
+$('#setForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#setErr').textContent = '';
+  const body = {reason: f.reason.value}; for (const k of SET_FIELDS) body[k] = +f[k].value;
+  try { const v = await api('PUT', '/api/v1/video/settings', body); SETS.settings = v; fillSettings(v); f.reason.value = ''; ctrl32.toast(t('settings saved'), 'ok'); }
+  catch (x) { $('#setErr').textContent = x.message; } };
 
 async function load() {
   try {
     [CAMS, WALLS] = await Promise.all([api('GET', '/api/v1/video/cameras'), api('GET', '/api/v1/video/walls')]);
     if (SECTION === 'live') renderLive(); else stopPlayers();
-    renderWalls(); if (SECTION === 'manage') renderManage();
+    renderWalls(); if (SECTION === 'manage') renderManage(); if (SECTION === 'settings') loadSettings();
   } catch (x) { ctrl32.toast(x.message, 'bad'); }
 }
 async function refreshStatus() {
@@ -275,8 +346,9 @@ $('#tileSize').onchange = e => { $('#liveGrid').style.gridTemplateColumns = `rep
 try { const v = localStorage.getItem('ctrl32.video.tile'); if (v) { $('#tileSize').value = v; $('#liveGrid').style.gridTemplateColumns = `repeat(auto-fill, minmax(${v}px, 1fr))`; } } catch (x) { /* ignore */ }
 ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(({me}) => {
   ME = me;
-  SECTION = ctrl32.section('live', ['live', 'walls', 'manage']);
+  SECTION = ctrl32.section('live', ['live', 'walls', 'manage', 'settings']);
   $('#manageTab').hidden = !can('video.manage');
+  $('#settingsTab').hidden = !can('video.manage');
   $('#addCam').hidden = !(can('video.manage') && SECTION === 'manage');
   $('#addWall').hidden = !(can('video.manage') && SECTION === 'walls');
   $('#addCam').onclick = () => camDialog(null);

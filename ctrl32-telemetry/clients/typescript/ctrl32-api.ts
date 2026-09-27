@@ -1003,10 +1003,26 @@ export type User = {
   username?: string;
 };
 
+export type VideoSettings = {
+  discovery_seconds?: number;
+  event_merge_seconds?: number;
+  linger_seconds?: number;
+  max_disk_gb?: number;
+  ptz_audit_minutes?: number;
+  push_block_minutes?: number;
+  push_max_fails?: number;
+  push_window_minutes?: number;
+  segment_seconds?: number;
+  timeshift_seconds?: number;
+  wall_sub_stream_above?: number;
+};
+
 export type VideoWall = {
   id?: string;
   name?: string;
   screens?: WallScreen[];
+  /** tiles above which automatic screens use the sub-stream */
+  sub_stream_above?: number;
   updated_at?: string;
 };
 
@@ -1015,6 +1031,8 @@ export type WallScreen = {
   cols: number;
   /** ≤ 40 */
   name?: string;
+  /** auto: sub-stream above the video setting wall_sub_stream_above */
+  quality?: "auto" | "main" | "sub";
   /** 1–8 */
   rows: number;
   tiles?: (string | null)[];
@@ -5745,7 +5763,7 @@ export class Ctrl32Client {
 
   /** Turn and zoom a PTZ camera
    *
-   * move starts a continuous movement (speeds -1…1) until stop; preset goes to a stored position. Audited (moves once per 5 minutes per user and camera, presets always).
+   * move starts a continuous movement (speeds -1…1) until stop; preset goes to a stored position. Audited (moves once per the video setting ptz_audit_minutes per user and camera, presets always).
    * 
    * Requires permission `video.ptz`. */
   postVideoCamerasIdPtz(id: string, body: {
@@ -5925,6 +5943,59 @@ export class Ctrl32Client {
     })[];
     ptz?: boolean;
   }>('POST', `/api/v1/video/onvif/profiles`, undefined, body, false);
+  }
+
+  /** Server-wide video settings
+   *
+   * Current settings, their defaults and whether this user may change them (system.admin).
+   * 
+   * Requires permission `video.manage`. */
+  getVideoSettings(): Promise<{
+    can_edit?: boolean;
+    defaults?: VideoSettings;
+    settings?: VideoSettings;
+    storage_dir?: string;
+  }> {
+    return this.request<{
+    can_edit?: boolean;
+    defaults?: VideoSettings;
+    settings?: VideoSettings;
+    storage_dir?: string;
+  }>('GET', `/api/v1/video/settings`, undefined, undefined, false);
+  }
+
+  /** Change the video settings
+   *
+   * Fields left out keep their value; every field has bounds (400 names the first one out of bounds). Audited with the old and new values.
+   * 
+   * Requires permission `system.admin`. */
+  putVideoSettings(body: {
+    /** 1–15 */
+    discovery_seconds?: number;
+    /** 0–120 */
+    event_merge_seconds?: number;
+    /** 0–600 */
+    linger_seconds?: number;
+    /** 1–1048576 */
+    max_disk_gb?: number;
+    /** 0–60, 0 = every move */
+    ptz_audit_minutes?: number;
+    /** 1–10080 */
+    push_block_minutes?: number;
+    /** 3–100 */
+    push_max_fails?: number;
+    /** 1–1440 */
+    push_window_minutes?: number;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** 10–600 */
+    segment_seconds?: number;
+    /** 5–300 */
+    timeshift_seconds?: number;
+    /** 0–64 */
+    wall_sub_stream_above?: number;
+  }): Promise<VideoSettings> {
+    return this.request<VideoSettings>('PUT', `/api/v1/video/settings`, undefined, body, false);
   }
 
   /** Space used by recordings

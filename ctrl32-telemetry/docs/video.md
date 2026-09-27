@@ -47,7 +47,7 @@ addresses only); **Fill in from ONVIF** reads the profiles and fills the main an
   start and end. Motion that starts again within 5 s joins the same event. The server never decodes video, so event
   detection costs nothing per camera — the camera's own analytics does the work; set its sensitivity and zones in the
   camera. Events of a disconnected camera, a changed camera and a restarted server are closed.
-- **Recording on events**: record mode *on events* records only around the chosen kinds: the pre-roll (0–30 s, kept
+- **Recording on events**: record mode *on events* records only around the chosen kinds: the pre-roll (0–60 s, kept
   in memory from the last key frame) and the post-roll (1–600 s) after the event ends. Continuous recording stores
   events too, as marks on the timeline.
 - **Marks**: the flag button on the camera page (or a flow) marks the camera with a label; on a camera recording on
@@ -59,6 +59,28 @@ addresses only); **Fill in from ONVIF** reads the profiles and fills the main an
 
 Active events outline the tile in the camera list and on video walls. `GET /api/v1/video/events` lists events of all
 cameras (`video.playback`).
+
+## Video settings
+
+**Cameras → Settings** holds the server-wide settings (anyone with `video.manage` sees them, a system administrator
+changes them; every change is audited with the old and new values and a reason). Every value has bounds checked by
+the server; **Default values** fills in the defaults.
+
+| Setting | Default | Bounds | Meaning |
+|---|---|---|---|
+| Disk space for recordings | `max_disk_gb` from `config.toml` (50) | 1 GB – 1 PB | the oldest recordings of all cameras are deleted beyond it |
+| Length of one recorded file | 60 s | 10–600 s | shorter loses less after a power cut, makes more files |
+| Join events within | 5 s | 0–120 s | flapping motion becomes one event (0 = never join) |
+| Find cameras: wait for answers | 3 s | 1–15 s | WS-Discovery answer time |
+| Audit PTZ moves once per | 5 min | 0–60 min | per user and camera; 0 = every move; presets always |
+| Keep an unwatched camera connected | 30 s | 0–600 s | cameras that do not record reconnect instantly within it |
+| Timeshift end | 20 s | 5–300 s | a following playback ends after this long without new video |
+| Video walls: sub-stream above | 4 tiles | 0–64 | for screens set to *automatic* |
+| Relay blocking | 10 attempts / 10 min → 15 min | 3–100 / 1–1440 min / 1–10080 min | failed relay attempts from one address |
+
+Per camera (**Camera management → Edit**): addresses, transport, ONVIF, recording mode, pre- and post-roll, the event
+kinds that record, retention, order. Per video wall screen: layout, cameras and stream (automatic, sub-stream or main
+stream). Per viewer (remembered in the browser): tile size, playback speed, PTZ speed.
 
 ## Camera settings for quality at low load
 

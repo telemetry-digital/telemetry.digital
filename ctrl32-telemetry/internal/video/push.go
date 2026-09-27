@@ -123,12 +123,6 @@ type failRec struct {
 	until time.Time
 }
 
-const (
-	pushMaxFails   = 10
-	pushFailWindow = 10 * time.Minute
-	pushBlock      = 15 * time.Minute
-)
-
 var pushPath = regexp.MustCompile(`^/?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(/sub)?/?$`)
 
 // StartPush opens the listener; nil when not configured.
@@ -206,16 +200,17 @@ func (ps *PushServer) blocked(ip string) bool {
 }
 
 func (ps *PushServer) fail(ip, why string) {
+	set := ps.m.Settings() // before ps.mu: the manager's lock is never taken under it
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	f := ps.fails[ip]
-	if f == nil || time.Since(f.first) > pushFailWindow {
+	if f == nil || time.Since(f.first) > time.Duration(set.PushWindowMinutes)*time.Minute {
 		f = &failRec{first: time.Now()}
 		ps.fails[ip] = f
 	}
 	f.n++
-	if f.n >= pushMaxFails {
-		f.until = time.Now().Add(pushBlock)
+	if f.n >= set.PushMaxFails {
+		f.until = time.Now().Add(time.Duration(set.PushBlockMinutes) * time.Minute)
 	}
 	ps.log.Warn("camera push refused", "security", true, "remote", ip, "reason", why, "failures", f.n)
 }

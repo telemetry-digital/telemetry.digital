@@ -280,6 +280,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("POST /api/v1/video/cameras/{id}/events", s.require("video.view", s.markCamera))
 	mux.Handle("GET /api/v1/video/cameras/{id}/ptz/presets", s.require("video.ptz", s.ptzPresets))
 	mux.Handle("POST /api/v1/video/cameras/{id}/ptz", s.require("video.ptz", s.cameraPTZ))
+	mux.Handle("GET /api/v1/video/settings", s.require("video.manage", s.videoSettings))
+	mux.Handle("PUT /api/v1/video/settings", s.require("system.admin", s.putVideoSettings))
 	mux.Handle("GET /api/v1/video/walls", s.require("video.view", s.listWalls))
 	mux.Handle("POST /api/v1/video/walls", s.require("video.manage", s.saveWall))
 	mux.Handle("GET /api/v1/video/walls/{id}", s.require("video.view", s.getWall))

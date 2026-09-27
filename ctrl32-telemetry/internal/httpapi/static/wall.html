@@ -39,8 +39,8 @@ function render() {
     cells.push(`<div class="cell" data-i="${i}" ${c ? `data-id="${id}"` : ''}>${c ? `<div class="cap"><span class="cam-dot"></span><span class="notranslate">${esc(c.name)}</span></div>` : ''}</div>`);
   }
   g.innerHTML = cells.join('');
-  // many tiles: the sub-stream; a few large tiles: the main stream
-  const quality = sc.cols * sc.rows > 4 ? 'sub' : 'main';
+  // the screen's choice; automatic: the sub-stream for many tiles, the main stream for a few large ones
+  const quality = sc.quality === 'main' || sc.quality === 'sub' ? sc.quality : sc.cols * sc.rows > (WALL.sub_stream_above ?? 4) ? 'sub' : 'main';
   for (const el of g.querySelectorAll('.cell[data-id]')) {
     const dotEl = el.querySelector('.cam-dot');
     const p = ctrl32Player(el, {url: `/api/v1/video/cameras/${el.dataset.id}/live?quality=${quality}`, live: true,

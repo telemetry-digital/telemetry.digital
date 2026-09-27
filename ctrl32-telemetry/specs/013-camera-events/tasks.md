@@ -8,3 +8,4 @@
 - [x] T006 Flows: camera_event trigger, camera_mark action; unit test
 - [x] T007 UI: camera form (ONVIF, find, fill in, events mode), camera page (PTZ, marks, events), wall highlight; sk/cs
 - [x] T008 e2e tests/e2e/video.sh; docs/video.md; URS P-11…P-14; JOURNAL, STAV; run-all
+- [x] T009 Video settings in the UI (migration 0031, GET/PUT /api/v1/video/settings, Cameras → Settings), wall screen stream, PTZ speed; unit + e2e

@@ -39,7 +39,7 @@ func selfSigned(t *testing.T) (string, string) {
 }
 
 func pushManager(secret string) (*Manager, *cam) {
-	m := &Manager{log: slog.New(slog.NewTextHandler(io.Discard, nil)), cams: map[string]*cam{}}
+	m := &Manager{log: slog.New(slog.NewTextHandler(io.Discard, nil)), cams: map[string]*cam{}, set: DefaultSettings(1)}
 	c := &cam{cfg: Camera{ID: pushCam, Push: true, PushSecret: secret}}
 	c.main = &Source{URL: &url.URL{Scheme: "push"}, Linger: time.Millisecond}
 	c.sub = &Source{URL: &url.URL{Scheme: "push"}, Linger: time.Millisecond}
@@ -94,7 +94,7 @@ func TestPushRefusesWrongSecretAndBlocks(t *testing.T) {
 	}
 	defer ps.Close()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	for i := 0; i < pushMaxFails; i++ {
+	for i := 0; i < m.Settings().PushMaxFails; i++ {
 		err := relayOnce(context.Background(), "rtsp://"+sim+"/x/h264/160x96", "tcp", "rtsp://"+addr+"/"+pushCam, pushCam, "wrong-secret-0123456789", nil, log)
 		if err == nil {
 			t.Fatal("wrong secret accepted")

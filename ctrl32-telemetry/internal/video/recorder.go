@@ -9,9 +9,8 @@ import (
 	"time"
 )
 
-// SegmentLength is the target length of one recorded file; a file always starts with a key frame, so the real
-// length is rounded up to the camera's key frame interval.
-var SegmentLength = 60 * time.Second
+// maxSegment is the longest segment the settings allow; playback looks back this far for a file covering a time.
+const maxSegment = 600 * time.Second
 
 // recorder writes the main stream of one camera into segment files and indexes them in core.video_segment.
 type recorder struct {
@@ -157,7 +156,7 @@ func (r *recorder) preroll(buf []Packet, p Packet) []Packet {
 // write adds one frame, opening and rotating files as needed; it returns the current segment.
 func (r *recorder) write(seg *segment, p Packet) *segment {
 	s := p.Sample
-	if seg != nil && (p.Track != seg.track || (s.Key && s.Time.Sub(seg.first) >= SegmentLength) || s.Time.Sub(seg.last) > 10*time.Second) {
+	if seg != nil && (p.Track != seg.track || (s.Key && s.Time.Sub(seg.first) >= r.m.segmentLength()) || s.Time.Sub(seg.last) > 10*time.Second) {
 		r.close(seg)
 		seg = nil
 	}

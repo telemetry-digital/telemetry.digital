@@ -217,6 +217,20 @@ req PUT /api/v1/video/walls/$WID '{"name":"Renamed","reason":"e2e"}'; check "wal
 req GET /api/v1/video/walls; check "wall listed" "$(jx "j.some(w => w.id === '$WID')")" true
 curl -s -o /dev/null -w '%{http_code}' "$BASE/video/walls/$WID" > "$TMP/s"; check "wall page served" "$(st)" 200
 
+echo "== video settings"
+req GET /api/v1/video/settings; check "settings with defaults" "$(st) $(jx 'j.defaults.segment_seconds + " " + j.defaults.event_merge_seconds + " " + j.can_edit')" "200 60 5 true"
+OLD=$(cat "$TMP/b" | node -pe 'JSON.stringify(JSON.parse(require("fs").readFileSync(0)).settings)')
+req PUT /api/v1/video/settings '{"segment_seconds":30}'; check "settings need a reason" "$(st)" 400
+req PUT /api/v1/video/settings '{"segment_seconds":5,"reason":"e2e"}'; check "bounds enforced" "$(st) $(jx j.error)" "400 segment_seconds: 10 to 600"
+req PUT /api/v1/video/settings '{"push_max_fails":1,"reason":"e2e"}'; check "relay blocking cannot be weakened below 3" "$(st)" 400
+req PUT /api/v1/video/settings '{"segment_seconds":30,"wall_sub_stream_above":9,"ptz_audit_minutes":0,"reason":"e2e"}'; check "settings saved" "$(st) $(jx 'j.segment_seconds + " " + j.wall_sub_stream_above + " " + j.event_merge_seconds')" "200 30 9 5"
+req GET /api/v1/video/settings; check "settings kept" "$(jx 'j.settings.segment_seconds')" 30
+req POST /api/v1/video/walls "{\"name\":\"Q $SUF\",\"reason\":\"e2e\",\"screens\":[{\"cols\":2,\"rows\":2,\"tiles\":[\"$CAM\"],\"quality\":\"main\"}]}"; check "wall screen quality stored" "$(st) $(jx 'j.screens[0].quality + " " + j.sub_stream_above')" "201 main 9"
+QW=$(jx j.id); req DELETE "/api/v1/video/walls/$QW?reason=e2e"
+req POST /api/v1/video/walls "{\"name\":\"x\",\"reason\":\"e2e\",\"screens\":[{\"cols\":1,\"rows\":1,\"tiles\":[],\"quality\":\"4k\"}]}"; check "wall quality validated" "$(st)" 400
+req PUT /api/v1/video/settings "$(node -e 'const o=JSON.parse(process.argv[1]); o.reason="e2e restore"; console.log(JSON.stringify(o))' "$OLD")"; check "settings restored" "$(st) $(jx j.segment_seconds)" "200 60"
+req GET "/api/v1/export/audit?format=csv"; check "settings change audited" "$(grep -c 'video.settings' "$TMP/b" | awk '{print ($1 >= 2)}')" 1
+
 echo "== change and remove"
 req PUT /api/v1/video/cameras/$CAM '{"record":"off","reason":"e2e"}'; check "recording switched off" "$(st) $(jx j.record)" "200 off"
 req GET /api/v1/video/cameras/$CAM; check "password kept on update" "$(jx j.has_password)" true

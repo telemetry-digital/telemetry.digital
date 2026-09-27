@@ -660,3 +660,10 @@ body.has-landing main.container { max-width: none; padding: 0; }
 .ev-list div:hover { background: var(--bg2); }
 .ev-kind { display: inline-block; min-width: 90px; font-weight: 600; }
 .cam-live.cam-alert::after { right: auto; left: 8px; top: 36px; }
+
+/* video settings */
+.set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 12px; }
+.set-grid .card { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.set-grid h2 { margin: 0 0 4px; font-size: 16px; }
+.set-grid .hint { font-size: 12px; color: var(--muted); margin-top: -4px; }
+#setSave { align-items: flex-end; gap: 10px; flex-wrap: wrap; }

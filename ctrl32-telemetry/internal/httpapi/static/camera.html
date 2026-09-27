@@ -181,20 +181,25 @@ $('#bMark').onclick = async () => {
 function ptzUI() {
   if (!CAM.onvif || !can('video.ptz')) return;
   const pad = document.createElement('div'); pad.className = 'ptz';
-  const B = [['↖', -.5, .5], ['▲', 0, .6], ['↗', .5, .5], ['◀', -.6, 0], ['■', 0, 0], ['▶', .6, 0], ['↙', -.5, -.5], ['▼', 0, -.6], ['↘', .5, -.5]];
+  const B = [['↖', -.7, .7], ['▲', 0, 1], ['↗', .7, .7], ['◀', -1, 0], ['■', 0, 0], ['▶', 1, 0], ['↙', -.7, -.7], ['▼', 0, -1], ['↘', .7, -.7]];
+  // PTZ speed is the viewer's choice, remembered in this browser
+  let speed = .6; try { speed = +(localStorage.getItem('ctrl32.ptz.speed') || .6); } catch (x) { /* ignore */ }
+  const r2 = v => Math.round(v * 100) / 100;
   pad.innerHTML = B.map(([l, x, y], i) => `<button type="button" data-i="${i}" title="${esc(t(i === 4 ? 'Stop' : 'Hold to turn'))}">${l}</button>`).join('');
   const extra = document.createElement('div'); extra.className = 'ptz-extra';
-  extra.innerHTML = `<button type="button" data-z="1" title="${esc(t('Hold to zoom in'))}">＋</button><button type="button" data-z="-1" title="${esc(t('Hold to zoom out'))}">－</button><select id="presets" title="${esc(t('Presets'))}"><option value="">${esc(t('Presets'))}</option></select>`;
+  extra.innerHTML = `<button type="button" data-z="1" title="${esc(t('Hold to zoom in'))}">＋</button><button type="button" data-z="-1" title="${esc(t('Hold to zoom out'))}">－</button><select id="presets" title="${esc(t('Presets'))}"><option value="">${esc(t('Presets'))}</option></select><select id="ptzSpeed" title="${esc(t('PTZ speed'))}">${[[.2, 'slow'], [.6, 'normal'], [1, 'fast']].map(([v, l]) => `<option value="${v}"${v === speed ? ' selected' : ''}>${esc(t('speed'))}: ${esc(t(l))}</option>`).join('')}</select>`;
   $('#stage').append(pad, extra);
   const send = (body) => api('POST', `/api/v1/video/cameras/${ID}/ptz`, body).catch(x => ctrl32.toast(x.message, 'bad'));
   const hold = (btn, body) => {
-    const start = (e) => { e.preventDefault(); e.stopPropagation(); send(body); };
+    const start = (e) => { e.preventDefault(); e.stopPropagation(); send(body()); };
     const stop = (e) => { e.stopPropagation(); send({action: 'stop'}); };
     btn.addEventListener('pointerdown', start); btn.addEventListener('pointerup', stop); btn.addEventListener('pointerleave', (e) => { if (e.buttons) stop(e); });
     btn.addEventListener('click', (e) => e.stopPropagation());
   };
-  for (const b of pad.querySelectorAll('button')) { const [, x, y] = B[+b.dataset.i]; if (+b.dataset.i === 4) b.onclick = (e) => { e.stopPropagation(); send({action: 'stop'}); }; else hold(b, {action: 'move', pan: x, tilt: y, zoom: 0}); }
-  for (const b of extra.querySelectorAll('[data-z]')) hold(b, {action: 'move', pan: 0, tilt: 0, zoom: +b.dataset.z * .6});
+  for (const b of pad.querySelectorAll('button')) { const [, x, y] = B[+b.dataset.i]; if (+b.dataset.i === 4) b.onclick = (e) => { e.stopPropagation(); send({action: 'stop'}); }; else hold(b, () => ({action: 'move', pan: r2(x * speed), tilt: r2(y * speed), zoom: 0})); }
+  for (const b of extra.querySelectorAll('[data-z]')) hold(b, () => ({action: 'move', pan: 0, tilt: 0, zoom: r2(+b.dataset.z * speed)}));
+  $('#ptzSpeed').onchange = (e) => { speed = +e.target.value; try { localStorage.setItem('ctrl32.ptz.speed', speed); } catch (x) { /* ignore */ } };
+  $('#ptzSpeed').onclick = (e) => e.stopPropagation();
   api('GET', `/api/v1/video/cameras/${ID}/ptz/presets`).then(ps => { $('#presets').innerHTML += ps.map(p => `<option value="${esc(p.token)}">${esc(p.name || p.token)}</option>`).join(''); }).catch(() => {});
   $('#presets').onchange = (e) => { if (e.target.value) send({action: 'preset', preset: e.target.value}); e.target.value = ''; };
   $('#presets').onclick = (e) => e.stopPropagation();

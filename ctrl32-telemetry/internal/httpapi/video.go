@@ -968,6 +968,8 @@ type WallScreen struct {
 	Cols  int       `json:"cols"`
 	Rows  int       `json:"rows"`
 	Tiles []*string `json:"tiles"`
+	// Quality of the tiles: "" or "auto" (sub-stream above the configured number of tiles), "main" or "sub".
+	Quality string `json:"quality,omitempty"`
 }
 
 type wallIn struct {
@@ -987,6 +989,11 @@ func (s *Server) validateWall(ctx context.Context, org string, screens []WallScr
 		}
 		if len(sc.Tiles) > sc.Cols*sc.Rows {
 			return fmt.Sprintf("screen %d: more tiles than cells", i+1)
+		}
+		switch sc.Quality {
+		case "", "auto", "main", "sub":
+		default:
+			return "screen quality: auto, main or sub"
 		}
 		if len([]rune(sc.Name)) > 40 {
 			return "screen name: at most 40 characters"
@@ -1014,7 +1021,11 @@ func (s *Server) wallJSON(ctx context.Context, org, id string) (map[string]any, 
 	if err != nil {
 		return nil, false
 	}
-	return map[string]any{"id": id, "name": name, "screens": json.RawMessage(screens), "updated_at": updated}, true
+	subAbove := 4
+	if s.video != nil {
+		subAbove = s.video.Settings().WallSubStreamAbove
+	}
+	return map[string]any{"id": id, "name": name, "screens": json.RawMessage(screens), "updated_at": updated, "sub_stream_above": subAbove}, true
 }
 
 func (s *Server) listWalls(w http.ResponseWriter, r *http.Request) {

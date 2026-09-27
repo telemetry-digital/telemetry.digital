@@ -47,7 +47,7 @@ type segRow struct {
 
 // Playback opens recorded video of a camera from `from` (to `to`, when not zero).
 func (m *Manager) Playback(camID string, from, to time.Time) *Playback {
-	return &Playback{m: m, camID: camID, from: from, to: to, after: from.Add(-2 * SegmentLength), follow: to.IsZero()}
+	return &Playback{m: m, camID: camID, from: from, to: to, after: from.Add(-2 * maxSegment), follow: to.IsZero()}
 }
 
 // Close releases the open file.
@@ -58,8 +58,9 @@ func (p *Playback) Close() {
 	}
 }
 
-// FollowLimit ends a following playback when the recording stops growing for this long.
-var FollowLimit = 20 * time.Second
+// FollowLimit, when set (tests), overrides the timeshift setting: a following playback ends when the recording stops
+// growing for this long.
+var FollowLimit time.Duration
 
 var errPartial = errors.New("the file is still being written")
 
@@ -115,12 +116,12 @@ func (p *Playback) Next(ctx context.Context) (Packet, error) {
 	}
 }
 
-// waitMore pauses while following; false when nothing new came for FollowLimit or ctx ended.
+// waitMore pauses while following; false when nothing new came for the follow limit or ctx ended.
 func (p *Playback) waitMore(ctx context.Context) bool {
 	if p.idle.IsZero() {
 		p.idle = time.Now()
 	}
-	if time.Since(p.idle) > FollowLimit {
+	if time.Since(p.idle) > p.m.followLimit() {
 		return false
 	}
 	select {

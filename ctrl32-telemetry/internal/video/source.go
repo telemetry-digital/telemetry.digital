@@ -169,6 +169,13 @@ func (s *Source) startLocked() {
 	go s.run(ctx)
 }
 
+// setLinger changes the linger of an on-demand stream (settings).
+func (s *Source) setLinger(d time.Duration) {
+	s.mu.Lock()
+	s.Linger = d
+	s.mu.Unlock()
+}
+
 func (s *Source) maybeStopLocked() {
 	if s.keep || len(s.subs) > 0 || s.cancel == nil {
 		return

@@ -1,0 +1,36 @@
+meta {
+  name: Change the video settings
+  type: http
+  seq: 21
+}
+
+put {
+  url: {{baseUrl}}/api/v1/video/settings
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "discovery_seconds": 1,
+    "event_merge_seconds": 1,
+    "linger_seconds": 1,
+    "max_disk_gb": 1,
+    "ptz_audit_minutes": 1,
+    "push_block_minutes": 1,
+    "push_max_fails": 1,
+    "push_window_minutes": 1,
+    "reason": "string",
+    "segment_seconds": 1,
+    "timeshift_seconds": 1,
+    "wall_sub_stream_above": 1
+  }
+}
+
+docs {
+  Change the video settings
+  
+  Fields left out keep their value; every field has bounds (400 names the first one out of bounds). Audited with the old and new values.
+  
+  Requires permission `system.admin`.
+}

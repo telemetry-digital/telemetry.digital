@@ -45,6 +45,7 @@ type Manager struct {
 	log      *slog.Logger
 
 	mu      sync.Mutex
+	set     Settings
 	cams    map[string]*cam
 	push    *PushServer
 	pushURL string
@@ -65,14 +66,18 @@ type cam struct {
 // New prepares the manager; Start loads the cameras.
 func New(pool *pgxpool.Pool, dir string, maxDiskGB int, secretKey string, log *slog.Logger) *Manager {
 	box, _ := iam.NewSecretBox(secretKey)
-	return &Manager{pool: pool, dir: dir, maxBytes: int64(maxDiskGB) << 30, box: box, log: log.With("component", "video"), cams: map[string]*cam{}}
+	return &Manager{pool: pool, dir: dir, maxBytes: int64(maxDiskGB) << 30, set: DefaultSettings(maxDiskGB), box: box, log: log.With("component", "video"), cams: map[string]*cam{}}
 }
 
 // Dir is the storage directory of recordings.
 func (m *Manager) Dir() string { return m.dir }
 
 // MaxBytes is the disk limit of all recordings.
-func (m *Manager) MaxBytes() int64 { return m.maxBytes }
+func (m *Manager) MaxBytes() int64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.maxBytes
+}
 
 // SealPassword encrypts a camera password for the database.
 func (m *Manager) SealPassword(pw string) (string, error) {
@@ -111,6 +116,7 @@ func (m *Manager) Run(ctx context.Context) error {
 	if err := os.MkdirAll(m.dir, 0o750); err != nil {
 		m.log.Error("video storage not writable; recording is off", "dir", m.dir, "err", err)
 	}
+	m.loadSettings(ctx)
 	m.repair(ctx)
 	// events left open by a crash end when the server started again
 	_, _ = m.pool.Exec(ctx, `UPDATE core.camera_event SET ended_at = now() WHERE ended_at IS NULL`)
@@ -249,14 +255,17 @@ func (m *Manager) Reload(ctx context.Context, id string) {
 	if !ok || !cfg.Enabled {
 		return
 	}
+	m.mu.Lock()
+	linger := m.linger()
+	m.mu.Unlock()
 	c := &cam{cfg: cfg, ev: camEvents{open: map[string]int64{}, lastClose: map[string]closed{}}}
 	if cfg.OnvifURL != "" && !cfg.Push {
 		c.onvif = &onvif.Client{Device: cfg.OnvifURL, Username: cfg.Username, Password: cfg.Password}
 	}
 	if cfg.Push {
 		// the relay publishes main and (optionally) sub; both sources stay ready to accept it
-		c.main = &Source{URL: &url.URL{Scheme: "push"}, Log: m.log.With("camera", cfg.Name), Linger: 30 * time.Second}
-		c.sub = &Source{URL: &url.URL{Scheme: "push"}, Log: m.log.With("camera", cfg.Name+" (sub)"), Linger: 30 * time.Second}
+		c.main = &Source{URL: &url.URL{Scheme: "push"}, Log: m.log.With("camera", cfg.Name), Linger: linger}
+		c.sub = &Source{URL: &url.URL{Scheme: "push"}, Log: m.log.With("camera", cfg.Name+" (sub)"), Linger: linger}
 		c.main.Keep(true)
 		c.sub.Keep(true)
 		c.rec = m.recorderFor(c)
@@ -270,10 +279,10 @@ func (m *Manager) Reload(ctx context.Context, id string) {
 		m.log.Warn("camera URL invalid", "camera", id, "err", err)
 		return
 	}
-	c.main = &Source{URL: mu, Transport: cfg.Transport, Log: m.log.With("camera", cfg.Name), Linger: 30 * time.Second}
+	c.main = &Source{URL: mu, Transport: cfg.Transport, Log: m.log.With("camera", cfg.Name), Linger: linger}
 	if cfg.SubURL != "" {
 		if su, err := StreamURL(cfg.SubURL, cfg.Username, cfg.Password); err == nil {
-			c.sub = &Source{URL: su, Transport: cfg.Transport, Log: m.log.With("camera", cfg.Name+" (sub)"), Linger: 30 * time.Second}
+			c.sub = &Source{URL: su, Transport: cfg.Transport, Log: m.log.With("camera", cfg.Name+" (sub)"), Linger: linger}
 		}
 	}
 	c.rec = m.recorderFor(c)
@@ -395,7 +404,7 @@ func (m *Manager) Retention(ctx context.Context) {
 	if err := m.pool.QueryRow(ctx, `SELECT COALESCE(sum(bytes), 0) FROM core.video_segment`).Scan(&total); err != nil {
 		return
 	}
-	for total > m.maxBytes && ctx.Err() == nil {
+	for total > m.MaxBytes() && ctx.Err() == nil {
 		freed := m.deleteWhere(ctx, `SELECT id, path, bytes FROM core.video_segment WHERE ended_at < now() - interval '2 minutes' ORDER BY started_at LIMIT 50`)
 		if freed == 0 {
 			return
