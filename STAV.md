@@ -53,15 +53,15 @@ Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (
 
 ## Čaká na používateľa
 
-- 0.58.0 (ovládanie kamier cez prenášač, G.711 cez prenášač, informácie o prúde): zlúčenie vetvy
-  `feature/relay-onvif` do `main`; po nasadení servera aktualizovať prenášač na PC (nová binárka) a do `relay.toml`
-  pridať `onvif = "http://192.168.0.21:2020"` (C210) a `onvif = "http://192.168.0.197:2020"` (C225), `audio = true`;
-  na serveri pri oboch kamerách ONVIF adresu `http://IP:2020/onvif/device_service` a účet kamery z aplikácie Tapo;
-  overiť so skutočnými kamerami (PTZ C210/C225, pohyb, zvuk)
-- white labeling: zlúčenie vetvy `feature/paid-white-label` do `main` (pull request na požiadanie); súkromný kľúč
-  licencora `C:\Users\PavolKRNÁČ\.ctrl32-license\telemetry-digital-2026.key` zálohovať offline (kto ho má, vydáva
-  licencie; nikdy nie do repozitára); právna kontrola výnimky v podmienke 2 `LICENSE`; spôsob objednávky a fakturácie
-- test so skutočnými kamerami TP-Link Tapo (návod: `ctrl32-telemetry/docs/video.md`, časť „Camera makes“)
-- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.57.0 root@2.29.5.17 -i <kľúč>` alebo
-  GitHub workflow (secrets `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS` a workflow na `main`)
+- **Produkcia 27. 9. 2026 22:57: telemetry.digital beží 0.58.0.** Kamery Tapo C210 („Byt“, 192.168.0.21) a C225
+  (192.168.0.197) cez prenášač na PC používateľa (`%USERPROFILE%\ctrl32-relay`, naplánovaná úloha „ctrl32 camera
+  relay“): obraz, nahrávanie v slučke (limit 15 GB), zvuk G.711 len naživo, PTZ cez tunel (predvoľby C210 načítané).
+  Používateľ má ešte vyskúšať PTZ a zvuk v prehliadači. Prenášač presunúť na Raspberry Pi (192.168.0.53) po nahratí
+  Raspberry Pi OS Lite (bez Home Assistanta; SSH alias `ctrl32-relay`, kľúč `~/.ssh/telemetry_relay_rpi`).
+- white labeling (39 EUR; jedna licencia ctrl32 odomkne buď editor, alebo telemetry): aktivácia číslom objednávky
+  cez `lic.ctrl32.com` (vetva `feature/license-activation` + `server/lic-worker` v repe ctrl32, rozpracované);
+  súkromné kľúče licencora v `C:\Users\PavolKRNÁČ\.ctrl32-license\` zálohovať offline (nikdy nie do repozitára);
+  právna kontrola výnimky v podmienke 2 `LICENSE`
+- nasadenie: `deploy/publish.sh VERSION root@2.29.5.17 -i ~/.ssh/telemetry_deploy`, potom na serveri záloha,
+  `migrate` novou binárkou a až potom výmena a reštart (poučenie z 27. 9.: 0016 CRLF a výpadok prihlasovania)
 - potvrdenie ADR-0015 (SCADA editor v čistom JS nad SVG)
