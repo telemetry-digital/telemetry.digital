@@ -1,0 +1,21 @@
+meta {
+  name: Name start page and sections of an enabled app
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/pwa-apps/:slug/launch
+  body: none
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+docs {
+  Name, start page and sections of an enabled app
+  
+  Public (the app window needs it before sign-in); contains no data of the organization. 404 for an unknown or disabled app.
+}

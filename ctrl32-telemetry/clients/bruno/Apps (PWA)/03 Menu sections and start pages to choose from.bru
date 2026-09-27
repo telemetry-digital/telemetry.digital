@@ -1,0 +1,19 @@
+meta {
+  name: Menu sections and start pages to choose from
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/pwa-apps/options
+  body: none
+  auth: inherit
+}
+
+docs {
+  Menu sections and start pages to choose from
+  
+  Sections are the top-level menu groups; start pages are the main pages plus the organization's dashboards, video walls and cameras (cameras only with `video.view`, limited to the user's camera groups).
+  
+  Requires permission `content.write`.
+}

@@ -396,6 +396,10 @@ iPhone ManagedMediaSource (iOS 17.1+); MJPEG cameras work everywhere. Nothing of
 the device (the service worker caches only the app shell). Access from outside goes through the same HTTPS address
 as the web interface, with the same sign-in, MFA and permissions.
 
+For a phone that should show only the cameras, create an own app under *Settings → Apps* with the **Cameras**
+preset (start page: live view, menu: Cameras) or the **Video wall** preset (start page: one wall) and install it from
+`/app/{address}` — see `docs/pwa.md`.
+
 ## Permissions and audit
 
 | Permission | Allows | Built-in roles |

@@ -1,0 +1,19 @@
+meta {
+  name: List app profiles
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/pwa-apps
+  body: none
+  auth: inherit
+}
+
+docs {
+  List app profiles
+  
+  Current version of every app of the organization, enabled or not.
+  
+  Requires permission `content.write`.
+}

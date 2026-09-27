@@ -1,0 +1,27 @@
+meta {
+  name: Delete an app profile
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/pwa-apps/:slug
+  body: none
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Delete an app profile
+  
+  The profile is retired (versions stay); its install page and manifest answer 404.
+  
+  Requires permission `content.write`.
+}

@@ -728,6 +728,44 @@ export type Organization = {
   users?: number;
 };
 
+export type PWAApp = {
+  created_at?: string;
+  enabled?: boolean;
+  /** id of this version */
+  id?: string;
+  install_url?: string;
+  manifest_url?: string;
+  name?: string;
+  sections?: string[];
+  /** home-screen label */
+  short_name?: string;
+  /** address /app/{slug} */
+  slug?: string;
+  start_url?: string;
+  /** #rrggbb or empty (the organization's colour) */
+  theme_color?: string;
+  version?: number;
+  warnings?: string[];
+};
+
+export type PWAAppInput = {
+  /** default true */
+  enabled?: boolean;
+  /** 1–64 characters */
+  name: string;
+  /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+  reason: string;
+  sections: string[];
+  /** ≤ 24 characters, ≤ 12 recommended; empty = name */
+  short_name?: string;
+  /** create only: 1–40 of a-z, 0-9, - */
+  slug?: string;
+  /** path of this application */
+  start_url: string;
+  /** #rrggbb or empty */
+  theme_color?: string;
+};
+
 export type Permission = {
   description?: string;
   name?: string;
@@ -4648,6 +4686,111 @@ export class Ctrl32Client {
     failed?: number;
     sent?: number;
   }>('POST', `/api/v1/push/test`, undefined, body, false);
+  }
+
+  /** List app profiles
+   *
+   * Current version of every app of the organization, enabled or not.
+   * 
+   * Requires permission `content.write`. */
+  getPwaApps(): Promise<PWAApp[]> {
+    return this.request<PWAApp[]>('GET', `/api/v1/pwa-apps`, undefined, undefined, false);
+  }
+
+  /** Create an app profile
+   *
+   * `start_url` must be a path of this application (`/video`, `/video/walls/{id}`, `/dashboards/{slug}` …): no other site, no `//`, no `javascript:`, not `/api/v1/` or `/app/`. `sections`: keys from `GET /api/v1/pwa-apps/options`, at least one. `warnings` names a short name longer than 12 characters.
+   * 
+   * Requires permission `content.write`. */
+  postPwaApps(body: PWAAppInput): Promise<PWAApp> {
+    return this.request<PWAApp>('POST', `/api/v1/pwa-apps`, undefined, body, false);
+  }
+
+  /** Menu sections and start pages to choose from
+   *
+   * Sections are the top-level menu groups; start pages are the main pages plus the organization's dashboards, video walls and cameras (cameras only with `video.view`, limited to the user's camera groups).
+   * 
+   * Requires permission `content.write`. */
+  getPwaAppsOptions(): Promise<{
+    sections?: ({
+      key?: string;
+      label?: string;
+      url?: string;
+    })[];
+    /** recommended maximum length of short_name */
+    short_name_hint?: number;
+    start_pages?: ({
+      group?: string;
+      label?: string;
+      url?: string;
+    })[];
+  }> {
+    return this.request<{
+    sections?: ({
+      key?: string;
+      label?: string;
+      url?: string;
+    })[];
+    /** recommended maximum length of short_name */
+    short_name_hint?: number;
+    start_pages?: ({
+      group?: string;
+      label?: string;
+      url?: string;
+    })[];
+  }>('GET', `/api/v1/pwa-apps/options`, undefined, undefined, false);
+  }
+
+  /** One app profile
+   *
+   * Requires permission `content.write`. */
+  getPwaAppsSlug(slug: string): Promise<PWAApp> {
+    return this.request<PWAApp>('GET', `/api/v1/pwa-apps/${encodeURIComponent(slug)}`, undefined, undefined, false);
+  }
+
+  /** Save a new version of an app profile
+   *
+   * The slug stays; `enabled` omitted keeps the current state.
+   * 
+   * Requires permission `content.write`. */
+  putPwaAppsSlug(slug: string, body: PWAAppInput): Promise<PWAApp> {
+    return this.request<PWAApp>('PUT', `/api/v1/pwa-apps/${encodeURIComponent(slug)}`, undefined, body, false);
+  }
+
+  /** Delete an app profile
+   *
+   * The profile is retired (versions stay); its install page and manifest answer 404.
+   * 
+   * Requires permission `content.write`. */
+  deletePwaAppsSlug(slug: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/pwa-apps/${encodeURIComponent(slug)}`, query, undefined, false);
+  }
+
+  /** Name, start page and sections of an enabled app
+   *
+   * Public (the app window needs it before sign-in); contains no data of the organization. 404 for an unknown or disabled app. */
+  getPwaAppsSlugLaunch(slug: string): Promise<{
+    name?: string;
+    sections?: string[];
+    short_name?: string;
+    slug?: string;
+    start_url?: string;
+    theme_color?: string;
+  }> {
+    return this.request<{
+    name?: string;
+    sections?: string[];
+    short_name?: string;
+    slug?: string;
+    start_url?: string;
+    theme_color?: string;
+  }>('GET', `/api/v1/pwa-apps/${encodeURIComponent(slug)}/launch`, undefined, undefined, false);
   }
 
   /** Register profiles (current versions)

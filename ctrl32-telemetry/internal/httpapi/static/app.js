@@ -86,43 +86,80 @@
     if (!r.ok) { const e = new Error((data && data.error) || ('HTTP ' + r.status)); e.status = r.status; e.code = data && data.code; throw e; }
     return data;
   }
-  async function logout() { try { await api('POST', '/api/v1/auth/logout', {}); } catch (e) { /* already gone */ } location.href = '/'; }
+  async function logout() { try { await api('POST', '/api/v1/auth/logout', {}); } catch (e) { /* already gone */ } location.href = app ? '/login' : '/'; }
+
+  // ---- installable apps (spec 021) ------------------------------------------------------------------
+  // /app/{slug} (launched from the home screen, or "Open") remembers the app for this window in sessionStorage; every
+  // page opened in the window then shows only the app's menu sections (plus My account) and its name, and the logo
+  // leads to the app's start page. The app is a view, not a permission boundary: permissions filter the menu first.
+  const APP_KEY = 'ctrl32.app';
+  let app = null;
+  function appStore(slug, profile) {
+    try {
+      if (slug) { sessionStorage.setItem(APP_KEY, slug); if (profile) sessionStorage.setItem(APP_KEY + '.profile', JSON.stringify(profile)); }
+      else { sessionStorage.removeItem(APP_KEY); sessionStorage.removeItem(APP_KEY + '.profile'); }
+    } catch (e) { /* storage blocked */ }
+  }
+  function appSlug() { try { return sessionStorage.getItem(APP_KEY) || ''; } catch (e) { return ''; } }
+  (function leaveAppByLink() { // "Open the full application" links to ?full=1
+    const q = new URLSearchParams(location.search);
+    if (!q.has('full')) return;
+    appStore('');
+    q.delete('full');
+    history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
+  })();
+  async function loadApp() {
+    const slug = appSlug();
+    if (!slug) return null;
+    try { app = JSON.parse(sessionStorage.getItem(APP_KEY + '.profile') || 'null'); } catch (e) { app = null; }
+    try {
+      const r = await fetch('/api/v1/pwa-apps/' + encodeURIComponent(slug) + '/launch', { credentials: 'same-origin' });
+      if (r.ok) { app = await r.json(); appStore(slug, app); } else if (r.status === 404) { app = null; appStore(''); }
+    } catch (e) { /* offline: keep the remembered profile */ }
+    if (app) document.body.classList.add('app-mode');
+    return app;
+  }
+  // enterApp: called by the install page; remembers the app and opens its start page in this window
+  function enterApp(slug, start) { appStore(slug); location.replace(start || '/'); }
+  function home() { return app ? app.start_url : '/'; }
 
   // ---- navigation shell -------------------------------------------------------------------------
   // Items are filtered by the signed-in user's permissions. Nothing user-specific appears before loadMe().
   // Menu: top-level pages with sub-pages (each sub-page is its own screen, nothing is crammed on one page).
   function navItems() {
     const items = [
-      { href: '/', label: 'Dashboard', icon: ICON.dashboard, show: !!me },
-      { href: '/dashboards', label: 'Dashboards', icon: ICON.dashboard, show: can('data.read') },
-      { href: '/home', label: 'Home', icon: ICON.home, show: can('data.read') },
-      { href: '/energy', label: 'Energy', icon: ICON.bolt, show: can('data.read') },
-      { href: '/video', label: 'Cameras', icon: ICON.camera, show: can('video.view'), children: [
+      { href: '/', label: 'Dashboard', icon: ICON.dashboard, show: !!me, sec: 'dashboards' },
+      { href: '/dashboards', label: 'Dashboards', icon: ICON.dashboard, show: can('data.read'), sec: 'dashboards' },
+      { href: '/home', label: 'Home', icon: ICON.home, show: can('data.read'), sec: 'home' },
+      { href: '/energy', label: 'Energy', icon: ICON.bolt, show: can('data.read'), sec: 'energy' },
+      { href: '/video', label: 'Cameras', icon: ICON.camera, show: can('video.view'), sec: 'cameras', children: [
         { href: '/video', label: 'Live view' }, { href: '/video/walls', label: 'Video walls' }, { href: '/video/manage', label: 'Camera management', show: can('video.manage') }] },
-      { href: '/displays', label: 'Displays', icon: ICON.display, show: can('display.control') },
-      { href: '/flows', label: 'Flows', icon: ICON.flow, show: can('data.read') },
-      { href: '/devices', label: 'Devices', icon: ICON.device, show: can('data.read') },
-      { href: '/incidents', label: 'Incidents', icon: ICON.alert, show: can('data.read') },
-      { href: '/assets', label: 'Assets', icon: ICON.assets, show: can('data.read'), children: [
+      { href: '/displays', label: 'Displays', icon: ICON.display, show: can('display.control'), sec: 'displays' },
+      { href: '/flows', label: 'Flows', icon: ICON.flow, show: can('data.read'), sec: 'flows' },
+      { href: '/devices', label: 'Devices', icon: ICON.device, show: can('data.read'), sec: 'devices' },
+      { href: '/incidents', label: 'Incidents', icon: ICON.alert, show: can('data.read'), sec: 'incidents' },
+      { href: '/assets', label: 'Assets', icon: ICON.assets, show: can('data.read'), sec: 'assets', children: [
         { href: '/assets/sites', label: 'Sites' }, { href: '/assets', label: 'Assets' }, { href: '/assets/rules', label: 'Alarm rules' },
         { href: '/assets/automation', label: 'Automation', show: can('config.write') }] },
-      { href: '/fota', label: 'Firmware', icon: ICON.file, show: can('fota.read'), children: [
+      { href: '/fota', label: 'Firmware', icon: ICON.file, show: can('fota.read'), sec: 'firmware', children: [
         { href: '/fota', label: 'Images' }, { href: '/fota/campaigns', label: 'Campaigns' }] },
-      { href: '/users', label: 'Users', icon: ICON.users, show: can('user.admin'), children: [
+      { href: '/users', label: 'Users', icon: ICON.users, show: can('user.admin'), sec: 'users', children: [
         { href: '/users', label: 'Accounts' }, { href: '/users/roles', label: 'Roles and permissions' }] },
-      { href: '/settings', label: 'Settings', icon: ICON.settings, show: can('content.write'), children: [
+      { href: '/settings', label: 'Settings', icon: ICON.settings, show: can('content.write'), sec: 'settings', children: [
         { href: '/settings/branding', label: 'Branding and theme' }, { href: '/settings/templates', label: 'Report templates' },
         { href: '/settings/reports', label: 'Stored reports' }, { href: '/settings/connectors', label: 'Connectors' },
         { href: '/settings/languages', label: 'Languages' }, { href: '/settings/translations', label: 'Translations' },
-        { href: '/settings/export', label: 'Organization export' }, { href: '/settings/notifications', label: 'Notifications' }, { href: '/settings/approvals', label: 'Approvals' }, { href: '/settings/policy', label: 'Security policy' }] },
-      { href: '/organizations', label: 'System', icon: ICON.system, show: can('system.admin'), children: [
+        { href: '/settings/apps', label: 'Apps' }, { href: '/settings/export', label: 'Organization export' }, { href: '/settings/notifications', label: 'Notifications' }, { href: '/settings/approvals', label: 'Approvals' }, { href: '/settings/policy', label: 'Security policy' }] },
+      { href: '/organizations', label: 'System', icon: ICON.system, show: can('system.admin'), sec: 'system', children: [
         { href: '/organizations', label: 'Organizations' }, { href: '/server', label: 'Server' }, { href: '/server/domain', label: 'Domain and TLS' },
         { href: '/server/wireguard', label: 'WireGuard' }, { href: '/server/backups', label: 'Backups' }, { href: '/server/redundancy', label: 'Redundant database' }, { href: '/server/updates', label: 'Updates' }, { href: '/landing/edit', label: 'Front page' }] },
       { href: '/account', label: 'My account', icon: ICON.user, show: !!me, children: [
-        { href: '/account', label: 'Profile' }, { href: '/account/security', label: 'Password and MFA' }, { href: '/account/tokens', label: 'API tokens' }, { href: '/account/push', label: 'Notifications' }, { href: '/api/docs', label: 'API documentation' }] },
+        { href: '/account', label: 'Profile' }, { href: '/account/security', label: 'Password and MFA' }, { href: '/account/tokens', label: 'API tokens' }, { href: '/account/push', label: 'Notifications' }, { href: '/api/docs', label: 'API documentation', show: !app },
+        { href: '/?full=1', label: 'Open the full application', show: !!app }] },
     ];
     for (const i of items) if (i.children) i.children = i.children.filter((c) => c.show === undefined || c.show);
-    return items.filter((i) => i.show);
+    // app mode: only the app's sections (after the permission filter) and My account
+    return items.filter((i) => i.show && (!app || !i.sec || app.sections.includes(i.sec)));
   }
   // sidebar state: open (default) -> icons only -> hidden (top bar with hamburger); remembered per browser
   function sidebarState() { try { return localStorage.getItem('ctrl32.sidebar') || 'open'; } catch (e) { return 'open'; } }
@@ -167,7 +204,7 @@
       : link(i)).join('');
     header.innerHTML = `<div class="container row">
       ${me ? `<button class="btn ghost icon only-mobile" id="menuBtn" type="button" aria-label="Menu" aria-expanded="false">${ICON.menu}</button>` : ''}
-      <a class="brand" href="/"><img id="logo" data-logo alt="telemetry.digital" src="${esc(logoURL())}">${me ? `<span id="orgname">${esc(brand.org_name || brand.product)}</span>` : ''}</a>
+      <a class="brand" href="${esc(home())}"><img id="logo" data-logo alt="telemetry.digital" src="${esc(logoURL())}">${me || app ? `<span id="orgname" class="${app ? 'notranslate' : ''}">${esc(app ? app.name : (brand.org_name || brand.product))}</span>` : ''}</a>
       <span class="grow"></span>
       ${me ? '' : (brand.public_read ? '<span class="badge warn" title="http.public_read is enabled: anyone can read data without signing in. Demo instances only.">Read-only demo · sign in to change anything</span>' : '')}
       ${bugButton(me ? 'only-mobile' : '')}
@@ -195,8 +232,8 @@
         const f = $('.footer');
         if (f) content.appendChild(f);
       }
-      $('#sidebar').innerHTML = `<div class="side-top"><a class="brand side-brand" href="/" title="${esc(brand.org_name || brand.product)}"><img data-logo alt="" src="${esc(logoURL())}"><img class="mark" alt="" src="/favicon.svg"></a></div>
-        <div class="side-org" title="${esc(brand.org_name || brand.product)}"><span>${esc(brand.org_name || brand.product)}</span></div>
+      $('#sidebar').innerHTML = `<div class="side-top"><a class="brand side-brand" href="${esc(home())}" title="${esc(app ? app.name : (brand.org_name || brand.product))}"><img data-logo alt="" src="${esc(logoURL())}"><img class="mark" alt="" src="/favicon.svg"></a></div>
+        <div class="side-org${app ? ' notranslate' : ''}" title="${esc(app ? app.name : (brand.org_name || brand.product))}"><span>${esc(app ? app.name : (brand.org_name || brand.product))}</span></div>
         <nav class="side-nav" aria-label="Main">${links}</nav>
         <div class="side-foot">
           <button class="btn ghost side-toggle" id="sideToggle" type="button" title="Collapse menu (icons, hidden, open)">${ICON.chevL}<span>Collapse menu</span></button>
@@ -219,7 +256,7 @@
         drawer = document.createElement('div');
         drawer.id = 'drawer';
         drawer.innerHTML = `<div class="drawer-backdrop"></div><aside class="drawer-panel" role="dialog" aria-label="Menu">
-          <div class="drawer-head"><a class="brand" href="/"><img data-logo alt="" src="${esc(logoURL())}"><span>${esc(brand.org_name || brand.product)}</span></a><button class="btn ghost icon" id="drawerClose" type="button" aria-label="Close">${ICON.close}</button></div>
+          <div class="drawer-head"><a class="brand" href="${esc(home())}"><img data-logo alt="" src="${esc(logoURL())}"><span class="${app ? 'notranslate' : ''}">${esc(app ? app.name : (brand.org_name || brand.product))}</span></a><button class="btn ghost icon" id="drawerClose" type="button" aria-label="Close">${ICON.close}</button></div>
           <div class="drawer-user">${ICON.user}<div><b>${esc(me.full_name || me.username)}</b><br><span class="muted">${esc((me.roles || []).join(', ') || 'no roles')}</span></div></div>
           <nav class="drawer-nav">${items.map((i) => `<a class="nav-link${isActive(i.href) ? ' active' : ''}" href="${i.href}">${i.icon}<span>${esc(i.label)}</span></a>` + (i.children ? i.children.map((c) => `<a class="nav-link sub-link${isExact(c.href) ? ' active' : ''}" href="${c.href}"><span style="padding-left:30px">${esc(c.label)}</span></a>`).join('') : '')).join('')}</nav>
           <div class="drawer-foot"><button class="btn ghost" data-theme-toggle data-label type="button"></button>${langSwitcher('langDrawer')}<button class="btn ghost" id="drawerSignout" type="button">${ICON.logout}<span>Sign out</span></button></div>
@@ -344,7 +381,7 @@
   let readyPromise = null;
   function ready(opts) {
     opts = opts || {};
-    if (!readyPromise) readyPromise = Promise.all([loadBranding(), loadMe()]).then(loadI18n).then(() => { renderShell(); footer(); wireLang(); translateNode(document.body); if (document.title && catalog[document.title]) document.title = catalog[document.title]; observeI18n(); applyWhiteLabel(); return { me, brand }; });
+    if (!readyPromise) readyPromise = Promise.all([loadBranding(), loadMe(), loadApp()]).then(loadI18n).then(() => { renderShell(); footer(); wireLang(); translateNode(document.body); if (document.title && catalog[document.title]) document.title = catalog[document.title]; observeI18n(); applyWhiteLabel(); return { me, brand, app }; });
     return readyPromise.then((r) => {
       if (opts.requireAuth && !me) { location.href = '/login'; return new Promise(() => {}); }
       if (opts.requirePerm && !can(opts.requirePerm)) { const m = $('main'); if (m) m.innerHTML = '<div class="card">Your role has no <code>' + esc(opts.requirePerm) + '</code> permission.</div>'; return new Promise(() => {}); }
@@ -356,7 +393,7 @@
   }
   if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyMode);
   applyMode();
-  window.ctrl32 = { ready, loadBranding, loadMe, api, logout, toggleMode, can, esc, section, t, ask, confirm: confirmAsk, setLocale, get locale() { return locale; }, get langs() { return langs; }, get brand() { return brand; }, get me() { return me; }, get csrf() { return csrf; }, ICON,
+  window.ctrl32 = { ready, loadBranding, loadMe, api, logout, toggleMode, can, esc, section, t, ask, confirm: confirmAsk, setLocale, get locale() { return locale; }, get langs() { return langs; }, get brand() { return brand; }, get me() { return me; }, get csrf() { return csrf; }, get app() { return app; }, home, enterApp, ICON,
     fmt: (t) => (t ? new Date(t).toLocaleString(document.documentElement.lang || undefined) : '—'), toast };
   function toast(msg, kind) {
     let t = $('#toast');

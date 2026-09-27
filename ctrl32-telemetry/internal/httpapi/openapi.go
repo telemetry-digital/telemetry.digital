@@ -108,6 +108,7 @@ const (
 	tagReports  = "Reports"
 	tagExports  = "Exports"
 	tagBrand    = "Branding and languages"
+	tagApps     = "Apps (PWA)"
 	tagServer   = "Server administration"
 	tagProv     = "Provisioning"
 	tagSmart    = "Smart home"
@@ -142,6 +143,7 @@ var apiTags = []struct{ Name, Desc string }{
 	{tagConn, "Inbound and outbound connectors: ChirpStack (LoRaWAN), OPC UA, Modbus TCP."},
 	{tagReports, "PDF report templates (Typst) and stored reports."},
 	{tagExports, "CSV / JSON Lines / PDF exports of observations, alarms, messages, audit and access logs; organization export."},
+	{tagApps, "Installable app profiles (spec 021): several PWAs over the same web application, e.g. a phone app with only the cameras. Each app has a public install page `/app/{slug}` and manifest `/app/{slug}/manifest.webmanifest`; in the app window the menu shows only the chosen sections (permissions still apply). Profiles are versioned content with a reason (ADR-0010). See docs/pwa.md."},
 	{tagBrand, "Organization branding, theme, map tiles, enabled languages and translation overrides."},
 	{tagServer, "Server status, updates, backups, TLS (Caddy) and WireGuard through the local agent (system.admin)."},
 	{tagProv, "Device self-provisioning with a claim code or a provisioning profile (ThingsBoard-compatible over MQTT and HTTP), approvals, and the LoRaWAN ingest endpoint used by ChirpStack."},
@@ -450,6 +452,15 @@ var apiOps = []apiOp{
 	{M: "GET /api/v1/export/audit", T: tagExports, S: "Export the audit trail", D: "Hash-chained rows: seq, hash, prev_hash, actor, action, entity, old/new values, reason, request id.", P: "audit.read", Q: []apiParam{q("from", ""), q("to", ""), q("format", "csv | jsonl"), qi("limit", "")}, CT: "text/csv", RD: "CSV or JSON Lines"},
 	{M: "GET /api/v1/export/access-log", T: tagExports, S: "Export the access log", D: "Sign-ins, failures, token use, session events.", P: "audit.read", Q: []apiParam{q("from", ""), q("to", ""), q("format", "csv | jsonl"), qi("limit", "")}, CT: "text/csv", RD: "CSV or JSON Lines"},
 
+	// ---- installable apps (PWA profiles, spec 021)
+	{M: "GET /api/v1/pwa-apps", T: tagApps, S: "List app profiles", D: "Current version of every app of the organization, enabled or not.", P: "content.write", R: arr(ref("PWAApp"))},
+	{M: "GET /api/v1/pwa-apps/options", T: tagApps, S: "Menu sections and start pages to choose from", D: "Sections are the top-level menu groups; start pages are the main pages plus the organization's dashboards, video walls and cameras (cameras only with `video.view`, limited to the user's camera groups).", P: "content.write", R: obj(S{"sections": arr(obj(S{"key": str(""), "label": str(""), "url": str("")})), "start_pages": arr(obj(S{"group": str(""), "label": str(""), "url": str("")})), "short_name_hint": integer("recommended maximum length of short_name")})},
+	{M: "POST /api/v1/pwa-apps", T: tagApps, S: "Create an app profile", D: "`start_url` must be a path of this application (`/video`, `/video/walls/{id}`, `/dashboards/{slug}` …): no other site, no `//`, no `javascript:`, not `/api/v1/` or `/app/`. `sections`: keys from `GET /api/v1/pwa-apps/options`, at least one. `warnings` names a short name longer than 12 characters.", P: "content.write", C: 201, B: ref("PWAAppInput"), R: ref("PWAApp")},
+	{M: "GET /api/v1/pwa-apps/{slug}", T: tagApps, S: "One app profile", P: "content.write", R: ref("PWAApp")},
+	{M: "PUT /api/v1/pwa-apps/{slug}", T: tagApps, S: "Save a new version of an app profile", D: "The slug stays; `enabled` omitted keeps the current state.", P: "content.write", B: ref("PWAAppInput"), R: ref("PWAApp")},
+	{M: "DELETE /api/v1/pwa-apps/{slug}", T: tagApps, S: "Delete an app profile", D: "The profile is retired (versions stay); its install page and manifest answer 404.", P: "content.write", Q: []apiParam{qr("reason", "")}, R: okResp},
+	{M: "GET /api/v1/pwa-apps/{slug}/launch", T: tagApps, S: "Name, start page and sections of an enabled app", D: "Public (the app window needs it before sign-in); contains no data of the organization. 404 for an unknown or disabled app.", P: "public", R: obj(S{"slug": str(""), "name": str(""), "short_name": str(""), "start_url": str(""), "sections": arr(str("")), "theme_color": str("")})},
+
 	// ---- branding and languages
 	{M: "GET /api/v1/branding", T: tagBrand, S: "Branding, theme, map settings and version", D: "Public: the sign-in page uses it.", P: "public", R: ref("Branding")},
 	{M: "GET /api/v1/tiles", T: tagBrand, S: "Self-hosted map tiles (PMTiles archive)", D: "Status of the server's local map: a raster PMTiles v3 archive named by `[map] pmtiles` in config.toml. When it is configured and the organization has no tile URL of its own, the branding map points at `/tiles/{z}/{x}/{y}.<ext>` on this server (public, cacheable; 404 outside the archive), so map widgets work without the Internet. Create an archive with `pmtiles convert map.mbtiles map.pmtiles` (go-pmtiles) or try `go run ./tools/pmtilesgen`.", P: "public", R: ref("TilesInfo")},
@@ -625,6 +636,8 @@ var apiSchemas = S{
 	"RuleEvaluation":        obj(S{"condition": boolean(""), "inputs": S{"type": "object", "additionalProperties": num("")}, "ages_s": S{"type": "object", "additionalProperties": num("")}, "missing": arr(str("inputs without data")), "active": boolean(""), "pending": boolean(""), "errors": arr(str(""))}),
 	"DashboardSpec":         obj(S{"format": str("screen-v1"), "layout": anyObj("{type: grid, columns: 12, row_height}"), "widgets": arr(anyObj("{id, type, title, geometry {x,y,w,h}, bindings [{datastream_id, …}], params}"))}),
 	"DashboardSummary":      obj(S{"id": uuid(""), "slug": str(""), "name": str(""), "version": integer(""), "is_default": boolean(""), "created_at": ts(""), "widgets": integer("")}),
+	"PWAApp":                obj(S{"id": uuid("id of this version"), "slug": str("address /app/{slug}"), "name": str(""), "short_name": str("home-screen label"), "start_url": str(""), "sections": arr(str("")), "theme_color": str("#rrggbb or empty (the organization's colour)"), "enabled": boolean(""), "version": integer(""), "created_at": ts(""), "install_url": str(""), "manifest_url": str(""), "warnings": arr(str("create/update only"))}),
+	"PWAAppInput":           obj(S{"slug": str("create only: 1–40 of a-z, 0-9, -"), "name": str("1–64 characters"), "short_name": str("≤ 24 characters, ≤ 12 recommended; empty = name"), "start_url": str("path of this application"), "sections": arr(str("section key")), "theme_color": str("#rrggbb or empty"), "enabled": boolean("default true"), "reason": reason}, "name", "start_url", "sections", "reason"),
 	"Dashboard":             obj(S{"id": uuid(""), "slug": str(""), "name": str(""), "version": integer(""), "is_default": boolean(""), "spec": ref("DashboardSpec"), "checksum": str(""), "created_at": ts("")}),
 	"Share":                 obj(S{"public": boolean(""), "slug": str(""), "token_prefix": str(""), "url": str("public URL"), "qr": str("data URL of the QR code")}),
 	"ModbusRegister":        obj(S{"key": str("^[a-z][a-z0-9_]{0,31}$"), "table": enum("", "holding", "input", "coil", "discrete"), "address": integer("0-based"), "type": enum("default int16 (bool for coils)", "bool", "int16", "uint16", "int32", "uint32", "float32", "int64", "uint64", "float64"), "scale": num(""), "offset": num(""), "writable": boolean("holding registers and coils only"), "min": num("limit for writes"), "max": num("limit for writes")}, "key", "table", "address"),

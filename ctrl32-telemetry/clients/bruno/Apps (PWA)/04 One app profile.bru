@@ -1,0 +1,21 @@
+meta {
+  name: One app profile
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/pwa-apps/:slug
+  body: none
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+docs {
+  One app profile
+  
+  Requires permission `content.write`.
+}
