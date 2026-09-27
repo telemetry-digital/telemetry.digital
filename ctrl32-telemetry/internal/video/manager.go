@@ -39,7 +39,8 @@ type Camera struct {
 	MotionSensitivity int
 	MotionZones       []MotionZone
 	SnapshotURL       string // JPEG snapshot address for cameras whose streams are H.264/H.265
-	Audio             bool   // record and play the camera's sound (spec 020)
+	Audio             bool   // take the camera's sound (spec 020)
+	AudioRecord       bool   // and record it (false: heard live only, saves disk space)
 }
 
 // Manager runs the cameras of all organizations: recorders for cameras that record, on-demand streams for viewers,
@@ -226,10 +227,10 @@ func (m *Manager) load(ctx context.Context, id string) (Camera, bool) {
 	var sealed, source, pushSealed string
 	var zones []byte
 	err := m.pool.QueryRow(ctx, `SELECT id::text, org_id::text, name, url, sub_url, username, password_sealed, transport, record, retention_days, enabled, source, push_secret_sealed,
-		onvif_url, ptz_profile, event_pre_s, event_post_s, event_kinds, motion_detect, motion_sensitivity, motion_zones, snapshot_url, audio
+		onvif_url, ptz_profile, event_pre_s, event_post_s, event_kinds, motion_detect, motion_sensitivity, motion_zones, snapshot_url, audio, audio_record
 		FROM core.camera WHERE id = $1::uuid AND removed_at IS NULL`, id).
 		Scan(&c.ID, &c.OrgID, &c.Name, &c.URL, &c.SubURL, &c.Username, &sealed, &c.Transport, &c.Record, &c.RetentionDays, &c.Enabled, &source, &pushSealed,
-			&c.OnvifURL, &c.PTZProfile, &c.EventPre, &c.EventPost, &c.EventKinds, &c.MotionDetect, &c.MotionSensitivity, &zones, &c.SnapshotURL, &c.Audio)
+			&c.OnvifURL, &c.PTZProfile, &c.EventPre, &c.EventPost, &c.EventKinds, &c.MotionDetect, &c.MotionSensitivity, &zones, &c.SnapshotURL, &c.Audio, &c.AudioRecord)
 	if err != nil {
 		return c, false
 	}
@@ -315,9 +316,9 @@ func (m *Manager) Reload(ctx context.Context, id string) {
 func (m *Manager) recorderFor(c *cam) *recorder {
 	switch c.cfg.Record {
 	case "continuous":
-		return m.startRecorder(c.cfg.ID, c.main, false, 0)
+		return m.startRecorder(c.cfg.ID, c.main, false, 0, !c.cfg.AudioRecord)
 	case "events":
-		return m.startRecorder(c.cfg.ID, c.main, true, time.Duration(c.cfg.EventPre)*time.Second)
+		return m.startRecorder(c.cfg.ID, c.main, true, time.Duration(c.cfg.EventPre)*time.Second, !c.cfg.AudioRecord)
 	}
 	return nil
 }

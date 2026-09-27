@@ -284,10 +284,17 @@ FROMG=$(iso '-20 sec'); sleep 3
 ws "/api/v1/video/cameras/$G7/playback?from=$FROMG&audio=1" 3; check "recorded G.711 sound plays back" "$(jx '(j.pbin > 20) + " " + (j.bin > 5)')" "true true"
 curl -s -b "$JAR" -o "$TMP/g7.mp4" "$BASE/api/v1/video/cameras/$G7/export?from=$FROMG&to=$(iso '-1 sec')"
 check "export holds picture and PCM sound" "$(python3 -c "d=open('$TMP/g7.mp4','rb').read(); print(d.count(b'trak'), b'ipcm' in d[:4000])")" "2 True"
+LV=$(mcam "{\"name\":\"Live sound $SUF\",\"url\":\"$SIM/lv$SUF/h264/160x96/g711\",\"record\":\"continuous\",\"audio\":true,\"audio_record\":false,\"reason\":\"e2e\"}")
+check "sound heard live only (saves disk space)" "$(jx 'j.audio + " " + j.audio_record')" "true false"
+waitfor '(mstat $LV; [[ "$(jx j.status.recording)" == true ]])' 20
+ws "/api/v1/video/cameras/$LV/live?quality=main&audio=1" 3; check "live-only sound is heard" "$(jx '(j.pbin > 50)')" true
+FROML=$(iso '-10 sec'); sleep 3
+curl -s -b "$JAR" -o "$TMP/lv.mp4" "$BASE/api/v1/video/cameras/$LV/export?from=$FROML&to=$(iso '-1 sec')"
+check "live-only sound is not recorded" "$(python3 -c "d=open('$TMP/lv.mp4','rb').read(); print(d.count(b'trak'), b'ipcm' in d[:4000])")" "1 False"
 G6=$(mcam "{\"name\":\"G726 $SUF\",\"url\":\"$SIM/g6$SUF/h264/160x96/g726\",\"audio\":true,\"reason\":\"e2e\"}")
 waitfor '(mstat $G6; [[ "$(jx j.status.audio)" == *"not supported"* ]])' 20 && ok "other codecs are explained (choose AAC or G.711)" || bad "G.726 status: $(jx j.status.audio)"
 req GET "/api/v1/export/audit?format=csv"; check "listening audited" "$(grep -c 'video.listen' "$TMP/b" | awk '{print ($1 >= 2)}')" 1
-for c in $SND $G7 $G7M $G6; do req DELETE "/api/v1/video/cameras/$c?reason=e2e"; done
+for c in $SND $G7 $G7M $G6 $LV; do req DELETE "/api/v1/video/cameras/$c?reason=e2e"; done
 
 echo "== video settings"
 req GET /api/v1/video/settings; check "settings with defaults" "$(st) $(jx 'j.defaults.segment_seconds + " " + j.defaults.event_merge_seconds + " " + j.can_edit')" "200 60 5 true"

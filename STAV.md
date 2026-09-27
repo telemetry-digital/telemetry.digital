@@ -23,6 +23,7 @@
 | 0.53.0 | Rozpoznanie pohybu na serveri pre kamery bez ONVIF (MJPEG alebo JPEG snímka, citlivosť, zóny); oprava ukladania masiek z formulára (spec 019) | e2e 120, unit |
 | 0.54.0 | Zvuk z kamier (AAC/Opus, predvolene vypnutý, oprávnenie `video.audio`, audit počúvania, samostatný prúd v prehliadači) (spec 020) | e2e 132, unit |
 | 0.55.0 | Zvuk G.711 (TP-Link Tapo a väčšina kamier) ako PCM cez WebAudio; predvoľby výrobcov kamier vo formulári (Tapo, Hikvision, Dahua, Reolink, Axis, Uniview, EZVIZ) | e2e 137, unit |
+| 0.56.0 | Zvuk len naživo — počúvanie bez nahrávania (šetrí disk), odhad miesta vo formulári | e2e 140 |
 
 Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (`tests/run-all.sh`) pre 0.54.0 (27. 9. 2026): všetko prešlo okrem 3 kontrol času NTP v `ops`, ktoré potrebujú internet (v tomto kontajneri nedostupný) — nesúvisí s kódom.
 
@@ -50,6 +51,6 @@ Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (
 
 - test so skutočnými kamerami TP-Link Tapo (návod: `ctrl32-telemetry/docs/video.md`, časť „Camera makes“)
 
-- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.55.0 root@2.29.5.17 -i <kľúč>` alebo
+- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.56.0 root@2.29.5.17 -i <kľúč>` alebo
   GitHub workflow (secrets `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS` a workflow na `main`)
 - potvrdenie ADR-0015 (SCADA editor v čistom JS nad SVG)

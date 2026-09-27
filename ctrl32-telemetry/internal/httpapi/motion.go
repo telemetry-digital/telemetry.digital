@@ -13,6 +13,9 @@ func applyMotion(in *cameraIn, c *cameraRow) string {
 	if in.Audio != nil {
 		c.audio = *in.Audio
 	}
+	if in.AudioRecord != nil {
+		c.audioRecord = *in.AudioRecord
+	}
 	if in.MotionDetect != nil {
 		c.motion = *in.MotionDetect
 	}
@@ -52,8 +55,8 @@ func applyMotion(in *cameraIn, c *cameraRow) string {
 
 // storeExtras writes the JSON, motion and sound columns of a camera (after its insert or update).
 const storeExtras = `UPDATE core.camera SET privacy_masks = $2::jsonb, motion_detect = $3, motion_sensitivity = $4, motion_zones = $5::jsonb,
-	snapshot_url = $6, audio = $7 WHERE id = $1::uuid`
+	snapshot_url = $6, audio = $7, audio_record = $8 WHERE id = $1::uuid`
 
 func extrasArgs(c cameraRow) []any {
-	return []any{c.id, string(orEmpty(c.masks)), c.motion, c.motionSens, string(orEmpty(c.zones)), c.snapshotURL, c.audio}
+	return []any{c.id, string(orEmpty(c.masks)), c.motion, c.motionSens, string(orEmpty(c.zones)), c.snapshotURL, c.audio, c.audioRecord}
 }

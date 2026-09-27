@@ -114,7 +114,10 @@ it on per camera (*Camera management → camera → Sound*) only where it is law
   AAC and Opus pass unchanged; G.711 is expanded to 16-bit PCM (a table lookup, no encoder), recorded as an
   uncompressed track (`ipcm`, about 1.4 GB a day per camera at 8 kHz) and played in the browser through WebAudio.
   Other codecs (G.726, MP2) show ⚠ with the advice to choose AAC or G.711. The sound is never re-encoded.
-- It is recorded as the second track of the recording files (the main stream), so exports and evidence packages are
+- *Sound recording*: **record it with the picture**, or **live only** — heard live but not written to disk (sound
+  per camera and day: G.711 about 1.4 GB, AAC 0.2–0.7 GB; the picture 10–40 GB). Live-only sound is not in
+  recordings, playback or exports.
+- When recorded, it is the second track of the recording files (the main stream), so exports and evidence packages are
   ordinary MP4 files with sound for VLC or any player.
 - The camera page shows a speaker button to people with `video.audio`. The sound is requested only after it is
   switched on (and then with the main stream); each listening is audited (`video.listen`). Walls, widgets and

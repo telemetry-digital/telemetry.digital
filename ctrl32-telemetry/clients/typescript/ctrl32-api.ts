@@ -77,6 +77,7 @@ export type Branding = {
 
 export type Camera = {
   audio?: boolean;
+  audio_record?: boolean;
   enabled?: boolean;
   /** camera group */
   group?: string;
@@ -5864,8 +5865,10 @@ export class Ctrl32Client {
    *
    * Requires permission `video.manage`. */
   postVideoCameras(body: {
-    /** record the camera's sound (AAC or Opus); spec 020 */
+    /** take the camera's sound (AAC, Opus or G.711); spec 020 */
     audio?: boolean;
+    /** record the sound too (default true; false = heard live only, saves disk space) */
+    audio_record?: boolean;
     enabled?: boolean;
     event_kinds?: string[];
     /** 1–600 */
@@ -5938,8 +5941,10 @@ export class Ctrl32Client {
    *
    * Requires permission `video.manage`. */
   putVideoCamerasId(id: string, body: {
-    /** record the camera's sound (AAC or Opus); spec 020 */
+    /** take the camera's sound (AAC, Opus or G.711); spec 020 */
     audio?: boolean;
+    /** record the sound too (default true; false = heard live only, saves disk space) */
+    audio_record?: boolean;
     enabled?: boolean;
     event_kinds?: string[];
     /** 1–600 */
