@@ -93,7 +93,9 @@ Hikvision (HiLook), Dahua (Imou, Amcrest), Reolink, Axis, Uniview and EZVIZ; *Te
 **TP-Link Tapo** (C100, C110, C200, C210, C220, C225, C310, C320WS, C500, C510W, C520WS, TC60, TC70 …):
 
 1. In the Tapo app: camera → Settings → Advanced settings → **Camera account**: create a user name and password.
-   This is the account for RTSP and ONVIF, not the Tapo app account.
+   This is the account for RTSP and ONVIF, not the Tapo app account. On newer firmware also turn on
+   **Third-Party Compatibility** (Tapo app → Me → Tapo Lab); until then the camera answers ping but keeps ports 554
+   and 2020 closed. Check from a PC on the same network that TCP 554 and 2020 are open before adding the camera.
 2. Camera make *TP-Link Tapo*, the camera's IP address (give it a fixed address in the router), that user name and
    password. Streams: `rtsp://IP:554/stream1` (main, 1080p/2K/4K) and `rtsp://IP:554/stream2` (sub, 640×360);
    ONVIF `http://IP:2020/onvif/device_service`.
