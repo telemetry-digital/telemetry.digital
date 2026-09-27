@@ -209,7 +209,7 @@ async function refreshMessages(){
   if(!curId) return;
   try{ const ms = await api('GET',`/api/v1/devices/${curId}/messages?limit=100`);
     $('#msgRows').innerHTML = ms.map(x => { const pl = x.payload_json ? JSON.stringify(x.payload_json) : (x.payload_text || ''); return `<tr><td>${fmt(x.received_at)}</td><td>${esc(x.direction)}</td><td><code>${esc(x.topic || '')}</code></td><td class="payload">${esc(pl.slice(0, 600))}</td><td>${x.decode_status === 'ok' ? '<span class="badge ok">ok</span>' : `<span class="badge warn" title="${esc(x.decode_error || '')}">${esc(x.decode_status)}</span>`}</td></tr>`; }).join('') || '<tr><td colspan="5" class="muted">no messages yet</td></tr>';
-    $('#liveState').textContent = 'live · ' + new Date().toLocaleTimeString();
+    $('#liveState').textContent = 'live · ' + new Date().toLocaleTimeString(document.documentElement.lang || undefined);
   }catch(x){ $('#liveState').textContent = x.message; }
 }
 function startLive(){ stopLive(); refreshMessages(); live = setInterval(refreshMessages, 3000); const b = $('#liveBtn'); b.textContent = 'Pause'; b.onclick = () => { if(live){ stopLive(); b.textContent = 'Resume'; $('#liveState').textContent = 'paused'; } else startLive(); }; }

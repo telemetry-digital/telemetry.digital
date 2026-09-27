@@ -178,7 +178,7 @@ async function pollDebug(){
   clearTimeout(dbgTimer);
   try{ const list = await api('GET', `/api/v1/flows/${encodeURIComponent(SLUG)}/debug?after=${SEQ}`); const box = $('#dbgList'); const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 20;
     for(const d of list){ SEQ = Math.max(SEQ, d.seq); const row = document.createElement('div'); row.className = 'fe-dbg ' + d.kind; row.dataset.node = d.node || '';
-      row.innerHTML = `<span class="muted">${new Date(d.ts).toLocaleTimeString()}</span><b class="notranslate">${esc(d.node || '—')}</b><span class="badge ${KIND[d.kind] || ''}">${esc(d.kind.replace('_', ' '))}${d.dry ? ' · dry' : ''}</span><span class="notranslate fe-dbg-text">${esc(d.text)}</span>${d.msg && typeof d.msg === 'object' ? `<details><summary class="muted">message</summary><pre class="notranslate">${esc(JSON.stringify(d.msg, null, 2))}</pre></details>` : ''}`;
+      row.innerHTML = `<span class="muted">${new Date(d.ts).toLocaleTimeString(document.documentElement.lang || undefined)}</span><b class="notranslate">${esc(d.node || '—')}</b><span class="badge ${KIND[d.kind] || ''}">${esc(d.kind.replace('_', ' '))}${d.dry ? ' · dry' : ''}</span><span class="notranslate fe-dbg-text">${esc(d.text)}</span>${d.msg && typeof d.msg === 'object' ? `<details><summary class="muted">message</summary><pre class="notranslate">${esc(JSON.stringify(d.msg, null, 2))}</pre></details>` : ''}`;
       row.onclick = ev => { if(!ev.target.closest('details') && d.node) ED.select([d.node]); };
       box.appendChild(row); }
     while(box.children.length > 500) box.firstChild.remove();

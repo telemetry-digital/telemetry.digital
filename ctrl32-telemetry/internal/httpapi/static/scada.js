@@ -214,7 +214,7 @@
       }
       case 'text': {
         const size = n(st.font, 14); const color = col(dv.color, null) || col(st.color, null) || DEF.text;
-        const txt = String(e.text ?? '{value}').replace(/\{value\}/g, val ?? '—').replace(/\{unit\}/g, unit || '').replace(/\{name\}/g, e.name || '').replace(/\{time\}/g, x && x.measured_at ? new Date(x.measured_at).toLocaleTimeString() : '');
+        const txt = String(e.text ?? '{value}').replace(/\{value\}/g, val ?? '—').replace(/\{unit\}/g, unit || '').replace(/\{name\}/g, e.name || '').replace(/\{time\}/g, x && x.measured_at ? new Date(x.measured_at).toLocaleTimeString(document.documentElement.lang || undefined) : '');
         const lines = txt.split('\n'); const al = st.align || 'start'; const va = st.valign || 'middle';
         const tx = al === 'middle' ? cx : al === 'end' ? b.x + b.w - 4 : b.x + 4; const lh = size * 1.2; const total = lh * lines.length;
         const ty0 = va === 'top' ? b.y + size + 2 : va === 'bottom' ? b.y + b.h - total + size - 2 : cy - total / 2 + size * 0.85;
@@ -336,7 +336,7 @@
     const title = e.name || (ds ? `${ds.asset} / ${ds.key}` : e.symbol || e.type);
     const ctl = !trendOnly && e.device && e.key;
     d.innerHTML = `<div class="sc-fp"><div class="sc-fp-head"><b>${esc(title)}</b>${ds ? `<span class="muted">${esc(ds.asset)} / ${esc(ds.key)}</span>` : ''}<span class="grow"></span><button class="btn small ghost" type="button" data-close title="Close">✕</button></div>
-      ${tag ? `<div class="sc-fp-val"><span class="sc-fp-big">${v == null ? '—' : esc(fmtVal(v, e.decimals))}</span> <span class="muted">${esc(unit)}</span> ${x ? `<span class="badge ${x.quality === 'ok' ? 'ok' : 'warn'}">${esc(x.quality || '')}</span>` : ''}<div class="muted" style="font-size:12px">${x && x.measured_at ? esc(new Date(x.measured_at).toLocaleString()) : 'no value yet'}</div></div>
+      ${tag ? `<div class="sc-fp-val"><span class="sc-fp-big">${v == null ? '—' : esc(fmtVal(v, e.decimals))}</span> <span class="muted">${esc(unit)}</span> ${x ? `<span class="badge ${x.quality === 'ok' ? 'ok' : 'warn'}">${esc(x.quality || '')}</span>` : ''}<div class="muted" style="font-size:12px">${x && x.measured_at ? esc(new Date(x.measured_at).toLocaleString(document.documentElement.lang || undefined)) : 'no value yet'}</div></div>
       <div class="row sc-fp-range">${['1h', '6h', '24h', '7d'].map((r) => `<button class="btn small${r === '6h' ? ' primary' : ''}" type="button" data-r="${r}">${r}</button>`).join('')}</div>
       <div class="sc-fp-chart"></div>` : '<p class="muted">No datastream is bound to this object.</p>'}
       ${ctl ? `<div class="sc-fp-ctl"><h3>Operation</h3>${canCmd() ? `<div class="row" style="align-items:center;gap:6px;flex-wrap:wrap"><button class="btn small" type="button" data-v="true">Start / On</button><button class="btn small" type="button" data-v="false">Stop / Off</button><input class="sc-sp" type="number" step="any" placeholder="value" style="width:110px"><button class="btn small primary" type="button" data-sp>Set</button></div><input class="sc-reason" placeholder="Reason (audit trail)" maxlength="200" style="width:100%;margin-top:6px"><div class="sc-out" style="min-height:18px;font-size:12px"></div>` : `<p class="muted">${isPublic() ? 'read-only' : 'no permission to send commands'}</p>`}</div>` : ''}</div>`;

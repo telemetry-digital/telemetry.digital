@@ -183,7 +183,7 @@ function handleMessage(m) {
   if (!m || new Date(m.until) < Date.now()) { el.hidden = true; return; }
   el.className = 'kiosk-msg ' + m.level; el.hidden = false;
   el.querySelector('.kiosk-msg-text').textContent = m.text;
-  el.querySelector('.kiosk-msg-by').textContent = `${m.by} · ${new Date(m.seq / 1e6).toLocaleTimeString()}`;
+  el.querySelector('.kiosk-msg-by').textContent = `${m.by} · ${new Date(m.seq / 1e6).toLocaleTimeString(document.documentElement.lang || undefined)}`;
 }
 
 // ---- state ----
@@ -192,7 +192,8 @@ async function poll() {
   try {
     const s = await api('GET', '/api/v1/display/state');
     $('#status').hidden = true;
-    if (s.locale && s.locale !== ctrl32.locale) { ctrl32.setLocale(s.locale); return; }
+    // switch only to a language the server has enabled (otherwise the page would reload forever)
+    if (s.locale && s.locale !== ctrl32.locale && (ctrl32.langs.enabled || []).includes(s.locale)) { ctrl32.setLocale(s.locale); return; }
     STATE = s; window.ctrl32DisplayCameras = s.cameras || {};
     document.title = s.name;
     if (s.version !== VERSION) { VERSION = s.version; IDX = 0; rotate(); }

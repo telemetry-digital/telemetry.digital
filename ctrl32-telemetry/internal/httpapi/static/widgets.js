@@ -46,7 +46,7 @@
 
   // ---- SVG chart ----------------------------------------------------------------------------------
   function niceTicks(lo, hi, n) { if (!(hi > lo)) { hi = lo + 1; lo = lo - 1; } const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), norm = raw / mag; const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag; const t = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) t.push(+v.toFixed(10)); return t; }
-  function timeTicks(t0, t1, n) { const span = t1 - t0, steps = [60e3, 300e3, 900e3, 1800e3, 3600e3, 7200e3, 6 * 3600e3, 12 * 3600e3, 86400e3, 2 * 86400e3, 7 * 86400e3, 30 * 86400e3]; const step = steps.find((s) => span / s <= n) || steps[steps.length - 1]; const out = []; for (let t = Math.ceil(t0 / step) * step; t <= t1; t += step) out.push(t); return { ticks: out, fmt: span <= 2 * 86400e3 ? (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (t) => new Date(t).toLocaleDateString([], { day: '2-digit', month: '2-digit' }) }; }
+  function timeTicks(t0, t1, n) { const span = t1 - t0, steps = [60e3, 300e3, 900e3, 1800e3, 3600e3, 7200e3, 6 * 3600e3, 12 * 3600e3, 86400e3, 2 * 86400e3, 7 * 86400e3, 30 * 86400e3]; const step = steps.find((s) => span / s <= n) || steps[steps.length - 1]; const out = []; for (let t = Math.ceil(t0 / step) * step; t <= t1; t += step) out.push(t); return { ticks: out, fmt: span <= 2 * 86400e3 ? (t) => new Date(t).toLocaleTimeString(document.documentElement.lang || [], { hour: '2-digit', minute: '2-digit' }) : (t) => new Date(t).toLocaleDateString(document.documentElement.lang || [], { day: '2-digit', month: '2-digit' }) }; }
   // Series with an explicit window and aggregation (spec 002): buckets carry avg/min/max/n, so sum = avg·n and count = n.
   const AGG_S = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '6h': 21600, '1d': 86400 };
   function aggPlan(t0, t1, agg, interval) {
@@ -64,9 +64,13 @@
     const band = f === 'auto' || f === 'avg';
     return { plan, points: r.points.filter((p) => p.n > 0).map((p) => ({ t: new Date(p.t).getTime(), v: pick(p), min: band ? p.min : null, max: band ? p.max : null, flagged: p.flagged })) };
   }
+  // short texts inside widgets follow the user's (or the display's) language
+  const TR = (s) => (window.ctrl32 && typeof ctrl32.t === 'function' ? ctrl32.t(s) : s);
+  const rangeLabel = (r) => r === 'today' ? TR('today') : String(r || '').replace(/^(\d+)([hd])$/, '$1 $2');
+  const aggLabel = (f) => TR({ avg: 'average', min: 'minimum', max: 'maximum', sum: 'sum', count: 'count', delta: 'change', none: 'raw' }[f] || f);
   function winOf(p, ctx) {
-    if (p.time_mode === 'fixed' && p.from && p.to) { const t0 = Date.parse(p.from), t1 = Date.parse(p.to); if (t1 > t0) return { t0, t1, label: new Date(t0).toLocaleString() + ' – ' + new Date(t1).toLocaleString() }; }
-    const range = p.range || ctx.range; const t1 = Date.now(); return { t0: t1 - (RANGE_MS[range] || RANGE_MS['24h']), t1, label: range, range };
+    if (p.time_mode === 'fixed' && p.from && p.to) { const t0 = Date.parse(p.from), t1 = Date.parse(p.to); if (t1 > t0) return { t0, t1, label: new Date(t0).toLocaleString(document.documentElement.lang || undefined) + ' – ' + new Date(t1).toLocaleString(document.documentElement.lang || undefined) }; }
+    const range = p.range || ctx.range; const t1 = Date.now(); return { t0: t1 - (RANGE_MS[range] || RANGE_MS['24h']), t1, label: rangeLabel(range || '24h'), range };
   }
   const statsOf = (pts) => { const vs = pts.map((p) => p.v).filter((v) => v != null); if (!vs.length) return {}; const total = vs.reduce((a, b) => a + b, 0); return { min: Math.min(...vs), max: Math.max(...vs), avg: total / vs.length, total, latest: vs[vs.length - 1] }; };
   function renderChart(el, list, o) {
@@ -101,7 +105,7 @@
     el.style.display = 'flex'; el.style.flexDirection = 'column'; el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;flex:1;min-height:60px;display:block">${g}</svg><div class="chart-tip muted" style="font-size:12px;height:16px;line-height:16px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>`;
     const svg = el.querySelector('svg'), tip = el.querySelector('.chart-tip'), cursor = svg.querySelector('.cursor');
     svg.onmousemove = (e) => { const rect = svg.getBoundingClientRect(); const x = (e.clientX - rect.left) / rect.width * W; const t = t0 + (x - L) / (W - L - R) * (t1 - t0); cursor.setAttribute('x1', x.toFixed(1)); cursor.setAttribute('x2', x.toFixed(1)); cursor.setAttribute('visibility', 'visible');
-      tip.textContent = new Date(t).toLocaleString() + ' · ' + vis.map((s) => { const dd = s.decimals ?? o.decimals; let best = null; for (const p of s.points) if (!best || Math.abs(p.t - t) < Math.abs(best.t - t)) best = p; return best ? `${s.label}: ${num(best.v, dd)}${s.unit ? ' ' + s.unit : ''}${best.min != null ? ` (${num(best.min, dd)}–${num(best.max, dd)})` : ''}` : s.label + ': —'; }).join(' · '); };
+      tip.textContent = new Date(t).toLocaleString(document.documentElement.lang || undefined) + ' · ' + vis.map((s) => { const dd = s.decimals ?? o.decimals; let best = null; for (const p of s.points) if (!best || Math.abs(p.t - t) < Math.abs(best.t - t)) best = p; return best ? `${s.label}: ${num(best.v, dd)}${s.unit ? ' ' + s.unit : ''}${best.min != null ? ` (${num(best.min, dd)}–${num(best.max, dd)})` : ''}` : s.label + ': —'; }).join(' · '); };
     svg.onmouseleave = () => { cursor.setAttribute('visibility', 'hidden'); tip.textContent = ''; };
   }
   function sparkline(points, c) { if (points.length < 2) return ''; const t0 = points[0].t, t1 = points[points.length - 1].t, vs = points.map((p) => p.v), lo = Math.min(...vs), hi = Math.max(...vs); return `<svg viewBox="0 0 120 30" style="width:120px;height:30px;display:block;flex:none"><path d="${points.map((p, k) => (k ? 'L' : 'M') + ((p.t - t0) / ((t1 - t0) || 1) * 120).toFixed(1) + ',' + (28 - ((p.v - lo) / ((hi - lo) || 1)) * 26).toFixed(1)).join(' ')}" fill="none" stroke="${c}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`; }
@@ -114,7 +118,7 @@
     const list = await Promise.all(ids(ctx).map(async (id, i) => { const d = dsInfo(all, id), c = cfg[i] || {}; const r = await seriesWin(id, win.t0, win.t1, p.agg, p.agg_interval); raised = raised || r.plan.raised; bucket = r.plan.bucket;
       return { label: c.label || dsLabel(d), unit: c.unit != null && c.unit !== '' ? c.unit : d.unit, color: c.color || color(i), style: c.style || '', axis: c.axis || 'left', showPoints: !!c.points, fill: !!c.fill, hidden: !!c.hidden, decimals: c.decimals, points: r.points }; }));
     const pos = p.legend === false ? 'none' : (p.legend_pos || 'top'); const lv = Array.isArray(p.legend_values) ? p.legend_values : [];
-    const aggTxt = (p.agg && p.agg !== 'auto' ? p.agg : 'avg') + (bucket ? '/' + (bucket >= 3600 ? bucket / 3600 + ' h' : Math.round(bucket / 60) + ' min') : '');
+    const aggTxt = aggLabel(p.agg && p.agg !== 'auto' ? p.agg : 'avg') + (bucket ? '/' + (bucket >= 3600 ? bucket / 3600 + ' h' : Math.round(bucket / 60) + ' min') : '');
     const info = `<span class="dw-win">${esc(win.label)}${bucket ? ' · ' + esc(aggTxt) : ''}${raised ? ' · <span title="interval raised to keep at most 2000 points">interval raised</span>' : ''}</span>`;
     const draw = () => {
       const legend = pos === 'none' ? '' : list.map((s, i) => { const st = statsOf(s.points); const vals = lv.map((k) => `<span class="muted"> ${k} <b>${num(st[k], s.decimals ?? p.decimals)}</b></span>`).join(''); return `<span class="dw-leg${s.hidden ? ' off' : ''}" data-s="${i}" style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;cursor:pointer${s.hidden ? ';opacity:.45' : ''}"><i style="display:inline-block;width:12px;height:3px;background:${s.color}"></i>${esc(s.label)}${s.unit ? ' [' + esc(s.unit) + ']' : ''}${s.axis === 'right' ? ' ▸' : ''}${vals}</span>`; }).join('');
@@ -142,7 +146,7 @@
     const days = [...new Set(pts.map((x) => new Date(x.t).toDateString()))]; const vals = pts.map((x) => x.v).filter((v) => v != null); const lo = p.y_min != null ? p.y_min : Math.min(...vals), hi = p.y_max != null ? p.y_max : Math.max(...vals);
     const cell = new Map(pts.map((x) => [new Date(x.t).toDateString() + '|' + new Date(x.t).getHours(), x.v]));
     const shade = (v) => { if (v == null) return 'var(--line)'; const f = Math.max(0, Math.min(1, (v - lo) / ((hi - lo) || 1))); return `hsl(${Math.round(210 - f * 210)}, 80%, ${Math.round(88 - f * 40)}%)`; };
-    el.innerHTML = `<div class="muted" style="font-size:12px;margin-bottom:4px">${esc(dsLabel(d))} [${esc(d.unit)}] · hourly average · ${num(lo, p.decimals)} → ${num(hi, p.decimals)}</div><div style="flex:1;min-height:0;overflow:auto"><div style="display:grid;grid-template-columns:auto repeat(24, minmax(0, 1fr));gap:2px;font-size:10px;align-items:center"><div></div>${Array.from({ length: 24 }, (_, h) => `<div style="text-align:center;color:var(--muted);overflow:hidden">${h % 3 ? '' : h}</div>`).join('')}${days.map((day) => `<div style="white-space:nowrap;color:var(--muted);padding-right:4px">${esc(new Date(day).toLocaleDateString([], { day: '2-digit', month: '2-digit' }))}</div>${Array.from({ length: 24 }, (_, h) => { const v = cell.get(day + '|' + h); return `<div title="${esc(day)} ${h}:00 — ${num(v, d.dec)}" style="height:14px;background:${shade(v)};border-radius:2px"></div>`; }).join('')}`).join('')}</div></div>`;
+    el.innerHTML = `<div class="muted" style="font-size:12px;margin-bottom:4px">${esc(dsLabel(d))} [${esc(d.unit)}] · hourly average · ${num(lo, p.decimals)} → ${num(hi, p.decimals)}</div><div style="flex:1;min-height:0;overflow:auto"><div style="display:grid;grid-template-columns:auto repeat(24, minmax(0, 1fr));gap:2px;font-size:10px;align-items:center"><div></div>${Array.from({ length: 24 }, (_, h) => `<div style="text-align:center;color:var(--muted);overflow:hidden">${h % 3 ? '' : h}</div>`).join('')}${days.map((day) => `<div style="white-space:nowrap;color:var(--muted);padding-right:4px">${esc(new Date(day).toLocaleDateString(document.documentElement.lang || [], { day: '2-digit', month: '2-digit' }))}</div>${Array.from({ length: 24 }, (_, h) => { const v = cell.get(day + '|' + h); return `<div title="${esc(day)} ${h}:00 — ${num(v, d.dec)}" style="height:14px;background:${shade(v)};border-radius:2px"></div>`; }).join('')}`).join('')}</div></div>`;
   };
   W.value = async (el, p, ctx) => {
     const all = await datastreams(); const list = ids(ctx); const lv = await latest(list);
@@ -409,7 +413,7 @@
     if (opts.live !== false && window.EventSource) connectLive(container, spec, refreshOne, layer);
     return refresh;
   }
-  window.ctrl32Widgets = { isPublic: () => !!PUBLIC, isDisplay: () => PUBLIC.startsWith('~'), apiPath: P, render, renderChart, setPublic, series, datastreams, latest, devices, loadLeaflet, makeMap, mapConfig, RANGE_MS, labelOf, isCanvas, fitMimic, placeCanvas, MIMIC_TYPES, register, condFormat, icon: ICON, get types() { return Object.keys(W); },
+  window.ctrl32Widgets = { tr: TR, aggLabel, rangeLabel, isPublic: () => !!PUBLIC, isDisplay: () => PUBLIC.startsWith('~'), apiPath: P, render, renderChart, setPublic, series, datastreams, latest, devices, loadLeaflet, makeMap, mapConfig, RANGE_MS, labelOf, isCanvas, fitMimic, placeCanvas, MIMIC_TYPES, register, condFormat, icon: ICON, get types() { return Object.keys(W); },
     // helpers for renderers registered from other files (widgets-more.js)
     util: { esc, api, fmt, num, color, COLORS, dsInfo, sInfo, dsLabel, ids, level, lvlColor, niceTicks, timeTicks, sparkline, seriesWin, winOf, statsOf, hourly, ctlHead, ctlSend, ctlCurrent, reasonInput, canCmd, P } };
 })();
