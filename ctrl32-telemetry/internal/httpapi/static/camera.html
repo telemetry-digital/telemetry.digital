@@ -55,7 +55,10 @@
     <div class="tl" id="tl2" style="margin-top:6px"></div>
     <div class="tl-ax" id="ax2"></div>
     <div class="row" style="margin-top:8px"><span class="muted" style="font-size:12px" id="evLegend"></span><span class="grow"></span>
-      <span class="muted" id="selInfo"></span><button class="btn small" type="button" id="export" disabled>Download selection (MP4)</button></div>
+      <span class="muted" id="selInfo"></span><button class="btn small" type="button" id="export" disabled>Download selection (MP4)</button>
+      <button class="btn small" type="button" id="hold" disabled hidden title="Recordings held as evidence are never deleted until released">Hold as evidence</button>
+      <button class="btn small" type="button" id="evidence" disabled hidden title="ZIP with the video, SHA-256 fingerprints and the server's signature">Evidence package (ZIP)</button></div>
+    <div id="holdList" class="hold-list"></div>
     <div class="ev-list" id="evList"></div>
     <p class="muted" style="font-size:12px;margin-bottom:0">Viewing and downloading recordings is written to the audit trail. Recording continues while you watch or play back.</p>
   </div>
@@ -83,6 +86,7 @@ const ICONS = {
 };
 const SPEEDS = [0.5, 1, 2, 4, 8, 16];
 let EVENTS = [];
+let HOLDS = [];
 let CAM = null, P = null, MODE = 'live', PAUSED = false, DAY = new Date(), SPANS = [], CUR = null, SEL = null, ME = null, SPEED = 1;
 const can = p => !!(ME && (ME.permissions || []).includes(p));
 const dayStart = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
@@ -242,6 +246,8 @@ async function loadRecordings() {
     const r = await api('GET', `/api/v1/video/cameras/${ID}/recordings?from=${from.toISOString()}&to=${to.toISOString()}`);
     SPANS = r.spans.map(s => [Date.parse(s.from), Date.parse(s.to)]);
     EVENTS = (await api('GET', `/api/v1/video/cameras/${ID}/events?from=${from.toISOString()}&to=${to.toISOString()}`).catch(() => [])).map(e => ({...e, s: Date.parse(e.started_at), e: e.ended_at ? Date.parse(e.ended_at) : Date.now()}));
+    HOLDS = can('video.playback') ? (await api('GET', `/api/v1/video/holds?camera_id=${ID}`).catch(() => [])).map(h => ({...h, s: Date.parse(h.from), e: Date.parse(h.to)})) : [];
+    holdList();
     evList();
     const mins = Math.round(SPANS.reduce((a, s) => a + (s[1] - s[0]), 0) / 60000);
     $('#recInfo').textContent = SPANS.length ? `${t('Recorded')}: ${Math.floor(mins / 60)} h ${mins % 60} min · ${r.files} ${t('files')}` : t('No recording on this day');
@@ -256,6 +262,7 @@ function drawBar(id) {
   el.innerHTML = SPANS.filter(([a, b]) => b > w[0] && a < w[1]).map(([a, b]) => `<div class="span" style="left:${frac(a, w) * 100}%;width:${Math.max(0.15, (frac(b, w) - frac(a, w)) * 100)}%"></div>`).join('') +
     (id === 'tl' ? `<div class="sel" style="left:${frac(HOUR, w) * 100}%;width:${100 / 24}%;background:transparent;border-color:var(--muted)"></div>` : '') +
     EVENTS.filter(ev => ev.e >= w[0] && ev.s <= w[1]).map(ev => `<div class="ev k-${ev.kind}" style="left:${frac(ev.s, w) * 100}%;${id === 'tl2' ? `width:${Math.max(0.3, (frac(ev.e, w) - frac(ev.s, w)) * 100)}%;` : ''}" title="${esc(hm(ev.s) + ' ' + t(ev.kind) + (ev.label ? ': ' + ev.label : ''))}"></div>`).join('') +
+    HOLDS.filter(h => h.e >= w[0] && h.s <= w[1]).map(h => `<div class="hold" style="left:${frac(h.s, w) * 100}%;width:${Math.max(0.3, (frac(h.e, w) - frac(h.s, w)) * 100)}%" title="${esc(t('Held as evidence') + ': ' + h.title)}"></div>`).join('') +
     (id === 'tl2' && SEL ? `<div class="sel" style="left:${frac(Math.min(...SEL), w) * 100}%;width:${Math.abs(frac(SEL[1], w) - frac(SEL[0], w)) * 100}%"></div>` : '') + nowX + '<div class="cur" hidden></div>';
 }
 function drawTimeline() {
@@ -291,9 +298,33 @@ $('#tl2').onpointerup = e => {
 };
 function updateSel() {
   const ok = SEL && Math.abs(SEL[1] - SEL[0]) <= HOURMS;
-  $('#export').disabled = !ok;
+  $('#export').disabled = !ok; $('#evidence').disabled = !ok; $('#hold').disabled = !SEL;
   $('#selInfo').textContent = SEL ? `${hm(Math.min(...SEL))} – ${hm(Math.max(...SEL))}${ok ? '' : ' (' + t('at most one hour') + ')'}` : '';
 }
+// evidence (spec 015): hold the selection so it is never deleted; a signed package for the police or an insurer
+function holdList() {
+  $('#holdList').innerHTML = HOLDS.map(h => `<div><span class="badge warn">${esc(t('evidence'))}</span> <b class="notranslate">${esc(h.title)}</b>${h.case_ref ? ` <span class="muted notranslate">${esc(h.case_ref)}</span>` : ''}
+    <span class="muted">${esc(new Date(h.s).toLocaleString(document.documentElement.lang || undefined))} – ${esc(hm(h.e))} · ${esc(h.created_by)}</span>
+    ${can('video.evidence') ? `<button class="btn small ghost" type="button" data-release="${h.id}">${esc(t('Release'))}</button>` : ''}</div>`).join('');
+  for (const b of document.querySelectorAll('[data-release]')) b.onclick = async () => {
+    const r = ctrl32.ask('Reason for releasing the evidence (it will be deleted by the normal retention)'); if (!r) return;
+    try { await api('DELETE', `/api/v1/video/holds/${b.dataset.release}?reason=${encodeURIComponent(r)}`); loadRecordings(); } catch (x) { ctrl32.toast(x.message, 'bad'); }
+  };
+}
+$('#hold').onclick = async () => {
+  const title = ctrl32.ask('Title of the evidence (what happened)'); if (!title) return;
+  const caseRef = window.prompt(t('Case or report number (optional)')) || '';
+  const reason = ctrl32.ask('Reason (audit trail)'); if (!reason) return;
+  try { await api('POST', '/api/v1/video/holds', {camera_id: ID, from: new Date(Math.min(...SEL)).toISOString(), to: new Date(Math.max(...SEL)).toISOString(), title, case_ref: caseRef, reason});
+    ctrl32.toast(t('held as evidence'), 'ok'); loadRecordings(); } catch (x) { ctrl32.toast(x.message, 'bad'); }
+};
+$('#evidence').onclick = () => {
+  const reason = ctrl32.ask('Reason for the evidence package (it is written into the signed manifest and the audit trail)'); if (!reason) return;
+  const caseRef = window.prompt(t('Case or report number (optional)')) || '';
+  const a = document.createElement('a');
+  a.href = `/api/v1/video/cameras/${ID}/evidence?from=${new Date(Math.min(...SEL)).toISOString()}&to=${new Date(Math.max(...SEL)).toISOString()}&reason=${encodeURIComponent(reason)}&case_ref=${encodeURIComponent(caseRef)}`;
+  a.click();
+};
 $('#export').onclick = () => {
   const a = document.createElement('a');
   a.href = `/api/v1/video/cameras/${ID}/export?from=${new Date(Math.min(...SEL)).toISOString()}&to=${new Date(Math.max(...SEL)).toISOString()}`;
@@ -313,6 +344,7 @@ ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(async ({me}) =
   $('#name').textContent = CAM.name; $('#loc').textContent = CAM.location; document.title = CAM.name;
   if (!CAM.enabled) $('#info').textContent = t('The camera is disabled.');
   $('#bSend').hidden = !can('display.control');
+  $('#hold').hidden = $('#evidence').hidden = !can('video.evidence');
   ptzUI(); activity(); setInterval(() => { if (!document.hidden) activity(); }, 3000);
   if (can('video.playback')) { $('#recPanel').hidden = false; await loadRecordings(); setInterval(() => { if (!document.hidden && dayStart(DAY).getTime() === dayStart(Date.now()).getTime()) loadRecordings(); }, 30000); }
   const q = new URLSearchParams(location.search);

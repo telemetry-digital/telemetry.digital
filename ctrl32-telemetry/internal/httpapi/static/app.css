@@ -709,3 +709,6 @@ body.kiosk .footer svg { width: 11px; height: 11px; }
 .kiosk-msg-by { font-size: 14px; font-weight: 400; opacity: .8; margin-top: 6px; }
 @keyframes kiosk-alarm { 50% { background: #7f1d1d; } }
 @media (prefers-reduced-motion: reduce) { .kiosk-msg.alarm { animation: none; } }
+.tl .hold { position: absolute; bottom: 0; height: 5px; background: repeating-linear-gradient(45deg, #7c3aed, #7c3aed 4px, #a78bfa 4px, #a78bfa 8px); border-radius: 1px; }
+.hold-list { font-size: 13px; margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.hold-list > div { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

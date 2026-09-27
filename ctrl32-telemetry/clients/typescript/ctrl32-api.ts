@@ -6017,6 +6017,15 @@ export class Ctrl32Client {
   }>('POST', `/api/v1/video/cameras/${encodeURIComponent(id)}/events`, undefined, body, false);
   }
 
+  /** Signed evidence package
+   *
+   * ZIP with video.mp4 (remuxed, not re-encoded), manifest.json (SHA-256 of the video and of every recorded file as computed while recording and now, events, who exported it and why), manifest.sig (Ed25519 by the server key), public_key.txt and README.txt. At most one hour. Verify with `ctrl32-telemetry verify-evidence`. Audited with the video hash.
+   * 
+   * Requires permission `video.evidence`. */
+  getVideoCamerasIdEvidence(id: string, query: { from: string; /** RFC 3339 */ to: string; /** RFC 3339 */ reason: string; /** written into the manifest */ case_ref?: string; }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/evidence`, query, undefined, true);
+  }
+
   /** Download recorded video
    *
    * One MP4 file (fragmented) of at most one hour; a change of resolution or codec ends it early. Written to the audit trail (video.export).
@@ -6187,6 +6196,70 @@ export class Ctrl32Client {
     source?: "camera" | "flow" | "user";
     started_at?: string;
   })[]>('GET', `/api/v1/video/events`, query, undefined, false);
+  }
+
+  /** Evidence signing key
+   *
+   * The server's Ed25519 public key and its fingerprint, to verify evidence packages.
+   * 
+   * Requires permission `video.playback`. */
+  getVideoEvidenceKey(): Promise<{
+    /** ed25519 */
+    algorithm?: string;
+    fingerprint?: string;
+    /** base64 */
+    public_key?: string;
+  }> {
+    return this.request<{
+    /** ed25519 */
+    algorithm?: string;
+    fingerprint?: string;
+    /** base64 */
+    public_key?: string;
+  }>('GET', `/api/v1/video/evidence/key`, undefined, undefined, false);
+  }
+
+  /** Recordings held as evidence
+   *
+   * Held ranges with their size; all=1 includes released ones (who released them and why). Limited users see only their cameras.
+   * 
+   * Requires permission `video.playback`. */
+  getVideoHolds(query?: { camera_id?: string; all?: string; /** 1 = include released */ }): Promise<(Record<string, unknown>)[]> {
+    return this.request<(Record<string, unknown>)[]>('GET', `/api/v1/video/holds`, query, undefined, false);
+  }
+
+  /** Hold recordings as evidence
+   *
+   * Recordings of the camera in the range are never deleted — not by the camera's retention nor to free disk space — until released. At most 31 days. Audited.
+   * 
+   * Requires permission `video.evidence`. */
+  postVideoHolds(body: {
+    camera_id: string;
+    /** ≤ 80 */
+    case_ref?: string;
+    from: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** 1–120 */
+    title: string;
+    to: string;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/video/holds`, undefined, body, false);
+  }
+
+  /** Release held recordings
+   *
+   * The normal retention deletes them afterwards. Audited with the reason.
+   * 
+   * Requires permission `video.evidence`. */
+  deleteVideoHoldsId(id: string, query?: { reason?: string; /** required */ }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/video/holds/${encodeURIComponent(id)}`, query, undefined, false);
   }
 
   /** Media profiles of an ONVIF camera

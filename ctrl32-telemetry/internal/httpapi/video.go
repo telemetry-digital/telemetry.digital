@@ -909,29 +909,38 @@ func (s *Server) cameraExport(w http.ResponseWriter, r *http.Request) {
 	name := fmt.Sprintf("%s-%s.mp4", safeFileName(c.name), from.UTC().Format("20060102-150405"))
 	w.Header().Set("Content-Type", "video/mp4")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+	_ = writeMP4(r.Context(), pb, first, w)
+}
+
+// writeMP4 remuxes recorded frames into one MP4 (no re-encoding) until the range ends or the stream changes.
+func writeMP4(ctx context.Context, pb *video.Playback, first video.Packet, w io.Writer) error {
 	mux := &video.Muxer{Track: first.Track, Batch: video.ClockRate}
 	init, err := mux.Init()
 	if err != nil {
-		writeErr(w, 500, "export failed")
-		return
+		return err
 	}
-	_, _ = w.Write(init)
+	if _, err := w.Write(init); err != nil {
+		return err
+	}
 	p := first
 	for {
 		if frag, err := mux.Push(p.Sample); err != nil {
-			return
+			return err
 		} else if frag != nil {
 			if _, err := w.Write(frag); err != nil {
-				return
+				return err
 			}
 		}
-		if p, err = pb.Next(r.Context()); err != nil || !p.Track.SameParams(first.Track) {
+		if p, err = pb.Next(ctx); err != nil || !p.Track.SameParams(first.Track) {
 			break
 		}
 	}
 	if frag, err := mux.Flush(); err == nil && frag != nil {
-		_, _ = w.Write(frag)
+		if _, err := w.Write(frag); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func safeFileName(s string) string {

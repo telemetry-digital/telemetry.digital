@@ -10,6 +10,8 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -90,6 +92,8 @@ func main() {
 		err = cmdReplica(args)
 	case "camera-relay":
 		err = cmdCameraRelay(args)
+	case "verify-evidence":
+		err = cmdVerifyEvidence(args)
 	case "version":
 		fmt.Println("ctrl32-telemetry", version)
 	default:
@@ -107,7 +111,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: ctrl32-telemetry <serve|agent|migrate|audit verify|service <action>|admin bootstrap|admin reset-password|admin seed-dashboard|dev seed|replica attach|status|promote|camera-relay|version> [-config path]")
+	fmt.Fprintln(os.Stderr, "usage: ctrl32-telemetry <serve|agent|migrate|audit verify|service <action>|admin bootstrap|admin reset-password|admin seed-dashboard|dev seed|replica attach|status|promote|camera-relay|verify-evidence|version> [-config path]")
 }
 
 func loadConfig(args []string) (*config.Config, string, error) {
@@ -722,4 +726,49 @@ func cmdCameraRelay(args []string) error {
 	defer stop()
 	logger.Info("camera relay", "server", cfg.Server, "cameras", len(cfg.Cameras))
 	return video.RunRelay(ctx, cfg, logger)
+}
+
+// cmdVerifyEvidence checks an evidence package (spec 015): the signature of the manifest and the hash of the video.
+// Anyone can run it; -key pins the server's public key (base64, from Cameras -> Evidence) instead of the included one.
+func cmdVerifyEvidence(args []string) error {
+	fs := flag.NewFlagSet("verify-evidence", flag.ContinueOnError)
+	keyB64 := fs.String("key", "", "the server's Ed25519 public key (base64); default: the key in the package, compare its fingerprint")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return errors.New("usage: ctrl32-telemetry verify-evidence [-key base64] package.zip")
+	}
+	var trusted ed25519.PublicKey
+	if *keyB64 != "" {
+		raw, err := base64.StdEncoding.DecodeString(*keyB64)
+		if err != nil || len(raw) != ed25519.PublicKeySize {
+			return errors.New("-key: not a base64 Ed25519 public key")
+		}
+		trusted = raw
+	}
+	rep, err := video.VerifyEvidence(fs.Arg(0), trusted)
+	if err != nil {
+		return err
+	}
+	m := rep.Manifest
+	fmt.Printf("camera        %s (%s)\nrecorded      %s – %s\nexported      %s by %s\nreason        %s\n",
+		m.Camera["name"], m.Camera["id"], m.From.UTC().Format(time.RFC3339), m.To.UTC().Format(time.RFC3339),
+		m.ExportedAt.UTC().Format(time.RFC3339), m.ExportedBy["username"], m.Reason)
+	fmt.Printf("key           %s\nsignature     %s\nvideo hash    %s\nrecorded files %d\n", rep.KeyFingerprint, okText(rep.SignatureValid), okText(rep.VideoHashValid), len(m.Segments))
+	for _, p := range rep.Problems {
+		fmt.Println("note:", p)
+	}
+	if !rep.SignatureValid || !rep.VideoHashValid {
+		return errors.New("the package is NOT intact")
+	}
+	fmt.Println("the package is intact")
+	return nil
+}
+
+func okText(ok bool) string {
+	if ok {
+		return "valid"
+	}
+	return "INVALID"
 }

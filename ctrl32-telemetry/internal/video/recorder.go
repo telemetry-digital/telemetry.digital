@@ -2,7 +2,10 @@ package video
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"hash"
 	"os"
 	"path/filepath"
 	"sync"
@@ -72,6 +75,7 @@ type segment struct {
 	last    time.Time
 	bytes   int64
 	flushed time.Time
+	hash    hash.Hash // SHA-256 of everything written; stored when the file is closed (evidence, spec 015)
 }
 
 func (m *Manager) startRecorder(camID string, src *Source, events bool, pre time.Duration) *recorder {
@@ -200,7 +204,7 @@ func (r *recorder) open(t *Track, s *Sample) (*segment, error) {
 	if err != nil {
 		return nil, err
 	}
-	seg := &segment{path: filepath.ToSlash(rel), f: f, mux: &Muxer{Track: t, Batch: ClockRate}, track: t, first: s.Time, last: s.Time, flushed: time.Now()}
+	seg := &segment{path: filepath.ToSlash(rel), f: f, mux: &Muxer{Track: t, Batch: ClockRate}, track: t, first: s.Time, last: s.Time, flushed: time.Now(), hash: sha256.New()}
 	init, err := seg.mux.Init()
 	if err == nil {
 		err = seg.write(init)
@@ -220,6 +224,9 @@ func (r *recorder) open(t *Track, s *Sample) (*segment, error) {
 func (s *segment) write(b []byte) error {
 	n, err := s.f.Write(b)
 	s.bytes += int64(n)
+	if s.hash != nil {
+		s.hash.Write(b[:n])
+	}
 	return err
 }
 
@@ -244,4 +251,8 @@ func (r *recorder) close(seg *segment) {
 	}
 	_ = seg.f.Close()
 	r.index(seg)
+	// the fingerprint of the finished file: an evidence export later shows the file is unchanged since recording
+	if _, err := r.m.pool.Exec(context.Background(), `UPDATE core.video_segment SET sha256 = $2 WHERE id = $1`, seg.id, hex.EncodeToString(seg.hash.Sum(nil))); err != nil {
+		r.m.log.Warn("recording fingerprint", "camera", r.camID, "err", err)
+	}
 }

@@ -15,7 +15,7 @@
   <div class="page-head"><h1>Cameras</h1><span class="grow"></span>
     <button class="btn primary" type="button" id="addCam" hidden>Add camera</button>
     <button class="btn primary" type="button" id="addWall" hidden>New video wall</button></div>
-  <nav class="subnav"><a href="/video" data-section="live">Live view</a><a href="/video/walls" data-section="walls">Video walls</a><a href="/video/manage" data-section="manage" id="manageTab" hidden>Camera management</a><a href="/video/settings" data-section="settings" id="settingsTab" hidden>Settings</a></nav>
+  <nav class="subnav"><a href="/video" data-section="live">Live view</a><a href="/video/walls" data-section="walls">Video walls</a><a href="/video/manage" data-section="manage" id="manageTab" hidden>Camera management</a><a href="/video/evidence" data-section="evidence" id="evidenceTab" hidden>Evidence</a><a href="/video/settings" data-section="settings" id="settingsTab" hidden>Settings</a></nav>
 
   <section data-section="live">
     <div class="row" style="margin-bottom:10px"><span class="muted" id="liveInfo"></span><span class="grow"></span>
@@ -33,6 +33,16 @@
   <section data-section="manage">
     <div class="table-wrap"><table id="cams"><thead><tr><th>Name</th><th>Location</th><th>Stream</th><th>State</th><th>Recording</th><th class="num">Stored</th><th></th></tr></thead><tbody></tbody></table></div>
     <div class="card" style="margin-top:12px"><h2 style="margin-top:0">Storage</h2><div id="storage" class="muted"></div></div>
+  </section>
+
+  <section data-section="evidence">
+    <p class="muted">Recordings held as evidence are never deleted — neither after the camera's retention days nor to free disk space — until someone releases them with a reason. Hold a part of a recording on the camera's page: drag over the hour detail and choose <b>Hold as evidence</b>; <b>Evidence package (ZIP)</b> exports it signed.</p>
+    <div class="card"><h2 style="margin-top:0">Server key for verifying evidence packages</h2>
+      <div class="row" style="align-items:center"><span class="muted">Fingerprint</span> <code id="keyFp" class="notranslate" style="font-size:15px"></code></div>
+      <p class="muted" style="margin-bottom:0;font-size:13px">A package is intact when <code>ctrl32-telemetry verify-evidence package.zip</code> reports a valid signature and video hash and the key fingerprint equals this one. Give this fingerprint to whoever receives evidence (police, insurer) through another channel.</p>
+      <details style="margin-top:6px"><summary class="muted" style="font-size:13px">Public key</summary><code id="keyPub" class="notranslate" style="word-break:break-all;font-size:12px"></code></details></div>
+    <div class="row" style="margin:12px 0 6px"><b>Held recordings</b><span class="grow"></span><label class="inline"><input type="checkbox" id="holdsAll"> show released</label></div>
+    <div class="table-wrap"><table id="holds"><thead><tr><th>Evidence</th><th>Camera</th><th>Time</th><th class="num">Size</th><th>By</th><th>State</th></tr></thead><tbody></tbody></table></div>
   </section>
 
   <section data-section="settings">
@@ -301,6 +311,20 @@ $('#wallForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $
     else await api('POST', '/api/v1/video/walls', {name: f.name.value, screens, reason: f.reason.value});
     $('#wallDlg').close(); ctrl32.toast(t('video wall saved'), 'ok'); load(); } catch (x) { $('#wallErr').textContent = x.message; } };
 
+// ---- evidence (spec 015) ----
+async function loadEvidence() {
+  try {
+    const [k, list] = await Promise.all([api('GET', '/api/v1/video/evidence/key'), api('GET', '/api/v1/video/holds' + ($('#holdsAll').checked ? '?all=1' : ''))]);
+    $('#keyFp').textContent = k.fingerprint; $('#keyPub').textContent = k.public_key;
+    $('#holds tbody').innerHTML = list.map(h => `<tr><td><b class="notranslate">${esc(h.title)}</b>${h.case_ref ? `<div class="muted notranslate" style="font-size:12px">${esc(h.case_ref)}</div>` : ''}<div class="muted" style="font-size:12px">${esc(h.reason)}</div></td>
+      <td class="notranslate"><a href="/video/cameras/${h.camera_id}">${esc(h.camera)}</a></td>
+      <td>${esc(ctrl32.fmt(h.from))} – ${esc(new Date(h.to).toLocaleTimeString(document.documentElement.lang || undefined))}</td><td class="num">${fmtBytes(h.bytes)}</td>
+      <td>${esc(h.created_by)}<div class="muted" style="font-size:12px">${esc(ctrl32.fmt(h.created_at))}</div></td>
+      <td>${h.released_at ? `<span class="badge">${esc(t('released'))}</span><div class="muted" style="font-size:12px">${esc(h.released_by)}: ${esc(h.release_reason)}</div>` : `<span class="badge warn">${esc(t('held'))}</span>`}</td></tr>`).join('') || `<tr><td colspan="6" class="muted">${esc(t('No recordings are held.'))}</td></tr>`;
+  } catch (x) { ctrl32.toast(x.message, 'bad'); }
+}
+$('#holdsAll').onchange = loadEvidence;
+
 // ---- settings (server-wide; editing needs system.admin) ----
 let SETS = null;
 const SET_FIELDS = ['max_disk_gb', 'segment_seconds', 'event_merge_seconds', 'discovery_seconds', 'ptz_audit_minutes', 'linger_seconds', 'timeshift_seconds', 'wall_sub_stream_above', 'push_max_fails', 'push_window_minutes', 'push_block_minutes', 'camera_offline_minutes', 'display_offline_minutes', 'disk_free_percent'];
@@ -337,7 +361,7 @@ async function load() {
   try {
     [CAMS, WALLS] = await Promise.all([api('GET', '/api/v1/video/cameras'), api('GET', '/api/v1/video/walls')]);
     if (SECTION === 'live') renderLive(); else stopPlayers();
-    renderWalls(); if (SECTION === 'manage') renderManage(); if (SECTION === 'settings') loadSettings();
+    renderWalls(); if (SECTION === 'manage') renderManage(); if (SECTION === 'settings') loadSettings(); if (SECTION === 'evidence') loadEvidence();
   } catch (x) { ctrl32.toast(x.message, 'bad'); }
 }
 async function refreshStatus() {
@@ -354,9 +378,10 @@ $('#tileSize').onchange = e => { $('#liveGrid').style.gridTemplateColumns = `rep
 try { const v = localStorage.getItem('ctrl32.video.tile'); if (v) { $('#tileSize').value = v; $('#liveGrid').style.gridTemplateColumns = `repeat(auto-fill, minmax(${v}px, 1fr))`; } } catch (x) { /* ignore */ }
 ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(({me}) => {
   ME = me;
-  SECTION = ctrl32.section('live', ['live', 'walls', 'manage', 'settings']);
+  SECTION = ctrl32.section('live', ['live', 'walls', 'manage', 'evidence', 'settings']);
   $('#manageTab').hidden = !can('video.manage');
   $('#settingsTab').hidden = !can('video.manage');
+  $('#evidenceTab').hidden = !can('video.playback');
   $('#addCam').hidden = !(can('video.manage') && SECTION === 'manage');
   $('#addWall').hidden = !(can('video.manage') && SECTION === 'walls');
   $('#addCam').onclick = () => camDialog(null);

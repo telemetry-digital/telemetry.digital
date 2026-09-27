@@ -88,6 +88,28 @@ Per camera (**Camera management → Edit**): addresses, transport, ONVIF, record
 kinds that record, retention, order. Per video wall screen: layout, cameras and stream (automatic, sub-stream or main
 stream). Per viewer (remembered in the browser): tile size, playback speed, PTZ speed.
 
+## Evidence
+
+Recordings needed for the police, an insurer or a court:
+
+- **Hold as evidence** — on the camera's page drag over the hour detail and choose *Hold as evidence* (title, case
+  number, reason). Held recordings are never deleted: not after the camera's retention days and not to free disk space
+  (when only held recordings remain on a full disk, the disk incident tells administrators). *Release* (with a reason)
+  hands them back to the normal retention. *Cameras → Evidence* lists all held recordings.
+- **Fingerprints while recording** — every recorded file gets its SHA-256 computed while it is written (no extra disk
+  reads), so an export can show that the file on disk is unchanged since it was recorded.
+- **Evidence package (ZIP)** — the selection (at most one hour) as `video.mp4` (remuxed, never re-encoded: the pictures
+  are the camera's own bytes), `manifest.json` (camera, range, who exported it and why, the SHA-256 of the video and
+  of each recorded file then and now, the events in the range), `manifest.sig` (Ed25519 signature by the server's key),
+  `public_key.txt` and `README.txt`. The audit entry carries the video's hash.
+- **Verification** — `ctrl32-telemetry verify-evidence [-key <public key>] package.zip` checks the signature and the
+  video hash; the key fingerprint must equal the one under *Cameras → Evidence* (hand it over through another
+  channel). Any changed byte of the video or of the manifest is detected.
+
+Permission `video.evidence` (engineers, administrators). The server key is created on first use and stored encrypted
+with `security.secret_key`; keep that secret in the backup, otherwise old packages can still be verified with the
+published public key but new ones get a new key.
+
 ## Camera settings for quality at low load
 
 The server records exactly what the camera sends, so quality and size are set in the camera:
@@ -214,6 +236,7 @@ as the web interface, with the same sign-in, MFA and permissions.
 | `video.playback` | recordings, playback, export | engineer, org_admin |
 | `video.manage` | cameras, walls, storage, discovery | engineer, org_admin |
 | `video.ptz` | PTZ control and presets | operator, engineer, org_admin |
+| `video.evidence` | hold recordings as evidence, signed evidence packages | engineer, org_admin |
 | `display.control` | send cameras and commands to displays | operator, engineer, org_admin |
 | `display.manage` | pair, change and disconnect displays | engineer, org_admin |
 

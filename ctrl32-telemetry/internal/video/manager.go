@@ -400,16 +400,22 @@ func Probe(ctx context.Context, u *url.URL, transport string) (Status, []byte) {
 }
 
 // Retention deletes recordings older than each camera's retention and, beyond the disk limit, the oldest ones.
+// notHeld excludes recordings of a segment alias s that lie in a range held as evidence (spec 015).
+const notHeld = `NOT EXISTS (SELECT 1 FROM core.video_hold h WHERE h.camera_id = s.camera_id AND h.released_at IS NULL
+	AND s.started_at < h.to_ts AND s.ended_at > h.from_ts)`
+
 func (m *Manager) Retention(ctx context.Context) {
 	m.deleteWhere(ctx, `SELECT s.id, s.path, s.bytes FROM core.video_segment s JOIN core.camera c ON c.id = s.camera_id
-		WHERE s.ended_at < now() - make_interval(days => c.retention_days) ORDER BY s.started_at LIMIT 500`)
-	_, _ = m.pool.Exec(ctx, `DELETE FROM core.camera_event e USING core.camera c WHERE c.id = e.camera_id AND e.started_at < now() - make_interval(days => c.retention_days)`)
+		WHERE s.ended_at < now() - make_interval(days => c.retention_days) AND `+notHeld+` ORDER BY s.started_at LIMIT 500`)
+	_, _ = m.pool.Exec(ctx, `DELETE FROM core.camera_event e USING core.camera c WHERE c.id = e.camera_id AND e.started_at < now() - make_interval(days => c.retention_days)
+		AND NOT EXISTS (SELECT 1 FROM core.video_hold h WHERE h.camera_id = e.camera_id AND h.released_at IS NULL AND e.started_at < h.to_ts AND coalesce(e.ended_at, e.started_at) >= h.from_ts)`)
 	var total int64
 	if err := m.pool.QueryRow(ctx, `SELECT COALESCE(sum(bytes), 0) FROM core.video_segment`).Scan(&total); err != nil {
 		return
 	}
 	for total > m.MaxBytes() && ctx.Err() == nil {
-		freed := m.deleteWhere(ctx, `SELECT id, path, bytes FROM core.video_segment WHERE ended_at < now() - interval '2 minutes' ORDER BY started_at LIMIT 50`)
+		// evidence is never deleted to make room: when only held recordings remain, the disk incident tells people
+		freed := m.deleteWhere(ctx, `SELECT s.id, s.path, s.bytes FROM core.video_segment s WHERE s.ended_at < now() - interval '2 minutes' AND `+notHeld+` ORDER BY s.started_at LIMIT 50`)
 		if freed == 0 {
 			return
 		}

@@ -1,0 +1,19 @@
+meta {
+  name: Evidence signing key
+  type: http
+  seq: 21
+}
+
+get {
+  url: {{baseUrl}}/api/v1/video/evidence/key
+  body: none
+  auth: inherit
+}
+
+docs {
+  Evidence signing key
+  
+  The server's Ed25519 public key and its fingerprint, to verify evidence packages.
+  
+  Requires permission `video.playback`.
+}

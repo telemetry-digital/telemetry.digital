@@ -17,12 +17,13 @@
 | 0.47.0 | Grafický editor úvodnej stránky pred prihlásením: bloky, úprava textu priamo v náhľade, počítač/tablet/mobil, verzie, zverejnenie, obrázky (SVG sanitizované), prísna validácia, prihlásenie sa nedá odstrániť (spec 012) | e2e 33, unit |
 | 0.48.0 | Kamery: pohyb a udalosti z ONVIF bez dekódovania, nahrávanie pri udalosti s predstihom, značky, PTZ s predvoľbami, vyhľadanie kamier v sieti, udalosti kamier v tokoch, všetky nastavenia videa v rozhraní (spec 013) | e2e 99, unit |
 | 0.49.0 | Obrazovky (kiosky) pre dashboardy, SCADA aj videosteny: párovanie kódom, striedanie obsahu, zväčšenie kamier pri udalosti, ovládanie z velína (poslať kameru, identifikovať); skupiny kamier pre používateľov; incidenty pri výpadku kamery, obrazovky a plnom disku; umiestnenie obrazoviek a hromadné správy, výrobné obrazovky (rozsahy 8 h/12 h/dnes, prispôsobenie výške); bezpečnostná kontrola, 7 opráv (spec 014) | e2e 76, unit |
+| 0.50.0 | Dôkazy z kamier: zamknutie úseku (nezmaže sa), SHA-256 súborov pri nahrávaní, podpísaný dôkazový balík a `verify-evidence`; obrazovky a widgety po slovensky (dátum, čas, popisy) (spec 015) | e2e 29, unit |
 
 Celá sada testov (`tests/run-all.sh`) prešla pre 0.49.0 (27. 9. 2026); po poslednej oprave (typ zoznamu widgetov) znova prešli e2e `displays` 76/76 a unit testy.
 
 ## Ďalšie možnosti (fáza 2)
 
-- kamery: zamknutie úsekov záznamu ako dôkaz a podpísaný export, maskovanie zón (GDPR), kamery na mape/pôdoryse,
+- kamery: maskovanie zón (GDPR), kamery na mape/pôdoryse,
   zvuk, detekcia pohybu na serveri pre kamery bez ONVIF (dekódovanie podprúdu),
   prenášač ako služba (inštalátor), sťahovanie záznamov z prenášača pri výpadku spojenia
 - smart home: efekty svetiel na karte, Shelly Gen1, skupiny entít, plánovanie scén (časovač),
@@ -43,7 +44,7 @@ Celá sada testov (`tests/run-all.sh`) prešla pre 0.49.0 (27. 9. 2026); po posl
 
 ## Čaká na používateľa
 
-- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.49.0 root@2.29.5.17 -i <kľúč>` alebo
+- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.50.0 root@2.29.5.17 -i <kľúč>` alebo
   GitHub workflow (secrets `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS` a workflow na `main`)
 - zlúčenie vetvy do `main` (pull request na požiadanie)
 - potvrdenie ADR-0015 (SCADA editor v čistom JS nad SVG)

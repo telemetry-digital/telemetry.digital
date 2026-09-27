@@ -1,0 +1,27 @@
+meta {
+  name: Release held recordings
+  type: http
+  seq: 24
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/video/holds/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~reason: 
+}
+
+docs {
+  Release held recordings
+  
+  The normal retention deletes them afterwards. Audited with the reason.
+  
+  Requires permission `video.evidence`.
+}
