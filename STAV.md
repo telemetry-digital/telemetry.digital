@@ -19,6 +19,7 @@
 | 0.49.0 | Obrazovky (kiosky) pre dashboardy, SCADA aj videosteny: párovanie kódom, striedanie obsahu, zväčšenie kamier pri udalosti, ovládanie z velína (poslať kameru, identifikovať); skupiny kamier pre používateľov; incidenty pri výpadku kamery, obrazovky a plnom disku; umiestnenie obrazoviek a hromadné správy, výrobné obrazovky (rozsahy 8 h/12 h/dnes, prispôsobenie výške); bezpečnostná kontrola, 7 opráv (spec 014) | e2e 76, unit |
 | 0.50.0 | Dôkazy z kamier: zamknutie úseku (nezmaže sa), SHA-256 súborov pri nahrávaní, podpísaný dôkazový balík a `verify-evidence`; obrazovky a widgety po slovensky (dátum, čas, popisy) (spec 015); maskovanie zón GDPR (spec 016) | e2e 29 + 20, unit |
 | 0.51.0 | Kamery na pôdoryse: značka so zorným uhlom a stavom (v prevádzke, výpadok, udalosť), klik otvorí živý obraz, rešpektuje skupiny kamier, aj na kioskoch (spec 017) | e2e 78, unit |
+| 0.52.0 | Prenášač vzdialených kamier ako služba: inštalátory pre Linux/Raspberry Pi a Windows, samokontrola pred spustením, stiahnutie relay.toml z rozhrania (spec 018) | e2e 101, unit |
 
 Celá sada testov (`tests/run-all.sh`) prešla pre 0.49.0 (27. 9. 2026); po poslednej oprave (typ zoznamu widgetov) znova prešli e2e `displays` 76/76 a unit testy.
 
@@ -45,7 +46,7 @@ Celá sada testov (`tests/run-all.sh`) prešla pre 0.49.0 (27. 9. 2026); po posl
 
 ## Čaká na používateľa
 
-- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.51.0 root@2.29.5.17 -i <kľúč>` alebo
+- nasadenie na telemetry.digital (v produkcii je 0.36.3): `deploy/publish.sh 0.52.0 root@2.29.5.17 -i <kľúč>` alebo
   GitHub workflow (secrets `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS` a workflow na `main`)
 - zlúčenie vetvy do `main` (pull request na požiadanie)
 - potvrdenie ADR-0015 (SCADA editor v čistom JS nad SVG)

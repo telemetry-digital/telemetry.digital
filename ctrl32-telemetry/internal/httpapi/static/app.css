@@ -738,3 +738,4 @@ body.kiosk .footer svg { width: 11px; height: 11px; }
 .pin-pop-box { width: min(1100px, 96vw); background: #0b0e12; color: #e5e7eb; border-radius: 10px; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
 .pin-pop-head { display: flex; gap: 8px; align-items: center; padding: 8px 10px; }
 .pin-pop-vid { position: relative; aspect-ratio: 16 / 9; background: #000; }
+.relay-cmd { background: var(--bg2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin: 4px 0 8px; font: 12px var(--mono); white-space: pre; overflow-x: auto; }

@@ -170,9 +170,29 @@ camera (192.168.1.64) ──RTSP──▶ camera-relay at the site ══RTSPS (
    pair is used; profile "internet" refuses to start without TLS) and open TCP 8322 in the firewall.
 2. *Camera management → Add camera → Connection: The camera sends its video to the server*. After saving, the
    camera's **secret and a ready `relay.toml` are shown once** (only an encrypted copy stays on the server).
-3. At the site, on any computer that reaches the camera (Linux, Windows, Raspberry Pi):
+3. At the site, on any computer that reaches the camera (Linux, Raspberry Pi with a 64-bit OS, Windows): save the
+   configuration as `relay.toml` (*Download relay.toml* in the dialog), fill in the local address of the camera and
+   run the installer next to it:
+   ```sh
+   # Linux / Raspberry Pi
+   curl -fsSL https://telemetry.digital/install-relay.sh -o install-relay.sh
+   sudo bash install-relay.sh --config relay.toml
+   ```
+   ```powershell
+   # Windows, PowerShell as administrator
+   irm https://telemetry.digital/install-relay.ps1 -OutFile install-relay.ps1; .\install-relay.ps1 -Config .\relay.toml
+   ```
+   The installer downloads the program and checks it against `SHA256SUMS`, stores the configuration where only the
+   service can read it (Linux `/etc/ctrl32-camera-relay/relay.toml`, root:ctrl32relay 0640; Windows
+   `C:\ProgramData\ctrl32-camera-relay`, SYSTEM and Administrators), **tests it** and only then installs the service
+   `ctrl32-camera-relay` (systemd unit under its own user in a sandbox; Windows service with automatic start, both
+   restart on failure). Delete the copied file afterwards. Re-run with a new `relay.toml` to add cameras,
+   `--update`/`-Update` for a new program version, `--check`/`-Check` to test again, `--uninstall`/`-Uninstall`
+   to remove it.
+
+   The configuration file:
    ```toml
-   # relay.toml — chmod 600
+   # relay.toml — keep it private
    server = "rtsps://telemetry.example.com:8322"
    # ca_file = "/etc/ctrl32/ca.pem"   # only for a private CA
    [[camera]]
@@ -181,7 +201,10 @@ camera (192.168.1.64) ──RTSP──▶ camera-relay at the site ══RTSPS (
    source = "rtsp://admin:pw@192.168.1.64:554/Streaming/Channels/101"
    sub_source = "rtsp://admin:pw@192.168.1.64:554/Streaming/Channels/102"   # optional, for tiles
    ```
-   `ctrl32-telemetry camera-relay -config relay.toml` (as a systemd service or Windows service for permanent use).
+   The test alone: `ctrl32-telemetry camera-relay -check -config relay.toml` — the server is reachable and its
+   certificate trusted, every camera answers with H.264, H.265 or MJPEG, the server accepts each secret; passwords
+   and secrets are never printed. Without the installer: `ctrl32-telemetry camera-relay -config relay.toml`, or
+   `ctrl32-telemetry service install-relay -config relay.toml` to register the service yourself.
    One relay forwards any number of cameras; each stream reconnects on its own (1 s … 30 s back-off).
 
 Security: the relay only sends (the push listener refuses reading); each camera has its own 192-bit secret; with

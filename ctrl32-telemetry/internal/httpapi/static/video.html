@@ -127,9 +127,15 @@
   <dialog id="secretDlg" style="max-width:min(760px,96vw)"><div class="form">
     <h2 style="margin-top:0">Relay for the remote camera</h2>
     <p class="bad" style="margin:0"><b>The secret is shown only now.</b> Copy the configuration to the relay at the remote site; a lost secret can only be replaced by a new one.</p>
-    <p class="muted" style="margin:6px 0">1. Copy the ctrl32-telemetry program to a computer at the site (Linux, Windows or a Raspberry Pi) that reaches the camera. 2. Save this as <code>relay.toml</code> and fill in the camera's local address. 3. Run <code>ctrl32-telemetry camera-relay -config relay.toml</code> (as a service for permanent use).</p>
+    <p class="muted" style="margin:6px 0">1. Save this configuration as <code>relay.toml</code> and fill in the local address of the camera (and its password).</p>
     <textarea id="relayCfg" rows="11" readonly class="notranslate" style="width:100%;font-family:var(--mono);font-size:12px"></textarea>
-    <div class="actions"><button class="btn primary" type="button" id="copyCfg">Copy</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+    <p class="muted" style="margin:6px 0">2. On a computer at the site that reaches the camera, run the installer next to the file:</p>
+    <div style="font-size:12px"><b>Linux / Raspberry Pi</b><pre class="notranslate relay-cmd">curl -fsSL https://telemetry.digital/install-relay.sh -o install-relay.sh
+sudo bash install-relay.sh --config relay.toml</pre>
+    <b>Windows (PowerShell as administrator)</b><pre class="notranslate relay-cmd">irm https://telemetry.digital/install-relay.ps1 -OutFile install-relay.ps1
+.\install-relay.ps1 -Config .\relay.toml</pre></div>
+    <p class="muted" style="margin:6px 0">The installer tests the connection to the server, the camera and the secret, then runs the relay as a service that starts with the computer. Delete the copied file afterwards.</p>
+    <div class="actions"><button class="btn primary" type="button" id="dlCfg">Download relay.toml</button><button class="btn" type="button" id="copyCfg">Copy</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
   </div></dialog>
 
   <dialog id="wallDlg" style="max-width:min(1100px,96vw)"><form class="form" id="wallForm">
@@ -221,6 +227,7 @@ function renderManage() {
 
 let EDIT = null;
 function showSecret(c) { $('#relayCfg').value = c.relay_config || ''; $('#secretDlg').showModal(); }
+$('#dlCfg').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([$('#relayCfg').value], { type: 'application/toml' })); a.download = 'relay.toml'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
 $('#copyCfg').onclick = async () => { try { await navigator.clipboard.writeText($('#relayCfg').value); ctrl32.toast(t('copied'), 'ok'); } catch (x) { $('#relayCfg').select(); } };
 const KINDS = [['motion', 'motion'], ['tamper', 'tampering'], ['line', 'line crossing'], ['intrusion', 'intrusion'], ['input', 'input'], ['mark', 'marks (flows, people)'], ['other', 'other']];
 $('#kinds').innerHTML = KINDS.map(([k, l]) => `<label class="inline"><input type="checkbox" data-kind="${k}"><span>${esc(t(l))}</span></label>`).join('');

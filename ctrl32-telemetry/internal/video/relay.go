@@ -72,21 +72,11 @@ func RunRelay(ctx context.Context, cfg RelayConfig, log *slog.Logger) error {
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
-	var tlsCfg *tls.Config
-	if strings.HasPrefix(cfg.Server, "rtsps://") {
-		tlsCfg = &tls.Config{MinVersion: tls.VersionTLS12}
-		if cfg.CAFile != "" {
-			pem, err := os.ReadFile(cfg.CAFile)
-			if err != nil {
-				return err
-			}
-			pool := x509.NewCertPool()
-			if !pool.AppendCertsFromPEM(pem) {
-				return errors.New("ca_file holds no certificate")
-			}
-			tlsCfg.RootCAs = pool
-		}
-	} else {
+	tlsCfg, err := relayTLS(cfg)
+	if err != nil {
+		return err
+	}
+	if tlsCfg == nil {
 		log.Warn("relay without TLS: use rtsps:// outside a trusted network")
 	}
 	var wg sync.WaitGroup
@@ -130,6 +120,26 @@ func RunRelay(ctx context.Context, cfg RelayConfig, log *slog.Logger) error {
 	}
 	wg.Wait()
 	return nil
+}
+
+// relayTLS is the TLS configuration towards the server (nil for rtsp:// inside a trusted network).
+func relayTLS(cfg RelayConfig) (*tls.Config, error) {
+	var tlsCfg *tls.Config
+	if strings.HasPrefix(cfg.Server, "rtsps://") {
+		tlsCfg = &tls.Config{MinVersion: tls.VersionTLS12}
+		if cfg.CAFile != "" {
+			pem, err := os.ReadFile(cfg.CAFile)
+			if err != nil {
+				return nil, err
+			}
+			pool := x509.NewCertPool()
+			if !pool.AppendCertsFromPEM(pem) {
+				return nil, errors.New("ca_file holds no certificate")
+			}
+			tlsCfg.RootCAs = pool
+		}
+	}
+	return tlsCfg, nil
 }
 
 func redactAll(err error, src, secret string) string {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build release binaries and publish them with the installer to a host running ctrl32 telemetry behind Caddy:
-#   https://<host>/install.sh  and  https://<host>/dl/ctrl32-telemetry-linux-{amd64,arm64} (+ SHA256SUMS)
+#   https://<host>/install.sh, /install-relay.sh (+ .ps1) and  https://<host>/dl/ctrl32-telemetry-linux-{amd64,arm64} (+ SHA256SUMS)
 # Usage (from the repository root, Go on PATH):
 #   deploy/publish.sh 0.4.0 root@2.29.5.17 [-i ~/.ssh/key]
 # The host directory /var/www/ctrl32 is served read-only by the Caddy container that install.sh configures.
@@ -37,11 +37,13 @@ else echo "note: cyclonedx-gomod not installed (go install github.com/CycloneDX/
 ( cd "$OUT" && sha256sum ctrl32-telemetry-* $(ls sbom-* govulncheck-* 2>/dev/null) > SHA256SUMS )
 cp deploy/install.sh "$OUT/install.sh"
 cp deploy/install.ps1 "$OUT/install.ps1"
+cp deploy/install-relay.sh deploy/install-relay.ps1 "$OUT/"
 echo "built $(ls "$OUT")"
 ssh "${SSH_OPTS[@]}" "$TARGET" 'install -d -m 0755 /var/www/ctrl32/dl'
 scp "${SSH_OPTS[@]}" "$OUT"/ctrl32-telemetry-* "$OUT/SHA256SUMS" "$TARGET:/var/www/ctrl32/dl/"
 for f in "$OUT"/sbom-* "$OUT"/govulncheck-*; do [[ -e "$f" ]] && scp "${SSH_OPTS[@]}" "$f" "$TARGET:/var/www/ctrl32/dl/"; done
 scp "${SSH_OPTS[@]}" "$OUT/install.sh" "$TARGET:/var/www/ctrl32/install.sh"
 scp "${SSH_OPTS[@]}" "$OUT/install.ps1" "$TARGET:/var/www/ctrl32/install.ps1"
-ssh "${SSH_OPTS[@]}" "$TARGET" "chmod 0644 /var/www/ctrl32/install.sh /var/www/ctrl32/install.ps1 /var/www/ctrl32/dl/*; printf '%s\n' '$VERSION' > /var/www/ctrl32/dl/VERSION"
+scp "${SSH_OPTS[@]}" "$OUT/install-relay.sh" "$OUT/install-relay.ps1" "$TARGET:/var/www/ctrl32/"
+ssh "${SSH_OPTS[@]}" "$TARGET" "chmod 0644 /var/www/ctrl32/install.sh /var/www/ctrl32/install.ps1 /var/www/ctrl32/install-relay.sh /var/www/ctrl32/install-relay.ps1 /var/www/ctrl32/dl/*; printf '%s\n' '$VERSION' > /var/www/ctrl32/dl/VERSION"
 echo "published $VERSION to $TARGET (/install.sh, /dl/)"

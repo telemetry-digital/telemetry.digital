@@ -138,12 +138,14 @@ if [[ "$PUSHON" == true ]]; then
   PURL=$(jx j.push.url)
   printf 'server = "%s"\n[[camera]]\nid = "%s"\nsecret = "%s"\nsource = "%s"\nsub_source = "%s"\ntransport = "tcp"\n' "${PURL%/*}" "$PUSH" "$SECRET" "$SIM/remote/h264/160x96" "$SIM/remote/mjpeg/160x96" > "$TMP/relay.toml"
   chmod 600 "$TMP/relay.toml"
+  "${BIN:-$TMP/c32}" camera-relay -check -config "$TMP/relay.toml" > "$TMP/check.log" 2>&1; check "relay self-check passes (server, cameras, secret)" "$? $(grep -c '^ok ' "$TMP/check.log") $(grep -c 'the relay is ready' "$TMP/check.log")" "0 5 1"
   "${BIN:-$TMP/c32}" camera-relay -config "$TMP/relay.toml" > "$TMP/relay.log" 2>&1 &
   RELAY=$!
   waitfor '(req GET /api/v1/video/cameras/$PUSH; [[ "$(jx j.status.state)" == online ]])' 30 && ok "relay connected, camera online" || bad "push status $(cat "$TMP/b"); relay: $(tail -3 "$TMP/relay.log")"
   check "remote camera records" "$(jx 'j.status.recording + " " + j.status.codec')" "true h264"
   ws "/api/v1/video/cameras/$PUSH/live" 2; check "tiles use the pushed sub-stream" "$(jx 'j.init && j.init.codec')" mjpeg
   printf 'server = "%s"\n[[camera]]\nid = "%s"\nsecret = "%s"\nsource = "%s"\n' "${PURL%/*}" "$PUSH" "wrong-secret-wrong-secret-123" "$SIM/remote/h264/160x96" > "$TMP/bad.toml"; chmod 600 "$TMP/bad.toml"
+  "${BIN:-$TMP/c32}" camera-relay -check -config "$TMP/bad.toml" > "$TMP/check2.log" 2>&1; check "self-check reports a wrong secret" "$? $(grep -c '^FAIL .*server accepts the secret' "$TMP/check2.log") $(grep -c 'wrong-secret-wrong-secret-123' "$TMP/check2.log")" "1 1 0"
   "${BIN:-$TMP/c32}" camera-relay -config "$TMP/bad.toml" > "$TMP/bad.log" 2>&1 &
   BADR=$!; sleep 3; kill $BADR 2>/dev/null
   check "wrong secret refused" "$(grep -c 'relay forwarding' "$TMP/bad.log")" 0

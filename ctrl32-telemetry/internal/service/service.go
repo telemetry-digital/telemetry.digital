@@ -69,6 +69,22 @@ func AgentConfig(configPath string) *service.Config {
 	}
 }
 
+// RelayConfig returns the definition of the camera relay service at a remote site (spec 018): it runs
+// `camera-relay -config path` and is restarted by the service manager when it stops.
+func RelayConfig(configPath string) *service.Config {
+	return &service.Config{
+		Name:        "ctrl32-camera-relay",
+		DisplayName: "ctrl32 camera relay",
+		Description: "ctrl32 telemetry — forwards local cameras to the server over an encrypted connection",
+		Arguments:   []string{"camera-relay", "-config", configPath},
+		Option: service.KeyValue{
+			"Restart":   "always",
+			"LogOutput": true,
+			"OnFailure": "restart",
+		},
+	}
+}
+
 // New builds the service handle.
 func New(cfg *service.Config, run RunFunc, log *slog.Logger) (service.Service, error) {
 	return service.New(&program{run: run, log: log}, cfg)

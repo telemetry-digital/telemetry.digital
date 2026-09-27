@@ -3,7 +3,7 @@
 //	ctrl32-telemetry serve   [-config path]           run the server (foreground or under the service manager)
 //	ctrl32-telemetry migrate [-config path]           apply embedded schema migrations
 //	ctrl32-telemetry audit verify [-config path]      re-walk the audit hash chain
-//	ctrl32-telemetry service install|uninstall|start|stop|restart [-config path]
+//	ctrl32-telemetry service install|uninstall|start|stop|restart[-agent|-relay] [-config path]
 //	ctrl32-telemetry dev seed [-config path]          create demo organization, device and datastreams (prints the device token)
 //	ctrl32-telemetry version
 package main
@@ -20,6 +20,8 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/incident"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/metrics"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/timecheck"
+	"io"
+	"log"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -470,9 +472,12 @@ func cmdAudit(args []string) error {
 
 func cmdService(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: ctrl32-telemetry service <install|uninstall|start|stop|restart>[-agent] [-config path]")
+		return errors.New("usage: ctrl32-telemetry service <install|uninstall|start|stop|restart>[-agent|-relay] [-config path]")
 	}
 	action := args[0]
+	if strings.HasSuffix(action, "-relay") {
+		return cmdRelayService(strings.TrimSuffix(action, "-relay"), args[1:])
+	}
 	_, path, err := loadConfig(args[1:])
 	if err != nil && strings.HasPrefix(action, "install") {
 		return err
@@ -711,21 +716,88 @@ func seqOrZero(p *int64) int64 {
 func cmdCameraRelay(args []string) error {
 	fs := flag.NewFlagSet("camera-relay", flag.ContinueOnError)
 	path := fs.String("config", "relay.toml", "relay configuration (server, cameras with id, secret and source)")
+	check := fs.Bool("check", false, "test the configuration (server, local cameras, secrets) and exit")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if fi, err := os.Stat(*path); err == nil && fi.Mode().Perm()&0o077 != 0 && runtime.GOOS != "windows" {
-		fmt.Fprintf(os.Stderr, "warning: %s holds camera secrets and is readable by others; chmod 600 it\n", *path)
-	}
-	var cfg video.RelayConfig
-	if _, err := toml.DecodeFile(*path, &cfg); err != nil {
+	cfg, err := loadRelayConfig(*path)
+	if err != nil {
 		return err
 	}
+	if *check {
+		log.SetOutput(io.Discard) // the RTSP library's own notes would only confuse the report
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		failed := 0
+		for _, c := range video.CheckRelay(ctx, cfg) {
+			mark := "ok  "
+			if !c.OK {
+				mark = "FAIL"
+				failed++
+			}
+			fmt.Printf("%s %s: %s\n", mark, c.What, c.Info)
+		}
+		if failed > 0 {
+			return fmt.Errorf("%d check(s) failed", failed)
+		}
+		fmt.Println("the relay is ready")
+		return nil
+	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil)).With("app", "ctrl32-camera-relay")
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	logger.Info("camera relay", "server", cfg.Server, "cameras", len(cfg.Cameras))
-	return video.RunRelay(ctx, cfg, logger)
+	run := func(ctx context.Context) error {
+		logger.Info("camera relay", "server", cfg.Server, "cameras", len(cfg.Cameras), "version", version)
+		return video.RunRelay(ctx, cfg, logger)
+	}
+	if svc.Interactive() {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		return run(ctx)
+	}
+	// under the Windows Service Control Manager (or systemd) run through the service wrapper
+	s, err := svc.New(svc.RelayConfig(*path), run, logger)
+	if err != nil {
+		return err
+	}
+	return s.Run()
+}
+
+func loadRelayConfig(path string) (video.RelayConfig, error) {
+	var cfg video.RelayConfig
+	if fi, err := os.Stat(path); err == nil && fi.Mode().Perm()&0o077 != 0 && runtime.GOOS != "windows" {
+		fmt.Fprintf(os.Stderr, "warning: %s holds camera secrets and is readable by others; chmod 600 it\n", path)
+	}
+	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+		return cfg, err
+	}
+	return cfg, cfg.Validate()
+}
+
+// cmdRelayService installs or controls the camera relay as a service (systemd unit or Windows service). The
+// configuration is checked before installing so a broken relay.toml never becomes a restarting service.
+func cmdRelayService(action string, args []string) error {
+	fs := flag.NewFlagSet("service", flag.ContinueOnError)
+	path := fs.String("config", "relay.toml", "relay configuration")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	abs, err := filepath.Abs(*path)
+	if err != nil {
+		return err
+	}
+	if action == "install" {
+		if _, err := loadRelayConfig(abs); err != nil {
+			return fmt.Errorf("%s: %w", abs, err)
+		}
+	}
+	s, err := svc.New(svc.RelayConfig(abs), func(ctx context.Context) error { return nil }, slog.Default())
+	if err != nil {
+		return err
+	}
+	if err := svc.Control(s, action); err != nil {
+		return err
+	}
+	fmt.Println("relay service", action, "ok")
+	return nil
 }
 
 // cmdVerifyEvidence checks an evidence package (spec 015): the signature of the manifest and the hash of the video.
