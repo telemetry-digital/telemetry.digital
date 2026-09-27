@@ -1,6 +1,6 @@
-# ADR-0016: Paid white labeling — 99 EUR one-time, perpetual license key verified offline
+# ADR-0016: Paid white labeling — 39 EUR one-time, perpetual license key verified offline
 
-**Status:** accepted 27 Sep 2026 (user: white labeling is paid, **99 EUR, one-time, forever**). History: first accepted
+**Status:** accepted 27 Sep 2026 (user: white labeling is paid, **39 EUR, one-time, forever**). History: first accepted
 26 Sep 2026 (user: "Predpríprava white labeling, bude platený" — prepare white labeling, it will be paid), withdrawn the
 same day ("zostaneme pri free verzii, nič platené" — the implementation was reverted), reinstated on 27 Sep 2026 with
 the price and a perpetual license. Amends ADR-0002 (everything free) and ADR-0011 decision 5 (fixed product footer).
@@ -12,7 +12,7 @@ ADR-0002 made everything free; the `LICENSE` required the footer to stay unchang
 
 1. **Everything else stays free** (ADR-0002 unchanged for all other functions). White labeling is the only paid
    feature. Without a license every deployment shows the fixed ctrl32 footer (ADR-0011).
-2. **Price: 99 EUR, one-time, per server (installation), forever.** One license covers one installation with all its
+2. **Price: 39 EUR, one-time, per server (installation), forever.** One license covers one installation with all its
    organizations; there is no subscription, no renewal and no expiry. Updates to newer versions keep the license (every
    later binary verifies the key as long as the licensor's public key stays in `internal/license/trusted/`).
 3. **White label** (per organization, spec 007): product name, short app name, footer text and up to four footer links,
@@ -40,7 +40,7 @@ ADR-0002 made everything free; the `LICENSE` required the footer to stay unchang
 
 ## Consequences
 
-- Ordering and invoicing (99 EUR) happen outside the software; the licensor issues the key with `licgen` and sends it
+- Ordering and invoicing (39 EUR) happen outside the software; the licensor issues the key with `licgen` and sends it
   to the customer (`docs/whitelabel.md`).
 - Losing the private key means no new licenses can be issued with it (existing ones keep working); leaking it lets
   anyone issue licenses. It is kept offline and backed up; a compromised key is rotated by adding a new `.pub` and

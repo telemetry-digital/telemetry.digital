@@ -1,7 +1,7 @@
-# White labeling (paid: 99 EUR one-time, forever)
+# White labeling (paid: 39 EUR one-time, forever)
 
 ctrl32 telemetry is free, and everything except white labeling stays free. **White labeling** — delivering the system
-under your own brand — is a paid feature: **99 EUR, paid once, per server (installation), valid forever** (a perpetual
+under your own brand — is a paid feature: **39 EUR, paid once, per server (installation), valid forever** (a perpetual
 license key, no subscription, no renewal; updates keep it). Without a license every deployment shows the fixed ctrl32
 footer. Specification: `specs/007-white-labeling/`; ADR-0016; URS J-16a.
 
@@ -23,7 +23,7 @@ Logo, colours, font and map tiles are free branding (Settings → Branding and t
 
 ## For the customer: buying
 
-1. Order white labeling from telemetry.digital (99 EUR, one-time). Give the licensee name (company) and a contact
+1. Order white labeling from telemetry.digital (39 EUR, one-time). Give the licensee name (company) and a contact
    e-mail; optionally the host name the server is reached at (`http.base_url`, e.g. `scada.acme.sk`) if the license
    should be bound to it.
 2. After payment you receive a license key: one line starting with `c32l1.`.
@@ -49,7 +49,7 @@ means no new licenses with this key).
 
 ```
 go run ./tools/licgen issue -key <offline dir>/telemetry-digital-2026.key -licensee "Acme s.r.o." \
-    -email it@acme.sk -notes "invoice 2026-042, 99 EUR"
+    -email it@acme.sk -notes "invoice 2026-042, 39 EUR"
 ```
 
 prints the license key (`c32l1.…`) to send to the customer, and on stderr a summary such as
