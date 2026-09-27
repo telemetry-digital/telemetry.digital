@@ -85,6 +85,7 @@ export type Camera = {
   id?: string;
   location?: string;
   name?: string;
+  privacy_masks?: number[][][];
   push?: {
     /** video.push_listen configured */
     enabled?: boolean;
@@ -2804,6 +2805,7 @@ export class Ctrl32Client {
     name?: string;
     /** http://camera/onvif/device_service: events and PTZ (spec 013) */
     onvif_url?: string;
+    privacy_masks?: number[][][];
     /** empty = the first profile with PTZ */
     ptz_profile?: string;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
@@ -5208,6 +5210,7 @@ export class Ctrl32Client {
     name: string;
     /** http://camera/onvif/device_service: events and PTZ (spec 013) */
     onvif_url?: string;
+    privacy_masks?: number[][][];
     /** empty = the first profile with PTZ */
     ptz_profile?: string;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
@@ -5237,6 +5240,7 @@ export class Ctrl32Client {
     name?: string;
     /** http://camera/onvif/device_service: events and PTZ (spec 013) */
     onvif_url?: string;
+    privacy_masks?: number[][][];
     /** empty = the first profile with PTZ */
     ptz_profile?: string;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
@@ -5870,6 +5874,7 @@ export class Ctrl32Client {
     onvif_url?: string;
     /** stored encrypted; omit to keep, "" to clear */
     password?: string;
+    privacy_masks?: number[][][];
     /** empty = the first profile with PTZ */
     ptz_profile?: string;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
@@ -5934,6 +5939,7 @@ export class Ctrl32Client {
     onvif_url?: string;
     /** stored encrypted; omit to keep, "" to clear */
     password?: string;
+    privacy_masks?: number[][][];
     /** empty = the first profile with PTZ */
     ptz_profile?: string;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */

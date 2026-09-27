@@ -712,3 +712,12 @@ body.kiosk .footer svg { width: 11px; height: 11px; }
 .tl .hold { position: absolute; bottom: 0; height: 5px; background: repeating-linear-gradient(45deg, #7c3aed, #7c3aed 4px, #a78bfa 4px, #a78bfa 8px); border-radius: 1px; }
 .hold-list { font-size: 13px; margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
 .hold-list > div { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.vp-mask { position: absolute; z-index: 1; pointer-events: none; overflow: visible; }
+.vp-mask polygon { fill: #000; }
+.vp[data-unmasked="1"]::after { content: "unmasked"; position: absolute; left: 6px; bottom: 6px; z-index: 2; background: #b91c1c; color: #fff; font: 600 11px var(--font); padding: 1px 6px; border-radius: 4px; }
+.mask-edit { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 6px; overflow: hidden; margin-top: 6px; }
+.mask-edit .vp { position: absolute; inset: 0; }
+.mask-draw { position: absolute; inset: 0; z-index: 3; cursor: crosshair; touch-action: none; }
+.mask-r { position: absolute; background: rgba(0,0,0,.72); outline: 2px solid #f59e0b; }
+.mask-r.ghost { background: rgba(245,158,11,.35); }
+.mask-r button { position: absolute; right: 2px; top: 2px; border: 0; border-radius: 4px; background: #f59e0b; color: #111; font-size: 11px; cursor: pointer; padding: 0 5px; }

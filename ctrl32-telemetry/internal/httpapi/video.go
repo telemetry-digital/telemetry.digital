@@ -38,25 +38,26 @@ import (
 )
 
 type cameraIn struct {
-	Name          *string   `json:"name"`
-	Location      *string   `json:"location"`
-	URL           *string   `json:"url"`
-	SubURL        *string   `json:"sub_url"`
-	Username      *string   `json:"username"`
-	Password      *string   `json:"password"`
-	Transport     *string   `json:"transport"`
-	Record        *string   `json:"record"`
-	RetentionDays *int      `json:"retention_days"`
-	Enabled       *bool     `json:"enabled"`
-	Sort          *int      `json:"sort"`
-	Source        *string   `json:"source"` // pull (the server connects to the camera) or push (a relay sends the video)
-	OnvifURL      *string   `json:"onvif_url"`
-	PTZProfile    *string   `json:"ptz_profile"`
-	EventPre      *int      `json:"event_pre_s"`
-	EventPost     *int      `json:"event_post_s"`
-	EventKinds    *[]string `json:"event_kinds"`
-	Group         *string   `json:"group"`
-	Reason        string    `json:"reason"`
+	Name          *string          `json:"name"`
+	Location      *string          `json:"location"`
+	URL           *string          `json:"url"`
+	SubURL        *string          `json:"sub_url"`
+	Username      *string          `json:"username"`
+	Password      *string          `json:"password"`
+	Transport     *string          `json:"transport"`
+	Record        *string          `json:"record"`
+	RetentionDays *int             `json:"retention_days"`
+	Enabled       *bool            `json:"enabled"`
+	Sort          *int             `json:"sort"`
+	Source        *string          `json:"source"` // pull (the server connects to the camera) or push (a relay sends the video)
+	OnvifURL      *string          `json:"onvif_url"`
+	PTZProfile    *string          `json:"ptz_profile"`
+	EventPre      *int             `json:"event_pre_s"`
+	EventPost     *int             `json:"event_post_s"`
+	EventKinds    *[]string        `json:"event_kinds"`
+	Group         *string          `json:"group"`
+	PrivacyMasks  *json.RawMessage `json:"privacy_masks"`
+	Reason        string           `json:"reason"`
 }
 
 type cameraRow struct {
@@ -66,6 +67,7 @@ type cameraRow struct {
 	eventPre, eventPost                                                  int
 	eventKinds                                                           []string
 	group                                                                string
+	masks                                                                []byte // privacy masks (JSON), spec 016
 	retention, sort                                                      int
 	enabled                                                              bool
 }
@@ -73,10 +75,10 @@ type cameraRow struct {
 func (s *Server) cameraRow(ctx context.Context, org, id string) (cameraRow, bool) {
 	var c cameraRow
 	err := s.pool.QueryRow(ctx, `SELECT id::text, name, location, url, sub_url, username, password_sealed, transport, record, retention_days, sort, enabled, source, push_secret_sealed,
-		onvif_url, ptz_profile, event_pre_s, event_post_s, event_kinds, camera_group
+		onvif_url, ptz_profile, event_pre_s, event_post_s, event_kinds, camera_group, privacy_masks
 		FROM core.camera WHERE id = $1::uuid AND org_id = $2::uuid AND removed_at IS NULL`, id, org).
 		Scan(&c.id, &c.name, &c.location, &c.url, &c.subURL, &c.username, &c.sealed, &c.transport, &c.record, &c.retention, &c.sort, &c.enabled, &c.source, &c.pushSealed,
-			&c.onvifURL, &c.ptzProfile, &c.eventPre, &c.eventPost, &c.eventKinds, &c.group)
+			&c.onvifURL, &c.ptzProfile, &c.eventPre, &c.eventPost, &c.eventKinds, &c.group, &c.masks)
 	if err != nil {
 		return c, false
 	}
@@ -91,7 +93,7 @@ func (s *Server) cameraRow(ctx context.Context, org, id string) (cameraRow, bool
 func (s *Server) cameraJSON(r *http.Request, c cameraRow) map[string]any {
 	out := map[string]any{"id": c.id, "name": c.name, "location": c.location, "record": c.record, "retention_days": c.retention,
 		"sort": c.sort, "enabled": c.enabled, "has_sub": c.subURL != "" || c.source == "push", "source": c.source,
-		"onvif": c.onvifURL != "", "event_pre_s": c.eventPre, "event_post_s": c.eventPost, "event_kinds": c.eventKinds, "group": c.group}
+		"onvif": c.onvifURL != "", "event_pre_s": c.eventPre, "event_post_s": c.eventPost, "event_kinds": c.eventKinds, "group": c.group, "privacy_masks": json.RawMessage(orEmpty(c.masks))}
 	if p := PrincipalFrom(r.Context()); p.Has("video.manage") {
 		out["url"], out["sub_url"], out["username"], out["transport"], out["has_password"] = c.url, c.subURL, c.username, c.transport, c.sealed != ""
 		out["onvif_url"], out["ptz_profile"] = c.onvifURL, c.ptzProfile
@@ -190,6 +192,13 @@ func (s *Server) applyCamera(in *cameraIn, c *cameraRow, pw **string) string {
 		if len([]rune(c.location)) > 120 {
 			return "location: at most 120 characters"
 		}
+	}
+	if in.PrivacyMasks != nil {
+		m, msg := validateMasks(*in.PrivacyMasks)
+		if msg != "" {
+			return msg
+		}
+		c.masks, _ = json.Marshal(m)
 	}
 	if in.Group != nil {
 		c.group = strings.TrimSpace(*in.Group)
@@ -359,6 +368,10 @@ func (s *Server) createCamera(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "camera not stored")
 		return
 	}
+	if _, err := s.pool.Exec(r.Context(), `UPDATE core.camera SET privacy_masks = $2::jsonb WHERE id = $1::uuid`, c.id, string(orEmpty(c.masks))); err != nil {
+		writeErr(w, 500, "privacy masks not stored")
+		return
+	}
 	s.audit(r, "camera.create", "camera", c.id, nil, cameraAudit(c), in.Reason)
 	if s.video != nil {
 		s.video.Reload(context.Background(), c.id)
@@ -424,7 +437,14 @@ func (s *Server) rotatePushSecret(w http.ResponseWriter, r *http.Request) {
 func cameraAudit(c cameraRow) map[string]any {
 	return map[string]any{"name": c.name, "location": c.location, "source": c.source, "url": c.url, "sub_url": c.subURL, "username": c.username,
 		"password_set": c.sealed != "", "transport": c.transport, "record": c.record, "retention_days": c.retention, "enabled": c.enabled,
-		"onvif_url": c.onvifURL, "ptz_profile": c.ptzProfile, "event_pre_s": c.eventPre, "event_post_s": c.eventPost, "event_kinds": c.eventKinds, "group": c.group}
+		"onvif_url": c.onvifURL, "ptz_profile": c.ptzProfile, "event_pre_s": c.eventPre, "event_post_s": c.eventPost, "event_kinds": c.eventKinds, "group": c.group, "privacy_masks": json.RawMessage(orEmpty(c.masks))}
+}
+
+func orEmpty(b []byte) []byte {
+	if len(b) == 0 {
+		return []byte("[]")
+	}
+	return b
 }
 
 func (s *Server) updateCamera(w http.ResponseWriter, r *http.Request) {
@@ -476,6 +496,10 @@ func (s *Server) updateCamera(w http.ResponseWriter, r *http.Request) {
 		c.onvifURL, c.ptzProfile, c.eventPre, c.eventPost, c.eventKinds, c.group)
 	if err != nil {
 		writeErr(w, 500, "update failed")
+		return
+	}
+	if _, err := s.pool.Exec(r.Context(), `UPDATE core.camera SET privacy_masks = $2::jsonb WHERE id = $1::uuid`, c.id, string(orEmpty(c.masks))); err != nil {
+		writeErr(w, 500, "privacy masks not stored")
 		return
 	}
 	s.audit(r, "camera.update", "camera", c.id, old, cameraAudit(c), in.Reason)
@@ -600,7 +624,16 @@ func (s *Server) cameraSnapshot(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "no picture (snapshots need an MJPEG stream, or the camera is offline)")
 		return
 	}
+	if m := parseMasks(c.masks); len(m) > 0 && !s.unmasked(r, c) {
+		masked, err := maskJPEG(img, m)
+		if err != nil {
+			writeErr(w, 500, "picture could not be masked")
+			return
+		}
+		img = masked
+	}
 	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(img)
 }
 
@@ -779,11 +812,15 @@ func (s *Server) cameraLive(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 409, "camera is disabled")
 		return
 	}
+	unmasked := s.unmasked(r, c)
 	vc, cancel, ok := s.upgradeVideo(w, r)
 	if !ok {
 		return
 	}
 	defer cancel()
+	if err := vc.json(masksMessage(c, unmasked)); err != nil {
+		return
+	}
 	sub := src.Subscribe()
 	defer sub.Close()
 	tick := time.NewTicker(3 * time.Second)
@@ -841,11 +878,15 @@ func (s *Server) cameraPlayback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.audit(r, "video.playback", "camera", c.id, nil, map[string]any{"camera": c.name, "from": from, "speed": speed}, "recording viewed")
+	unmasked := s.unmasked(r, c)
 	vc, cancel, ok := s.upgradeVideo(w, r)
 	if !ok {
 		return
 	}
 	defer cancel()
+	if err := vc.json(masksMessage(c, unmasked)); err != nil {
+		return
+	}
 	pb := s.video.Playback(c.id, from, time.Time{})
 	defer pb.Close()
 	var t0 time.Time
@@ -889,6 +930,9 @@ func (s *Server) cameraExport(w http.ResponseWriter, r *http.Request) {
 	c, ok := s.cameraRow(r.Context(), org, r.PathValue("id"))
 	if !ok || s.video == nil {
 		writeErr(w, 404, "camera not found")
+		return
+	}
+	if !s.maskedExportAllowed(w, r, c) {
 		return
 	}
 	from, to, msg := parseRange(r.URL.Query(), time.Hour)

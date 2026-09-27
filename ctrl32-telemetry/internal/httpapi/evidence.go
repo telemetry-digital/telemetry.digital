@@ -163,6 +163,9 @@ func (s *Server) cameraEvidence(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "camera not found")
 		return
 	}
+	if !s.maskedExportAllowed(w, r, c) {
+		return
+	}
 	q := r.URL.Query()
 	reason, caseRef := strings.TrimSpace(q.Get("reason")), strings.TrimSpace(q.Get("case_ref"))
 	if !reasonOf(w, reason) {

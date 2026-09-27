@@ -11,11 +11,27 @@
   function player(host, opts) {
     const box = document.createElement('div');
     box.className = 'vp';
-    box.innerHTML = '<div class="vp-stage"><video muted playsinline autoplay disablepictureinpicture></video><canvas hidden></canvas></div><div class="vp-msg" hidden></div><div class="vp-zoom" hidden></div>';
+    box.innerHTML = '<div class="vp-stage"><video muted playsinline autoplay disablepictureinpicture></video><canvas hidden></canvas><svg class="vp-mask" hidden aria-hidden="true"></svg></div><div class="vp-msg" hidden></div><div class="vp-zoom" hidden></div>';
     host.appendChild(box);
     const video = box.querySelector('video'), canvas = box.querySelector('canvas'), msg = box.querySelector('.vp-msg'), stage = box.querySelector('.vp-stage'), zlabel = box.querySelector('.vp-zoom');
     let ws = null, ms = null, sb = null, queue = [], closed = false, retry = null, mode = '', lastT = null, drawing = false, pendingJpeg = null, stallTimer = null;
     const T = (s) => (window.ctrl32 && ctrl32.t ? ctrl32.t(s) : s);
+    // privacy masks (spec 016): the server sends them before the first frame; they cover the picture area, which
+    // "contain" letterboxes inside the stage, and zoom with it
+    const maskEl = box.querySelector('.vp-mask'); let MASKS = [];
+    function placeMasks() {
+      if (!MASKS.length) { maskEl.hidden = true; return; }
+      const W = mode === 'jpeg' ? canvas.width : video.videoWidth, H = mode === 'jpeg' ? canvas.height : video.videoHeight;
+      const sw = stage.clientWidth, sh = stage.clientHeight;
+      if (!W || !H || !sw || !sh) { maskEl.hidden = false; maskEl.setAttribute('style', 'left:0;top:0;width:100%;height:100%'); } else {
+        const k = Math.min(sw / W, sh / H), w = W * k, h = H * k;
+        maskEl.setAttribute('style', `left:${(sw - w) / 2}px;top:${(sh - h) / 2}px;width:${w}px;height:${h}px`); maskEl.hidden = false;
+      }
+      maskEl.setAttribute('viewBox', '0 0 1 1'); maskEl.setAttribute('preserveAspectRatio', 'none');
+      maskEl.innerHTML = MASKS.map((p) => `<polygon points="${p.map((q) => (+q[0]).toFixed(4) + ',' + (+q[1]).toFixed(4)).join(' ')}"/>`).join('');
+    }
+    if (window.ResizeObserver) new ResizeObserver(placeMasks).observe(stage);
+    video.addEventListener('loadedmetadata', placeMasks); video.addEventListener('resize', placeMasks);
     function say(text) { msg.textContent = text ? T(text) : ''; msg.hidden = !text; }
     function state(s, e) { box.dataset.state = s; if (opts.onState) opts.onState(s, e || ''); }
 
@@ -73,7 +89,7 @@
       drawing = true;
       try {
         const bmp = await createImageBitmap(new Blob([data], { type: 'image/jpeg' }));
-        if (canvas.width !== bmp.width || canvas.height !== bmp.height) { canvas.width = bmp.width; canvas.height = bmp.height; }
+        if (canvas.width !== bmp.width || canvas.height !== bmp.height) { canvas.width = bmp.width; canvas.height = bmp.height; placeMasks(); }
         canvas.getContext('2d').drawImage(bmp, 0, 0);
         bmp.close();
       } catch (e) { /* a broken picture */ }
@@ -93,7 +109,8 @@
         if (my !== gen) return;
         if (typeof e.data === 'string') {
           const m = JSON.parse(e.data);
-          if (m.type === 'init') { say(''); state('online'); if (m.codec === 'mjpeg') initJPEG(); else initMSE(m); box.dataset.codec = m.codec; box.dataset.size = m.width + 'x' + m.height; }
+          if (m.type === 'masks') { MASKS = Array.isArray(m.masks) ? m.masks : []; box.dataset.masked = MASKS.length ? '1' : ''; box.dataset.unmasked = m.unmasked ? '1' : ''; placeMasks(); if (opts.onMasks) opts.onMasks(m); }
+          else if (m.type === 'init') { say(''); state('online'); if (m.codec === 'mjpeg') initJPEG(); else initMSE(m); box.dataset.codec = m.codec; box.dataset.size = m.width + 'x' + m.height; }
           else if (m.type === 'time') { lastT = { t: m.t, pos: m.pos, at: performance.now() }; if (mode === 'jpeg' && opts.onTime) opts.onTime(m.t); }
           else if (m.type === 'status') { if (m.state !== 'online') { say(m.state === 'offline' ? 'Camera offline' : 'Connecting…'); } state(m.state, m.error); }
           else if (m.type === 'end') { state('end'); if (opts.onEnd) opts.onEnd(); }

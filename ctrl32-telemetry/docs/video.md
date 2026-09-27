@@ -88,6 +88,18 @@ Per camera (**Camera management → Edit**): addresses, transport, ONVIF, record
 kinds that record, retention, order. Per video wall screen: layout, cameras and stream (automatic, sub-stream or main
 stream). Per viewer (remembered in the browser): tile size, playback speed, PTZ speed.
 
+## Privacy masks (GDPR)
+
+*Camera management → Edit → Privacy masks*: drag over the live picture to cover areas that must not be watched (a
+neighbour's window, a cash desk, a public street). The server does not decode video, so the masks travel with every
+live and recorded stream and every player covers them — the camera page, video walls, camera widgets, displays and
+phones; JPEG snapshots are masked on the server. The recording itself stays complete:
+
+- seeing it unmasked (the editor, `?unmask=1`) needs `video.unmask` (administrators) and is audited (`video.unmask`);
+- MP4 export and evidence packages of a masked camera need `video.unmask`;
+- to keep the areas out of the recording altogether, set the privacy masks in the camera itself (its web page or
+  ONVIF) — then they are missing from the recording and every export too.
+
 ## Evidence
 
 Recordings needed for the police, an insurer or a court:
@@ -237,6 +249,7 @@ as the web interface, with the same sign-in, MFA and permissions.
 | `video.manage` | cameras, walls, storage, discovery | engineer, org_admin |
 | `video.ptz` | PTZ control and presets | operator, engineer, org_admin |
 | `video.evidence` | hold recordings as evidence, signed evidence packages | engineer, org_admin |
+| `video.unmask` | see and export pictures without privacy masks | org_admin |
 | `display.control` | send cameras and commands to displays | operator, engineer, org_admin |
 | `display.manage` | pair, change and disconnect displays | engineer, org_admin |
 

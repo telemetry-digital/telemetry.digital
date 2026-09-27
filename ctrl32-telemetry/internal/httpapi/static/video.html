@@ -113,6 +113,11 @@
       <div class="row" id="kinds" style="gap:10px;font-size:13px"></div>
     </div>
     <div class="row2"><label>Keep recordings (days) <input name="retention_days" type="number" min="1" max="3650" value="7"></label><label>Order <input name="sort" type="number" value="0"></label></div>
+    <div id="maskSec" hidden>
+      <div class="row"><b>Privacy masks (GDPR)</b><span class="grow"></span><button class="btn small" type="button" id="maskClear">Remove all</button></div>
+      <div class="muted" style="font-size:13px">Drag over the picture to cover an area (a neighbour's window, a cash desk, a public street). The areas are covered wherever the picture is shown; the recording stays complete and only people with the permission to see unmasked pictures can see or export it. Masks set in the camera itself keep the areas out of the recording.</div>
+      <div class="mask-edit" id="maskBox"><div class="mask-draw" id="maskDraw"></div></div>
+    </div>
     <label class="check"><input type="checkbox" name="enabled" checked> Enabled</label>
     <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
     <div class="err" id="camErr"></div>
@@ -235,7 +240,8 @@ $('#profBtn').onclick = async () => {
   if (!f.onvif_url.value) { out.textContent = t('Enter the ONVIF address first.'); return; }
   out.textContent = t('Connecting…');
   const body = {url: f.onvif_url.value, username: f.username.value};
-  if (f.password.value) body.password = f.password.value; if (EDIT) body.id = EDIT.id;
+  if (f.password.value) body.password = f.password.value;
+  if (EDIT) body.privacy_masks = MASKS; if (EDIT) body.id = EDIT.id;
   try {
     const r = await api('POST', '/api/v1/video/onvif/profiles', body);
     const ps = r.profiles.filter(p => p.uri).sort((a, b) => b.width * b.height - a.width * a.height);
@@ -245,6 +251,43 @@ $('#profBtn').onclick = async () => {
 };
 function sourceMode() { const push = $('#camForm').source.value === 'push'; for (const el of document.querySelectorAll('#camForm .pull-only')) el.hidden = push; for (const el of document.querySelectorAll('#camForm .push-only')) el.hidden = !push; $('#camForm').url.required = !push; }
 $('#camForm').source.onchange = sourceMode;
+// ---- privacy mask editor: rectangles in picture coordinates 0..1 over the live picture ----
+let MASKS = [], maskPlayer = null;
+function maskRect() {
+  // the picture area inside the player (object-fit: contain)
+  const box = $('#maskBox'), el = maskPlayer && maskPlayer.el, size = (el && el.dataset.size || '').split('x').map(Number);
+  const bw = box.clientWidth, bh = box.clientHeight;
+  if (!size[0] || !size[1]) return {x: 0, y: 0, w: bw, h: bh};
+  const k = Math.min(bw / size[0], bh / size[1]), w = size[0] * k, h = size[1] * k;
+  return {x: (bw - w) / 2, y: (bh - h) / 2, w, h};
+}
+function drawMasks() {
+  const r = maskRect();
+  $('#maskDraw').innerHTML = MASKS.map((p, i) => { const xs = p.map(q => q[0]), ys = p.map(q => q[1]); const x0 = Math.min(...xs), y0 = Math.min(...ys), x1 = Math.max(...xs), y1 = Math.max(...ys);
+    return `<div class="mask-r" style="left:${r.x + x0 * r.w}px;top:${r.y + y0 * r.h}px;width:${(x1 - x0) * r.w}px;height:${(y1 - y0) * r.h}px"><button type="button" data-mi="${i}" title="${esc(t('Remove'))}">✕</button></div>`; }).join('');
+  for (const b of document.querySelectorAll('[data-mi]')) b.onpointerdown = e => { e.stopPropagation(); MASKS.splice(+b.dataset.mi, 1); drawMasks(); };
+}
+function maskEditor(c) {
+  if (maskPlayer) { maskPlayer.close(); maskPlayer = null; }
+  $('#maskSec').hidden = !c;
+  if (!c) return;
+  MASKS = JSON.parse(JSON.stringify(c.privacy_masks || []));
+  // the editor shows the picture without masks when permitted (audited), so the areas can be placed exactly
+  maskPlayer = ctrl32Player($('#maskBox'), {url: `/api/v1/video/cameras/${c.id}/live?quality=sub&unmask=1`, live: true, onMasks: () => {}});
+  $('#maskBox').prepend(maskPlayer.el);
+  const layer = $('#maskDraw'); let start = null, ghost = null;
+  const pt = e => { const b = $('#maskBox').getBoundingClientRect(), r = maskRect(); return [Math.min(1, Math.max(0, (e.clientX - b.left - r.x) / r.w)), Math.min(1, Math.max(0, (e.clientY - b.top - r.y) / r.h))]; };
+  layer.onpointerdown = e => { start = pt(e); ghost = document.createElement('div'); ghost.className = 'mask-r ghost'; layer.appendChild(ghost); layer.setPointerCapture(e.pointerId); };
+  layer.onpointermove = e => { if (!start) return; const p = pt(e), r = maskRect(); Object.assign(ghost.style, {left: r.x + Math.min(start[0], p[0]) * r.w + 'px', top: r.y + Math.min(start[1], p[1]) * r.h + 'px', width: Math.abs(p[0] - start[0]) * r.w + 'px', height: Math.abs(p[1] - start[1]) * r.h + 'px'}); };
+  layer.onpointerup = e => { if (!start) return; const p = pt(e), x0 = Math.min(start[0], p[0]), x1 = Math.max(start[0], p[0]), y0 = Math.min(start[1], p[1]), y1 = Math.max(start[1], p[1]); start = null;
+    if (x1 - x0 > 0.01 && y1 - y0 > 0.01 && MASKS.length < 16) MASKS.push([[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(q => q.map(v => Math.round(v * 10000) / 10000)));
+    drawMasks(); };
+  setTimeout(drawMasks, 800); setTimeout(drawMasks, 2500);
+}
+$('#maskClear').onclick = () => { MASKS = []; drawMasks(); };
+if (window.ResizeObserver) new ResizeObserver(() => { if (maskPlayer) drawMasks(); }).observe($('#maskBox'));
+$('#camDlg').addEventListener('close', () => { if (maskPlayer) { maskPlayer.close(); maskPlayer = null; } });
+
 function camDialog(c) {
   EDIT = c || null; const f = $('#camForm'); f.reset(); $('#camErr').textContent = ''; $('#testOut').textContent = '';
   $('#camTitle').textContent = t(c ? 'Edit camera' : 'Add camera');
@@ -255,6 +298,7 @@ function camDialog(c) {
   sourceMode(); recordMode();
   $('#groupList').innerHTML = [...new Set(CAMS.map(x => x.group).filter(Boolean))].sort().map(g => `<option value="${esc(g)}">`).join('');
   $('#camDlg').showModal();
+  maskEditor(c);
 }
 $('#testBtn').onclick = async () => {
   const f = $('#camForm'), out = $('#testOut'); out.textContent = t('Connecting…'); out.className = 'muted';
