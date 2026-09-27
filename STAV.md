@@ -38,9 +38,10 @@ Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (
 
 ## Poznámka k prostrediu
 
-- Lokálna testovacia DB: PostgreSQL 16 na porte 5433 (rola `ctrl32`, dáta `/var/lib/pgtest/data`), po reštarte kontajnera ho
-  treba znova spustiť (`su postgres -c "pg_ctl -D /var/lib/pgtest/data -o '-p 5433 -k /tmp' -l /var/lib/pgtest/log start"`);
-  test zálohy potrebuje aj systémový klaster na 5432 (`pg_ctlcluster 16 main start`). Povolenie od používateľa: 26. 9. 2026.
+- Vývoj na PC: `ctrl32-telemetry/deploy/dev/README.md` — `bash deploy/dev/dev.sh up` (PostgreSQL 18 v Dockeri na porte
+  5433, databáza `ctrl32_dev`, server na http://127.0.0.1:8080, admin / admin1234), `camsim` (simulované kamery),
+  `demo` (40 kamier, 2 steny, výroba, pôdorys). Lokálne dáta v `ctrl32-telemetry/.dev/` (mimo gitu).
+- Celá sada testov: `bash tests/run-all.sh` (porty 8080, 1883, 1884 voľné; `SKIP="ops"`, keď je NTP blokované).
 
 ## Rozhodnutia
 
