@@ -7,7 +7,8 @@ package httpapi
 //
 //	GET    /api/v1/server/license   system.admin: installed license and whether it is valid on this server
 //	PUT    /api/v1/server/license   system.admin: {"token","reason"} installs a license issued with tools/licgen
-//	DELETE /api/v1/server/license   system.admin: ?reason=… removes it
+//	DELETE /api/v1/server/license   system.admin: ?reason=… removes it (and the stored order number)
+//	POST   /api/v1/server/license/activate|renew   online activation with the order number (license_activation.go)
 //	GET    /api/v1/branding/icon    public: the browser icon (white label icon, else the default)
 //	GET    /manifest.webmanifest    public: PWA manifest with the product name
 
@@ -203,8 +204,14 @@ func (s *Server) licenseJSON(ctx context.Context) map[string]any {
 			out["problem"] = c.Problem
 		}
 		out["installed_at"], out["installed_by"] = st.installedAt, st.installedBy
+		out["online"] = st.lic.Online() // a 30-day license of the online activation, renewed automatically
 	}
 	out["white_label"] = st.lic.Has(license.WhiteLabel, s.licenseHost(), time.Now())
+	out["buy_url"], out["activation_host"] = s.cfg.License.BuyURL, s.activationHost()
+	if a, err := s.loadActivation(ctx); err == nil && a != nil {
+		out["activation"] = a
+		out["auto_renew"] = !a.Refused && st.lic != nil && !st.lic.Perpetual()
+	}
 	return out
 }
 
@@ -242,12 +249,10 @@ func (s *Server) putLicense(w http.ResponseWriter, r *http.Request) {
 		by = p.Username
 	}
 	old := s.licenseJSON(r.Context())
-	if _, err := s.pool.Exec(r.Context(), `INSERT INTO core.product_license (id, token, installed_at, installed_by) VALUES (1, $1, now(), $2)
-		ON CONFLICT (id) DO UPDATE SET token = EXCLUDED.token, installed_at = now(), installed_by = EXCLUDED.installed_by`, in.Token, by); err != nil {
+	if err := s.storeLicense(r.Context(), in.Token, by); err != nil {
 		writeErr(w, 500, "license not stored")
 		return
 	}
-	s.dropLicenseCache()
 	now := s.licenseJSON(r.Context())
 	s.audit(r, "license.install", "license", l.ID, auditLicense(old), auditLicense(now), in.Reason)
 	writeJSON(w, 200, now)
@@ -263,6 +268,10 @@ func (s *Server) deleteLicense(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.pool.Exec(r.Context(), `DELETE FROM core.product_license WHERE id = 1`); err != nil {
 		writeErr(w, 500, "license not removed")
 		return
+	}
+	// the stored order number goes too: nothing is renewed for a removed license
+	if _, err := s.pool.Exec(r.Context(), `DELETE FROM core.license_activation WHERE id = 1`); err != nil {
+		s.log.Error("license activation not removed", "err", err)
 	}
 	s.dropLicenseCache()
 	id, _ := old["id"].(string)

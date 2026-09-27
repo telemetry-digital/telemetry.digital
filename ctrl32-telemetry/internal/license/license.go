@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -40,6 +41,8 @@ type License struct {
 var (
 	ErrFormat    = errors.New("not a ctrl32 license token")
 	ErrSignature = errors.New("license signature is not valid (not issued by the licensor or changed)")
+	// ErrOnlineTerm: a token of an online key without an expiry, or valid longer than the key allows.
+	ErrOnlineTerm = errors.New("license signed with the online activation key must expire within its limit")
 )
 
 //go:embed trusted
@@ -47,12 +50,54 @@ var trustedFS embed.FS
 
 // extraKey is a base64 Ed25519 public key added at build time for test builds only
 // (go build -ldflags "-X github.com/telemetry-digital/ctrl32-telemetry/internal/license.extraKey=…"); release builds
-// leave it empty.
-var extraKey string
+// leave it empty. extraOnlineKey is the same for a test ONLINE key (key id "build-online", max-days 31), so the tests
+// can prove the limit of online keys end to end.
+var extraKey, extraOnlineKey string
 
-// TrustedKeys returns the public keys licenses are verified with.
-func TrustedKeys() map[string]ed25519.PublicKey {
-	out := map[string]ed25519.PublicKey{}
+// OnlineMaxDays is the limit of the online key of the licence worker (lic.ctrl32.com): its licenses run 30 days.
+const OnlineMaxDays = 31
+
+// KeyFile is one trusted key file: the base64 public key and optional "# max-days: N" line. A key with a max-days
+// limit is an ONLINE key (held by the licence worker): a token it signed is accepted only with an expiry at most N days
+// after its issue date, so a stolen online key can never issue a perpetual license. The master key has no limit.
+type KeyFile struct {
+	Key     ed25519.PublicKey
+	MaxDays int // 0 = no limit
+}
+
+// ParseKeyFile reads a trusted key file (.pub).
+func ParseKeyFile(b []byte) (KeyFile, error) {
+	var kf KeyFile
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "#") {
+			if v, ok := strings.CutPrefix(strings.TrimSpace(strings.TrimPrefix(line, "#")), "max-days:"); ok {
+				n, err := strconv.Atoi(strings.TrimSpace(v))
+				if err != nil || n <= 0 {
+					return kf, fmt.Errorf("bad max-days line %q", line)
+				}
+				kf.MaxDays = n
+			}
+			continue
+		}
+		k, err := ParsePublicKey(line)
+		if err != nil {
+			return kf, err
+		}
+		kf.Key = k
+	}
+	if kf.Key == nil {
+		return kf, errors.New("no public key in the file")
+	}
+	return kf, nil
+}
+
+// trusted returns the embedded key files by key id (file name without .pub) plus the build-time test keys.
+func trusted() map[string]KeyFile {
+	out := map[string]KeyFile{}
 	entries, _ := trustedFS.ReadDir("trusted")
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".pub") {
@@ -62,22 +107,51 @@ func TrustedKeys() map[string]ed25519.PublicKey {
 		if err != nil {
 			continue
 		}
-		for _, line := range strings.Split(string(b), "\n") {
-			line = strings.TrimSpace(line)
-			if line == "" || strings.HasPrefix(line, "#") {
-				continue
-			}
-			if k, err := ParsePublicKey(line); err == nil {
-				out[strings.TrimSuffix(e.Name(), ".pub")] = k
-			}
+		if kf, err := ParseKeyFile(b); err == nil {
+			out[strings.TrimSuffix(e.Name(), ".pub")] = kf
 		}
 	}
 	if extraKey != "" {
 		if k, err := ParsePublicKey(extraKey); err == nil {
-			out["build"] = k
+			out["build"] = KeyFile{Key: k}
+		}
+	}
+	if extraOnlineKey != "" {
+		if k, err := ParsePublicKey(extraOnlineKey); err == nil {
+			out["build-online"] = KeyFile{Key: k, MaxDays: OnlineMaxDays}
 		}
 	}
 	return out
+}
+
+// TrustedKeys returns the public keys licenses are verified with.
+func TrustedKeys() map[string]ed25519.PublicKey {
+	out := map[string]ed25519.PublicKey{}
+	for id, kf := range trusted() {
+		out[id] = kf.Key
+	}
+	return out
+}
+
+// KeyLimits returns the max-days limit of each trusted online key (keys without a limit are absent).
+func KeyLimits() map[string]int {
+	out := map[string]int{}
+	for id, kf := range trusted() {
+		if kf.MaxDays > 0 {
+			out[id] = kf.MaxDays
+		}
+	}
+	return out
+}
+
+// Online reports whether the license was verified by an online key (a renewable 30-day license of the licence
+// worker) rather than the master key.
+func (l *License) Online() bool {
+	if l == nil {
+		return false
+	}
+	_, ok := KeyLimits()[l.KeyID]
+	return ok
 }
 
 // ParsePublicKey decodes a base64 (standard or URL) Ed25519 public key.
@@ -108,9 +182,29 @@ func Sign(l License, key ed25519.PrivateKey) (string, error) {
 	return body + "." + base64.RawURLEncoding.EncodeToString(ed25519.Sign(key, []byte(body))), nil
 }
 
-// Parse verifies a token with the given keys (TrustedKeys() in the server) and returns its payload. Expiry and
-// domains are not checked here; see Check.
+// Parse verifies a token with the given keys (TrustedKeys() in the server) and returns its payload; the max-days
+// limits of the trusted online keys (KeyLimits) apply to keys of the same id. Expiry and domains are not checked here;
+// see Check.
 func Parse(token string, keys map[string]ed25519.PublicKey) (*License, error) {
+	return ParseLimited(token, keys, KeyLimits())
+}
+
+// ParseLimited is Parse with explicit max-days limits by key id: a token verified by a key with a limit must carry an
+// issue date and an expiry at most that many days later.
+func ParseLimited(token string, keys map[string]ed25519.PublicKey, limits map[string]int) (*License, error) {
+	l, err := parse(token, keys)
+	if err != nil {
+		return nil, err
+	}
+	if d := limits[l.KeyID]; d > 0 {
+		if l.Issued.IsZero() || l.Expires.IsZero() || l.Expires.Sub(l.Issued) > time.Duration(d)*24*time.Hour {
+			return nil, fmt.Errorf("%w (%d days)", ErrOnlineTerm, d)
+		}
+	}
+	return l, nil
+}
+
+func parse(token string, keys map[string]ed25519.PublicKey) (*License, error) {
 	token = strings.Join(strings.Fields(token), "") // pasted tokens may be wrapped
 	if !strings.HasPrefix(token, prefix) || len(token) > 8192 {
 		return nil, ErrFormat

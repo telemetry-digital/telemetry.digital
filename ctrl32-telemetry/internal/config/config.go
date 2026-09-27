@@ -5,6 +5,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -31,7 +32,21 @@ type Config struct {
 	Map      MapConfig      `toml:"map"`
 	Time     TimeConfig     `toml:"time"`
 	Video    VideoConfig    `toml:"video"`
+	License  LicenseConfig  `toml:"license"`
 }
+
+// LicenseConfig is the online activation of the white-label license (spec 007): the server sends the order number and
+// its host name to the licence worker and installs the license it returns.
+type LicenseConfig struct {
+	ActivationURL string `toml:"activation_url"` // default https://lic.ctrl32.com/telemetry/activate; https, or http to loopback (tests)
+	BuyURL        string `toml:"buy_url"`        // where the "Buy" link points; default https://ctrl32.com/pricing/
+}
+
+// Default license URLs.
+const (
+	DefaultActivationURL = "https://lic.ctrl32.com/telemetry/activate"
+	DefaultBuyURL        = "https://ctrl32.com/pricing/"
+)
 
 // VideoConfig locates camera recordings (spec 010).
 type VideoConfig struct {
@@ -200,6 +215,7 @@ func (c *Config) applyEnv() {
 	set("SECURITY_SECRET_KEY", &c.Security.SecretKey)
 	set("REPORT_TYPST_PATH", &c.Report.TypstPath)
 	set("REPORT_STORAGE_DIR", &c.Report.StorageDir)
+	set("LICENSE_ACTIVATION_URL", &c.License.ActivationURL)
 	if v, ok := os.LookupEnv("CTRL32_HTTP_PUBLIC_READ"); ok {
 		c.HTTP.PublicRead, _ = strconv.ParseBool(v)
 	}
@@ -271,6 +287,15 @@ func (c *Config) Validate() error {
 	if c.Video.MaxDiskGB <= 0 {
 		c.Video.MaxDiskGB = 50
 	}
+	if c.License.ActivationURL == "" {
+		c.License.ActivationURL = DefaultActivationURL
+	}
+	if c.License.BuyURL == "" {
+		c.License.BuyURL = DefaultBuyURL
+	}
+	if err := checkLicenseURLs(c.License); err != nil {
+		return err
+	}
 	if c.FOTA.MaxSizeMB <= 0 {
 		c.FOTA.MaxSizeMB = 16
 	}
@@ -294,4 +319,23 @@ func (c *Config) MQTTTLSFiles() (cert, key string) {
 
 func isLoopback(addr string) bool {
 	return strings.HasPrefix(addr, "127.") || strings.HasPrefix(addr, "localhost:") || strings.HasPrefix(addr, "[::1]:")
+}
+
+// checkLicenseURLs: the activation service is reached over https (a plain http URL only on the loopback interface,
+// for tests); the buy link is an http(s) URL.
+func checkLicenseURLs(l LicenseConfig) error {
+	u, err := url.Parse(l.ActivationURL)
+	if err != nil || u.Host == "" {
+		return fmt.Errorf("license.activation_url: not a URL: %q", l.ActivationURL)
+	}
+	h := u.Hostname()
+	loop := h == "localhost" || h == "::1" || strings.HasPrefix(h, "127.")
+	if u.Scheme != "https" && !(u.Scheme == "http" && loop) {
+		return errors.New("license.activation_url must be https:// (http:// only to 127.0.0.1 or localhost)")
+	}
+	b, err := url.Parse(l.BuyURL)
+	if err != nil || b.Host == "" || (b.Scheme != "https" && b.Scheme != "http") {
+		return fmt.Errorf("license.buy_url: not an http(s) URL: %q", l.BuyURL)
+	}
+	return nil
 }

@@ -67,6 +67,13 @@ secret_key = "REPLACE-WITH-RANDOM-32-CHARS"
 # push_tls_key = ""
 # push_host = "telemetry.example.com"   # name the relays connect to; default the host of http.base_url
 
+[license]
+# White labeling is unlocked by the ctrl32 licence bought on ctrl32.com (39 EUR, once; it unlocks either the ctrl32
+# editor or white labeling on one server). System → License → "Activate with the order number" sends the order number
+# and the host name of http.base_url to the licence service and installs the license it returns (docs/whitelabel.md).
+# activation_url = "https://lic.ctrl32.com/telemetry/activate"   # https only (http just to 127.0.0.1 for tests)
+# buy_url = "https://ctrl32.com/pricing/"
+
 [fota]
 # Uploaded firmware images (records; devices download them with their own token, Range supported).
 # storage_dir = "/var/lib/ctrl32-telemetry/firmware"

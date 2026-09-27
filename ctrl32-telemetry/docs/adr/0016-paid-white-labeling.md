@@ -38,6 +38,30 @@ ADR-0002 made everything free; the `LICENSE` required the footer to stay unchang
    `tests/keys/license-test.*` is public and trusted only by test builds (`-ldflags -X …extraKey=`); release builds
    (`deploy/publish.sh`) do not trust it.
 
+## Amendment 27 Sep 2026 (evening): online activation through lic.ctrl32.com (0.59.0)
+
+User decisions: white labeling is sold on ctrl32.com through Paddle exactly like the ctrl32 editor licence, and it is
+**the same product**: one ctrl32 licence (39 EUR, once, perpetual) unlocks **either** the ctrl32 editor **or** white
+labeling on one telemetry server — the product it is first activated for claims the order.
+
+9. **Activation with the order number.** System → License sends the order number and the host name of `http.base_url`
+   to the licence worker (`license.activation_url`, default `https://lic.ctrl32.com/telemetry/activate`) and
+   installs the returned token after verifying it like a pasted one. This is the one exception to "no phone-home" in
+   decision 4, and it is initiated by the administrator; the offline path (a pasted key) stays for isolated networks.
+10. **Two keys, the editor's safety model.** Inside the 14-day refund window the worker signs a **30-day** license with
+    the **online key** `telemetry-online-2026` (worker secret). Its trusted key file declares `# max-days: 31`: the
+    binary rejects any token of that key without an expiry or valid longer than 31 days after issue, so a compromised
+    worker or Cloudflare account can issue only 30-day licenses until the key is rotated. **Perpetual** licenses are
+    minted offline with the **master key** `telemetry-digital-2026` (`licgen batch` on the licensor's PC, from the
+    worker's queue) and returned by the next activation. Refunded orders get nothing; queued mints of a refunded order
+    are dropped before they reach the master key.
+11. **Automatic renewal.** The server stores the order number and asks the worker once a day while its license expires
+    within 20 days (never replacing a perpetual license, never shortening one); a refusal (refunded, claimed by the
+    editor, host limit) stops it and is shown on the License page. Removing the license forgets the order number.
+12. **Limits in the worker**: two host names per order (a known one is always allowed again), up to six re-issued
+    30-day licenses while the perpetual one is pending, one product per order (`claim:<order>`, older editor
+    activations count as editor claims).
+
 ## Consequences
 
 - Ordering and invoicing (39 EUR) happen outside the software; the licensor issues the key with `licgen` and sends it

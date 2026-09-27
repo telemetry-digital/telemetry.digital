@@ -1,0 +1,26 @@
+meta {
+  name: Activate the license with an order number
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/v1/server/license/activate
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "order": "string",
+    "reason": "string"
+  }
+}
+
+docs {
+  Activate the license with an order number
+  
+  Sends the order number of the ctrl32 licence (bought on ctrl32.com; it unlocks either the ctrl32 editor or white labeling on one server) and the host name of http.base_url to the licence service (license.activation_url), verifies the license it returns and installs it. Inside the 14-day refund period the license runs 30 days and is renewed daily while it expires within 20 days; afterwards the perpetual license is returned. 409 = refused by the service (refunded, used for the editor, server limit) or a perpetual license is already installed; 502 = the service is not reachable or its answer was not accepted.
+  
+  Requires permission `system.admin`.
+}

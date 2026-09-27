@@ -16,7 +16,7 @@
 #   SKIP          space-separated suite names to skip, e.g. SKIP="ops" where NTP (udp/123) is blocked
 #   CHROME        browser for the headless probes (default: first Chrome/Chromium found)
 #   KEEP=1        leave the server running afterwards
-# Ports 8080 (HTTP), 1883 and 1884 (MQTT) must be free: the suites assume them.
+# Ports 8080 (HTTP), 1883 and 1884 (MQTT) and 18790 (the stand-in licence service of whitelabel.sh) must be free.
 set -u
 cd "$(dirname "$0")/.."
 ROOT=$PWD
@@ -96,9 +96,10 @@ fi
 
 mkdir -p "$WORK/bin" "$WORK/reports" "$WORK/firmware"
 BIN=$WORK/bin/ctrl32-telemetry
-# test builds trust the test license key (tests/keys/README.md); release builds do not
+# test builds trust the test license keys (tests/keys/README.md); release builds do not
 LICKEY=$(grep -v '^#' tests/keys/license-test.pub | tr -d '[:space:]')
-go build -ldflags "-X github.com/telemetry-digital/ctrl32-telemetry/internal/license.extraKey=$LICKEY" -o "$BIN" ./cmd/ctrl32-telemetry || exit 2
+LICONLINE=$(grep -v '^#' tests/keys/license-online-test.pub | tr -d '[:space:]')
+go build -ldflags "-X github.com/telemetry-digital/ctrl32-telemetry/internal/license.extraKey=$LICKEY -X github.com/telemetry-digital/ctrl32-telemetry/internal/license.extraOnlineKey=$LICONLINE" -o "$BIN" ./cmd/ctrl32-telemetry || exit 2
 go run ./tools/pmtilesgen -o "$WORK/bin/sample.pmtiles" -maxzoom 4 > /dev/null || exit 2
 CONFIG=$WORK/config.toml
 APP_PW=e2e-app-$RANDOM$RANDOM
@@ -109,6 +110,7 @@ sed -e "s|^url = .*|url = \"$(db_url ctrl32_app "$APP_PW" "$TEST_DB")\"|" \
     -e "s|^\[report\]$|[report]\nstorage_dir = \"$WORK/reports\"|" \
     -e "s|^\[fota\]$|[fota]\nstorage_dir = \"$WORK/firmware\"|" \
     -e "s|^\[video\]$|[video]\npush_listen = \"127.0.0.1:18322\"|" \
+    -e "s|^\[license\]$|[license]\nactivation_url = \"http://127.0.0.1:18790/telemetry/activate\"|" \
     -e "s|^\[map\]$|[map]\npmtiles = \"$WORK/bin/sample.pmtiles\"\nattribution = \"sample tiles (e2e)\"|" \
     config.example.toml > "$CONFIG"
 

@@ -7,6 +7,8 @@
 //	                                                           perpetual white_label license (the default: 39 EUR,
 //	                                                           one-time); -days N or -expires YYYY-MM-DD set an expiry
 //	licgen show -token c32l1.… [-pub file.pub]                 prints the payload (and verifies it with -pub)
+//	licgen batch [-apply] [-url https://lic.ctrl32.com]         mints the perpetual licenses the licence worker queued
+//	             [-token-file …worker-token.txt] [-key …]     for activated orders past the refund period (batch.go)
 //
 // Keep the private key offline; whoever has it can issue licenses.
 package main
@@ -28,7 +30,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: licgen keygen|issue|show [flags]")
+		fmt.Fprintln(os.Stderr, "usage: licgen keygen|issue|show|batch [flags]")
 		os.Exit(2)
 	}
 	var err error
@@ -39,6 +41,8 @@ func main() {
 		err = issue(os.Args[2:])
 	case "show":
 		err = show(os.Args[2:])
+	case "batch":
+		err = batch(os.Args[2:])
 	default:
 		err = fmt.Errorf("unknown command %q", os.Args[1])
 	}
@@ -153,20 +157,20 @@ func show(args []string) error {
 	tok := fs.String("token", "", "license token")
 	pubFile := fs.String("pub", "", "public key file to verify with (default: the keys built into this binary)")
 	_ = fs.Parse(args)
-	keys := license.TrustedKeys()
+	keys, limits := license.TrustedKeys(), license.KeyLimits()
 	if *pubFile != "" {
 		b, err := os.ReadFile(*pubFile)
 		if err != nil {
 			return err
 		}
-		keys = map[string]ed25519.PublicKey{}
-		for _, line := range strings.Split(string(b), "\n") {
-			if k, err := license.ParsePublicKey(line); err == nil && !strings.HasPrefix(strings.TrimSpace(line), "#") {
-				keys[filepath.Base(*pubFile)] = k
-			}
+		kf, err := license.ParseKeyFile(b)
+		if err != nil {
+			return fmt.Errorf("%s: %w", *pubFile, err)
 		}
+		id := filepath.Base(*pubFile)
+		keys, limits = map[string]ed25519.PublicKey{id: kf.Key}, map[string]int{id: kf.MaxDays} // honours "# max-days: N"
 	}
-	l, err := license.Parse(*tok, keys)
+	l, err := license.ParseLimited(*tok, keys, limits)
 	if err != nil {
 		return err
 	}

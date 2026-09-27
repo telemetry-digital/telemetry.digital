@@ -26,6 +26,7 @@
 | 0.56.0 | Zvuk len naživo — počúvanie bez nahrávania (šetrí disk), odhad miesta vo formulári | e2e 140 |
 | 0.57.0 | Platený white labeling (39 EUR jednorazovo, navždy): trvalé licenčné kľúče overované offline (Ed25519, `licgen` predvolene bez vypršania), produkčný kľúč licencora v binárke, Systém → Licencia („navždy“), vlastný názov produktu, pätička, ikona, názov aplikácie, úvod, e-maily, 2FA, PDF; bez licencie pevná pätička ctrl32; migrácia 0039 (vetva `feature/paid-white-label`, spec 007, ADR-0016) | e2e 34, unit |
 | 0.58.0 | Kamery za prenášačom: PTZ, predvoľby, udalosti ONVIF a „Vyplniť z ONVIF“ cez prenášač (tunel cez webový port HTTPS, dlhé dotazovanie, tajomstvo kamery, prenášač dosiahne len `onvif` pôvod z `relay.toml`, cesty `/onvif/`, 1 MiB, 10 s); prenášač posiela aj zvuk G.711 (Tapo); informácie o prúde (kodek, rozmer, fps, kbit/s hlavného aj vedľajšieho prúdu) na stránke kamery, prekrytie v prehrávači, dlaždice, widget; `relay.toml`: `web`, `onvif`; doplnok HA: `web`, `audio`, `onvif` (vetva `feature/relay-onvif`, URS P-27, P-28) | e2e `video` 167 (27 nových; na Windows PC 158/167, 9 zlyhaní nesúvisí — čas +02:00 v URL, `python3`), `displays` 78, `masks` 20, unit (8 nových), headless `camera_relay` |
+| 0.59.0 | Online aktivácia white labelingu číslom objednávky (vetva `feature/license-activation`): licencia ctrl32 z ctrl32.com (39 EUR, Paddle) odomkne **buď** editor ctrl32, **alebo** white labeling na jednom serveri; Systém → Licencia → „Aktivácia číslom objednávky“ pošle číslo a názov servera na `lic.ctrl32.com/telemetry/activate`, v lehote na vrátenie 30-dňová licencia z online kľúča (`telemetry-online-2026`, binárka ho prijme najviac na 31 dní), potom trvalá z hlavného kľúča; denné automatické obnovovanie (zastaví ho odmietnutie), „Obnoviť teraz“, odkaz „Kúpiť“; `licgen batch` (fronta workera → trvalé licencie → /telemetry/minted); config `[license]`; migrácia 0040; licenčný worker v repozitári ctrl32 (`server/lic-worker`, trasy `/telemetry/*`, jedna objednávka = jeden produkt) — **nenasadený** | e2e whitelabel 72, unit, worker 56 + 24 |
 
 Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (`tests/run-all.sh`) pre 0.54.0 (27. 9. 2026): všetko prešlo okrem 3 kontrol času NTP v `ops`, ktoré potrebujú internet (v tomto kontajneri nedostupný) — nesúvisí s kódom.
 
@@ -58,10 +59,13 @@ Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (
   relay“): obraz, nahrávanie v slučke (limit 15 GB), zvuk G.711 len naživo, PTZ cez tunel (predvoľby C210 načítané).
   Používateľ má ešte vyskúšať PTZ a zvuk v prehliadači. Prenášač presunúť na Raspberry Pi (192.168.0.53) po nahratí
   Raspberry Pi OS Lite (bez Home Assistanta; SSH alias `ctrl32-relay`, kľúč `~/.ssh/telemetry_relay_rpi`).
-- white labeling (39 EUR; jedna licencia ctrl32 odomkne buď editor, alebo telemetry): aktivácia číslom objednávky
-  cez `lic.ctrl32.com` (vetva `feature/license-activation` + `server/lic-worker` v repe ctrl32, rozpracované);
-  súkromné kľúče licencora v `C:\Users\PavolKRNÁČ\.ctrl32-license\` zálohovať offline (nikdy nie do repozitára);
-  právna kontrola výnimky v podmienke 2 `LICENSE`
+- white labeling (39 EUR; jedna licencia ctrl32 odomkne buď editor, alebo telemetry), online aktivácia 0.59.0:
+  worker `server/lic-worker` v repozitári ctrl32 (secret `TELEMETRY_KEY_SEED` z
+  `C:\Users\PavolKRNÁČ\.ctrl32-license\telemetry-online-2026.key`, `wrangler deploy`); súkromné kľúče licencora
+  (`telemetry-digital-2026.key`, `telemetry-online-2026.key`) zálohovať offline, nikdy nie do repozitára; na ctrl32.com
+  uviesť, že licencia odomkne editor alebo white labeling; odkaz „Kúpiť“ (`license.buy_url`) zmeniť na adresu košíka;
+  trvalé licencie raz za čas: `go run ./tools/licgen batch -apply`; právna kontrola výnimky v podmienke 2 `LICENSE`.
+  Známa chyba editora (mimo telemetry): refund webhook označí len `ordr:<txn>`, alias z portálu ostane „zaplatený“.
 - nasadenie: `deploy/publish.sh VERSION root@2.29.5.17 -i ~/.ssh/telemetry_deploy`, potom na serveri záloha,
   `migrate` novou binárkou a až potom výmena a reštart (poučenie z 27. 9.: 0016 CRLF a výpadok prihlasovania)
 - potvrdenie ADR-0015 (SCADA editor v čistom JS nad SVG)

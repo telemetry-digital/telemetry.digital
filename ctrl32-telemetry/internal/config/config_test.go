@@ -37,3 +37,30 @@ func TestPushListenerNeedsTLSOnInternet(t *testing.T) {
 		t.Fatalf("video defaults %+v", c.Video)
 	}
 }
+
+// The activation service gets the order number: https only, plain http just to the loopback interface (tests).
+func TestLicenseURLs(t *testing.T) {
+	c := base()
+	if err := c.Validate(); err != nil || c.License.ActivationURL != DefaultActivationURL || c.License.BuyURL != DefaultBuyURL {
+		t.Fatalf("defaults %+v %v", c.License, err)
+	}
+	for u, good := range map[string]bool{
+		"https://lic.example.com/telemetry/activate": true,
+		"http://127.0.0.1:18790/telemetry/activate":  true,
+		"http://localhost:1/x":                       true,
+		"http://lic.example.com/telemetry/activate":  false,
+		"ftp://lic.example.com/":                     false,
+		"lic.example.com":                            false,
+	} {
+		c := base()
+		c.License.ActivationURL = u
+		if err := c.Validate(); (err == nil) != good {
+			t.Fatalf("%s: %v", u, err)
+		}
+	}
+	c = base()
+	c.License.BuyURL = "javascript:alert(1)"
+	if err := c.Validate(); err == nil {
+		t.Fatal("script buy link accepted")
+	}
+}
