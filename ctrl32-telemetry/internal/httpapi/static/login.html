@@ -48,7 +48,7 @@
 <script>
 const $=s=>document.querySelector(s), f=$('#f'), err=$('#err');
 let pre=null, csrf=null, mode='login';
-ctrl32.ready().then(({me}) => { if(me && !me.must_change_password && !(me.mfa_required && !me.mfa_enabled)) location.href='/'; });
+ctrl32.ready().then(({me}) => { if(me && !me.must_change_password && !(me.mfa_required && !me.mfa_enabled)) location.href=ctrl32.home(); });
 async function post(u,b){ const h={'Content-Type':'application/json'}; if(csrf) h['X-CSRF-Token']=csrf; const r=await fetch(u,{method:'POST',headers:h,body:JSON.stringify(b),credentials:'same-origin'}); const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||r.status); return j; }
 async function me(){ const r=await fetch('/api/v1/auth/me',{credentials:'same-origin'}); if(!r.ok) return null; return r.json(); }
 function show(step,hint,btn){ for(const s of ['step1','step2','step3','step4']) $('#'+s).hidden = s!==step; $('#hint').textContent=hint; $('#btn').textContent=btn; $('#links').hidden = step!=='step1'; err.textContent=''; }
@@ -57,13 +57,13 @@ async function afterLogin(){
   csrf=m.csrf_token;
   if(m.must_change_password){ mode='pw'; show('step3','Please set a new password.','Save password'); return; }
   if(m.mfa_required && !m.mfa_enabled){ mode='mfa-setup'; const s=await post('/api/v1/auth/totp/setup',{}); $('#otpqr').src=s.qr; $('#otpsecret').textContent=s.secret; show('step4','Two-factor setup','Confirm code'); return; }
-  location.href='/';
+  location.href=ctrl32.home();
 }
 f.onsubmit=async e=>{ e.preventDefault(); const d=Object.fromEntries(new FormData(f)); err.textContent=''; try{
   if(mode==='login'){ const r=await post('/api/v1/auth/login',{username:d.username,password:d.password}); if(r.mfa_required){ pre=r.pre_auth_token; mode='mfa'; show('step2','Enter the code from your authenticator app.','Verify'); return; } await afterLogin(); }
   else if(mode==='mfa'){ await post('/api/v1/auth/mfa',{pre_auth_token:pre,code:d.code}); await afterLogin(); }
   else if(mode==='pw'){ await post('/api/v1/auth/password',{current:d.password,new:d.newpw}); location.href='/login?changed=1'; }
-  else if(mode==='mfa-setup'){ const r=await post('/api/v1/auth/totp/confirm',{code:d.totp}); alert('Recovery codes (store them safely, shown once):\n\n'+r.recovery_codes.join('\n')); location.href='/'; }
+  else if(mode==='mfa-setup'){ const r=await post('/api/v1/auth/totp/confirm',{code:d.totp}); alert('Recovery codes (store them safely, shown once):\n\n'+r.recovery_codes.join('\n')); location.href=ctrl32.home(); }
 }catch(x){ err.textContent=x.message; } };
 if(location.search.includes('changed=1')) $('#hint').textContent='Password changed. Sign in again.';
 if(location.search.includes('reset=1')) $('#hint').textContent='Password set. Sign in with the new password.';

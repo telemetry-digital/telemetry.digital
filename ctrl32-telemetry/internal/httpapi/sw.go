@@ -25,7 +25,7 @@ func (s *Server) serviceWorker(w http.ResponseWriter, r *http.Request) {
 func noStaleShell(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/app.js", "/app.css", "/manifest.webmanifest":
+		case "/app.js", "/app.css", "/manifest.webmanifest", "/app-install.js", "/settings-apps.js":
 			w.Header().Set("Cache-Control", "no-cache")
 		}
 		next.ServeHTTP(w, r)

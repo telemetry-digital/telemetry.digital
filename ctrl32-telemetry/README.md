@@ -6,7 +6,7 @@ Developer: telemetry.digital (Palo Krnáč). Revenue comes from implementation s
 
 ## Status
 
-Version **0.58.0** (27 Sep 2026; production runs 0.36.3). Development on a PC: `deploy/dev/README.md`. Phases 1–2 of the roadmap (`docs/02-navrh-systemu.md`, chapter 13) are functionally covered; the `Zdroj` column of the URS names the version and the test that fulfil each requirement. The production instance runs at `https://telemetry.digital/` (installed with the public installer, updated from the Server page). Every release has an entry in `JOURNAL.md`.
+Version **0.60.0** (27 Sep 2026; production runs 0.36.3). Development on a PC: `deploy/dev/README.md`. Phases 1–2 of the roadmap (`docs/02-navrh-systemu.md`, chapter 13) are functionally covered; the `Zdroj` column of the URS names the version and the test that fulfil each requirement. The production instance runs at `https://telemetry.digital/` (installed with the public installer, updated from the Server page). Every release has an entry in `JOURNAL.md`.
 
 ## What it does
 
@@ -23,7 +23,7 @@ Version **0.58.0** (27 Sep 2026; production runs 0.36.3). Development on a PC: `
 - **Evaluation:** alarm rules with escalation policies and delivery records (e-mail, HMAC-signed webhooks, HTTP SMS and voice gateways, Web Push), automation rules "condition → action" with an expression language, commands to devices with four-eyes approval, change requests for limits and assignments, an incident log with impact, cause and CAPA (opened automatically for undelivered alarms and a broken audit chain).
 - **Presentation:** dashboards as a versioned screen format (20 widget types, live values over SSE, public read-only links with QR), ISA-101 process mimics on a free canvas, maps with the organization's tiles or a self-hosted PMTiles archive, PDF reports and exports rendered with Typst from block-designed templates.
 - **Devices:** FOTA with author-signed images and staged campaigns, remote console as a channel into the firmware, C client library with Arduino and ESP-IDF ports (`ctrl32-telemetry-c`).
-- **Operation:** organizations as tenants, roles and permissions, TOTP MFA, self-service registration with approval, security policies, 19 language catalogs editable in the UI, branding and themes, PWA. The Server page manages the host through a privileged agent: restart, Caddy with automatic HTTPS, WireGuard, encrypted backups with schedule and restore notes, updates verified by SHA-256 (Linux and Windows).
+- **Operation:** organizations as tenants, roles and permissions, TOTP MFA, self-service registration with approval, security policies, 19 language catalogs editable in the UI, branding and themes, PWA with own installable apps per organization (e.g. a phone app with only the cameras, `docs/pwa.md`). The Server page manages the host through a privileged agent: restart, Caddy with automatic HTTPS, WireGuard, encrypted backups with schedule and restore notes, updates verified by SHA-256 (Linux and Windows).
 - **API first:** everything the UI does is `/api/v1` with an OpenAPI 3.1 description (`/api/docs`), a generated TypeScript client and a Bruno collection (`clients/`).
 - **Operations evidence:** `/healthz`, Prometheus `/metrics` (data completeness, alarm latency, queues, NTP, audit chain), syslog forwarding, an NTP clock check, `security.txt`, and a CycloneDX SBOM with a `govulncheck` result published with every release.
 

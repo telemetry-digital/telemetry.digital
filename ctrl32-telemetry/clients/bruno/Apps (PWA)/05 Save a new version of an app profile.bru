@@ -1,0 +1,38 @@
+meta {
+  name: Save a new version of an app profile
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{baseUrl}}/api/v1/pwa-apps/:slug
+  body: json
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+body:json {
+  {
+    "enabled": true,
+    "name": "string",
+    "reason": "string",
+    "sections": [
+      "string"
+    ],
+    "short_name": "string",
+    "slug": "string",
+    "start_url": "string",
+    "theme_color": "string"
+  }
+}
+
+docs {
+  Save a new version of an app profile
+  
+  The slug stays; `enabled` omitted keeps the current state.
+  
+  Requires permission `content.write`.
+}
