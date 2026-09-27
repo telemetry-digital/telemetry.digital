@@ -222,6 +222,27 @@ func (c *Client) sync(ctx context.Context) {
 	c.mu.Unlock()
 }
 
+// DateTime asks the camera for its clock (GetSystemDateAndTime needs no authentication); the relay's self-check uses
+// it to prove that the camera's ONVIF service answers.
+func (c *Client) DateTime(ctx context.Context) (time.Time, error) {
+	var r struct {
+		T struct {
+			UTC struct {
+				Date struct{ Year, Month, Day int }     `xml:"Date"`
+				Time struct{ Hour, Minute, Second int } `xml:"Time"`
+			} `xml:"SystemDateAndTime>UTCDateTime"`
+		} `xml:"GetSystemDateAndTimeResponse"`
+	}
+	if err := c.call(ctx, c.Device, "", `<tds:GetSystemDateAndTime/>`, &r, "", false); err != nil {
+		return time.Time{}, err
+	}
+	d, t := r.T.UTC.Date, r.T.UTC.Time
+	if d.Year < 2000 {
+		return time.Time{}, errors.New("the camera did not report its time")
+	}
+	return time.Date(d.Year, time.Month(d.Month), d.Day, t.Hour, t.Minute, t.Second, 0, time.UTC), nil
+}
+
 // Capabilities returns the service addresses (cached).
 func (c *Client) Capabilities(ctx context.Context) (*Capabilities, error) {
 	c.mu.Lock()

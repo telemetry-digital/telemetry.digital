@@ -88,21 +88,41 @@ func (s *Server) onvifProfiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pw := ""
-	if in.Password != nil {
-		pw = *in.Password
-	} else if in.ID != "" && s.video != nil {
+	cl := &onvif.Client{Device: u.String(), Username: in.Username}
+	if in.ID != "" && s.video != nil {
 		if c, ok := s.cameraRow(r.Context(), org, in.ID); ok {
-			pw = s.video.OpenPassword(c.sealed)
+			if in.Password == nil {
+				pw = s.video.OpenPassword(c.sealed)
+			}
+			if c.source == "push" {
+				// a camera behind a relay is reached through its relay (only while the relay is connected)
+				hc, err := s.video.TunnelClient(c.id, u.String())
+				if err != nil {
+					writeErr(w, 400, err.Error())
+					return
+				}
+				cl.HTTP = hc
+			}
 		}
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	if in.Password != nil {
+		pw = *in.Password
+	}
+	cl.Password = pw
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
-	cl := &onvif.Client{Device: u.String(), Username: in.Username, Password: pw}
 	ps, err := cl.Profiles(ctx)
 	if err != nil {
 		code := 502
 		if errors.Is(err, onvif.ErrAuth) {
 			code = 401
+		}
+		var ue *url.Error
+		if errors.As(err, &ue) && cl.HTTP != nil {
+			err = ue.Err
+		}
+		if errors.Is(err, video.ErrRelayNotConnected) {
+			code = 409
 		}
 		writeJSON(w, code, map[string]any{"error": err.Error()})
 		return
@@ -204,12 +224,12 @@ func (s *Server) ptzPresets(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	cl, prof, err := s.video.ONVIF(ctx, c.id)
 	if err != nil {
-		writeErr(w, 409, err.Error())
+		onvifErr(w, 409, err)
 		return
 	}
 	ps, err := cl.Presets(ctx, prof)
 	if err != nil {
-		writeErr(w, 502, err.Error())
+		onvifErr(w, 502, err)
 		return
 	}
 	writeJSON(w, 200, ps)
@@ -240,7 +260,7 @@ func (s *Server) cameraPTZ(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	cl, prof, err := s.video.ONVIF(ctx, c.id)
 	if err != nil {
-		writeErr(w, 409, err.Error())
+		onvifErr(w, 409, err)
 		return
 	}
 	p := PrincipalFrom(r.Context())
@@ -271,10 +291,22 @@ func (s *Server) cameraPTZ(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeErr(w, 502, err.Error())
+		onvifErr(w, 502, err)
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true})
+}
+
+// onvifErr answers an ONVIF failure without the camera's address; a relay that is not connected is a conflict (409).
+func onvifErr(w http.ResponseWriter, code int, err error) {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		err = ue.Err
+	}
+	if errors.Is(err, video.ErrRelayNotConnected) {
+		code = 409
+	}
+	writeErr(w, code, err.Error())
 }
 
 // cameraEventForFlows is what the live hub carries to flows and pages.

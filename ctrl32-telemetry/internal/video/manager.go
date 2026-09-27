@@ -63,6 +63,10 @@ type Manager struct {
 	// Incidents receives health problems; set before Run.
 	Incidents Incidents
 	health    healthState
+
+	guard   authGuard          // failed relay authentications per address
+	tunnels map[string]*tunnel // ONVIF control of push cameras through their relay, by camera id
+	webURL  string             // the server's web address, for relay configurations
 }
 
 type cam struct {
@@ -271,6 +275,9 @@ func (m *Manager) Reload(ctx context.Context, id string) {
 		old.stop()
 		m.closeOpen(old, time.Now())
 	}
+	if !ok || !cfg.Push {
+		m.dropTunnel(id) // requests waiting for a relay that no longer serves this camera fail at once
+	}
 	if !ok || !cfg.Enabled {
 		return
 	}
@@ -280,6 +287,14 @@ func (m *Manager) Reload(ctx context.Context, id string) {
 	c := &cam{cfg: cfg, ev: camEvents{open: map[string]int64{}, lastClose: map[string]closed{}}}
 	if cfg.OnvifURL != "" && !cfg.Push {
 		c.onvif = &onvif.Client{Device: cfg.OnvifURL, Username: cfg.Username, Password: cfg.Password}
+	}
+	if cfg.OnvifURL != "" && cfg.Push {
+		// the camera's ONVIF address is in the remote network: every request goes through the relay (tunnel.go)
+		if hc, err := m.tunnelClient(cfg.ID, cfg.OnvifURL); err == nil {
+			c.onvif = &onvif.Client{Device: cfg.OnvifURL, Username: cfg.Username, Password: cfg.Password, HTTP: hc}
+		} else {
+			m.log.Warn("camera ONVIF address invalid", "camera", id, "err", err)
+		}
 	}
 	if cfg.Push {
 		// the relay publishes main and (optionally) sub; both sources stay ready to accept it
@@ -291,6 +306,7 @@ func (m *Manager) Reload(ctx context.Context, id string) {
 		m.mu.Lock()
 		m.cams[id] = c
 		m.mu.Unlock()
+		m.startEvents(c)
 		m.startMotion(c)
 		return
 	}
@@ -387,7 +403,15 @@ func (m *Manager) Status(id string) (Status, bool) {
 		c.ev.mu.Unlock()
 	}
 	if c.sub != nil {
-		st.Viewers += c.sub.Status().Viewers
+		ss := c.sub.Status()
+		st.Viewers += ss.Viewers
+		if ss.State == "online" || ss.Codec != "" {
+			st.Sub = &StreamInfo{State: ss.State, Codec: ss.Codec, Width: ss.Width, Height: ss.Height, FPS: ss.FPS, Kbps: ss.Kbps}
+		}
+	}
+	if c.cfg.Push && c.onvif != nil {
+		on := m.tunnelConnected(id)
+		st.OnvifRelay = &on
 	}
 	if c.rec != nil && st.Viewers > 0 {
 		st.Viewers-- // the recorder is not a viewer

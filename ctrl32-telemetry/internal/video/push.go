@@ -117,13 +117,48 @@ type PushServer struct {
 	mu       sync.Mutex
 	sessions map[*gortsplib.ServerSession]*pushConn
 	targets  map[string]*gortsplib.ServerSession // camera path → current publisher
-	fails    map[string]*failRec
+}
+
+// authGuard counts failed relay authentications per address — RTSP publishing and the ONVIF control channel alike —
+// and blocks an address that fails too often (settings push_max_fails, push_window_minutes, push_block_minutes).
+type authGuard struct {
+	mu    sync.Mutex
+	fails map[string]*failRec
 }
 
 type failRec struct {
 	n     int
 	first time.Time
 	until time.Time
+}
+
+// relayBlocked reports whether an address is blocked after too many failed relay authentications.
+func (m *Manager) relayBlocked(ip string) bool {
+	m.guard.mu.Lock()
+	defer m.guard.mu.Unlock()
+	f := m.guard.fails[ip]
+	return f != nil && time.Now().Before(f.until)
+}
+
+// relayFail counts a failed relay authentication (a security event) and blocks the address beyond the limit.
+func (m *Manager) relayFail(ip, why string) {
+	set := m.Settings() // before guard.mu: the manager's lock is never taken under it
+	g := &m.guard
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.fails == nil {
+		g.fails = map[string]*failRec{}
+	}
+	f := g.fails[ip]
+	if f == nil || time.Since(f.first) > time.Duration(set.PushWindowMinutes)*time.Minute {
+		f = &failRec{first: time.Now()}
+		g.fails[ip] = f
+	}
+	f.n++
+	if f.n >= set.PushMaxFails {
+		f.until = time.Now().Add(time.Duration(set.PushBlockMinutes) * time.Minute)
+	}
+	m.log.Warn("camera relay refused", "security", true, "remote", ip, "reason", why, "failures", f.n)
 }
 
 var pushPath = regexp.MustCompile(`^/?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(/sub)?/?$`)
@@ -133,7 +168,7 @@ func (m *Manager) StartPush(cfg PushConfig) (*PushServer, error) {
 	if cfg.Listen == "" {
 		return nil, nil
 	}
-	ps := &PushServer{m: m, log: m.log.With("part", "push"), sessions: map[*gortsplib.ServerSession]*pushConn{}, targets: map[string]*gortsplib.ServerSession{}, fails: map[string]*failRec{}}
+	ps := &PushServer{m: m, log: m.log.With("part", "push"), sessions: map[*gortsplib.ServerSession]*pushConn{}, targets: map[string]*gortsplib.ServerSession{}}
 	ps.srv = &gortsplib.Server{Handler: ps, RTSPAddress: cfg.Listen, ReadTimeout: 15 * time.Second, WriteTimeout: 10 * time.Second}
 	if cfg.TLSCert != "" && cfg.TLSKey != "" {
 		cert, err := tls.LoadX509KeyPair(cfg.TLSCert, cfg.TLSKey)
@@ -195,28 +230,9 @@ func ipOf(c *gortsplib.ServerConn) string {
 	return ""
 }
 
-func (ps *PushServer) blocked(ip string) bool {
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
-	f := ps.fails[ip]
-	return f != nil && time.Now().Before(f.until)
-}
+func (ps *PushServer) blocked(ip string) bool { return ps.m.relayBlocked(ip) }
 
-func (ps *PushServer) fail(ip, why string) {
-	set := ps.m.Settings() // before ps.mu: the manager's lock is never taken under it
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
-	f := ps.fails[ip]
-	if f == nil || time.Since(f.first) > time.Duration(set.PushWindowMinutes)*time.Minute {
-		f = &failRec{first: time.Now()}
-		ps.fails[ip] = f
-	}
-	f.n++
-	if f.n >= set.PushMaxFails {
-		f.until = time.Now().Add(time.Duration(set.PushBlockMinutes) * time.Minute)
-	}
-	ps.log.Warn("camera push refused", "security", true, "remote", ip, "reason", why, "failures", f.n)
-}
+func (ps *PushServer) fail(ip, why string) { ps.m.relayFail(ip, why) }
 
 // OnConnOpen implements gortsplib.ServerHandlerOnConnOpen: addresses with too many failed attempts are cut off.
 func (ps *PushServer) OnConnOpen(ctx *gortsplib.ServerHandlerOnConnOpenCtx) {

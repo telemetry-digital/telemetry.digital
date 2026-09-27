@@ -228,9 +228,10 @@ func (s *Server) applyCamera(in *cameraIn, c *cameraRow, pw **string) string {
 	switch c.source {
 	case "pull":
 	case "push":
-		// the relay at the site knows the camera addresses; the server keeps none
-		c.url, c.subURL, c.username, c.sealed, c.transport = "", "", "", "", "auto"
-		in.URL, in.SubURL, in.Username, in.Password, in.Transport = nil, nil, nil, nil, nil
+		// the relay at the site knows the stream addresses; the server keeps none. User name and password stay: they
+		// are the camera's ONVIF account for control through the relay (0.58.0).
+		c.url, c.subURL, c.transport = "", "", "auto"
+		in.URL, in.SubURL, in.Transport = nil, nil, nil
 	default:
 		return "source: pull or push"
 	}
@@ -287,8 +288,9 @@ func (s *Server) applyCamera(in *cameraIn, c *cameraRow, pw **string) string {
 		if u, err := url.Parse(c.onvifURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
 			return "onvif_url: http(s)://camera/onvif/device_service without credentials"
 		}
-		if c.source == "push" {
-			return "onvif_url: not for cameras that send their video through a relay"
+		if u, _ := url.Parse(c.onvifURL); c.source == "push" && (!strings.HasPrefix(u.Path, "/onvif/") || u.RawQuery != "") {
+			// reached through the relay, which forwards only paths under /onvif/ at this origin
+			return "onvif_url: the camera's address in its own network, http://CAMERA-IP:port/onvif/device_service"
 		}
 	}
 	if in.PTZProfile != nil {
@@ -408,9 +410,22 @@ func (s *Server) withSecret(out map[string]any, c cameraRow, secret string) {
 	if server == "" {
 		server = "rtsps://SERVER:8322"
 	}
+	// camera control (PTZ, presets, events) goes through the relay to the camera's ONVIF address at the site (0.58.0)
+	onvif := `# onvif = "http://CAMERA-IP:2020"`
+	if u, err := url.Parse(c.onvifURL); err == nil && c.onvifURL != "" {
+		onvif = fmt.Sprintf("onvif = %q", u.Scheme+"://"+u.Host+u.Path)
+	}
+	var b strings.Builder
+	b.WriteString("# relay.toml at the remote site — keep it private (chmod 600)\n")
+	fmt.Fprintf(&b, "server = %q\n", server)
+	fmt.Fprintf(&b, "web = %q   # the server's web address (camera control)\n", strings.TrimRight(s.cfg.HTTP.BaseURL, "/"))
+	fmt.Fprintf(&b, "\n[[camera]]\n# %s\nid = %q\nsecret = %q\n", strings.ReplaceAll(c.name, "\n", " "), c.id, secret)
+	b.WriteString(`source = "rtsp://user:password@192.168.1.64:554/stream1"   # main stream of the local camera` + "\n")
+	b.WriteString(`# sub_source = "rtsp://user:password@192.168.1.64:554/stream2"   # optional, for tiles` + "\n")
+	b.WriteString("# audio = true   # forward the camera's sound too (AAC, Opus or G.711; switch the sound on for the camera on the server as well)\n")
+	b.WriteString(onvif + "   # camera control (PTZ, presets, events) through the relay: the camera's ONVIF address in this network\n")
 	out["push_secret"] = secret
-	out["relay_config"] = fmt.Sprintf("# relay.toml at the remote site — keep it private (chmod 600)\nserver = %q\n\n[[camera]]\n# %s\nid = %q\nsecret = %q\nsource = \"rtsp://user:password@192.168.1.64:554/stream1\"   # main stream of the local camera\n# sub_source = \"rtsp://user:password@192.168.1.64:554/stream2\"   # optional, for tiles\n# audio = true   # forward the camera's sound too (AAC or Opus; switch the sound on for the camera on the server as well)\n",
-		server, strings.ReplaceAll(c.name, "\n", " "), c.id, secret)
+	out["relay_config"] = b.String()
 }
 
 // rotatePushSecret issues a new secret for a push camera; the old one stops working at once.
@@ -899,6 +914,10 @@ func (s *Server) cameraLive(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 409, "camera is disabled")
 		return
 	}
+	stream := "main" // what the player gets: a push camera without a sub-stream falls back to the main one
+	if src != s.video.Source(c.id, false) {
+		stream = "sub"
+	}
 	unmasked := s.unmasked(r, c)
 	hears := r.URL.Query().Get("quality") == "main" && s.hears(r, c) // the sound comes with the main stream
 	vc, cancel, ok := s.upgradeVideo(w, r)
@@ -925,6 +944,12 @@ func (s *Server) cameraLive(w http.ResponseWriter, r *http.Request) {
 			if st.State != lastState || st.State != "online" {
 				lastState = st.State
 				if err := vc.json(map[string]any{"type": "status", "state": st.State, "error": st.Error}); err != nil {
+					return
+				}
+			}
+			if st.State == "online" {
+				// what arrives from the camera (or its relay), for the player's stream information
+				if err := vc.json(map[string]any{"type": "stats", "stream": stream, "codec": st.Codec, "width": st.Width, "height": st.Height, "fps": st.FPS, "kbps": st.Kbps}); err != nil {
 					return
 				}
 			}

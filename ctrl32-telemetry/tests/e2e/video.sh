@@ -29,7 +29,7 @@ SUF=$RANDOM
 cat > "$TMP/ws.js" <<'EOF'
 const [url, jar, secs] = process.argv.slice(2);
 const fs = require('fs'), http = require('http'), crypto = require('crypto');
-const cookie = fs.readFileSync(jar, 'utf8').split('\n').map(l => l.replace('#HttpOnly_', '')).filter(l => l && !l.startsWith('#')).map(l => l.split('\t')).filter(p => p.length >= 7).map(p => p[5] + '=' + p[6]).join('; ');
+const cookie = fs.readFileSync(jar, 'utf8').split(/\r?\n/).map(l => l.replace('#HttpOnly_', '')).filter(l => l && !l.startsWith('#')).map(l => l.split('\t')).filter(p => p.length >= 7).map(p => p[5] + '=' + p[6]).join('; ');
 const u = new URL(url);
 const out = { init: null, types: {}, bin: 0, bytes: 0, boxes: [], jpeg: 0, times: [] };
 const req = http.request({ host: u.hostname, port: u.port, path: u.pathname + u.search, headers: { Cookie: cookie, Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': crypto.randomBytes(16).toString('base64') } });
@@ -42,7 +42,7 @@ req.on('upgrade', (res, sock, head) => {
     if (len === 126) { if (buf.length < 4) return; len = buf.readUInt16BE(2); off = 4; } else if (len === 127) { if (buf.length < 10) return; len = Number(buf.readBigUInt64BE(2)); off = 10; }
     if (buf.length < off + len) return;
     const p = buf.subarray(off, off + len); buf = buf.subarray(off + len);
-    if (op === 1) { const j = JSON.parse(p.toString()); out.types[j.type] = (out.types[j.type] || 0) + 1; if (j.type === 'init' && !out.init) out.init = j; if (j.type === 'audio') out.audio = j; if (j.type === 'time') out.times.push(j.t); }
+    if (op === 1) { const j = JSON.parse(p.toString()); out.types[j.type] = (out.types[j.type] || 0) + 1; if (j.type === 'init' && !out.init) out.init = j; if (j.type === 'audio') out.audio = j; if (j.type === 'stats') out.stats = j; if (j.type === 'time') out.times.push(j.t); }
     else if (op === 2) { if (p[0] === 0x50) { out.pbin = (out.pbin || 0) + 1; continue; } if (p[0] === 0x41) { out.abin = (out.abin || 0) + 1; if (!out.abox) out.abox = p.subarray(5, 9).toString('latin1'); continue; } out.bin++; out.bytes += p.length; if (p[0] === 0xff && p[1] === 0xd8) out.jpeg++; else if (out.boxes.length < 3) out.boxes.push(p.subarray(4, 8).toString('latin1')); }
   } });
 });
@@ -124,9 +124,54 @@ echo "== camera widget"
 DW="{\"name\":\"Cams $SUF\",\"reason\":\"e2e\",\"spec\":{\"version\":1,\"kind\":\"dashboard\",\"layout\":{\"type\":\"grid\",\"row_height\":96},\"range\":\"6h\",\"refresh_s\":30,\"widgets\":[{\"id\":\"c\",\"type\":\"camera\",\"geometry\":{\"x\":0,\"y\":0,\"w\":4,\"h\":3},\"bindings\":{},\"params\":{\"camera\":\"CAMID\"}}]}}"
 req POST /api/v1/dashboards "${DW/CAMID/$CAM}"; check "dashboard with a camera widget" "$(st)" 201
 DSLUG=$(jx j.slug)
-req GET "/api/v1/dashboards/$DSLUG"; check "camera widget stored with defaults" "$(jx 'JSON.stringify(j.spec.widgets[0].params)')" "{\"camera\":\"$CAM\",\"quality\":\"sub\",\"show_name\":true,\"open_on_click\":true}"
+req GET "/api/v1/dashboards/$DSLUG"; check "camera widget stored with defaults" "$(jx 'JSON.stringify(j.spec.widgets[0].params)')" "{\"camera\":\"$CAM\",\"quality\":\"sub\",\"show_name\":true,\"show_stats\":false,\"open_on_click\":true}"
 req POST /api/v1/dashboards "${DW/CAMID/not-a-camera}"; check "camera id validated" "$(st)" 400
 req DELETE "/api/v1/dashboards/$DSLUG?reason=e2e"
+
+echo "== remote camera control through the relay, G.711 sound, stream information (0.58.0)"
+ONVR=http://127.0.0.1:$HP/onvif/rptz/device_service
+req POST /api/v1/video/cameras "{\"name\":\"x\",\"source\":\"push\",\"onvif_url\":\"http://10.0.0.1/cgi-bin/x\",\"reason\":\"e2e\"}"; check "a relayed camera's ONVIF address must be under /onvif/" "$(st)" 400
+req POST /api/v1/video/cameras "{\"name\":\"Remote PTZ $SUF\",\"source\":\"push\",\"onvif_url\":\"$ONVR\",\"username\":\"admin\",\"password\":\"onvifpw\",\"record\":\"off\",\"audio\":true,\"audio_record\":false,\"reason\":\"e2e\"}"
+check "relayed camera with an ONVIF address and account" "$(st) $(jx 'j.onvif + " " + j.username + " " + j.has_password + " " + j.onvif_url')" "201 true admin true $ONVR"
+RPTZ=$(jx j.id); RSEC=$(jx j.push_secret); RPURL=$(jx j.push.url); PUSHON=$(jx j.push.enabled)
+check "relay configuration names the web address and the camera's ONVIF address" "$(jx "j.relay_config.includes('web = \"') && j.relay_config.includes('onvif = \"$ONVR\"')")" true
+req GET /api/v1/video/cameras/$RPTZ; check "camera control not connected before the relay polls" "$(jx 'j.status.onvif_relay')" false
+req POST "/api/v1/video/cameras/$RPTZ/ptz" '{"action":"stop"}'; check "PTZ without the relay: a clear conflict" "$(st) $(jx 'j.error.includes("relay")')" "409 true"
+rcurl() { curl -s -o "$TMP/b" -w '%{http_code}' "$@" > "$TMP/s"; }
+rcurl -H "X-Camera-Secret: $RSEC" "$BASE/api/v1/video/relay/$RPTZ/onvif/next?wait=0"; check "control endpoint accepts the camera's secret" "$(st)" 204
+rcurl -X POST -H "Content-Type: application/json" -H "X-Camera-Secret: $RSEC" --data '{"status":200,"body":""}' "$BASE/api/v1/video/relay/$RPTZ/onvif/unknown"; check "an answer to no request is gone" "$(st)" 410
+if [[ "$PUSHON" == true ]]; then
+  printf 'server = "%s"\nweb = "%s"\n[[camera]]\nid = "%s"\nsecret = "%s"\nsource = "%s"\ntransport = "tcp"\naudio = true\nonvif = "%s"\n' "${RPURL%/*}" "$BASE" "$RPTZ" "$RSEC" "$SIM/rptz/h264/160x96/g711" "$ONVR" > "$TMP/rptz.toml"
+  chmod 600 "$TMP/rptz.toml"
+  "${BIN:-$TMP/c32}" camera-relay -check -config "$TMP/rptz.toml" > "$TMP/check3.log" 2>&1
+  check "self-check: camera, G.711 sound, secret, local ONVIF, camera control" "$? $(grep -c '^ok ' "$TMP/check3.log") $(grep -c '^ok .*sound: G.711 µ-law 8000 Hz' "$TMP/check3.log") $(grep -c '^ok .*local ONVIF' "$TMP/check3.log") $(grep -c '^ok .*camera control through the server' "$TMP/check3.log")" "0 7 1 1 1"
+  grep -q "$RSEC" "$TMP/check3.log" && bad "secret in the self-check output" || ok "secret not in the self-check output"
+  "${BIN:-$TMP/c32}" camera-relay -config "$TMP/rptz.toml" > "$TMP/relay3.log" 2>&1 &
+  RELAY=$!
+  waitfor '(req GET /api/v1/video/cameras/$RPTZ; [[ "$(jx "j.status.state + j.status.onvif_relay")" == onlinetrue ]])' 40 && ok "relay forwards the video and polls for camera control" || bad "status $(cat "$TMP/b"); relay: $(tail -3 "$TMP/relay3.log")"
+  req GET "/api/v1/video/cameras/$RPTZ/ptz/presets"; check "PTZ presets through the relay" "$(st) $(jx 'j.map(p => p.name).join()')" "200 Home,Gate,Parking"
+  req POST "/api/v1/video/cameras/$RPTZ/ptz" '{"action":"move","pan":0.5,"tilt":0,"zoom":0}'; check "PTZ move through the relay" "$(st)" 200
+  req POST "/api/v1/video/cameras/$RPTZ/ptz" '{"action":"stop"}'; check "PTZ stop through the relay" "$(st)" 200
+  req POST "/api/v1/video/cameras/$RPTZ/ptz" '{"action":"preset","preset":"2"}'; check "PTZ preset through the relay" "$(st)" 200
+  check "the camera turned to the preset" "$(curl -s "http://127.0.0.1:$HP/sim/ptz/rptz" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).pan))')" "-0.6"
+  req POST /api/v1/video/onvif/profiles "{\"url\":\"$ONVR\",\"username\":\"admin\",\"id\":\"$RPTZ\"}"; check "ONVIF profiles of a relayed camera through the relay" "$(st) $(jx 'j.profiles.length + " " + j.ptz')" "200 2 true"
+  waitfor '(req GET /api/v1/video/cameras/$RPTZ; [[ "$(jx j.status.events)" == connected ]])' 30 && ok "ONVIF events through the relay" || bad "events $(jx j.status.events)"
+  curl -s -X POST "http://127.0.0.1:$HP/sim/motion/rptz?on=1"
+  waitfor '(req GET /api/v1/video/cameras/$RPTZ; [[ "$(jx "(j.status.active || []).join()")" == motion ]])' 20 && ok "motion of a relayed camera arrives" || bad "status $(cat "$TMP/b")"
+  curl -s -X POST "http://127.0.0.1:$HP/sim/motion/rptz?on=0"
+  waitfor '(req GET /api/v1/video/cameras/$RPTZ; [[ "$(jx j.status.audio)" == "G.711 8000 Hz (as PCM)" ]])' 20 && ok "the relay forwards G.711 sound" || bad "sound status: $(jx j.status.audio)"
+  ws "/api/v1/video/cameras/$RPTZ/live?quality=main&audio=1" 4; check "relayed G.711 sound plays live (PCM)" "$(jx '(j.audio && j.audio.codec) + " " + (j.pbin > 5)')" "pcm true"
+  check "the player gets the stream information" "$(jx 'j.stats && (j.stats.stream + " " + j.stats.codec + " " + j.stats.width + "x" + j.stats.height + " " + (j.stats.fps > 0) + " " + (j.stats.kbps > 0))')" "main h264 160x96 true true"
+  req GET /api/v1/video/cameras/$RPTZ; check "status shows what arrives" "$(jx 'j.status.codec + " " + (j.status.fps > 0) + " " + (j.status.kbps > 0)')" "h264 true true"
+  grep -q "onvifpw" "$TMP/relay3.log" && bad "ONVIF password in the relay log" || ok "no ONVIF request body in the relay log"
+  kill $RELAY 2>/dev/null; RELAY=""
+  waitfor '(req GET /api/v1/video/cameras/$RPTZ; [[ "$(jx j.status.onvif_relay)" == false ]])' 20 && ok "a stopped relay shows as not connected" || bad "still connected: $(jx j.status.onvif_relay)"
+  req POST "/api/v1/video/cameras/$RPTZ/ptz" '{"action":"stop"}'; check "PTZ after the relay stopped: a clear conflict" "$(st) $(jx 'j.error.includes("relay")')" "409 true"
+fi
+# wrong secrets last: they count towards blocking this address (as the relay checks below do)
+rcurl -H "X-Camera-Secret: wrong-secret-0123456789" "$BASE/api/v1/video/relay/$RPTZ/onvif/next?wait=0"; check "control endpoint refuses a wrong secret" "$(st)" 401
+rcurl "$BASE/api/v1/video/relay/$RPTZ/onvif/next?wait=0"; check "and a missing one" "$(st)" 401
+req DELETE "/api/v1/video/cameras/$RPTZ?reason=e2e"
 
 echo "== remote camera (relay sends the video)"
 req POST /api/v1/video/cameras "{\"name\":\"Remote $SUF\",\"source\":\"push\",\"url\":\"rtsp://ignored/x\",\"reason\":\"e2e\"}"

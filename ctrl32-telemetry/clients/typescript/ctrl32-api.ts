@@ -133,11 +133,14 @@ export type CameraStatus = {
   fps?: number;
   height?: number;
   kbps?: number;
+  /** push cameras with ONVIF: the relay polls for camera control requests */
+  onvif_relay?: boolean;
   /** events when recording only around events */
   record_mode?: string;
   recording?: boolean;
   since?: string;
   state?: "idle" | "connecting" | "online" | "offline" | "disabled";
+  sub?: StreamInfo;
   viewers?: number;
   width?: number;
 };
@@ -803,6 +806,18 @@ export type RegisterProfileSpec = {
   registers: ModbusRegister[];
 };
 
+export type RelayRequest = {
+  /** base64 */
+  body?: string;
+  /** Content-Type, SOAPAction, Accept */
+  headers?: Record<string, unknown>;
+  method?: "POST" | "GET";
+  /** path and query at the camera's ONVIF origin, always /onvif/… */
+  path?: string;
+  /** request id */
+  rid?: string;
+};
+
 export type Replica = {
   /** total_bytes, done_bytes, percent, eta_s */
   copy?: Record<string, unknown>;
@@ -1011,6 +1026,17 @@ export type Site = {
   id?: string;
   name?: string;
   tz?: string;
+};
+
+export type StreamInfo = {
+  codec?: "h264" | "h265" | "mjpeg";
+  /** frames per second arriving */
+  fps?: number;
+  height?: number;
+  /** kbit/s arriving */
+  kbps?: number;
+  state?: string;
+  width?: number;
 };
 
 export type Theme = {
@@ -2887,7 +2913,7 @@ export class Ctrl32Client {
     group?: string;
     hidden?: boolean;
     name?: string;
-    /** http://camera/onvif/device_service: events and PTZ (spec 013) */
+    /** http://camera/onvif/device_service: events and PTZ (spec 013); for source push the camera's address in its own network, reached through the relay (onvif = … in relay.toml) */
     onvif_url?: string;
     privacy_masks?: number[][][];
     /** empty = the first profile with PTZ */
@@ -5292,7 +5318,7 @@ export class Ctrl32Client {
     icon?: string;
     /** ≤ 80 */
     name: string;
-    /** http://camera/onvif/device_service: events and PTZ (spec 013) */
+    /** http://camera/onvif/device_service: events and PTZ (spec 013); for source push the camera's address in its own network, reached through the relay (onvif = … in relay.toml) */
     onvif_url?: string;
     privacy_masks?: number[][][];
     /** empty = the first profile with PTZ */
@@ -5322,7 +5348,7 @@ export class Ctrl32Client {
     group?: string;
     icon?: string;
     name?: string;
-    /** http://camera/onvif/device_service: events and PTZ (spec 013) */
+    /** http://camera/onvif/device_service: events and PTZ (spec 013); for source push the camera's address in its own network, reached through the relay (onvif = … in relay.toml) */
     onvif_url?: string;
     privacy_masks?: number[][][];
     /** empty = the first profile with PTZ */
@@ -6037,7 +6063,7 @@ export class Ctrl32Client {
     motion_zones?: number[][][];
     /** ≤ 80 */
     name: string;
-    /** http://camera/onvif/device_service: events and PTZ (spec 013) */
+    /** http://camera/onvif/device_service: events and PTZ (spec 013); for source push the camera's address in its own network, reached through the relay (onvif = … in relay.toml) */
     onvif_url?: string;
     /** stored encrypted; omit to keep, "" to clear */
     password?: string;
@@ -6113,7 +6139,7 @@ export class Ctrl32Client {
     motion_zones?: number[][][];
     /** ≤ 80 */
     name?: string;
-    /** http://camera/onvif/device_service: events and PTZ (spec 013) */
+    /** http://camera/onvif/device_service: events and PTZ (spec 013); for source push the camera's address in its own network, reached through the relay (onvif = … in relay.toml) */
     onvif_url?: string;
     /** stored encrypted; omit to keep, "" to clear */
     password?: string;
@@ -6485,6 +6511,35 @@ export class Ctrl32Client {
     })[];
     ptz?: boolean;
   }>('POST', `/api/v1/video/onvif/profiles`, undefined, body, false);
+  }
+
+  /** Next camera control request (relay)
+   *
+   * Long poll of the relay of a camera that sends its video (source push): answers one pending ONVIF request of the camera as soon as there is one, or 204 after `wait` seconds (at most 25). The relay performs it against the camera's ONVIF address from its relay.toml (only paths under /onvif/, POST or GET) and posts the answer back. `wait=0` only tests the secret and never hands out a request. Authenticated with the camera's push secret in `X-Camera-Secret`; wrong secrets count towards blocking the address (video settings push_max_fails, push_window_minutes, push_block_minutes) and are security events. 429 while the address is blocked. */
+  getVideoRelayIdOnvifNext(id: string, query?: { wait?: number; /** seconds to wait for a request, 0 to 25 (default 25) */ }): Promise<RelayRequest> {
+    return this.request<RelayRequest>('GET', `/api/v1/video/relay/${encodeURIComponent(id)}/onvif/next`, query, undefined, false);
+  }
+
+  /** Answer of a camera control request (relay)
+   *
+   * The camera's answer (status, Content-Type, body up to 1 MiB) or the relay's error. 410 when the request no longer waits (the server gives up after 10 s). */
+  postVideoRelayIdOnvifRid(id: string, rid: string, body: {
+    /** base64, at most 1 MiB */
+    body?: string;
+    /** why the relay has no answer */
+    error?: string;
+    /** Content-Type only */
+    headers?: Record<string, unknown>;
+    /** HTTP status of the camera */
+    status?: number;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/video/relay/${encodeURIComponent(id)}/onvif/${encodeURIComponent(rid)}`, undefined, body, false);
   }
 
   /** Server-wide video settings

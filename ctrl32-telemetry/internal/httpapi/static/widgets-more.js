@@ -258,7 +258,7 @@
     const display = WG.isDisplay && WG.isDisplay();
     if (WG.isPublic() && !display) { el.innerHTML = '<div class="dw-center muted">Cameras are not shown on public dashboards.</div>'; return; }
     if (!p.camera) { el.innerHTML = '<div class="dw-center muted">Choose a camera in the widget properties.</div>'; return; }
-    const key = p.camera + '|' + (p.quality || 'sub') + '|' + (p.show_name !== false) + '|' + (p.open_on_click !== false);
+    const key = p.camera + '|' + (p.quality || 'sub') + '|' + (p.show_name !== false) + '|' + (p.open_on_click !== false) + '|' + !!p.show_stats;
     if (el._cam && el._cam.key === key && el._cam.player.el.isConnected) return; // live already; refreshes do not reconnect
     if (el._cam) el._cam.player.close();
     await loadPlayer();
@@ -268,7 +268,7 @@
     el.innerHTML = `<div class="cam-widget${p.open_on_click !== false ? ' click' : ''}">${name ? `<div class="cap"><span class="cam-dot"></span><b class="notranslate">${esc(name)}</b></div>` : ''}</div>`;
     const box = el.firstElementChild, dot = box.querySelector('.cam-dot');
     const liveBase = display ? '/api/v1/display/cameras/' : '/api/v1/video/cameras/';
-    const player = window.ctrl32Player(box, { url: `${liveBase}${encodeURIComponent(p.camera)}/live?quality=${p.quality === 'main' ? 'main' : 'sub'}`, live: true,
+    const player = window.ctrl32Player(box, { url: `${liveBase}${encodeURIComponent(p.camera)}/live?quality=${p.quality === 'main' ? 'main' : 'sub'}`, live: true, stats: !!p.show_stats,
       onState: (s) => { if (dot) dot.className = 'cam-dot ' + (s === 'online' ? 'online' : s === 'offline' ? 'offline' : ''); } });
     box.prepend(player.el);
     if (p.open_on_click !== false && !display) box.onclick = () => { location.href = '/video/cameras/' + encodeURIComponent(p.camera); };

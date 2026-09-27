@@ -34,6 +34,20 @@ type Status struct {
 	Active     []string `json:"active,omitempty"`      // kinds of events going on now
 	Motion     string   `json:"motion,omitempty"`      // motion detection on the server: watching (…) or the problem
 	Audio      string   `json:"audio,omitempty"`       // the sound (codec, rate) or why there is none (spec 020)
+	// what arrives on the sub-stream (tiles), and for push cameras with ONVIF whether the relay's control channel is
+	// connected (0.58.0)
+	Sub        *StreamInfo `json:"sub,omitempty"`
+	OnvifRelay *bool       `json:"onvif_relay,omitempty"`
+}
+
+// StreamInfo is what arrives on one stream of a camera.
+type StreamInfo struct {
+	State  string  `json:"state"`
+	Codec  string  `json:"codec,omitempty"`
+	Width  int     `json:"width,omitempty"`
+	Height int     `json:"height,omitempty"`
+	FPS    float64 `json:"fps"`
+	Kbps   float64 `json:"kbps"`
 }
 
 // Source is one camera stream (main or sub). It connects while it is kept (recording) or watched, reconnects with a
