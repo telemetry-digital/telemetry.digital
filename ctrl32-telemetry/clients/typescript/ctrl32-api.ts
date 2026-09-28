@@ -862,7 +862,7 @@ export type RelayRequest = {
   /** Content-Type, SOAPAction, Accept */
   headers?: Record<string, unknown>;
   method?: "POST" | "GET";
-  /** path and query at the camera's ONVIF origin, always /onvif/… */
+  /** path and query at the camera's ONVIF origin: /onvif/…, or a SOAP service the camera named (e.g. Tapo /event-…) */
   path?: string;
   /** request id */
   rid?: string;
@@ -6754,7 +6754,7 @@ export class Ctrl32Client {
 
   /** Next camera control request (relay)
    *
-   * Long poll of the relay of a camera that sends its video (source push): answers one pending ONVIF request of the camera as soon as there is one, or 204 after `wait` seconds (at most 25). The relay performs it against the camera's ONVIF address from its relay.toml (only paths under /onvif/, POST or GET) and posts the answer back. `wait=0` only tests the secret and never hands out a request. Authenticated with the camera's push secret in `X-Camera-Secret`; wrong secrets count towards blocking the address (video settings push_max_fails, push_window_minutes, push_block_minutes) and are security events. 429 while the address is blocked. */
+   * Long poll of the relay of a camera that sends its video (source push): answers one pending ONVIF request of the camera as soon as there is one, or 204 after `wait` seconds (at most 25). The relay performs it against the camera's ONVIF address from its relay.toml (under /onvif/ POST or GET, elsewhere at that origin only SOAP calls: POST, application/soap+xml or text/xml, a SOAP envelope) and posts the answer back. `wait=0` only tests the secret and never hands out a request. Authenticated with the camera's push secret in `X-Camera-Secret`; wrong secrets count towards blocking the address (video settings push_max_fails, push_window_minutes, push_block_minutes) and are security events. 429 while the address is blocked. */
   getVideoRelayIdOnvifNext(id: string, query?: { wait?: number; /** seconds to wait for a request, 0 to 25 (default 25) */ }): Promise<RelayRequest> {
     return this.request<RelayRequest>('GET', `/api/v1/video/relay/${encodeURIComponent(id)}/onvif/next`, query, undefined, false);
   }

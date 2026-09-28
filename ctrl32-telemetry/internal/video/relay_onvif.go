@@ -21,7 +21,8 @@ import (
 
 // The relay's side of camera control (tunnel.go describes the protocol). The relay polls the server for ONVIF requests
 // of its cameras and performs them against the camera's ONVIF origin from relay.toml — never anywhere else: the
-// server sends only a path under /onvif/, only POST (SOAP) and GET are allowed, redirects are not followed, bodies are
+// server sends only a path at that origin — under /onvif/ POST (SOAP) and GET, elsewhere only SOAP calls such as a
+// camera's own events subscription address (tunnelAllowed) — redirects are not followed, bodies are
 // limited to 1 MiB each way and nothing of them is logged (they carry the camera's WS-Security digests).
 
 const relaySecretHeader = "X-Camera-Secret"
@@ -114,15 +115,18 @@ func relayTarget(origin string, rq *TunnelRequest) (string, error) {
 		return "", errors.New("request larger than 1 MiB")
 	}
 	p := rq.Path
-	if len(p) > 2048 || !strings.HasPrefix(p, "/onvif/") || strings.ContainsAny(p, "\\#@\r\n\t ") || strings.Contains(p, "//") {
+	if len(p) > 2048 || !strings.HasPrefix(p, "/") || strings.ContainsAny(p, "\\#@\r\n\t ") || strings.Contains(p, "//") {
 		return "", errors.New("path not allowed")
 	}
 	u, err := url.Parse(p)
-	if err != nil || u.Scheme != "" || u.Host != "" || u.User != nil || path.Clean(u.Path) != u.Path || !strings.HasPrefix(u.Path, "/onvif/") {
+	if err != nil || u.Scheme != "" || u.Host != "" || u.User != nil || path.Clean(u.Path) != u.Path {
 		return "", errors.New("path not allowed")
 	}
 	if dec, err := url.PathUnescape(u.EscapedPath()); err != nil || strings.Contains(dec, "..") {
 		return "", errors.New("path not allowed")
+	}
+	if err := tunnelAllowed(rq.Method, u.EscapedPath(), rq.Header["Content-Type"], rq.Body); err != nil {
+		return "", err
 	}
 	full := origin + p
 	fu, err := url.Parse(full)

@@ -349,3 +349,88 @@ func TestRelayConfigONVIF(t *testing.T) {
 		t.Fatal("device address")
 	}
 }
+
+// TP-Link Tapo names its events subscription outside /onvif/ (/event-1025_1025): the SOAP calls to it go through the
+// relay, and motion arrives (0.61.1).
+func TestTunnelTapoEventsOutsideONVIF(t *testing.T) {
+	sim, camURL := onvifSim(t)
+	sim.TapoEvents = true
+	secret := NewPushSecret()
+	m, _ := pushManager(secret)
+	api := httptest.NewServer(relayAPI(m))
+	defer api.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cfg := RelayConfig{Server: "rtsp://127.0.0.1:8322", Web: api.URL, Cameras: []RelayCamera{{ID: pushCam, Secret: secret, Source: "rtsp://x/y", ONVIF: camURL}}}
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	go relayONVIF(ctx, cfg, cfg.Cameras[0], slog.New(slog.NewTextHandler(io.Discard, nil)))
+	for deadline := time.Now().Add(5 * time.Second); !m.tunnelConnected(pushCam); time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("relay did not connect for camera control")
+		}
+	}
+	hc, err := m.tunnelClient(pushCam, camURL+"/onvif/gate/device_service")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cl := &onvif.Client{Device: camURL + "/onvif/gate/device_service", Username: "admin", Password: "pw", HTTP: hc}
+	got := make(chan onvif.Event, 4)
+	ectx, ecancel := context.WithTimeout(ctx, 8*time.Second)
+	defer ecancel()
+	go func() { _ = cl.Subscribe(ectx, func(e onvif.Event) { got <- e }) }()
+	select {
+	case e := <-got:
+		if e.Kind != "motion" || !e.Init {
+			t.Fatalf("first event %+v", e)
+		}
+	case <-ectx.Done():
+		t.Fatal("no event from a Tapo-style subscription through the relay")
+	}
+	sim.SetMotion("gate", true)
+	select {
+	case e := <-got:
+		if !e.Active {
+			t.Fatalf("motion %+v", e)
+		}
+	case <-ectx.Done():
+		t.Fatal("motion not delivered")
+	}
+}
+
+// Outside /onvif/ only SOAP calls pass, on the server and on the relay.
+func TestTunnelAllowedOutsideONVIF(t *testing.T) {
+	env := []byte(`<?xml version="1.0" encoding="UTF-8"?><s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"><s:Body/></s:Envelope>`)
+	soap := "application/soap+xml; charset=utf-8"
+	for _, c := range []struct {
+		method, path, ct string
+		body             []byte
+		ok               bool
+	}{
+		{"POST", "/onvif/device_service", soap, env, true},
+		{"GET", "/onvif/snapshot", "", nil, true},
+		{"POST", "/event-1025_1025", soap, env, true},
+		{"POST", "/event-1025_1025", "text/xml", env, true},
+		{"GET", "/event-1025_1025", "", nil, false},
+		{"POST", "/cgi-bin/reboot", "application/x-www-form-urlencoded", []byte("a=1"), false},
+		{"POST", "/cgi-bin/reboot", soap, []byte("reboot=1"), false},
+		{"POST", "/", soap, env, false},
+		{"PUT", "/onvif/x", soap, env, false},
+	} {
+		err := tunnelAllowed(c.method, c.path, c.ct, c.body)
+		if (err == nil) != c.ok {
+			t.Errorf("%s %s %q: %v", c.method, c.path, c.ct, err)
+		}
+		_, rerr := relayTarget("http://192.168.0.197:2020", &TunnelRequest{Method: c.method, Path: c.path, Header: map[string]string{"Content-Type": c.ct}, Body: c.body})
+		if (rerr == nil) != c.ok {
+			t.Errorf("relay %s %s %q: %v", c.method, c.path, c.ct, rerr)
+		}
+	}
+	// the path checks stay the same outside /onvif/
+	for _, p := range []string{"/event-1/../cgi-bin/x", "/event-1/%2e%2e/x", "//evil/x", "/a\b", "/x#y"} {
+		if _, err := relayTarget("http://192.168.0.197:2020", &TunnelRequest{Method: "POST", Path: p, Header: map[string]string{"Content-Type": soap}, Body: env}); err == nil {
+			t.Errorf("relay accepted %q", p)
+		}
+	}
+}

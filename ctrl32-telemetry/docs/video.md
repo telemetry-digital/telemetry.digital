@@ -321,8 +321,11 @@ server ──(queue)── GET  /api/v1/video/relay/{camera}/onvif/next ◀═�
 
 Security: the relay polls with the camera's push secret (`X-Camera-Secret`); wrong secrets are security events and count
 towards blocking the address together with the RTSP push port (`push_max_fails` etc.). The server hands the relay only a
-**path under `/onvif/`**; the relay builds the address from the `onvif` origin in its own `relay.toml`, allows only POST
-(SOAP) and GET, follows no redirects, limits bodies to 1 MiB each way and the camera's answer to 10 s, and never logs
+**path at the camera's ONVIF origin**; the relay builds the address from the `onvif` origin in its own `relay.toml`.
+Under `/onvif/` it allows POST (SOAP) and GET; elsewhere only SOAP calls — POST with `application/soap+xml` or
+`text/xml` and a SOAP envelope — because some cameras name their own services outside `/onvif/` (TP-Link Tapo gives the
+events subscription as `/event-1025_1025`, 0.61.1; an older relay refuses it and events stay off). The camera's web
+pages and GET-driven CGI stay out of reach. The relay follows no redirects, limits bodies to 1 MiB each way and the camera's answer to 10 s, and never logs
 the bodies (they carry the camera's WS-Security digests). The server also refuses any service address outside the
 configured ONVIF origin. So the server can never use a relay to reach anything else in the remote network. A request
 waits at most 10 s for the relay; the relay is *connected* while it polls (a poll lasts up to 25 s; a relay that went
