@@ -52,7 +52,7 @@ var (
 type TunnelRequest struct {
 	ID     string            `json:"rid"`
 	Method string            `json:"method"`
-	Path   string            `json:"path"` // path and query at the camera's ONVIF origin, always /onvif/…
+	Path   string            `json:"path"` // path and query at the camera's ONVIF origin (tunnelAllowed)
 	Header map[string]string `json:"headers,omitempty"`
 	Body   []byte            `json:"body"` // base64 in JSON
 
@@ -79,6 +79,36 @@ func pickHeaders(h http.Header) map[string]string {
 		}
 	}
 	return out
+}
+
+// tunnelAllowed decides, on the server and again on the relay, what may reach a camera at its ONVIF origin. Paths
+// under /onvif/ take POST and GET. A camera may also name another address at the same origin for a service it
+// creates — TP-Link Tapo gives its events subscription as /event-1025_1025 (0.61.1) — so elsewhere only a SOAP call
+// is carried: POST, a SOAP content type and an XML envelope in the body. The camera's web pages and GET-driven CGI
+// stay out of reach; the origin (relay.toml) remains the boundary, and the server holds the camera's ONVIF account
+// anyway.
+func tunnelAllowed(method, path, contentType string, body []byte) error {
+	if strings.HasPrefix(path, "/onvif/") {
+		if method != http.MethodPost && method != http.MethodGet {
+			return errors.New("only POST and GET are sent through the relay")
+		}
+		return nil
+	}
+	if !strings.HasPrefix(path, "/") || path == "/" {
+		return errors.New("only /onvif/… or a SOAP service of the camera is reached through the relay")
+	}
+	if method != http.MethodPost {
+		return errors.New("outside /onvif/ only SOAP calls (POST) are sent through the relay")
+	}
+	ct := strings.ToLower(strings.TrimSpace(strings.SplitN(contentType, ";", 2)[0]))
+	if ct != "application/soap+xml" && ct != "text/xml" {
+		return errors.New("outside /onvif/ only SOAP calls (application/soap+xml) are sent through the relay")
+	}
+	head := body[:min(len(body), 2048)]
+	if !bytes.HasPrefix(bytes.TrimSpace(head), []byte("<")) || !(bytes.Contains(head, []byte(":Envelope")) || bytes.Contains(head, []byte("<Envelope"))) {
+		return errors.New("outside /onvif/ only SOAP envelopes are sent through the relay")
+	}
+	return nil
 }
 
 // tunnel is the queue of one push camera.
@@ -292,8 +322,8 @@ type tunnelTransport struct {
 	origin string
 }
 
-// RoundTrip implements http.RoundTripper. Only the camera's configured ONVIF origin and paths under /onvif/ are
-// allowed; a camera that names a service elsewhere is refused.
+// RoundTrip implements http.RoundTripper. Only the camera's configured ONVIF origin is allowed, and there what
+// tunnelAllowed permits (paths under /onvif/, elsewhere SOAP calls only).
 func (tt *tunnelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req.Body != nil {
 		defer req.Body.Close()
@@ -302,9 +332,6 @@ func (tt *tunnelTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		return nil, fmt.Errorf("refused: %s is not the camera's ONVIF address", o)
 	}
 	path := req.URL.EscapedPath()
-	if !strings.HasPrefix(path, "/onvif/") {
-		return nil, errors.New("refused: only /onvif/… is reached through the relay")
-	}
 	if req.Method != http.MethodPost && req.Method != http.MethodGet {
 		return nil, errors.New("refused: only POST and GET are sent through the relay")
 	}
@@ -321,6 +348,9 @@ func (tt *tunnelTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 			return nil, errors.New("refused: request larger than 1 MiB")
 		}
 		body = b
+	}
+	if err := tunnelAllowed(req.Method, req.URL.EscapedPath(), req.Header.Get("Content-Type"), body); err != nil {
+		return nil, errors.New("refused: " + err.Error())
 	}
 	t := tt.m.tunnelOf(tt.cam, false)
 	if t == nil {

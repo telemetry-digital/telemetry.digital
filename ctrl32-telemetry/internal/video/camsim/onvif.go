@@ -23,6 +23,8 @@ type ONVIF struct {
 	User, Pass  string
 	Codec       string        // stream codec of the simulated profiles (h264 or mjpeg)
 	MotionEvery time.Duration // > 0: motion for a third of this period, repeatedly
+	// TapoEvents gives the events subscription outside /onvif/, as TP-Link Tapo does: http://host/event-<label>_<id>
+	TapoEvents bool
 
 	mu    sync.Mutex
 	cams  map[string]*simCam
@@ -214,7 +216,12 @@ func (o *ONVIF) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		o.SetMotion(strings.TrimPrefix(r.URL.Path, "/sim/motion/"), r.URL.Query().Get("on") == "1")
 		return
 	}
-	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/") // onvif/<label>/<service>[/sub/<id>]
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")                    // onvif/<label>/<service>[/sub/<id>]
+	if rest, ok := strings.CutPrefix(r.URL.Path, "/event-"); ok && o.TapoEvents { // Tapo: /event-<label>_<id>
+		if label, id, ok := strings.Cut(rest, "_"); ok {
+			parts = []string{"onvif", label, "events", "sub", id}
+		}
+	}
 	if len(parts) < 3 || parts[0] != "onvif" || r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -263,7 +270,11 @@ func (o *ONVIF) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ch <- motionMsg(c.motion, "Initialized")
 		c.subs[id] = ch
 		o.mu.Unlock()
-		reply(w, 200, `<tev:CreatePullPointSubscriptionResponse><tev:SubscriptionReference><wsa:Address>`+base+`/events/sub/`+id+`</wsa:Address></tev:SubscriptionReference><wsnt:CurrentTime>`+time.Now().UTC().Format(time.RFC3339)+`</wsnt:CurrentTime><wsnt:TerminationTime>`+time.Now().Add(2*time.Minute).UTC().Format(time.RFC3339)+`</wsnt:TerminationTime></tev:CreatePullPointSubscriptionResponse>`)
+		addr := base + "/events/sub/" + id
+		if o.TapoEvents {
+			addr = "http://" + o.HTTPHost + "/event-" + label + "_" + id
+		}
+		reply(w, 200, `<tev:CreatePullPointSubscriptionResponse><tev:SubscriptionReference><wsa:Address>`+addr+`</wsa:Address></tev:SubscriptionReference><wsnt:CurrentTime>`+time.Now().UTC().Format(time.RFC3339)+`</wsnt:CurrentTime><wsnt:TerminationTime>`+time.Now().Add(2*time.Minute).UTC().Format(time.RFC3339)+`</wsnt:TerminationTime></tev:CreatePullPointSubscriptionResponse>`)
 	case "PullMessages", "Renew", "Unsubscribe":
 		if len(parts) < 5 {
 			fault(w, 400, "ter:InvalidArgVal", "no subscription")
