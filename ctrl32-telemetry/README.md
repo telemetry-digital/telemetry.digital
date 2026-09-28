@@ -6,7 +6,7 @@ Developer: telemetry.digital (Palo Krnáč). Revenue comes from implementation s
 
 ## Status
 
-Version **0.62.0** (28 Sep 2026; production runs 0.61.1). Development on a PC: `deploy/dev/README.md`. Phases 1–2 of the roadmap (`docs/02-navrh-systemu.md`, chapter 13) are functionally covered; the `Zdroj` column of the URS names the version and the test that fulfil each requirement. The production instance runs at `https://telemetry.digital/` (installed with the public installer, updated from the Server page). Every release has an entry in `JOURNAL.md`.
+Version **0.63.0** (28 Sep 2026; production runs 0.62.0). Development on a PC: `deploy/dev/README.md`. Phases 1–2 of the roadmap (`docs/02-navrh-systemu.md`, chapter 13) are functionally covered; the `Zdroj` column of the URS names the version and the test that fulfil each requirement. The production instance runs at `https://telemetry.digital/` (installed with the public installer, updated from the Server page). Every release has an entry in `JOURNAL.md`.
 
 ## What it does
 
@@ -25,6 +25,7 @@ Version **0.62.0** (28 Sep 2026; production runs 0.61.1). Development on a PC: `
 - **Devices:** FOTA with author-signed images and staged campaigns, remote console as a channel into the firmware, C client library with Arduino and ESP-IDF ports (`ctrl32-telemetry-c`).
 - **Operation:** organizations as tenants, roles and permissions, TOTP MFA, self-service registration with approval, security policies, 19 language catalogs editable in the UI, branding and themes, PWA with own installable apps per organization (e.g. a phone app with only the cameras, `docs/pwa.md`). The Server page manages the host through a privileged agent: restart, Caddy with automatic HTTPS, WireGuard, encrypted backups with schedule and restore notes, updates verified by SHA-256 (Linux and Windows).
 - **API first:** everything the UI does is `/api/v1` with an OpenAPI 3.1 description (`/api/docs`), a generated TypeScript client and a Bruno collection (`clients/`).
+- **Period tables:** a dashboard widget with values per local day, week or month (daily temperature logs, monthly consumption of meters) and export of the same table to Excel, CSV and a PDF report (`docs/period-tables.md`).
 - **AI assistants (MCP):** assistant and other MCP clients work in the system through `/mcp` — every API operation as tools, the user's permissions, reasons and the audit trail; OAuth 2.1 for assistant.example connectors or an API token; off until an administrator switches it on; reading free, changes through assistants with the paid license (the white-labeling one) (`docs/mcp.md`, ADR-0017).
 - **Operations evidence:** `/healthz`, Prometheus `/metrics` (data completeness, alarm latency, queues, NTP, audit chain), syslog forwarding, an NTP clock check, `security.txt`, and a CycloneDX SBOM with a `govulncheck` result published with every release.
 

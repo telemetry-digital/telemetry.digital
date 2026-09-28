@@ -1,0 +1,37 @@
+meta {
+  name: Export a period table
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/period-table/export
+  body: none
+  auth: inherit
+}
+
+params:query {
+  datastreams: 
+  ~interval: 
+  ~values: 
+  ~period: 
+  ~from: 
+  ~to: 
+  ~shift: 
+  ~low: 
+  ~high: 
+  ~orientation: 
+  ~total: 
+  ~decimals: 
+  ~label: 
+  ~title: 
+  ~format: 
+}
+
+docs {
+  Export a period table
+  
+  The same table as `GET /api/v1/period-table` as `format` xlsx (default; title, period, organization and author above the table), csv (UTF-8 with BOM) or pdf (stored under Reports with hashes, like other PDF exports). Audited.
+  
+  Requires permission `data.export`.
+}

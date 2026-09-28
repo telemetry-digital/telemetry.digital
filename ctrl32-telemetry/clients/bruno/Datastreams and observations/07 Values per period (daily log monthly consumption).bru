@@ -1,0 +1,36 @@
+meta {
+  name: Values per period (daily log monthly consumption)
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/period-table
+  body: none
+  auth: inherit
+}
+
+params:query {
+  datastreams: 
+  ~interval: 
+  ~values: 
+  ~period: 
+  ~from: 
+  ~to: 
+  ~shift: 
+  ~low: 
+  ~high: 
+  ~orientation: 
+  ~total: 
+  ~decimals: 
+  ~label: 
+  ~title: 
+}
+
+docs {
+  Values per period (daily log, monthly consumption)
+  
+  Aggregates of datastreams per local hour, day, week, month or year in the organization's time zone: minimum, maximum, average, first and last reading, consumption of a counter (sum of increases, a meter reset counts the new reading, the last reading before the period is the baseline), sample count and samples outside the limits. Every period of the range has a row, empty when there is no data. Used by the dashboard widget *Period table* (spec 023).
+  
+  Requires permission `data.read`.
+}
