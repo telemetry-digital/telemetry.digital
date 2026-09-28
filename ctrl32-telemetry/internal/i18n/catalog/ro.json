@@ -2257,5 +2257,18 @@
  "This app does not exist or is switched off. Ask your administrator for the right address.": "Această aplicație nu există sau este dezactivată. Cereți administratorului adresa corectă.",
  "Up to 12 characters fit under the icon on most phones.": "Pe majoritatea telefoanelor încap până la 12 caractere sub pictogramă.",
  "app deleted": "aplicație ștearsă",
- "app saved": "aplicație salvată"
+ "app saved": "aplicație salvată",
+ "No way into the full application": "Fără acces la aplicația completă",
+ "no page zoom": "fără mărirea paginii",
+ "In the app window": "În fereastra aplicației",
+ "Locked to its sections — no way into the full application": "Blocată pe secțiunile sale — fără acces la aplicația completă",
+ "Pages outside the chosen sections open the start page instead; My account keeps only Password and MFA and Sign out. This limits the app's screens, not the user's rights: permissions stay what protects data.": "Paginile din afara secțiunilor alese deschid în schimb pagina de start; Contul meu păstrează doar Parolă și MFA și Deconectare. Aceasta limitează ecranele aplicației, nu drepturile utilizatorului: datele rămân protejate de permisiuni.",
+ "Zoom the page with two fingers": "Mărirea paginii cu două degete",
+ "Off: pinch and double tap do not enlarge the page (the camera picture still zooms with two fingers).": "Dezactivat: ciupirea și atingerea dublă nu măresc pagina (imaginea camerei se mărește în continuare cu două degete).",
+ "Cameras in live view and on video walls": "Camere în direct și pe pereții video",
+ "automatic — one per row on phones": "automat — una pe rând pe telefoane",
+ "one camera per row": "o cameră pe rând",
+ "grid": "grilă",
+ "Grid": "Grilă",
+ "One camera per row": "O cameră pe rând"
 }

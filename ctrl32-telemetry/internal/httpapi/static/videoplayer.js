@@ -12,6 +12,9 @@
 //
 //   const p = ctrl32Player(element, {url, live: true, zoom: true, onTime(ms), onState(state, error), onEnd()});
 //   p.open(url, live);   // another source in the same player (keeps the zoom)
+//   p.rate(4);           // playback speed of a recording (opts.rate): the server paces the frames by the speed, but the
+//                        // fragments keep their recorded timestamps, so the <video> element has to play faster as well
+//                        // (playbackRate); a live picture always plays at 1
 //   p.pause(); p.resume(); p.zoomBy(1.25); p.zoomReset(); p.stats(true); p.close();
 // Digital zoom (opts.zoom): mouse wheel or pinch zooms at the pointer, dragging pans, a double click resets.
 (function () {
@@ -141,6 +144,14 @@
       const start = video.buffered.start(0), keep = opts.live ? 6 : 30;
       if (force || video.currentTime - start > keep * 2) { try { sb.remove(start, Math.max(start, video.currentTime - keep)); } catch (e) { /* busy */ } }
     }
+    // playback speed: MSE plays the recorded timestamps, so a recording at 4× needs playbackRate 4 (a new src or a
+    // seek resets it: applied again on every new source and on loadedmetadata/playing)
+    let rate = opts.rate > 0 ? opts.rate : 1;
+    function applyRate() {
+      const r = opts.live ? 1 : rate;
+      try { if (video.defaultPlaybackRate !== r) video.defaultPlaybackRate = r; if (video.playbackRate !== r) video.playbackRate = r; } catch (e) { /* out of the browser's range */ }
+    }
+    video.addEventListener('loadedmetadata', applyRate); video.addEventListener('playing', applyRate);
     function chase() {
       if (!opts.live || !video.buffered.length) return;
       const end = video.buffered.end(video.buffered.length - 1);
@@ -160,6 +171,7 @@
       ms = new MSImpl();
       if (!window.MediaSource) video.disableRemotePlayback = true; // required by ManagedMediaSource
       video.src = URL.createObjectURL(ms);
+      applyRate();
       ms.addEventListener('sourceopen', () => {
         try { sb = ms.addSourceBuffer(m.mime); } catch (e) { say('This browser cannot play this video'); return; }
         sb.mode = 'segments';
@@ -238,7 +250,13 @@
       if (cx === undefined) { cx = box.clientWidth / 2; cy = box.clientHeight / 2; }
       zx = cx - (cx - zx) * nz / z; zy = cy - (cy - zy) * nz / z; z = nz; applyZoom();
     }
+    // a long press on the picture opens no browser menu (save video, copy) and selects nothing
+    box.addEventListener('contextmenu', (e) => e.preventDefault());
+    video.draggable = false; canvas.draggable = false;
     if (opts.zoom) {
+      // two fingers zoom the picture, not the page (touch-action in app.css; iOS Safari needs its gesture events cancelled)
+      box.classList.add('vp-zoomable');
+      for (const ev of ['gesturestart', 'gesturechange']) box.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
       box.addEventListener('wheel', (e) => { e.preventDefault(); const r = box.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.2 : 1 / 1.2, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
       let drag = null; const pts = new Map();
       box.addEventListener('pointerdown', (e) => { pts.set(e.pointerId, e); if (z > 1) { drag = { x: e.clientX, y: e.clientY, zx, zy, moved: false }; try { box.setPointerCapture(e.pointerId); } catch (x) { /* synthetic */ } } });
@@ -284,7 +302,10 @@
       zoomBy(f) { zoomAt(f); },
       zoomReset() { z = 1; applyZoom(); },
       // another source in the same player: the picture stays until the new one starts
-      open(url, live) { stop(); opts.url = url; opts.live = !!live; lastT = null; box.dataset.state = ''; connect(); },
+      open(url, live) { stop(); opts.url = url; opts.live = !!live; lastT = null; box.dataset.state = ''; applyRate(); connect(); },
+      // playback speed of a recording (1 for a live picture)
+      rate(r) { rate = r > 0 ? r : 1; applyRate(); },
+      get playbackRate() { return video.playbackRate; },
       pause() { stop(); video.pause(); if (audio) audio.pause(); if (actx) actx.suspend().catch(() => {}); state('paused'); },
       // switch the sound on or off (on needs a user gesture in browsers); true when there is sound to hear
       sound(on) { soundOn = !!on; if (soundOn) { const c = pcmCtx(); if (c) c.resume().catch(() => {}); } else if (actx) actx.suspend().catch(() => {}); if (audio) { audio.muted = !soundOn; if (soundOn) { syncAudio(); audio.play().catch(() => {}); } else audio.pause(); } return box.dataset.audio === '1'; },
@@ -301,6 +322,27 @@
   const all = new Set();
   setInterval(() => { for (const p of all) if (!p.el.isConnected) { if ((p._gone = (p._gone || 0) + 1) >= 2) { p.close(); all.delete(p); } } else p._gone = 0; }, 2000);
   window.ctrl32Player = (host, opts) => { const p = player(host, opts); all.add(p); const c = p.close; p.close = () => { all.delete(p); c(); }; return p; };
+  // Layout of the live view and of video walls (0.61.0): 'grid', or 'list' — one camera per row, full width, scrolling.
+  // The viewer's own choice on this device wins (localStorage); otherwise the app profile's camera_layout (single =
+  // list, grid = grid) and otherwise automatic: a list on narrow screens (phones), the grid elsewhere.
+  const LAYOUT_KEY = 'ctrl32.video.layout', NARROW = 700;
+  window.ctrl32Player.layout = {
+    NARROW,
+    stored() { try { const v = localStorage.getItem(LAYOUT_KEY); return v === 'grid' || v === 'list' ? v : ''; } catch (e) { return ''; } },
+    mode() {
+      const own = this.forced || this.stored();
+      if (own) return own;
+      const pref = (window.ctrl32 && ctrl32.app && ctrl32.app.camera_layout) || 'auto';
+      if (pref === 'single') return 'list';
+      if (pref === 'grid') return 'grid';
+      return window.innerWidth < NARROW ? 'list' : 'grid';
+    },
+    set(v) { try { localStorage.setItem(LAYOUT_KEY, v); } catch (e) { /* private mode: this page only */ } this.forced = v; },
+    icons: {
+      grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg>',
+      list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="8" rx="1"/><rect x="5" y="13" width="14" height="8" rx="1"/></svg>',
+    },
+  };
   // "H.264 1920×1080 · 15 fps · 2048 kbit/s" from a stats message or a camera's status
   const CODEC = { h264: 'H.264', h265: 'H.265', mjpeg: 'MJPEG' };
   window.ctrl32Player.statsText = (m) => {

@@ -2,7 +2,9 @@
 # End-to-end checks for installable app profiles (spec 021): create, update (new version), disable, delete with a
 # reason and audit; strict validation (address, start page of this application only, known menu sections); the
 # public install page, manifest and launch info (no data, 404 for unknown or disabled apps); the main manifest
-# unchanged; permissions (content.write to manage); white-label naming when the server trusts the test license key.
+# unchanged; permissions (content.write to manage); white-label naming when the server trusts the test license key;
+# options of 0.61.0: locked app (no way into the full application), page zoom, camera layout — defaults, validation,
+# kept on an update that leaves them out, in the launch info, install page of a locked app without the way out.
 #   BASE=http://127.0.0.1:8080 USER=admin PASS=admin1234 bash tests/e2e/pwa_apps.sh
 set -u
 BASE=${BASE:-http://127.0.0.1:8080}
@@ -54,6 +56,7 @@ echo "== create (Cameras preset)"
 req POST /api/v1/pwa-apps "{\"slug\":\"$S\",\"name\":\"Cameras $SUF\",\"short_name\":\"Cameras\",\"start_url\":\"/video\",\"sections\":[\"cameras\"],\"reason\":\"e2e create\"}"
 check "created" "$(st)" 201
 check "stored" "$(jx 'j.version + " " + j.enabled + " " + j.install_url + " " + j.warnings.length')" "1 true /app/$S 0"
+check "options default: not locked, page zoom, automatic layout" "$(jx 'j.locked + " " + j.page_zoom + " " + j.camera_layout')" "false true auto"
 req POST /api/v1/pwa-apps "{\"slug\":\"$S\",\"name\":\"Again\",\"start_url\":\"/video\",\"sections\":[\"cameras\"],\"reason\":\"e2e\"}"; check "same address twice refused" "$(st)" 409
 req GET /api/v1/pwa-apps; check "listed" "$(jx "j.filter(a => a.slug === '$S').map(a => a.name).join()")" "Cameras $SUF"
 req GET "/api/v1/pwa-apps/$S"; check "get" "$(st) $(jx j.start_url)" "200 /video"
@@ -71,7 +74,8 @@ check "manifest names (no white label: product in the full name)" "$(jx 'j.name 
 check "shortcut to the section" "$(jx 'j.shortcuts.map(s => s.url).join()')" "/video"
 check "product icons" "$(jx 'j.icons.length + " " + j.icons[0].src')" "3 /icon.svg"
 pub "/api/v1/pwa-apps/$S/launch"; check "launch info without sign-in" "$(st)" 200
-check "launch info" "$(jx 'j.start_url + " " + j.sections.join() + " " + Object.keys(j).sort().join()')" "/video cameras name,sections,short_name,slug,start_url,theme_color"
+check "launch info" "$(jx 'j.start_url + " " + j.sections.join() + " " + Object.keys(j).sort().join()')" "/video cameras camera_layout,locked,name,page_zoom,sections,short_name,slug,start_url,theme_color"
+pub "/app/$S"; grep -q 'href="/?full=1"' "$TMP/b" && ok "unlocked app: install page links the full application" || bad "unlocked app: no link to the full application"
 pub "/app/nope-$SUF"; check "unknown app: 404 page" "$(st)" 404
 pub "/app/nope-$SUF/manifest.webmanifest"; check "unknown app: no manifest" "$(st)" 404
 pub "/api/v1/pwa-apps/nope-$SUF/launch"; check "unknown app: no launch info" "$(st)" 404
@@ -80,6 +84,28 @@ pub /manifest.webmanifest; check "main manifest unchanged" "$(jx 'j.start_url + 
 curl -s "$BASE/sw.js" > "$TMP/b"; grep -q "'/app/" "$TMP/b" && bad "service worker caches app pages" || ok "service worker never caches app pages"
 check "manifest not cached stale" "$(curl -s -D - -o /dev/null "$BASE/app/$S/manifest.webmanifest" | grep -i '^cache-control' | tr -d '\r' | cut -d' ' -f2)" "no-cache"
 check "install page not cached" "$(curl -s -D - -o /dev/null "$BASE/app/$S" | grep -i '^cache-control' | tr -d '\r' | cut -d' ' -f2)" "no-store"
+
+echo "== locked phone app (Cameras preset: locked, no page zoom, one camera per row)"
+K="kamery-$SUF"
+req POST /api/v1/pwa-apps "{\"slug\":\"$K\",\"name\":\"Kamery $SUF\",\"start_url\":\"/video\",\"sections\":[\"cameras\"],\"locked\":true,\"page_zoom\":false,\"camera_layout\":\"list\",\"reason\":\"e2e\"}"; check "unknown camera layout refused" "$(st)" 400
+req POST /api/v1/pwa-apps "{\"slug\":\"$K\",\"name\":\"Kamery $SUF\",\"start_url\":\"/video\",\"sections\":[\"cameras\"],\"locked\":\"yes\",\"reason\":\"e2e\"}"; check "locked must be a boolean" "$(st)" 400
+req POST /api/v1/pwa-apps "{\"slug\":\"$K\",\"name\":\"Kamery $SUF\",\"short_name\":\"Kamery\",\"start_url\":\"/video\",\"sections\":[\"cameras\"],\"locked\":true,\"page_zoom\":false,\"camera_layout\":\"single\",\"reason\":\"e2e locked\"}"
+check "locked app created" "$(st) $(jx 'j.locked + " " + j.page_zoom + " " + j.camera_layout + " " + j.warnings.length')" "201 true false single 0"
+pub "/api/v1/pwa-apps/$K/launch"; check "launch info carries the options" "$(st) $(jx 'j.locked + " " + j.page_zoom + " " + j.camera_layout')" "200 true false single"
+pub "/app/$K"; check "install page of the locked app" "$(st)" 200
+grep -q '/?full=1' "$TMP/b" && bad "locked app: install page links the full application" || ok "locked app: install page has no way into the full application"
+req PUT "/api/v1/pwa-apps/$K" "{\"name\":\"Kamery $SUF\",\"short_name\":\"Kamery\",\"start_url\":\"/video\",\"sections\":[\"cameras\"],\"reason\":\"e2e keep options\"}"
+check "update without the options keeps them" "$(st) $(jx 'j.version + " " + j.locked + " " + j.page_zoom + " " + j.camera_layout')" "200 2 true false single"
+req PUT "/api/v1/pwa-apps/$K" "{\"name\":\"Kamery $SUF\",\"start_url\":\"/video/walls/$WALL\",\"sections\":[\"cameras\"],\"camera_layout\":\"grid\",\"reason\":\"e2e wall start\"}"
+check "wall start page is in the cameras section (no warning)" "$(st) $(jx 'j.camera_layout + " " + j.warnings.length')" "200 grid 0"
+req PUT "/api/v1/pwa-apps/$K" "{\"name\":\"Kamery $SUF\",\"start_url\":\"/incidents\",\"sections\":[\"cameras\"],\"reason\":\"e2e outside\"}"
+check "locked app with a start page outside its sections: warned" "$(st) $(jx 'j.warnings.length')" "200 1"
+req PUT "/api/v1/pwa-apps/$K" "{\"name\":\"Kamery $SUF\",\"start_url\":\"/video\",\"sections\":[\"cameras\"],\"locked\":false,\"page_zoom\":true,\"camera_layout\":\"\",\"reason\":\"e2e unlock\"}"
+check "unlocked, zoom back, empty layout keeps it" "$(st) $(jx 'j.locked + " " + j.page_zoom + " " + j.camera_layout')" "200 false true grid"
+pub "/app/$K"; grep -q '/?full=1' "$TMP/b" && ok "unlocked again: the way out is back" || bad "unlocked again: no link to the full application"
+req GET /api/v1/pwa-apps; check "list shows the options" "$(jx "j.filter(a => a.slug === '$K').map(a => a.locked + ' ' + a.page_zoom + ' ' + a.camera_layout).join()")" "false true grid"
+req GET "/api/v1/export/audit?format=csv"; grep "pwa_app.update" "$TMP/b" | grep "e2e unlock" | grep -q "locked" && ok "options in the audit trail" || bad "options missing in the audit trail"
+req DELETE "/api/v1/pwa-apps/$K?reason=e2e%20cleanup"; check "locked app deleted" "$(st)" 200
 
 echo "== update (Video wall)"
 req PUT "/api/v1/pwa-apps/$S" "{\"name\":\"Gate $SUF\",\"short_name\":\"Gate wall at entrance\",\"start_url\":\"/video/walls/$WALL\",\"sections\":[\"home\",\"cameras\",\"dashboards\",\"home\"],\"theme_color\":\"#0F766E\",\"reason\":\"e2e update\"}"

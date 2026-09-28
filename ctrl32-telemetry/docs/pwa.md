@@ -50,6 +50,19 @@ drawer) shows only the app's sections plus My account, the header shows the app'
 page, sign-in returns to the start page and sign-out stays in the app. *My account → Open the full application*
 leaves the mode. In a normal browser tab, *Open* on the install page starts the app mode in that tab.
 
+### In the app window (0.61.0)
+
+Three options of the app profile shape the window; the **Cameras** preset turns all of them on (a phone app for the
+cameras only). Existing apps keep the previous behaviour.
+
+| Option | Default | Effect |
+|---|---|---|
+| **Locked to its sections** (`locked`) | off | No way into the full application: no *Open the full application*, `?full=1` is ignored, the install page has no *Full application* button. A page outside the chosen sections (typed address, link, back button) opens the start page instead; sign-in, password reset, *Password and MFA* and the licence page stay reachable. My account keeps only *Password and MFA*; sign out stays at the bottom of the menu. |
+| **Zoom the page with two fingers** (`page_zoom`) | on | Off: pinch and double tap do not enlarge the page (viewport `user-scalable=no`, `touch-action`, and on iPhone the gesture events are cancelled — Safari ignores `user-scalable`). The camera picture still zooms with two fingers inside the player; a long press on the picture opens no browser menu. |
+| **Cameras in live view and on video walls** (`camera_layout`) | `auto` | `auto`: one camera per row on screens narrower than 700 px, the grid elsewhere; `single`: always one per row; `grid`: always the grid. The grid/list switch next to the live view and in the wall bar overrides it on that device (remembered in the browser). |
+
+Locking limits the app's screens, not the user's rights — see the next paragraph.
+
 **An app is a view, not a permission boundary.** The menu is filtered by the user's permissions first — an app never
 shows what the user may not see — and the server checks permissions on every request as always. Someone who types
 another address in the app window still gets only what the role allows. To limit what a person can see, use roles

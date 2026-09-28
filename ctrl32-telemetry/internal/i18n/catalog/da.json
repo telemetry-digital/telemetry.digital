@@ -2257,5 +2257,18 @@
  "This app does not exist or is switched off. Ask your administrator for the right address.": "Denne app findes ikke eller er slået fra. Bed din administrator om den rigtige adresse.",
  "Up to 12 characters fit under the icon on most phones.": "Op til 12 tegn kan stå under ikonet på de fleste telefoner.",
  "app deleted": "app slettet",
- "app saved": "app gemt"
+ "app saved": "app gemt",
+ "No way into the full application": "Ingen adgang til hele programmet",
+ "no page zoom": "ingen sidezoom",
+ "In the app window": "I appvinduet",
+ "Locked to its sections — no way into the full application": "Låst til sine sektioner — ingen adgang til hele programmet",
+ "Pages outside the chosen sections open the start page instead; My account keeps only Password and MFA and Sign out. This limits the app's screens, not the user's rights: permissions stay what protects data.": "Sider uden for de valgte sektioner åbner i stedet startsiden; Min konto beholder kun Adgangskode og MFA samt Log ud. Det begrænser appens skærme, ikke brugerens rettigheder: data beskyttes fortsat af tilladelserne.",
+ "Zoom the page with two fingers": "Zoom siden med to fingre",
+ "Off: pinch and double tap do not enlarge the page (the camera picture still zooms with two fingers).": "Fra: knib og dobbelttryk forstørrer ikke siden (kamerabilledet kan stadig zoomes med to fingre).",
+ "Cameras in live view and on video walls": "Kameraer i livevisning og på videovægge",
+ "automatic — one per row on phones": "automatisk — én pr. række på telefoner",
+ "one camera per row": "ét kamera pr. række",
+ "grid": "gitter",
+ "Grid": "Gitter",
+ "One camera per row": "Ét kamera pr. række"
 }

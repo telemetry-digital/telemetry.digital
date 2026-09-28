@@ -2257,5 +2257,18 @@
  "This app does not exist or is switched off. Ask your administrator for the right address.": "Seda rakendust pole olemas või see on välja lülitatud. Küsige administraatorilt õiget aadressi.",
  "Up to 12 characters fit under the icon on most phones.": "Enamikus telefonides mahub ikooni alla kuni 12 märki.",
  "app deleted": "rakendus kustutatud",
- "app saved": "rakendus salvestatud"
+ "app saved": "rakendus salvestatud",
+ "No way into the full application": "Ligipääsuta täisrakendusele",
+ "no page zoom": "lehe suumimiseta",
+ "In the app window": "Rakenduse aknas",
+ "Locked to its sections — no way into the full application": "Lukustatud oma jaotistele — ligipääsuta täisrakendusele",
+ "Pages outside the chosen sections open the start page instead; My account keeps only Password and MFA and Sign out. This limits the app's screens, not the user's rights: permissions stay what protects data.": "Valitud jaotistest väljas olevad lehed avavad selle asemel avalehe; Minu kontole jääb ainult Parool ja MFA ning Logi välja. See piirab rakenduse ekraane, mitte kasutaja õigusi: andmeid kaitsevad endiselt õigused.",
+ "Zoom the page with two fingers": "Suumi lehte kahe sõrmega",
+ "Off: pinch and double tap do not enlarge the page (the camera picture still zooms with two fingers).": "Väljas: näpistamine ja topeltpuudutus lehte ei suurenda (kaamerapilti saab endiselt kahe sõrmega suumida).",
+ "Cameras in live view and on video walls": "Kaamerad otsevaates ja videoseintel",
+ "automatic — one per row on phones": "automaatne — telefonides üks reas",
+ "one camera per row": "üks kaamera reas",
+ "grid": "ruudustik",
+ "Grid": "Ruudustik",
+ "One camera per row": "Üks kaamera reas"
 }

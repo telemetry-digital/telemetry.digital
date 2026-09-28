@@ -2257,5 +2257,18 @@
  "This app does not exist or is switched off. Ask your administrator for the right address.": "Tato aplikace neexistuje nebo je vypnutá. Zeptejte se správce na správnou adresu.",
  "Up to 12 characters fit under the icon on most phones.": "Pod ikonu se na většině mobilů vejde do 12 znaků.",
  "app deleted": "aplikace smazána",
- "app saved": "aplikace uložena"
+ "app saved": "aplikace uložena",
+ "No way into the full application": "Bez cesty do celé aplikace",
+ "no page zoom": "bez zvětšování stránky",
+ "In the app window": "V okně aplikace",
+ "Locked to its sections — no way into the full application": "Uzamčená na své části — bez cesty do celé aplikace",
+ "Pages outside the chosen sections open the start page instead; My account keeps only Password and MFA and Sign out. This limits the app's screens, not the user's rights: permissions stay what protects data.": "Stránky mimo zvolené části otevřou místo sebe úvodní stránku; v Mém účtu zůstane jen Heslo a MFA a Odhlásit. Omezuje to obrazovky aplikace, ne práva uživatele: data dál chrání oprávnění.",
+ "Zoom the page with two fingers": "Zvětšovat stránku dvěma prsty",
+ "Off: pinch and double tap do not enlarge the page (the camera picture still zooms with two fingers).": "Vypnuto: roztažení prsty ani dvojité klepnutí stránku nezvětší (obraz kamery se dvěma prsty zvětšuje i nadále).",
+ "Cameras in live view and on video walls": "Kamery v živém obrazu a na videostěnách",
+ "automatic — one per row on phones": "automaticky — na mobilu jedna na řádek",
+ "one camera per row": "jedna kamera na řádek",
+ "grid": "mřížka",
+ "Grid": "Mřížka",
+ "One camera per row": "Jedna kamera na řádek"
 }

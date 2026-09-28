@@ -14,6 +14,7 @@
   <div class="wall-bar" id="bar">
     <b class="notranslate" id="wname"></b>
     <select id="screen" aria-label="Screen"></select>
+    <span class="cam-layout" id="camLayout" role="group" aria-label="Layout"><button class="btn ghost small" type="button" data-layout="grid" title="Grid" aria-label="Grid"></button><button class="btn ghost small" type="button" data-layout="list" title="One camera per row" aria-label="One camera per row"></button></span>
     <button class="btn ghost small" type="button" id="fs">Full screen</button>
     <button class="btn ghost small" type="button" id="all">Open on all monitors</button>
     <a class="btn ghost small" href="/video/walls">Close</a>
@@ -60,6 +61,16 @@ function maximize(el) {
   big = {el, p};
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && big) maximize(big.el); });
+// on a phone the tiles go below each other (one camera per row, scrolling); the same streams as in the grid
+const LAYOUT = ctrl32Player.layout;
+function applyLayout() {
+  const m = LAYOUT.mode();
+  document.body.classList.toggle('wall-list', m === 'list');
+  for (const b of document.querySelectorAll('#camLayout [data-layout]')) { b.classList.toggle('on', b.dataset.layout === m); b.setAttribute('aria-pressed', String(b.dataset.layout === m)); }
+}
+for (const b of document.querySelectorAll('#camLayout [data-layout]')) { b.innerHTML = LAYOUT.icons[b.dataset.layout]; b.onclick = (e) => { e.stopPropagation(); LAYOUT.set(b.dataset.layout); applyLayout(); }; }
+addEventListener('resize', applyLayout);
+applyLayout();
 $('#screen').onchange = e => { SCREEN = +e.target.value; const u = new URL(location.href); u.searchParams.set('screen', SCREEN); history.replaceState(null, '', u); render(); };
 $('#fs').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); };
 $('#all').onclick = async () => {
@@ -81,6 +92,7 @@ ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(async () => {
     WALL = w; for (const c of cams) CAMS[c.id] = c;
   } catch (x) { $('#grid').innerHTML = `<div class="vp-msg">${esc(x.message)}</div>`; return; }
   $('#wname').textContent = WALL.name;
+  applyLayout(); // the app profile is known now
   render(); wake();
   // cameras reporting motion or other events are outlined
   setInterval(async () => {

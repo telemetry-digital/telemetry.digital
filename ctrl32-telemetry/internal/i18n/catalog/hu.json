@@ -2257,5 +2257,18 @@
  "This app does not exist or is switched off. Ask your administrator for the right address.": "Ez az alkalmazás nem létezik vagy ki van kapcsolva. Kérje el a helyes címet az adminisztrátortól.",
  "Up to 12 characters fit under the icon on most phones.": "A legtöbb telefonon legfeljebb 12 karakter fér el az ikon alatt.",
  "app deleted": "alkalmazás törölve",
- "app saved": "alkalmazás mentve"
+ "app saved": "alkalmazás mentve",
+ "No way into the full application": "Nincs átjárás a teljes alkalmazásba",
+ "no page zoom": "nincs oldalnagyítás",
+ "In the app window": "Az alkalmazás ablakában",
+ "Locked to its sections — no way into the full application": "A saját részeire zárva — nincs átjárás a teljes alkalmazásba",
+ "Pages outside the chosen sections open the start page instead; My account keeps only Password and MFA and Sign out. This limits the app's screens, not the user's rights: permissions stay what protects data.": "A kiválasztott részeken kívüli oldalak helyett a kezdőlap nyílik meg; a Saját fiókban csak a Jelszó és MFA és a Kijelentkezés marad. Ez az alkalmazás képernyőit korlátozza, nem a felhasználó jogait: az adatokat továbbra is a jogosultságok védik.",
+ "Zoom the page with two fingers": "Oldal nagyítása két ujjal",
+ "Off: pinch and double tap do not enlarge the page (the camera picture still zooms with two fingers).": "Kikapcsolva: a széthúzás és a dupla koppintás nem nagyítja az oldalt (a kamera képe két ujjal továbbra is nagyítható).",
+ "Cameras in live view and on video walls": "Kamerák élőképen és videofalakon",
+ "automatic — one per row on phones": "automatikus — telefonon soronként egy",
+ "one camera per row": "soronként egy kamera",
+ "grid": "rács",
+ "Grid": "Rács",
+ "One camera per row": "Soronként egy kamera"
 }

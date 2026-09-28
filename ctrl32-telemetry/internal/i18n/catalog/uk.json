@@ -2257,5 +2257,18 @@
  "This app does not exist or is switched off. Ask your administrator for the right address.": "Цей застосунок не існує або вимкнений. Запитайте в адміністратора правильну адресу.",
  "Up to 12 characters fit under the icon on most phones.": "На більшості телефонів під значком уміщується до 12 символів.",
  "app deleted": "застосунок видалено",
- "app saved": "застосунок збережено"
+ "app saved": "застосунок збережено",
+ "No way into the full application": "Без переходу до повного застосунку",
+ "no page zoom": "без масштабування сторінки",
+ "In the app window": "У вікні застосунку",
+ "Locked to its sections — no way into the full application": "Заблоковано на своїх розділах — без переходу до повного застосунку",
+ "Pages outside the chosen sections open the start page instead; My account keeps only Password and MFA and Sign out. This limits the app's screens, not the user's rights: permissions stay what protects data.": "Сторінки поза вибраними розділами відкривають натомість початкову сторінку; у Моєму обліковому записі лишаються тільки Пароль і MFA та Вийти. Це обмежує екрани застосунку, а не права користувача: дані й надалі захищають дозволи.",
+ "Zoom the page with two fingers": "Масштабувати сторінку двома пальцями",
+ "Off: pinch and double tap do not enlarge the page (the camera picture still zooms with two fingers).": "Вимкнено: розведення пальців і подвійний дотик не збільшують сторінку (зображення камери й надалі масштабується двома пальцями).",
+ "Cameras in live view and on video walls": "Камери в живому перегляді та на відеостінах",
+ "automatic — one per row on phones": "автоматично — на телефонах одна в рядку",
+ "one camera per row": "одна камера в рядку",
+ "grid": "сітка",
+ "Grid": "Сітка",
+ "One camera per row": "Одна камера в рядку"
 }

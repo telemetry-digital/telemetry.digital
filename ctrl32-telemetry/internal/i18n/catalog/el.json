@@ -2257,5 +2257,18 @@
  "This app does not exist or is switched off. Ask your administrator for the right address.": "Αυτή η εφαρμογή δεν υπάρχει ή είναι απενεργοποιημένη. Ζητήστε από τον διαχειριστή σας τη σωστή διεύθυνση.",
  "Up to 12 characters fit under the icon on most phones.": "Στα περισσότερα τηλέφωνα χωρούν έως 12 χαρακτήρες κάτω από το εικονίδιο.",
  "app deleted": "η εφαρμογή διαγράφηκε",
- "app saved": "η εφαρμογή αποθηκεύτηκε"
+ "app saved": "η εφαρμογή αποθηκεύτηκε",
+ "No way into the full application": "Χωρίς πρόσβαση στην πλήρη εφαρμογή",
+ "no page zoom": "χωρίς μεγέθυνση σελίδας",
+ "In the app window": "Στο παράθυρο της εφαρμογής",
+ "Locked to its sections — no way into the full application": "Κλειδωμένη στις ενότητές της — χωρίς πρόσβαση στην πλήρη εφαρμογή",
+ "Pages outside the chosen sections open the start page instead; My account keeps only Password and MFA and Sign out. This limits the app's screens, not the user's rights: permissions stay what protects data.": "Οι σελίδες εκτός των επιλεγμένων ενοτήτων ανοίγουν αντί γι' αυτές την αρχική σελίδα· ο Λογαριασμός μου κρατά μόνο Κωδικό και MFA και Αποσύνδεση. Αυτό περιορίζει τις οθόνες της εφαρμογής, όχι τα δικαιώματα του χρήστη: τα δεδομένα εξακολουθούν να προστατεύονται από τα δικαιώματα πρόσβασης.",
+ "Zoom the page with two fingers": "Μεγέθυνση σελίδας με δύο δάχτυλα",
+ "Off: pinch and double tap do not enlarge the page (the camera picture still zooms with two fingers).": "Απενεργοποιημένο: το τσίμπημα και το διπλό πάτημα δεν μεγεθύνουν τη σελίδα (η εικόνα της κάμερας μεγεθύνεται ακόμη με δύο δάχτυλα).",
+ "Cameras in live view and on video walls": "Κάμερες σε ζωντανή προβολή και σε βιντεοτοίχους",
+ "automatic — one per row on phones": "αυτόματα — μία ανά γραμμή στα τηλέφωνα",
+ "one camera per row": "μία κάμερα ανά γραμμή",
+ "grid": "πλέγμα",
+ "Grid": "Πλέγμα",
+ "One camera per row": "Μία κάμερα ανά γραμμή"
 }

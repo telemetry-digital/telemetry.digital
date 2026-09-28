@@ -145,3 +145,111 @@ func TestPWASectionsMatchMenu(t *testing.T) {
 		}
 	}
 }
+
+// Options of 0.61.0: locked app, page zoom, camera layout.
+func TestValidatePWAAppOptions(t *testing.T) {
+	a := PWAApp{Slug: "kamery", Name: "Kamery", StartURL: "/video", Sections: []string{"cameras"}, PageZoom: true}
+	if msg, _ := validatePWAApp(&a); msg != "" || a.CameraLayout != "auto" {
+		t.Fatalf("empty layout: msg %q, layout %q (want auto)", msg, a.CameraLayout)
+	}
+	for _, l := range []string{"auto", "single", "grid", " single "} {
+		a.CameraLayout = l
+		if msg, _ := validatePWAApp(&a); msg != "" || a.CameraLayout != strings.TrimSpace(l) {
+			t.Errorf("layout %q refused or not trimmed: %q %q", l, msg, a.CameraLayout)
+		}
+	}
+	for _, l := range []string{"list", "Single", "1", "<b>"} {
+		a.CameraLayout = l
+		if msg, _ := validatePWAApp(&a); msg == "" {
+			t.Errorf("layout %q accepted", l)
+		}
+	}
+	// a locked app whose start page is outside its sections is allowed, with a warning
+	a = PWAApp{Slug: "kamery", Name: "Kamery", StartURL: "/video/walls/w1", Sections: []string{"cameras"}, Locked: true}
+	if msg, warn := validatePWAApp(&a); msg != "" || len(warn) != 0 {
+		t.Errorf("start page in the cameras section: %q %v", msg, warn)
+	}
+	a.StartURL = "/dashboards/plant"
+	if msg, warn := validatePWAApp(&a); msg != "" || len(warn) != 1 {
+		t.Errorf("start page outside the sections of a locked app: %q %v", msg, warn)
+	}
+	a.Locked = false
+	if _, warn := validatePWAApp(&a); len(warn) != 0 {
+		t.Errorf("an unlocked app does not warn: %v", warn)
+	}
+	// the options are part of the version's checksum
+	b := PWAApp{Slug: "k", Name: "K", ShortName: "K", StartURL: "/video", Sections: []string{"cameras"}, PageZoom: true, CameraLayout: "auto"}
+	c := b
+	c.Locked = true
+	d := b
+	d.PageZoom = false
+	e := b
+	e.CameraLayout = "single"
+	if b.checksum() == c.checksum() || b.checksum() == d.checksum() || b.checksum() == e.checksum() {
+		t.Error("checksum ignores locked, page_zoom or camera_layout")
+	}
+	out := c.out()
+	if out["locked"] != true || out["page_zoom"] != true || out["camera_layout"] != "auto" {
+		t.Errorf("profile output without the options: %v", out)
+	}
+}
+
+func TestPWAPathIn(t *testing.T) {
+	cams := pwaSectionPaths["cameras"]
+	for _, p := range []string{"/video", "/video/walls", "/video/cameras/abc", "/video/walls/w1"} {
+		if !pwaPathIn(p, cams) {
+			t.Errorf("%s not in cameras", p)
+		}
+	}
+	for _, p := range []string{"/videos", "/devices", "/", "/v", "/api/v1/video"} {
+		if pwaPathIn(p, cams) {
+			t.Errorf("%s in cameras", p)
+		}
+	}
+	dash := pwaSectionPaths["dashboards"]
+	if !pwaPathIn("/", dash) || !pwaPathIn("/dashboards/x", dash) || pwaPathIn("/devices", dash) {
+		t.Error(`"/" of the dashboards section matches only itself`)
+	}
+	for _, s := range pwaSections {
+		if _, ok := pwaSectionPaths[s.Key]; !ok {
+			t.Errorf("section %s has no pages for a locked app", s.Key)
+		} else if !pwaPathIn(s.URL, pwaSectionPaths[s.Key]) {
+			t.Errorf("section %s: its own page %s is not allowed in a locked app", s.Key, s.URL)
+		}
+	}
+}
+
+// app.js confines a locked app with the same pages per section as the server.
+func TestPWASectionPathsMatchAppJS(t *testing.T) {
+	b, err := static.ReadFile("static/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, paths := range pwaSectionPaths {
+		q := make([]string, len(paths))
+		for i, p := range paths {
+			q[i] = "'" + p + "'"
+		}
+		if want := key + ": [" + strings.Join(q, ", ") + "]"; !strings.Contains(string(b), want) {
+			t.Errorf("app.js APP_PATHS has no %s", want)
+		}
+	}
+}
+
+// The install page of a locked app offers no way into the full application.
+func TestPWAInstallPageLocked(t *testing.T) {
+	var sb strings.Builder
+	data := map[string]any{"Slug": "kamery", "Name": "Kamery", "ShortName": "Kamery", "Start": "/video", "Theme": "#e30613", "TouchIcon": "/icon-192.png", "Product": "ctrl32 telemetry", "Locked": true}
+	if err := pwaPage.Execute(&sb, data); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(sb.String(), "/?full=1") {
+		t.Error("locked app: install page links the full application")
+	}
+	sb.Reset()
+	data["Locked"] = false
+	_ = pwaPage.Execute(&sb, data)
+	if !strings.Contains(sb.String(), "/?full=1") {
+		t.Error("unlocked app: install page lost the link to the full application")
+	}
+}

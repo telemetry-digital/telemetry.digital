@@ -1020,8 +1020,9 @@ func (s *Server) cameraPlayback(w http.ResponseWriter, r *http.Request) {
 			t0, d0 = time.Now(), p.Sample.DTS
 		}
 		due := t0.Add(time.Duration(float64(p.Sample.DTS-d0) / video.ClockRate / speed * float64(time.Second)))
-		// send up to half a second ahead so the player keeps a small buffer
-		if wait := time.Until(due) - 500*time.Millisecond; wait > 0 {
+		// send ahead so the player keeps a small buffer: half a second, more at higher speeds (the player plays the
+		// recorded timestamps with playbackRate = speed, so a fast playback drains the buffer faster)
+		if wait := time.Until(due) - playbackLead(speed); wait > 0 {
 			select {
 			case <-vc.ctx.Done():
 				vc.close("")
@@ -1359,4 +1360,11 @@ func (s *Server) deleteWall(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "video_wall.delete", "video_wall", r.PathValue("id"), old, nil, reason)
 	writeJSON(w, 200, map[string]any{"ok": true})
+}
+
+// playbackLead is how far ahead of its due time (wall clock) a recorded frame is sent: 0.5 s at normal speed, 0.5 s ×
+// speed when faster, at most 2 s (32 s of recording at 16×).
+func playbackLead(speed float64) time.Duration {
+	lead := time.Duration(float64(500*time.Millisecond) * max(1, speed))
+	return min(lead, 2*time.Second)
 }

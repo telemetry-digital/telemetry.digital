@@ -652,7 +652,7 @@ body.has-landing main.container { max-width: none; padding: 0; }
 .ptz { position: absolute; right: 10px; bottom: 10px; z-index: 3; display: grid; grid-template-columns: repeat(3, 34px); grid-template-rows: repeat(3, 34px); gap: 2px; opacity: .35; transition: opacity .2s; }
 .cam-live:hover .ptz, .ptz:focus-within { opacity: 1; }
 .ptz button { border: 0; border-radius: 6px; background: rgba(15,23,42,.8); color: #fff; font-size: 16px; cursor: pointer; touch-action: none; }
-.ptz button:active { background: var(--primary); }
+.ptz button:active, .ptz button.held, .ptz-extra button.held { background: var(--primary); }
 .ptz-extra { position: absolute; right: 10px; bottom: 120px; z-index: 3; display: flex; flex-direction: column; gap: 4px; opacity: .35; transition: opacity .2s; }
 .cam-live:hover .ptz-extra { opacity: 1; }
 .ptz-extra button, .ptz-extra select { border: 0; border-radius: 6px; background: rgba(15,23,42,.8); color: #fff; padding: 4px 8px; font-size: 13px; }
@@ -672,7 +672,7 @@ body.has-landing main.container { max-width: none; padding: 0; }
 #setSave { align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 .ptz[hidden], .ptz-extra[hidden] { display: none; }
 @media (max-width: 700px) {
-  .ptz { grid-template-columns: repeat(3, 30px); grid-template-rows: repeat(3, 30px); right: 6px; bottom: 6px; opacity: .85; }
+  .ptz { grid-template-columns: repeat(3, 36px); grid-template-rows: repeat(3, 36px); right: 6px; bottom: 6px; opacity: .85; }
   .ptz-extra { right: auto; left: 6px; bottom: 6px; top: auto; opacity: .85; }
   .ptz-extra select { max-width: 120px; }
 }
@@ -744,3 +744,32 @@ body.kiosk .footer svg { width: 11px; height: 11px; }
 .pin-pop-head { display: flex; gap: 8px; align-items: center; padding: 8px 10px; }
 .pin-pop-vid { position: relative; aspect-ratio: 16 / 9; background: #000; }
 .relay-cmd { background: var(--bg2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin: 4px 0 8px; font: 12px var(--mono); white-space: pre; overflow-x: auto; }
+
+/* ---- phone camera apps (0.61.0) ---- */
+/* app without page zoom (app profile page_zoom false): pinch and double-tap do not zoom the page */
+html.no-page-zoom, html.no-page-zoom body { touch-action: pan-x pan-y; }
+/* video, player bar and PTZ: controls, not text — no selection, no callout or loupe on a long press, no double-tap zoom */
+.vp, .cam-tile, .cam-widget, .wall-grid, .wall-bar, .pbar, .ptz, .ptz-extra, .cam-layout { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.pb, .pb-group button, .ptz-extra button, .ptz-extra select, .wall-bar .btn, .wall-bar select, .cam-layout button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.ptz button, .ptz-extra button[data-z] { touch-action: none; -webkit-tap-highlight-color: transparent; }
+.pb svg, .pb small, .pb .dot, .ptz svg, .ptz-extra svg { pointer-events: none; -webkit-user-drag: none; }
+.ptz button { display: flex; align-items: center; justify-content: center; padding: 0; }
+.ptz button svg { width: 18px; height: 18px; }
+.ptz-extra button[data-z] { display: flex; align-items: center; justify-content: center; min-height: 30px; }
+.ptz-extra button[data-z] svg { width: 16px; height: 16px; }
+/* the player zooms its picture with two fingers: the page neither zooms nor scrolls under a zoomed picture */
+.vp.vp-zoomable { touch-action: pan-x pan-y; }
+.vp.vp-zoomable.zoomed { touch-action: none; }
+/* live view: grid or one camera per row (list) */
+.cam-layout { display: inline-flex; }
+.cam-layout svg { width: 16px; height: 16px; vertical-align: -3px; }
+.cam-grid.cam-list { grid-template-columns: 1fr !important; max-width: 960px; margin: 0 auto; }
+.cam-list-mode #tileSizeWrap { display: none; }
+/* video wall as a list: cameras below each other, full width, scrolling */
+body.wall.wall-list { overflow: auto; }
+body.wall.wall-list .wall-grid { position: static; grid-template-columns: 1fr !important; grid-template-rows: none !important; gap: 4px; padding: 56px 0 4px; min-height: 100vh; background: #000; }
+body.wall.wall-list .wall-grid .cell { aspect-ratio: 16 / 9; }
+body.wall.wall-list .wall-grid .cell:not([data-id]) { display: none; }
+.wall-bar { max-width: calc(100vw - 16px); flex-wrap: wrap; justify-content: center; }
+@media (max-width: 700px) { .wall-bar #all { display: none; } }
+.wall-bar .cam-layout { gap: 2px; } .wall-bar .cam-layout .btn { padding: 2px 6px; } .wall-bar .cam-layout .btn.on { background: rgba(255,255,255,.18); }

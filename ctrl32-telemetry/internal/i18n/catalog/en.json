@@ -2257,5 +2257,18 @@
  "This app does not exist or is switched off. Ask your administrator for the right address.": "This app does not exist or is switched off. Ask your administrator for the right address.",
  "Up to 12 characters fit under the icon on most phones.": "Up to 12 characters fit under the icon on most phones.",
  "app deleted": "app deleted",
- "app saved": "app saved"
+ "app saved": "app saved",
+ "No way into the full application": "No way into the full application",
+ "no page zoom": "no page zoom",
+ "In the app window": "In the app window",
+ "Locked to its sections — no way into the full application": "Locked to its sections — no way into the full application",
+ "Pages outside the chosen sections open the start page instead; My account keeps only Password and MFA and Sign out. This limits the app's screens, not the user's rights: permissions stay what protects data.": "Pages outside the chosen sections open the start page instead; My account keeps only Password and MFA and Sign out. This limits the app's screens, not the user's rights: permissions stay what protects data.",
+ "Zoom the page with two fingers": "Zoom the page with two fingers",
+ "Off: pinch and double tap do not enlarge the page (the camera picture still zooms with two fingers).": "Off: pinch and double tap do not enlarge the page (the camera picture still zooms with two fingers).",
+ "Cameras in live view and on video walls": "Cameras in live view and on video walls",
+ "automatic — one per row on phones": "automatic — one per row on phones",
+ "one camera per row": "one camera per row",
+ "grid": "grid",
+ "Grid": "Grid",
+ "One camera per row": "One camera per row"
 }

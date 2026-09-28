@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-27
 
-**Status**: Implemented (0.60.0)
+**Status**: Implemented (0.60.0; options of the app window 0.61.0)
 
 **Input**: The user (27. 9. 2026): "Chcelo by to spraviť nastavenie, kde by sa dali robiť rôzne PWA — na kamery
 napríklad atď." — a settings page where different PWAs can be made, for example one for the cameras.
@@ -77,3 +77,27 @@ specs 010/011 (cameras, video walls, phone use); URS J-15, J-15a; constitution I
   permissions (operator refused, anonymous refused); white-label naming with the test license; audit with reasons.
 - SC-003 Headless `pwa_apps`: Settings → Apps with presets, install page (QR, Android and iPhone hints), launch as
   from the home screen, restricted menu on desktop and phone, the mode kept across pages, the way out, a deleted app.
+
+## Addendum 0.61.0: options of the app window
+
+**Input**: a phone app for the cameras should not lead into the whole system, the page should not zoom with two
+fingers (only the camera picture), and on a phone the cameras should go below each other.
+
+- FR-011 Profile options, versioned with the profile (migration 0042; existing profiles keep today's behaviour):
+  `locked` (default false), `page_zoom` (default true), `camera_layout` `auto` | `single` | `grid` (default `auto`).
+  An update that leaves an option out keeps its value. The launch info carries the options.
+- FR-012 Locked app: no way into the full application (no *Open the full application*, `?full=1` ignored, no *Full
+  application* on the install page); a page outside the app's sections opens the start page (before the page
+  renders, for links, and on back/forward); sign-in, password reset, Password and MFA, the licence page and the start
+  page stay reachable; My account keeps only Password and MFA. UI confinement only — permissions stay the boundary.
+  A start page outside the sections of a locked app gives a warning.
+- FR-013 Page zoom off: viewport `maximum-scale=1, user-scalable=no`, `touch-action: pan-x pan-y`, iOS gesture events
+  cancelled outside the video player; the player keeps its own pinch zoom; a long press on the picture opens no
+  browser menu; PTZ buttons are press-and-hold with pointer capture and exactly one stop per press.
+- FR-014 Camera layout of the live view and video walls: grid or one camera per row; the viewer's choice on the
+  device (grid/list switch) wins, else the app's `camera_layout`, else automatic (list below 700 px).
+- FR-015 Playback of a recording at a higher speed plays at that speed in the browser (`playbackRate`) and the server
+  sends further ahead (0.5 s × speed, at most 2 s).
+- SC-004 Unit (validation, defaults, kept options, warning, playback lead), e2e `pwa_apps` (93), headless `pwa_apps`
+  (Cameras preset options, locked phone app: no way out, redirect to the start page, viewport, one camera per row,
+  device choice wins).

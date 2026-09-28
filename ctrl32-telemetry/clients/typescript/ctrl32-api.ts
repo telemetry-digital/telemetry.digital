@@ -729,13 +729,19 @@ export type Organization = {
 };
 
 export type PWAApp = {
+  /** live view and video walls: auto = one camera per row on narrow screens, single = always one per row, grid = always the grid */
+  camera_layout?: "auto" | "single" | "grid";
   created_at?: string;
   enabled?: boolean;
   /** id of this version */
   id?: string;
   install_url?: string;
+  /** the app window stays on its sections: no way into the full application (UI confinement, not a permission boundary) */
+  locked?: boolean;
   manifest_url?: string;
   name?: string;
+  /** false: pinch and double-tap do not zoom the page in the app (the video player still zooms its picture) */
+  page_zoom?: boolean;
   sections?: string[];
   /** home-screen label */
   short_name?: string;
@@ -749,10 +755,16 @@ export type PWAApp = {
 };
 
 export type PWAAppInput = {
+  /** default auto; omitted or empty on update keeps the value */
+  camera_layout?: "auto" | "single" | "grid";
   /** default true */
   enabled?: boolean;
+  /** default false; omitted on update keeps the value */
+  locked?: boolean;
   /** 1–64 characters */
   name: string;
+  /** default true; omitted on update keeps the value */
+  page_zoom?: boolean;
   /** Reason for the change, written to the audit trail (required, 3–200 characters). */
   reason: string;
   sections: string[];
@@ -4699,7 +4711,7 @@ export class Ctrl32Client {
 
   /** Create an app profile
    *
-   * `start_url` must be a path of this application (`/video`, `/video/walls/{id}`, `/dashboards/{slug}` …): no other site, no `//`, no `javascript:`, not `/api/v1/` or `/app/`. `sections`: keys from `GET /api/v1/pwa-apps/options`, at least one. `warnings` names a short name longer than 12 characters.
+   * `start_url` must be a path of this application (`/video`, `/video/walls/{id}`, `/dashboards/{slug}` …): no other site, no `//`, no `javascript:`, not `/api/v1/` or `/app/`. `sections`: keys from `GET /api/v1/pwa-apps/options`, at least one. `warnings` names a short name longer than 12 characters, and the start page of a locked app outside its sections. `locked`, `page_zoom`, `camera_layout` (auto, single, grid): see the PWAApp schema.
    * 
    * Requires permission `content.write`. */
   postPwaApps(body: PWAAppInput): Promise<PWAApp> {
@@ -4772,11 +4784,14 @@ export class Ctrl32Client {
   }>('DELETE', `/api/v1/pwa-apps/${encodeURIComponent(slug)}`, query, undefined, false);
   }
 
-  /** Name, start page and sections of an enabled app
+  /** Name, start page, sections and options of an enabled app
    *
-   * Public (the app window needs it before sign-in); contains no data of the organization. 404 for an unknown or disabled app. */
+   * Public (the app window needs it before sign-in); contains no data of the organization. 404 for an unknown or disabled app. A locked app keeps the window on its sections (app.js redirects other pages to the start page and offers no way into the full application); this is UI confinement, permissions stay the security boundary. */
   getPwaAppsSlugLaunch(slug: string): Promise<{
+    camera_layout?: "auto" | "single" | "grid";
+    locked?: boolean;
     name?: string;
+    page_zoom?: boolean;
     sections?: string[];
     short_name?: string;
     slug?: string;
@@ -4784,7 +4799,10 @@ export class Ctrl32Client {
     theme_color?: string;
   }> {
     return this.request<{
+    camera_layout?: "auto" | "single" | "grid";
+    locked?: boolean;
     name?: string;
+    page_zoom?: boolean;
     sections?: string[];
     short_name?: string;
     slug?: string;

@@ -2257,5 +2257,18 @@
  "This app does not exist or is switched off. Ask your administrator for the right address.": "Tätä sovellusta ei ole olemassa tai se on poistettu käytöstä. Pyydä ylläpitäjältä oikea osoite.",
  "Up to 12 characters fit under the icon on most phones.": "Useimmissa puhelimissa kuvakkeen alle mahtuu enintään 12 merkkiä.",
  "app deleted": "sovellus poistettu",
- "app saved": "sovellus tallennettu"
+ "app saved": "sovellus tallennettu",
+ "No way into the full application": "Ei pääsyä koko sovellukseen",
+ "no page zoom": "ei sivun zoomausta",
+ "In the app window": "Sovellusikkunassa",
+ "Locked to its sections — no way into the full application": "Lukittu omiin osioihinsa — ei pääsyä koko sovellukseen",
+ "Pages outside the chosen sections open the start page instead; My account keeps only Password and MFA and Sign out. This limits the app's screens, not the user's rights: permissions stay what protects data.": "Valittujen osioiden ulkopuoliset sivut avaavat sen sijaan aloitussivun; Oma tili sisältää vain Salasana ja MFA sekä Kirjaudu ulos. Tämä rajaa sovelluksen näkymiä, ei käyttäjän oikeuksia: tietoja suojaavat edelleen käyttöoikeudet.",
+ "Zoom the page with two fingers": "Zoomaa sivua kahdella sormella",
+ "Off: pinch and double tap do not enlarge the page (the camera picture still zooms with two fingers).": "Pois: nipistys ja kaksoisnapautus eivät suurenna sivua (kamerakuvaa voi edelleen zoomata kahdella sormella).",
+ "Cameras in live view and on video walls": "Kamerat live-näkymässä ja videoseinillä",
+ "automatic — one per row on phones": "automaattinen — puhelimissa yksi riville",
+ "one camera per row": "yksi kamera riville",
+ "grid": "ruudukko",
+ "Grid": "Ruudukko",
+ "One camera per row": "Yksi kamera riville"
 }
