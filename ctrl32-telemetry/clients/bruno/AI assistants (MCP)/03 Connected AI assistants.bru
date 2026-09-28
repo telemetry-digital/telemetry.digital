@@ -1,0 +1,23 @@
+meta {
+  name: Connected AI assistants
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/mcp/grants
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~all: 
+}
+
+docs {
+  Connected AI assistants
+  
+  The assistants I approved (with all=1 the whole organization's, user.admin); revoked ones are listed for 30 days.
+  
+  Requires a signed-in user or an API token (any permission).
+}

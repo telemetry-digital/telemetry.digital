@@ -1,7 +1,8 @@
 # White labeling (paid: 39 EUR one-time, forever)
 
-ctrl32 telemetry is free, and everything except white labeling stays free. **White labeling** — delivering the system
-under your own brand — is a paid feature. It is unlocked by the **ctrl32 licence** sold on
+ctrl32 telemetry is free, and everything except white labeling and changes through AI assistants stays free.
+**White labeling** — delivering the system under your own brand — is a paid feature; the same license also unlocks
+**changes through AI assistants over MCP** (reading through assistants is free; `docs/mcp.md`, ADR-0017). It is unlocked by the **ctrl32 licence** sold on
 [ctrl32.com](https://ctrl32.com/pricing/): **39 EUR, paid once, valid forever** (no subscription). One ctrl32 licence
 unlocks **either** the ctrl32 editor **or** white labeling on one telemetry server (installation) — not both; whichever
 it is activated for first keeps it. Without a license every deployment shows the fixed ctrl32 footer. Specification:

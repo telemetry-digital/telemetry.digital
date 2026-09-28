@@ -1,0 +1,26 @@
+meta {
+  name: Switch AI access on or off
+  type: http
+  seq: 6
+}
+
+put {
+  url: {{baseUrl}}/api/v1/mcp/settings
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "enabled": true,
+    "reason": "string"
+  }
+}
+
+docs {
+  Switch AI access on or off
+  
+  Audited with the reason. Switching off stops every connected assistant at once (their tokens are refused); switching on again lets them continue.
+  
+  Requires permission `user.admin`.
+}

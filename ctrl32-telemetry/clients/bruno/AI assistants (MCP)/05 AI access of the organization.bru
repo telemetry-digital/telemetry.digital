@@ -1,0 +1,19 @@
+meta {
+  name: AI access of the organization
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/mcp/settings
+  body: none
+  auth: inherit
+}
+
+docs {
+  AI access of the organization
+  
+  Whether AI assistants may connect (off by default), the MCP address to add in the assistant, and the number of tools and operations offered.
+  
+  Requires a signed-in user or an API token (any permission).
+}

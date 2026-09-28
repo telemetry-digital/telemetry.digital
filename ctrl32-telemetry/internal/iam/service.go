@@ -72,6 +72,11 @@ type Principal struct {
 	MFAVerified bool
 	SessionID   string // hashed id; empty for API tokens
 	TokenID     string // API token id; empty for sessions
+	// GrantID is set for an access token issued over OAuth to an AI client (spec 022): such a token is valid only at
+	// /mcp, ClientName names the client, ReadOnly limits it to reading.
+	GrantID     string
+	ClientName  string
+	ReadOnly    bool
 	CSRFSecret  string
 	MustChange  bool
 	MFAEnabled  bool
@@ -642,7 +647,7 @@ func (s *Service) CreateAPIToken(ctx context.Context, p *Principal, name string,
 
 // ListAPITokens returns the user's tokens.
 func (s *Service) ListAPITokens(ctx context.Context, userID string) ([]APIToken, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id::text, name, scopes, expires_at, last_used_at, created_at, revoked_at FROM core.api_token WHERE user_id = $1::uuid ORDER BY created_at DESC`, userID)
+	rows, err := s.pool.Query(ctx, `SELECT id::text, name, scopes, expires_at, last_used_at, created_at, revoked_at FROM core.api_token WHERE user_id = $1::uuid AND grant_id IS NULL ORDER BY created_at DESC`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -660,7 +665,7 @@ func (s *Service) ListAPITokens(ctx context.Context, userID string) ([]APIToken,
 
 // RevokeAPIToken revokes one of the user's tokens.
 func (s *Service) RevokeAPIToken(ctx context.Context, userID, tokenID string) error {
-	tag, err := s.pool.Exec(ctx, `UPDATE core.api_token SET revoked_at = now() WHERE id = $1::uuid AND user_id = $2::uuid AND revoked_at IS NULL`, tokenID, userID)
+	tag, err := s.pool.Exec(ctx, `UPDATE core.api_token SET revoked_at = now() WHERE id = $1::uuid AND user_id = $2::uuid AND revoked_at IS NULL AND grant_id IS NULL`, tokenID, userID)
 	if err != nil {
 		return err
 	}
@@ -680,10 +685,15 @@ func (s *Service) AuthenticateToken(ctx context.Context, raw string) (*Principal
 	var expires *time.Time
 	err := s.pool.QueryRow(ctx, `
 		SELECT t.id::text, t.scopes, t.expires_at, u.id::text, u.org_id::text, COALESCE(u.customer_id::text,''), u.username, u.full_name,
-		       u.camera_groups IS NOT NULL, COALESCE(u.camera_groups, '{}')
+		       u.camera_groups IS NOT NULL, COALESCE(u.camera_groups, '{}'),
+		       COALESCE(g.id::text, ''), COALESCE(c.name, ''), COALESCE(g.read_only, false)
 		FROM core.api_token t JOIN core.user_account u ON u.id = t.user_id
-		WHERE t.token_hash = $1 AND t.revoked_at IS NULL AND u.disabled_at IS NULL`, HashToken(raw)).
-		Scan(&p.TokenID, &scopes, &expires, &p.UserID, &p.OrgID, &p.CustomerID, &p.Username, &p.FullName, &p.CameraLimited, &p.CameraGroups)
+		LEFT JOIN core.oauth_grant g ON g.id = t.grant_id
+		LEFT JOIN core.oauth_client c ON c.id = g.client_id
+		WHERE t.token_hash = $1 AND t.revoked_at IS NULL AND u.disabled_at IS NULL
+		  AND (t.grant_id IS NULL OR g.revoked_at IS NULL)`, HashToken(raw)).
+		Scan(&p.TokenID, &scopes, &expires, &p.UserID, &p.OrgID, &p.CustomerID, &p.Username, &p.FullName, &p.CameraLimited, &p.CameraGroups,
+			&p.GrantID, &p.ClientName, &p.ReadOnly)
 	if err != nil {
 		return nil, ErrNoSession
 	}

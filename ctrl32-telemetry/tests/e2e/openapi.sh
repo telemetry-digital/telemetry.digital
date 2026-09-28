@@ -19,7 +19,7 @@ N=$(jx "$TMP/spec.json" 'Object.values(j.paths).reduce((n,p)=>n+Object.keys(p).l
 check "every operation has a summary" "$(jx "$TMP/spec.json" 'Object.values(j.paths).flatMap(p=>Object.values(p)).filter(o=>!o.summary).length')" 0
 check "every operation has a tag" "$(jx "$TMP/spec.json" 'Object.values(j.paths).flatMap(p=>Object.values(p)).filter(o=>!o.tags||!o.tags.length).length')" 0
 check "dangling \$ref" "$(jx "$TMP/spec.json" 'const s=JSON.stringify(j); [...s.matchAll(/"\$ref":"#\/components\/schemas\/([A-Za-z]+)"/g)].filter(m=>!j.components.schemas[m[1]]).length')" 0
-check "security schemes" "$(jx "$TMP/spec.json" 'Object.keys(j.components.securitySchemes).sort().join(",")')" "bearerToken,connectorSecret,deviceToken,sessionCookie"
+check "security schemes" "$(jx "$TMP/spec.json" 'Object.keys(j.components.securitySchemes).sort().join(",")')" "bearerToken,cameraSecret,connectorSecret,deviceToken,sessionCookie"
 check "permission on a protected operation" "$(jx "$TMP/spec.json" 'j.paths["/api/v1/rules"].post["x-permission"]')" "config.write"
 check "public operation has empty security" "$(jx "$TMP/spec.json" 'JSON.stringify(j.paths["/api/v1/auth/login"].post.security)')" "[]"
 check "path parameter derived" "$(jx "$TMP/spec.json" 'j.paths["/api/v1/devices/{id}/commands/{cid}/approve"].post.parameters.map(p=>p.name).join(",")')" "id,cid"

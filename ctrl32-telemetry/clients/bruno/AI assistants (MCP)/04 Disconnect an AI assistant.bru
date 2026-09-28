@@ -1,0 +1,27 @@
+meta {
+  name: Disconnect an AI assistant
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/mcp/grants/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Disconnect an AI assistant
+  
+  Ends the approval and every token issued under it. The owner, or user.admin for anyone in the organization.
+  
+  Requires a signed-in user or an API token (any permission).
+}

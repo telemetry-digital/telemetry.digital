@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Connect an AI assistant</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<meta name="referrer" content="no-referrer">
+<link rel="stylesheet" href="/app.css">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+.box { max-width: 480px; margin: 32px auto; }
+.box h1 { font-size: 1.25em; margin: 0 0 12px; }
+.who { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 12px 0; font-size: 14px; }
+.who dt { color: var(--muted); }
+.who dd { margin: 0; overflow-wrap: anywhere; }
+.choice { display: grid; gap: 8px; margin: 12px 0; }
+.box .choice label { display: flex; flex-direction: row; gap: 10px; align-items: flex-start; border: 1px solid var(--border); border-radius: 8px; padding: 10px; cursor: pointer; margin: 0; }
+.box .choice label input { margin: 3px 0 0; flex: none; width: auto; }
+.box .choice label span { display: block; }
+.choice label small { display: block; color: var(--muted); }
+.actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<div class="card box" id="card">
+  <h1>Connect an AI assistant</h1>
+  <p class="muted" id="loading">Checking the request…</p>
+  <div id="ask" hidden>
+    <p><b class="notranslate" id="client"></b> <span>wants to work in this application on your behalf.</span></p>
+    <dl class="who">
+      <dt>User</dt><dd class="notranslate" id="user"></dd>
+      <dt>Organization</dt><dd class="notranslate" id="org"></dd>
+      <dt>Returns to</dt><dd class="notranslate" id="host"></dd>
+    </dl>
+    <p class="muted" style="font-size:14px">The assistant acts with your permissions and sees what you see. Every change it makes carries a reason and is written to the audit trail under your name with the note “via MCP”. You can disconnect it at any time under My account → AI assistants.</p>
+    <div class="choice" id="choice">
+      <label><input type="radio" name="mode" value="all" checked><span>Everything my permissions allow<small>read data, change settings, control devices and cameras</small></span></label>
+      <label><input type="radio" name="mode" value="read"><span>Reading only<small>the assistant cannot change anything</small></span></label>
+    </div>
+    <p class="muted" id="noLic" hidden style="font-size:13px">This server has no license for changes through AI assistants: the assistant can only read.</p>
+    <div class="err" id="err"></div>
+    <div class="actions"><button class="btn" type="button" id="deny">Deny</button><button class="btn primary" type="button" id="allow">Allow</button></div>
+  </div>
+  <div id="off" hidden>
+    <p>AI access is switched off in your organization.</p>
+    <p class="muted" id="offHint">Ask an administrator of your organization to switch it on under Settings → AI assistants.</p>
+    <p id="offAdmin" hidden><a class="btn" href="/settings/ai" target="_blank" rel="noopener">Open Settings → AI assistants</a></p>
+    <div class="actions"><button class="btn" type="button" id="offDeny">Back to the assistant</button></div>
+  </div>
+  <div id="bad" hidden><p class="err" id="badMsg"></p></div>
+</div>
+</main>
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const t = s => (window.ctrl32 && ctrl32.t) ? ctrl32.t(s) : s;
+const Q = new URLSearchParams(location.search);
+const req = Object.fromEntries(['response_type', 'client_id', 'redirect_uri', 'code_challenge', 'code_challenge_method', 'state', 'scope', 'resource'].map(k => [k, Q.get(k) || '']));
+function fail(msg) { $('#loading').hidden = true; $('#ask').hidden = true; $('#off').hidden = true; $('#bad').hidden = false; $('#badMsg').textContent = msg; }
+async function decide(approve) {
+  $('#err').textContent = '';
+  for (const b of document.querySelectorAll('button')) b.disabled = true;
+  try {
+    const r = await ctrl32.api('POST', '/api/v1/mcp/authorize', Object.assign({}, req, { approve, read_only: document.querySelector('input[name=mode]:checked').value === 'read' }));
+    location.replace(r.redirect);
+  } catch (x) { $('#err').textContent = x.message; for (const b of document.querySelectorAll('button')) b.disabled = false; }
+}
+ctrl32.ready().then(async ({ me }) => {
+  if (!me) { location.replace('/login?next=' + encodeURIComponent(location.pathname + location.search)); return; }
+  let info;
+  try { info = await ctrl32.api('GET', '/api/v1/mcp/authorize?' + Q.toString()); }
+  catch (x) { fail(x.message); return; }
+  // a refused request goes back to the assistant only by the user's click (no silent redirect to a registered address)
+  if (info.error) { fail(t('The assistant sent an invalid request') + ' (' + info.error + ').'); const b = document.createElement('button'); b.className = 'btn'; b.type = 'button'; b.textContent = t('Back to the assistant'); b.onclick = () => location.replace(info.redirect); const h = document.createElement('p'); h.className = 'muted notranslate'; h.textContent = new URL(info.redirect).host || new URL(info.redirect).protocol; $('#bad').append(h, b); return; }
+  $('#loading').hidden = true;
+  $('#client').textContent = info.client_name;
+  if (!info.enabled) {
+    $('#off').hidden = false;
+    $('#offAdmin').hidden = !info.can_enable;
+    $('#offDeny').onclick = () => decide(false);
+    return;
+  }
+  $('#user').textContent = info.full_name ? info.full_name + ' (' + info.user + ')' : info.user;
+  $('#org').textContent = info.organization;
+  $('#host').textContent = info.redirect_host;
+  if (info.read_only_requested || !info.write_licensed) document.querySelector('input[value=read]').checked = true;
+  if (!info.write_licensed) { const all = document.querySelector('input[value=all]'); all.disabled = true; all.closest('label').style.opacity = '.5'; $('#noLic').hidden = false; }
+  $('#ask').hidden = false;
+  $('#allow').onclick = () => decide(true);
+  $('#deny').onclick = () => decide(false);
+});
+</script>
+</body>
+</html>
