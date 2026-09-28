@@ -2257,5 +2257,18 @@
  "This app does not exist or is switched off. Ask your administrator for the right address.": "Deze app bestaat niet of is uitgeschakeld. Vraag uw beheerder om het juiste adres.",
  "Up to 12 characters fit under the icon on most phones.": "Onder het pictogram passen op de meeste telefoons maximaal 12 tekens.",
  "app deleted": "app verwijderd",
- "app saved": "app opgeslagen"
+ "app saved": "app opgeslagen",
+ "No way into the full application": "Geen toegang tot de volledige applicatie",
+ "no page zoom": "geen paginazoom",
+ "In the app window": "In het app-venster",
+ "Locked to its sections — no way into the full application": "Vergrendeld op de eigen onderdelen — geen toegang tot de volledige applicatie",
+ "Pages outside the chosen sections open the start page instead; My account keeps only Password and MFA and Sign out. This limits the app's screens, not the user's rights: permissions stay what protects data.": "Pagina's buiten de gekozen onderdelen openen in plaats daarvan de startpagina; Mijn account houdt alleen Wachtwoord en MFA en Afmelden. Dit beperkt de schermen van de app, niet de rechten van de gebruiker: gegevens blijven beschermd door de rechten.",
+ "Zoom the page with two fingers": "Pagina zoomen met twee vingers",
+ "Off: pinch and double tap do not enlarge the page (the camera picture still zooms with two fingers).": "Uit: knijpen en dubbeltikken vergroten de pagina niet (het camerabeeld zoomt nog steeds met twee vingers).",
+ "Cameras in live view and on video walls": "Camera's in liveweergave en op videowanden",
+ "automatic — one per row on phones": "automatisch — één per rij op telefoons",
+ "one camera per row": "één camera per rij",
+ "grid": "raster",
+ "Grid": "Raster",
+ "One camera per row": "Eén camera per rij"
 }

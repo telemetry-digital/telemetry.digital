@@ -2257,5 +2257,18 @@
  "This app does not exist or is switched off. Ask your administrator for the right address.": "Den här appen finns inte eller är avstängd. Be din administratör om rätt adress.",
  "Up to 12 characters fit under the icon on most phones.": "Upp till 12 tecken får plats under ikonen på de flesta telefoner.",
  "app deleted": "app raderad",
- "app saved": "app sparad"
+ "app saved": "app sparad",
+ "No way into the full application": "Ingen väg in i hela programmet",
+ "no page zoom": "ingen sidzoom",
+ "In the app window": "I appfönstret",
+ "Locked to its sections — no way into the full application": "Låst till sina avsnitt — ingen väg in i hela programmet",
+ "Pages outside the chosen sections open the start page instead; My account keeps only Password and MFA and Sign out. This limits the app's screens, not the user's rights: permissions stay what protects data.": "Sidor utanför de valda avsnitten öppnar startsidan i stället; Mitt konto behåller bara Lösenord och MFA samt Logga ut. Det begränsar appens skärmar, inte användarens rättigheter: data skyddas fortfarande av behörigheterna.",
+ "Zoom the page with two fingers": "Zooma sidan med två fingrar",
+ "Off: pinch and double tap do not enlarge the page (the camera picture still zooms with two fingers).": "Av: nyp och dubbeltryck förstorar inte sidan (kamerabilden kan fortfarande zoomas med två fingrar).",
+ "Cameras in live view and on video walls": "Kameror i livevy och på videoväggar",
+ "automatic — one per row on phones": "automatiskt — en per rad på telefoner",
+ "one camera per row": "en kamera per rad",
+ "grid": "rutnät",
+ "Grid": "Rutnät",
+ "One camera per row": "En kamera per rad"
 }

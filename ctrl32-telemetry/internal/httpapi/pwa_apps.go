@@ -8,11 +8,12 @@ package httpapi
 //
 //	GET    /api/v1/pwa-apps                 content.write  current profiles of the organization
 //	GET    /api/v1/pwa-apps/options         content.write  menu sections and start pages to choose from
-//	POST   /api/v1/pwa-apps                 content.write  {slug, name, short_name, start_url, sections, theme_color, enabled, reason}
+//	POST   /api/v1/pwa-apps                 content.write  {slug, name, short_name, start_url, sections, theme_color, enabled,
+//	                                                        locked, page_zoom, camera_layout, reason}
 //	GET    /api/v1/pwa-apps/{slug}          content.write  one profile
 //	PUT    /api/v1/pwa-apps/{slug}          content.write  new version
 //	DELETE /api/v1/pwa-apps/{slug}?reason=  content.write  retire
-//	GET    /api/v1/pwa-apps/{slug}/launch   public         name, start page and sections of an enabled app (no data)
+//	GET    /api/v1/pwa-apps/{slug}/launch   public         name, start page, sections and options of an enabled app (no data)
 //	GET    /app/{slug}                      public         install and launch page
 //	GET    /app/{slug}/manifest.webmanifest public         the app's manifest
 
@@ -34,17 +35,22 @@ import (
 
 // PWAApp is one installable app profile.
 type PWAApp struct {
-	ID         string    `json:"id,omitempty"`
-	Slug       string    `json:"slug"`
-	Name       string    `json:"name"`
-	ShortName  string    `json:"short_name"`
-	StartURL   string    `json:"start_url"`
-	Sections   []string  `json:"sections"`
-	ThemeColor string    `json:"theme_color"`
-	Enabled    bool      `json:"enabled"`
-	Version    int       `json:"version,omitempty"`
-	CreatedAt  time.Time `json:"created_at,omitzero"`
-	orgID      string
+	ID         string   `json:"id,omitempty"`
+	Slug       string   `json:"slug"`
+	Name       string   `json:"name"`
+	ShortName  string   `json:"short_name"`
+	StartURL   string   `json:"start_url"`
+	Sections   []string `json:"sections"`
+	ThemeColor string   `json:"theme_color"`
+	Enabled    bool     `json:"enabled"`
+	// Locked keeps the app window on its sections: no way into the full application (UI confinement, not a
+	// permission boundary). PageZoom false stops pinch and double-tap zoom of the page. CameraLayout: auto, single, grid.
+	Locked       bool      `json:"locked"`
+	PageZoom     bool      `json:"page_zoom"`
+	CameraLayout string    `json:"camera_layout"`
+	Version      int       `json:"version,omitempty"`
+	CreatedAt    time.Time `json:"created_at,omitzero"`
+	orgID        string
 }
 
 // pwaSection is a top-level menu group an app may show (keys match the `sec` of navItems() in app.js).
@@ -71,7 +77,41 @@ var (
 	// paths that are not pages of the application (or would loop back into the app page)
 	pwaStartRefused = []string{"/api/v1", "/app/", "/tiles/", "/metrics", "/healthz", "/sw.js", "/manifest.webmanifest", "/.well-known"}
 	pwaSlugReserved = []string{"options"}
+	// live view and video walls of the app: one camera per row on narrow screens (auto), always (single), never (grid)
+	pwaCameraLayouts = []string{"auto", "single", "grid"}
 )
+
+// pwaSectionPaths are the pages of a section (and their sub-pages) that a locked app may open; app.js keeps the same
+// list (APP_PATHS).
+var pwaSectionPaths = map[string][]string{
+	"dashboards": {"/", "/dashboards"}, "home": {"/home", "/smarthome"}, "energy": {"/energy"}, "cameras": {"/video"},
+	"displays": {"/displays"}, "flows": {"/flows"}, "devices": {"/devices"}, "incidents": {"/incidents"}, "assets": {"/assets"},
+	"firmware": {"/fota"}, "users": {"/users"}, "settings": {"/settings"}, "system": {"/organizations", "/server", "/landing/edit"},
+}
+
+// pwaPathIn reports whether a path is one of the prefixes or below one ("/" matches only itself).
+func pwaPathIn(path string, prefixes []string) bool {
+	for _, p := range prefixes {
+		if path == p || (p != "/" && strings.HasPrefix(path, p+"/")) {
+			return true
+		}
+	}
+	return false
+}
+
+// pwaStartInSections reports whether the start page belongs to one of the sections. A locked app always allows its
+// start page; this only decides a warning (the menu would not lead back to it).
+func pwaStartInSections(start string, sections []string) bool {
+	if i := strings.IndexByte(start, '?'); i >= 0 {
+		start = start[:i]
+	}
+	for _, s := range sections {
+		if pwaPathIn(start, pwaSectionPaths[s]) {
+			return true
+		}
+	}
+	return false
+}
 
 // validPWAStart reports whether a start page is a same-origin path of the application.
 func validPWAStart(u string) bool {
@@ -140,6 +180,16 @@ func validatePWAApp(in *PWAApp) (string, []string) {
 	if in.ThemeColor != "" && !hexColor.MatchString(in.ThemeColor) {
 		return "theme_color: #rrggbb or empty (the organization's colour)", nil
 	}
+	in.CameraLayout = strings.TrimSpace(in.CameraLayout)
+	if in.CameraLayout == "" {
+		in.CameraLayout = "auto"
+	}
+	if !slices.Contains(pwaCameraLayouts, in.CameraLayout) {
+		return "camera_layout: auto, single or grid", nil
+	}
+	if in.Locked && !pwaStartInSections(in.StartURL, in.Sections) {
+		warnings = append(warnings, "the start page is outside the app's menu sections: the locked app opens it, but only the start page of it")
+	}
 	return "", warnings
 }
 
@@ -163,22 +213,23 @@ func pwaSectionIndex(key string) int {
 }
 
 func (a *PWAApp) checksum() string {
-	b, _ := json.Marshal([]any{a.Slug, a.Name, a.ShortName, a.StartURL, a.Sections, a.ThemeColor, a.Enabled})
+	b, _ := json.Marshal([]any{a.Slug, a.Name, a.ShortName, a.StartURL, a.Sections, a.ThemeColor, a.Enabled, a.Locked, a.PageZoom, a.CameraLayout})
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
 }
 
 func (a *PWAApp) out() map[string]any {
 	return map[string]any{"id": a.ID, "slug": a.Slug, "name": a.Name, "short_name": a.ShortName, "start_url": a.StartURL,
-		"sections": a.Sections, "theme_color": a.ThemeColor, "enabled": a.Enabled, "version": a.Version, "created_at": a.CreatedAt,
+		"sections": a.Sections, "theme_color": a.ThemeColor, "enabled": a.Enabled, "locked": a.Locked, "page_zoom": a.PageZoom,
+		"camera_layout": a.CameraLayout, "version": a.Version, "created_at": a.CreatedAt,
 		"install_url": "/app/" + a.Slug, "manifest_url": "/app/" + a.Slug + "/manifest.webmanifest"}
 }
 
-const pwaCols = `id::text, org_id::text, slug, name, short_name, start_url, sections, theme_color, enabled, version, created_at`
+const pwaCols = `id::text, org_id::text, slug, name, short_name, start_url, sections, theme_color, enabled, locked, page_zoom, camera_layout, version, created_at`
 
 func scanPWAApp(row pgx.Row) (*PWAApp, error) {
 	a := &PWAApp{}
-	err := row.Scan(&a.ID, &a.orgID, &a.Slug, &a.Name, &a.ShortName, &a.StartURL, &a.Sections, &a.ThemeColor, &a.Enabled, &a.Version, &a.CreatedAt)
+	err := row.Scan(&a.ID, &a.orgID, &a.Slug, &a.Name, &a.ShortName, &a.StartURL, &a.Sections, &a.ThemeColor, &a.Enabled, &a.Locked, &a.PageZoom, &a.CameraLayout, &a.Version, &a.CreatedAt)
 	if a.Sections == nil {
 		a.Sections = []string{}
 	}
@@ -294,8 +345,10 @@ func (s *Server) savePWAApp(w http.ResponseWriter, r *http.Request, create bool)
 	p := PrincipalFrom(r.Context())
 	var in struct {
 		PWAApp
-		Enabled *bool  `json:"enabled"`
-		Reason  string `json:"reason"`
+		Enabled  *bool  `json:"enabled"`
+		Locked   *bool  `json:"locked"`
+		PageZoom *bool  `json:"page_zoom"`
+		Reason   string `json:"reason"`
 	}
 	if err := decodeJSON(r, &in, 16<<10); err != nil {
 		writeErr(w, 400, err.Error())
@@ -309,11 +362,8 @@ func (s *Server) savePWAApp(w http.ResponseWriter, r *http.Request, create bool)
 		a.Slug = r.PathValue("slug")
 	}
 	a.Enabled = in.Enabled == nil || *in.Enabled
-	msg, warnings := validatePWAApp(&a)
-	if msg != "" {
-		writeErr(w, 400, msg)
-		return
-	}
+	a.Locked = in.Locked != nil && *in.Locked
+	a.PageZoom = in.PageZoom == nil || *in.PageZoom
 	tx, err := s.pool.Begin(r.Context())
 	if err != nil {
 		writeErr(w, 500, "begin failed")
@@ -334,6 +384,23 @@ func (s *Server) savePWAApp(w http.ResponseWriter, r *http.Request, create bool)
 		writeErr(w, 404, "app not found")
 		return
 	}
+	// options left out of an update keep their value (older clients and scripts that send only the basics)
+	if exists {
+		if in.Locked == nil {
+			a.Locked = prev.Locked
+		}
+		if in.PageZoom == nil {
+			a.PageZoom = prev.PageZoom
+		}
+		if strings.TrimSpace(a.CameraLayout) == "" {
+			a.CameraLayout = prev.CameraLayout
+		}
+	}
+	msg, warnings := validatePWAApp(&a)
+	if msg != "" {
+		writeErr(w, 400, msg)
+		return
+	}
 	a.Version = 1
 	if exists {
 		if in.Enabled == nil {
@@ -345,9 +412,11 @@ func (s *Server) savePWAApp(w http.ResponseWriter, r *http.Request, create bool)
 			return
 		}
 	}
-	if err := tx.QueryRow(r.Context(), `INSERT INTO core.pwa_app (org_id, slug, name, short_name, start_url, sections, theme_color, enabled, version, checksum, created_by, reason)
-		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULLIF($11,'')::uuid, $12) RETURNING id::text, created_at`,
-		org, a.Slug, a.Name, a.ShortName, a.StartURL, a.Sections, a.ThemeColor, a.Enabled, a.Version, a.checksum(), p.UserID, in.Reason).Scan(&a.ID, &a.CreatedAt); err != nil {
+	if err := tx.QueryRow(r.Context(), `INSERT INTO core.pwa_app (org_id, slug, name, short_name, start_url, sections, theme_color, enabled,
+		locked, page_zoom, camera_layout, version, checksum, created_by, reason)
+		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NULLIF($14,'')::uuid, $15) RETURNING id::text, created_at`,
+		org, a.Slug, a.Name, a.ShortName, a.StartURL, a.Sections, a.ThemeColor, a.Enabled, a.Locked, a.PageZoom, a.CameraLayout,
+		a.Version, a.checksum(), p.UserID, in.Reason).Scan(&a.ID, &a.CreatedAt); err != nil {
 		writeErr(w, 500, "insert failed")
 		return
 	}
@@ -370,7 +439,8 @@ func (s *Server) savePWAApp(w http.ResponseWriter, r *http.Request, create bool)
 
 func pwaAudit(a *PWAApp) map[string]any {
 	return map[string]any{"slug": a.Slug, "name": a.Name, "short_name": a.ShortName, "start_url": a.StartURL, "sections": a.Sections,
-		"theme_color": a.ThemeColor, "enabled": a.Enabled, "version": a.Version}
+		"theme_color": a.ThemeColor, "enabled": a.Enabled, "locked": a.Locked, "page_zoom": a.PageZoom, "camera_layout": a.CameraLayout,
+		"version": a.Version}
 }
 
 func (s *Server) createPWAApp(w http.ResponseWriter, r *http.Request) { s.savePWAApp(w, r, true) }
@@ -394,14 +464,16 @@ func (s *Server) deletePWAApp(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
 
-// pwaAppLaunch gives app.js what the app mode needs: name, start page and sections. No data of the organization.
+// pwaAppLaunch gives app.js what the app mode needs: name, start page, sections and the options (locked, page zoom,
+// camera layout). No data of the organization.
 func (s *Server) pwaAppLaunch(w http.ResponseWriter, r *http.Request) {
 	a, ok := s.publicPWAApp(r, r.PathValue("slug"))
 	if !ok {
 		writeErr(w, 404, "app not found")
 		return
 	}
-	writeJSON(w, 200, map[string]any{"slug": a.Slug, "name": a.Name, "short_name": a.ShortName, "start_url": a.StartURL, "sections": a.Sections, "theme_color": a.ThemeColor})
+	writeJSON(w, 200, map[string]any{"slug": a.Slug, "name": a.Name, "short_name": a.ShortName, "start_url": a.StartURL, "sections": a.Sections, "theme_color": a.ThemeColor,
+		"locked": a.Locked, "page_zoom": a.PageZoom, "camera_layout": a.CameraLayout})
 }
 
 // ---- manifest and install page --------------------------------------------------------------------------------------
@@ -524,7 +596,7 @@ var pwaPage = template.Must(template.New("app").Parse(`<!doctype html>
     </div>
     <div class="app-qr"><div id="qr"></div><div><p>Scan with the phone to open this page there:</p><code id="appUrl" class="notranslate"></code></div></div>
   </div>
-  <p style="margin-top:16px"><a class="btn" id="openBtn" href="/app/{{.Slug}}?launch=1">Open</a> <a class="btn ghost" href="/?full=1">Full application</a></p>
+  <p style="margin-top:16px"><a class="btn" id="openBtn" href="/app/{{.Slug}}?launch=1">Open</a>{{if not .Locked}} <a class="btn ghost" href="/?full=1">Full application</a>{{end}}</p>
 </div>
 </main>
 <script>
@@ -551,6 +623,6 @@ func (s *Server) pwaAppPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := s.pwaIdentity(r, a)
-	_ = pwaPage.Execute(w, map[string]string{"Slug": a.Slug, "Name": a.Name, "ShortName": a.ShortName, "Start": a.StartURL,
-		"Theme": id.Theme, "TouchIcon": id.TouchIcon, "Product": id.Product})
+	_ = pwaPage.Execute(w, map[string]any{"Slug": a.Slug, "Name": a.Name, "ShortName": a.ShortName, "Start": a.StartURL,
+		"Theme": id.Theme, "TouchIcon": id.TouchIcon, "Product": id.Product, "Locked": a.Locked})
 }

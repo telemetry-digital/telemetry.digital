@@ -13,3 +13,6 @@
 - [x] T007 Translations sk/cs/en (38 new strings)
 - [x] T008 Tests: unit, e2e `pwa_apps`, headless `pwa_apps` with screenshots
 - [x] T009 Docs: `docs/pwa.md`, `docs/video.md` (Phone and tablet), URS J-15a, README, JOURNAL, STAV
+- [x] T010 0.61.0: migration 0042 (`locked`, `page_zoom`, `camera_layout`), API and OpenAPI, Settings → Apps options,
+      locked app mode and page zoom in `app.js`, grid/list layout of the live view and walls, player touch handling
+      and playback speed, PTZ press-and-hold; translations in all 19 catalogs (13 strings); tests and docs

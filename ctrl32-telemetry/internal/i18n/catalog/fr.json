@@ -2257,5 +2257,18 @@
  "This app does not exist or is switched off. Ask your administrator for the right address.": "Cette application n'existe pas ou est désactivée. Demandez la bonne adresse à votre administrateur.",
  "Up to 12 characters fit under the icon on most phones.": "Jusqu'à 12 caractères tiennent sous l'icône sur la plupart des téléphones.",
  "app deleted": "application supprimée",
- "app saved": "application enregistrée"
+ "app saved": "application enregistrée",
+ "No way into the full application": "Aucun accès à l'application complète",
+ "no page zoom": "pas de zoom de la page",
+ "In the app window": "Dans la fenêtre de l'application",
+ "Locked to its sections — no way into the full application": "Verrouillée sur ses sections — aucun accès à l'application complète",
+ "Pages outside the chosen sections open the start page instead; My account keeps only Password and MFA and Sign out. This limits the app's screens, not the user's rights: permissions stay what protects data.": "Les pages hors des sections choisies ouvrent la page d'accueil à la place ; Mon compte ne garde que Mot de passe et MFA et Se déconnecter. Cela limite les écrans de l'application, pas les droits de l'utilisateur : les autorisations protègent toujours les données.",
+ "Zoom the page with two fingers": "Zoomer la page avec deux doigts",
+ "Off: pinch and double tap do not enlarge the page (the camera picture still zooms with two fingers).": "Désactivé : le pincement et le double appui n'agrandissent pas la page (l'image de la caméra se zoome toujours avec deux doigts).",
+ "Cameras in live view and on video walls": "Caméras en direct et sur les murs vidéo",
+ "automatic — one per row on phones": "automatique — une par ligne sur téléphone",
+ "one camera per row": "une caméra par ligne",
+ "grid": "grille",
+ "Grid": "Grille",
+ "One camera per row": "Une caméra par ligne"
 }

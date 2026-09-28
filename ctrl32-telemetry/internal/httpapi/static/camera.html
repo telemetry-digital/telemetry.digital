@@ -141,7 +141,9 @@ function playFrom(ms) {
   if (ms >= Date.now() - 1500) { live(); return; }
   MODE = 'rec'; PAUSED = false; CUR = ms;
   const recSound = SOUND && SPEED === 1 && CAM && CAM.audio_record !== false; // sound heard only live is not recorded
-  ensurePlayer().open(`/api/v1/video/cameras/${ID}/playback?from=${new Date(ms).toISOString()}&speed=${SPEED}${recSound ? '&audio=1' : ''}`, false);
+  // the server paces the frames by the speed; the picture plays them at the same rate (their timestamps are recorded time)
+  ensurePlayer().rate(SPEED);
+  P.open(`/api/v1/video/cameras/${ID}/playback?from=${new Date(ms).toISOString()}&speed=${SPEED}${recSound ? '&audio=1' : ''}`, false);
   P.sound(recSound);
   if (dayStart(ms).getTime() !== dayStart(DAY).getTime()) { DAY = new Date(ms); HOUR = null; loadRecordings(); }
   else if (ms < HOUR || ms >= HOUR + HOURMS) { HOUR = new Date(ms).setMinutes(0, 0, 0); drawTimeline(); }
@@ -178,6 +180,8 @@ $('#bSound').onclick = () => { SOUND = !SOUND; if (MODE === 'live') live(); else
 $('#bInfo').onclick = () => { STATS = !STATS; try { localStorage.setItem('ctrl32.video.stats', STATS ? '1' : '0'); } catch (x) { /* ignore */ } if (P) P.stats(STATS); ui(); };
 $('#bFull').onclick = () => { const s = $('#player'); if (document.fullscreenElement) document.exitFullscreen(); else s.requestFullscreen().catch(() => {}); };
 $('#quality').onchange = live;
+// the player and its buttons are controls: a long press opens no browser menu (the lists keep theirs)
+$('#player').addEventListener('contextmenu', e => { if (!e.target.closest('select')) e.preventDefault(); });
 document.addEventListener('keydown', e => {
   if (e.target.closest('input,select,textarea')) return;
   const k = e.key;
@@ -222,13 +226,18 @@ $('#bSend').onclick = async () => {
 function ptzUI() {
   if (!CAM.onvif || !can('video.ptz')) return;
   const pad = document.createElement('div'); pad.className = 'ptz';
-  const B = [['↖', -.7, .7], ['▲', 0, 1], ['↗', .7, .7], ['◀', -1, 0], ['■', 0, 0], ['▶', 1, 0], ['↙', -.7, -.7], ['▼', 0, -1], ['↘', .7, -.7]];
+  // [rotation of the arrow (degrees), pan, tilt]; the middle button stops. Icons are drawn (SVG), not text characters:
+  // phones would select and copy text on a long press, and render ▶ ◀ as emoji.
+  const B = [[-45, -.7, .7], [0, 0, 1], [45, .7, .7], [-90, -1, 0], [null, 0, 0], [90, 1, 0], [-135, -.7, -.7], [180, 0, -1], [135, .7, -.7]];
+  const arrow = deg => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(${deg}deg)" aria-hidden="true"><path d="M6 15l6 -6l6 6"/></svg>`;
+  const stopIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/></svg>';
   // PTZ speed is the viewer's choice, remembered in this browser
   let speed = .6; try { speed = +(localStorage.getItem('ctrl32.ptz.speed') || .6); } catch (x) { /* ignore */ }
   const r2 = v => Math.round(v * 100) / 100;
-  pad.innerHTML = B.map(([l, x, y], i) => `<button type="button" data-i="${i}" title="${esc(t(i === 4 ? 'Stop' : 'Hold to turn'))}">${l}</button>`).join('');
+  pad.innerHTML = B.map(([deg], i) => `<button type="button" data-i="${i}" title="${esc(t(i === 4 ? 'Stop' : 'Hold to turn'))}" aria-label="${esc(t(i === 4 ? 'Stop' : 'Hold to turn'))}">${deg === null ? stopIcon : arrow(deg)}</button>`).join('');
   const extra = document.createElement('div'); extra.className = 'ptz-extra';
-  extra.innerHTML = `<button type="button" data-z="1" title="${esc(t('Hold to zoom in'))}">＋</button><button type="button" data-z="-1" title="${esc(t('Hold to zoom out'))}">－</button><select id="presets" title="${esc(t('Presets'))}"><option value="">${esc(t('Presets'))}</option></select><select id="ptzSpeed" title="${esc(t('PTZ speed'))}">${[[.2, 'slow'], [.6, 'normal'], [1, 'fast']].map(([v, l]) => `<option value="${v}"${v === speed ? ' selected' : ''}>${esc(t('speed'))}: ${esc(t(l))}</option>`).join('')}</select>`;
+  const I2 = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">${d}</svg>`;
+  extra.innerHTML = `<button type="button" data-z="1" title="${esc(t('Hold to zoom in'))}" aria-label="${esc(t('Hold to zoom in'))}">${I2('<path d="M5 12h14"/><path d="M12 5v14"/>')}</button><button type="button" data-z="-1" title="${esc(t('Hold to zoom out'))}" aria-label="${esc(t('Hold to zoom out'))}">${I2('<path d="M5 12h14"/>')}</button><select id="presets" title="${esc(t('Presets'))}"><option value="">${esc(t('Presets'))}</option></select><select id="ptzSpeed" title="${esc(t('PTZ speed'))}">${[[.2, 'slow'], [.6, 'normal'], [1, 'fast']].map(([v, l]) => `<option value="${v}"${v === speed ? ' selected' : ''}>${esc(t('speed'))}: ${esc(t(l))}</option>`).join('')}</select>`;
   $('#stage').append(pad, extra);
   // the PTZ controls cover a small picture: shown by default on wide screens, toggled with the PTZ button (remembered)
   let on = innerWidth > 700; try { const v = localStorage.getItem('ctrl32.ptz.shown'); if (v !== null) on = v === '1'; } catch (x) { /* ignore */ }
@@ -236,10 +245,21 @@ function ptzUI() {
   $('#bPtz').hidden = false; show(on);
   $('#bPtz').onclick = () => { show(!on); try { localStorage.setItem('ctrl32.ptz.shown', on ? '1' : '0'); } catch (x) { /* ignore */ } };
   const send = (body) => api('POST', `/api/v1/video/cameras/${ID}/ptz`, body).catch(x => ctrl32.toast(x.message, 'bad'));
+  // Press and hold: pointerdown starts the move and captures the pointer (the finger may slide off the button), letting
+  // go, a cancelled touch, a lost capture or leaving the window stops it — exactly one stop per press.
   const hold = (btn, body) => {
-    const start = (e) => { e.preventDefault(); e.stopPropagation(); send(body()); };
-    const stop = (e) => { e.stopPropagation(); send({action: 'stop'}); };
-    btn.addEventListener('pointerdown', start); btn.addEventListener('pointerup', stop); btn.addEventListener('pointerleave', (e) => { if (e.buttons) stop(e); });
+    let held = false;
+    const stop = () => { if (!held) return; held = false; btn.classList.remove('held'); send({action: 'stop'}); };
+    btn.addEventListener('pointerdown', (e) => {
+      if (e.button > 0) return;
+      e.preventDefault(); e.stopPropagation();
+      try { btn.setPointerCapture(e.pointerId); } catch (x) { /* synthetic */ }
+      if (held) return;
+      held = true; btn.classList.add('held'); send(body());
+    });
+    btn.addEventListener('pointerup', (e) => { e.stopPropagation(); stop(); });
+    btn.addEventListener('pointercancel', stop); btn.addEventListener('lostpointercapture', stop);
+    window.addEventListener('blur', stop); document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });
     btn.addEventListener('click', (e) => e.stopPropagation());
   };
   for (const b of pad.querySelectorAll('button')) { const [, x, y] = B[+b.dataset.i]; if (+b.dataset.i === 4) b.onclick = (e) => { e.stopPropagation(); send({action: 'stop'}); }; else hold(b, () => ({action: 'move', pan: r2(x * speed), tilt: r2(y * speed), zoom: 0})); }

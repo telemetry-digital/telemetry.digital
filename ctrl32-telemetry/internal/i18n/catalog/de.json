@@ -2257,5 +2257,18 @@
  "This app does not exist or is switched off. Ask your administrator for the right address.": "Diese App existiert nicht oder ist ausgeschaltet. Fragen Sie Ihren Administrator nach der richtigen Adresse.",
  "Up to 12 characters fit under the icon on most phones.": "Auf den meisten Telefonen passen bis zu 12 Zeichen unter das Symbol.",
  "app deleted": "App gelöscht",
- "app saved": "App gespeichert"
+ "app saved": "App gespeichert",
+ "No way into the full application": "Kein Weg in die vollständige Anwendung",
+ "no page zoom": "kein Seitenzoom",
+ "In the app window": "Im App-Fenster",
+ "Locked to its sections — no way into the full application": "Auf ihre Bereiche gesperrt — kein Weg in die vollständige Anwendung",
+ "Pages outside the chosen sections open the start page instead; My account keeps only Password and MFA and Sign out. This limits the app's screens, not the user's rights: permissions stay what protects data.": "Seiten außerhalb der gewählten Bereiche öffnen stattdessen die Startseite; unter Mein Konto bleiben nur Passwort und MFA sowie Abmelden. Das begrenzt die Bildschirme der App, nicht die Rechte des Benutzers: Daten schützen weiterhin die Berechtigungen.",
+ "Zoom the page with two fingers": "Seite mit zwei Fingern zoomen",
+ "Off: pinch and double tap do not enlarge the page (the camera picture still zooms with two fingers).": "Aus: Aufziehen mit zwei Fingern und Doppeltippen vergrößern die Seite nicht (das Kamerabild lässt sich weiterhin mit zwei Fingern zoomen).",
+ "Cameras in live view and on video walls": "Kameras in der Liveansicht und auf Videowänden",
+ "automatic — one per row on phones": "automatisch — auf Telefonen eine pro Zeile",
+ "one camera per row": "eine Kamera pro Zeile",
+ "grid": "Raster",
+ "Grid": "Raster",
+ "One camera per row": "Eine Kamera pro Zeile"
 }

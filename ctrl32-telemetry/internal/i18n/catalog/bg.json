@@ -2257,5 +2257,18 @@
  "This app does not exist or is switched off. Ask your administrator for the right address.": "Това приложение не съществува или е изключено. Попитайте администратора за правилния адрес.",
  "Up to 12 characters fit under the icon on most phones.": "На повечето телефони под иконата се побират до 12 знака.",
  "app deleted": "приложението е изтрито",
- "app saved": "приложението е запазено"
+ "app saved": "приложението е запазено",
+ "No way into the full application": "Без достъп до цялото приложение",
+ "no page zoom": "без мащабиране на страницата",
+ "In the app window": "В прозореца на приложението",
+ "Locked to its sections — no way into the full application": "Заключено в своите раздели — без достъп до цялото приложение",
+ "Pages outside the chosen sections open the start page instead; My account keeps only Password and MFA and Sign out. This limits the app's screens, not the user's rights: permissions stay what protects data.": "Страниците извън избраните раздели отварят вместо това началната страница; в Моят профил остават само Парола и MFA и Изход. Това ограничава екраните на приложението, не правата на потребителя: данните продължават да се защитават от правата за достъп.",
+ "Zoom the page with two fingers": "Мащабиране на страницата с два пръста",
+ "Off: pinch and double tap do not enlarge the page (the camera picture still zooms with two fingers).": "Изключено: раздалечаването на пръсти и двойното докосване не увеличават страницата (образът от камерата продължава да се мащабира с два пръста).",
+ "Cameras in live view and on video walls": "Камери на живо и на видеостени",
+ "automatic — one per row on phones": "автоматично — по една на ред на телефони",
+ "one camera per row": "по една камера на ред",
+ "grid": "мрежа",
+ "Grid": "Мрежа",
+ "One camera per row": "По една камера на ред"
 }

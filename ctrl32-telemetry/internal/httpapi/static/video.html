@@ -20,7 +20,8 @@
   <section data-section="live">
     <div class="row" style="margin-bottom:10px"><span class="muted" id="liveInfo"></span><span class="grow"></span>
       <label class="inline muted" title="Codec, size, frames per second and kbit/s of what arrives from each camera"><input type="checkbox" id="tileStats"> Stream information</label>
-      <label class="muted">Tile size <select id="tileSize"><option value="200">small</option><option value="280" selected>medium</option><option value="420">large</option></select></label></div>
+      <span class="seg cam-layout" id="camLayout" role="group" aria-label="Layout"><button type="button" data-layout="grid" title="Grid" aria-label="Grid"></button><button type="button" data-layout="list" title="One camera per row" aria-label="One camera per row"></button></span>
+      <label class="muted" id="tileSizeWrap">Tile size <select id="tileSize"><option value="200">small</option><option value="280" selected>medium</option><option value="420">large</option></select></label></div>
     <div class="cam-grid" id="liveGrid"></div>
     <div class="card muted" id="noCams" hidden><p>No cameras yet. An administrator adds them under Camera management (RTSP or HTTP MJPEG address of the camera).</p></div>
   </section>
@@ -482,11 +483,23 @@ async function refreshStatus() {
 }
 $('#tileSize').onchange = e => { $('#liveGrid').style.gridTemplateColumns = `repeat(auto-fill, minmax(${e.target.value}px, 1fr))`; try { localStorage.setItem('ctrl32.video.tile', e.target.value); } catch (x) { /* ignore */ } };
 try { const v = localStorage.getItem('ctrl32.video.tile'); if (v) { $('#tileSize').value = v; $('#liveGrid').style.gridTemplateColumns = `repeat(auto-fill, minmax(${v}px, 1fr))`; } } catch (x) { /* ignore */ }
+// grid or one camera per row (phones): the viewer's choice on this device, else the app profile, else by screen width
+const LAYOUT = ctrl32Player.layout;
+function applyLayout() {
+  const m = LAYOUT.mode();
+  $('#liveGrid').classList.toggle('cam-list', m === 'list');
+  document.body.classList.toggle('cam-list-mode', m === 'list');
+  for (const b of document.querySelectorAll('#camLayout [data-layout]')) { b.classList.toggle('on', b.dataset.layout === m); b.setAttribute('aria-pressed', String(b.dataset.layout === m)); }
+}
+for (const b of document.querySelectorAll('#camLayout [data-layout]')) { b.innerHTML = LAYOUT.icons[b.dataset.layout]; b.onclick = () => { LAYOUT.set(b.dataset.layout); applyLayout(); }; }
+addEventListener('resize', applyLayout);
+applyLayout();
 // stream information on the tiles (off by default, remembered in this browser)
 try { $('#tileStats').checked = localStorage.getItem('ctrl32.video.stats') === '1'; } catch (x) { /* ignore */ }
 $('#tileStats').onchange = e => { for (const p of players) p.stats(e.target.checked); try { localStorage.setItem('ctrl32.video.stats', e.target.checked ? '1' : '0'); } catch (x) { /* ignore */ } };
 ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(({me}) => {
   ME = me;
+  applyLayout(); // the app profile is known now
   SECTION = ctrl32.section('live', ['live', 'walls', 'manage', 'evidence', 'settings']);
   $('#manageTab').hidden = !can('video.manage');
   $('#settingsTab').hidden = !can('video.manage');

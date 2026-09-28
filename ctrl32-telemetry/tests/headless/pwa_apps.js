@@ -48,6 +48,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   expect("preset fills the form", await ev(`(() => { const f = document.querySelector('#appForm'); return f.start.value + ' ' + [...f.querySelectorAll('input[name=sec]:checked')].map(c => c.value).join(); })()`), "/home home,energy");
   await ev(`document.querySelector('[data-preset="cameras"]').click()`);
   expect("Cameras preset", await ev(`(() => { const f = document.querySelector('#appForm'); return f.start.value + ' ' + [...f.querySelectorAll('input[name=sec]:checked')].map(c => c.value).join(); })()`), "/video cameras");
+  expect("Cameras preset: locked, no page zoom, one camera per row", await ev(`(() => { const f = document.querySelector('#appForm'); return [f.locked.checked, f.page_zoom.checked, f.camera_layout.value].join(); })()`), "true,false,single");
   await shot("pwa-settings-new-app.png");
   await ev(`document.querySelector('#appDlg').close()`);
 
@@ -107,6 +108,36 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   expect("deleted app: full menu", await ev(topMenu + `.length`), (n) => n > 5);
   await go("/app/" + slug, 1500);
   expect("deleted app: install page gone", await ev(`document.querySelector('h1').textContent`), "App not found");
+
+  // 0.61.0: a locked phone app for the cameras — no way into the full application, no page zoom, one camera per row
+  const slug2 = "phone-probe-" + (Date.now() % 100000);
+  const made2 = await ev(`ctrl32.api('POST', '/api/v1/pwa-apps', {slug: '${slug2}', name: 'Phone cameras', short_name: 'Cameras', start_url: '/video', sections: ['cameras'], locked: true, page_zoom: false, camera_layout: 'single', reason: 'headless probe'})`);
+  expect("locked app created", made2 && [made2.slug, made2.locked, made2.page_zoom, made2.camera_layout].join(), `${slug2},true,false,single`);
+  await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  await go("/app/" + slug2, 2500);
+  expect("locked: install page without the way out", await ev(`[...document.querySelectorAll('a')].some(a => a.getAttribute('href') === '/?full=1')`), false);
+  await go(`/app/${slug2}?launch=1`, 3000);
+  expect("locked: start page", await ev(`location.pathname`), "/video");
+  expect("locked: html classes", await ev(`['app-locked', 'no-page-zoom'].map(c => document.documentElement.classList.contains(c)).join()`), "true,true");
+  expect("no page zoom: viewport forbids zooming", await ev(`document.querySelector('meta[name=viewport]').content`), (v) => /user-scalable=no/.test(v) && /maximum-scale=1/.test(v));
+  expect("one camera per row", await until(`document.querySelector('#liveGrid').classList.contains('cam-list')`), true);
+  expect("layout switch shows the list", await ev(`document.querySelector('#camLayout [data-layout=list]').classList.contains('on')`), true);
+  await shot("pwa-locked-phone.png");
+  await ev(`document.querySelector('#menuBtn').click()`);
+  await sleep(500);
+  expect("locked: no way out in the menu", await ev(`[...document.querySelectorAll('#drawer a')].some(a => a.getAttribute('href') === '/?full=1')`), false);
+  expect("locked: My account leads to Password and MFA", await ev(`[...document.querySelectorAll('#drawer .drawer-nav > a.nav-link:not(.sub-link)')].map(a => a.getAttribute('href')).join()`), "/video,/account/security");
+  await shot("pwa-locked-phone-menu.png");
+  await go("/devices", 3000);
+  expect("locked: a page outside the app opens the start page", await ev(`location.pathname`), "/video");
+  await go("/?full=1", 3000);
+  expect("locked: ?full=1 does not leave the app", await ev(`location.pathname + ' ' + document.documentElement.classList.contains('app-locked')`), "/video true");
+  // the viewer's own choice on this device wins over the app profile
+  await ev(`document.querySelector('#camLayout [data-layout=grid]').click()`);
+  expect("grid chosen on the device", await ev(`document.querySelector('#liveGrid').classList.contains('cam-list')`), false);
+  await ev(`localStorage.removeItem('ctrl32.video.layout'); sessionStorage.clear()`);
+  await send("Emulation.clearDeviceMetricsOverride");
+  expect("locked app deleted", await ev(`ctrl32.api('DELETE', '/api/v1/pwa-apps/${slug2}?reason=headless%20probe').then(r => r.ok)`), true);
 
   console.log(problems.length ? "PROBLEMS:\n" + problems.join("\n") : "no problems");
   proc.kill(); process.exit(problems.length ? 1 : 0);

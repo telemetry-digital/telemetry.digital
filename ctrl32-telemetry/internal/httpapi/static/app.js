@@ -93,7 +93,7 @@
   // page opened in the window then shows only the app's menu sections (plus My account) and its name, and the logo
   // leads to the app's start page. The app is a view, not a permission boundary: permissions filter the menu first.
   const APP_KEY = 'ctrl32.app';
-  let app = null;
+  let app = null, pendingFull = false;
   function appStore(slug, profile) {
     try {
       if (slug) { sessionStorage.setItem(APP_KEY, slug); if (profile) sessionStorage.setItem(APP_KEY + '.profile', JSON.stringify(profile)); }
@@ -101,27 +101,90 @@
     } catch (e) { /* storage blocked */ }
   }
   function appSlug() { try { return sessionStorage.getItem(APP_KEY) || ''; } catch (e) { return ''; } }
-  (function leaveAppByLink() { // "Open the full application" links to ?full=1
+  // the remembered profile is known at once, so a locked app is confined before the page renders
+  if (appSlug()) { try { app = JSON.parse(sessionStorage.getItem(APP_KEY + '.profile') || 'null'); } catch (e) { app = null; } if (app && app.slug !== appSlug()) app = null; }
+  // Locked app (0.61.0): the window stays on the app's sections. Pages of a section (and their sub-pages), as the server's
+  // pwaSectionPaths; every locked app also keeps sign-in, password reset, Password and MFA, the licence and its install
+  // page, and always its start page. Anything else opens the start page instead. This confines the user interface only;
+  // permissions stay the security boundary (the API answers what the role allows, whatever window asks).
+  const APP_PATHS = {
+    dashboards: ['/', '/dashboards'], home: ['/home', '/smarthome'], energy: ['/energy'], cameras: ['/video'],
+    displays: ['/displays'], flows: ['/flows'], devices: ['/devices'], incidents: ['/incidents'], assets: ['/assets'],
+    firmware: ['/fota'], users: ['/users'], settings: ['/settings'], system: ['/organizations', '/server', '/landing/edit'],
+  };
+  const APP_ALWAYS = ['/login', '/forgot', '/reset', '/account/security', '/license'];
+  const pathIn = (p, list) => list.some((x) => p === x || (x !== '/' && p.startsWith(x + '/')));
+  function appAllows(path) {
+    if (!app || !app.locked) return true;
+    path = path.replace(/\/+$/, '') || '/';
+    if (path === (app.start_url || '/').split('?')[0] || path === '/app/' + app.slug || pathIn(path, APP_ALWAYS)) return true;
+    return (app.sections || []).some((s) => pathIn(path, APP_PATHS[s] || []));
+  }
+  // a page outside a locked app: its start page instead (true when leaving)
+  function confine() {
+    if (!app || !app.locked || appAllows(location.pathname)) return false;
+    location.replace(app.start_url || '/');
+    return true;
+  }
+  (function leaveAppByLink() { // "Open the full application" links to ?full=1; a locked app has no way out
     const q = new URLSearchParams(location.search);
     if (!q.has('full')) return;
-    appStore('');
     q.delete('full');
     history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
+    if (app && app.locked) return;
+    if (appSlug() && !app) { pendingFull = true; return; } // profile not known yet: loadApp decides
+    appStore(''); app = null;
   })();
+  // page zoom off (page_zoom false): the viewport forbids zooming, touch-action stops pinch and double-tap zoom, and
+  // for iOS Safari (which ignores user-scalable since iOS 10) multi-touch gestures outside the video player are
+  // cancelled. The player keeps its own pinch zoom of the picture (videoplayer.js).
+  const noPageZoom = () => !!(app && app.page_zoom === false);
+  function applyAppMode() {
+    const root = document.documentElement;
+    root.classList.toggle('app-locked', !!(app && app.locked));
+    root.classList.toggle('no-page-zoom', noPageZoom());
+    if (document.body) document.body.classList.toggle('app-mode', !!app);
+    const vp = document.querySelector('meta[name="viewport"]');
+    if (vp) {
+      if (vp.dataset.orig === undefined) vp.dataset.orig = vp.getAttribute('content') || '';
+      const base = vp.dataset.orig.split(',').map((s) => s.trim()).filter((s) => s && !/^(maximum-scale|minimum-scale|user-scalable)=/.test(s));
+      vp.setAttribute('content', noPageZoom() ? base.concat(['maximum-scale=1', 'user-scalable=no']).join(', ') : vp.dataset.orig);
+    }
+  }
+  const inPlayer = (t) => !!(t && t.closest && t.closest('.vp'));
+  for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => { if (noPageZoom() && !inPlayer(e.target)) e.preventDefault(); }, { passive: false });
+  document.addEventListener('touchmove', (e) => { if (noPageZoom() && e.touches.length > 1 && !inPlayer(e.target)) e.preventDefault(); }, { passive: false });
+  // links out of a locked app go to its start page without loading the other page first
+  document.addEventListener('click', (e) => {
+    if (!app || !app.locked || e.defaultPrevented) return;
+    const a = e.target.closest && e.target.closest('a[href]');
+    if (!a || (a.target && a.target !== '_self')) return;
+    let u; try { u = new URL(a.href, location.href); } catch (x) { return; }
+    if (u.origin !== location.origin || appAllows(u.pathname)) return;
+    e.preventDefault();
+    location.href = app.start_url || '/';
+  }, true);
+  window.addEventListener('pageshow', (e) => { if (e.persisted) confine(); }); // back/forward from the page cache
+  applyAppMode();
+  confine();
   async function loadApp() {
     const slug = appSlug();
     if (!slug) return null;
-    try { app = JSON.parse(sessionStorage.getItem(APP_KEY + '.profile') || 'null'); } catch (e) { app = null; }
     try {
       const r = await fetch('/api/v1/pwa-apps/' + encodeURIComponent(slug) + '/launch', { credentials: 'same-origin' });
       if (r.ok) { app = await r.json(); appStore(slug, app); } else if (r.status === 404) { app = null; appStore(''); }
     } catch (e) { /* offline: keep the remembered profile */ }
-    if (app) document.body.classList.add('app-mode');
+    if (pendingFull && app && !app.locked) { app = null; appStore(''); }
+    pendingFull = false;
+    applyAppMode();
+    if (confine()) return new Promise(() => {}); // leaving for the start page: nothing to render here
     return app;
   }
   // enterApp: called by the install page; remembers the app and opens its start page in this window
-  function enterApp(slug, start) { appStore(slug); location.replace(start || '/'); }
+  function enterApp(slug, start) { appStore(''); appStore(slug); location.replace(start || '/'); }
   function home() { return app ? app.start_url : '/'; }
+  const locked = () => !!(app && app.locked);
+  const accountHref = () => (locked() ? '/account/security' : '/account');
 
   // ---- navigation shell -------------------------------------------------------------------------
   // Items are filtered by the signed-in user's permissions. Nothing user-specific appears before loadMe().
@@ -153,7 +216,8 @@
       { href: '/organizations', label: 'System', icon: ICON.system, show: can('system.admin'), sec: 'system', children: [
         { href: '/organizations', label: 'Organizations' }, { href: '/server', label: 'Server' }, { href: '/server/domain', label: 'Domain and TLS' },
         { href: '/server/wireguard', label: 'WireGuard' }, { href: '/server/backups', label: 'Backups' }, { href: '/server/redundancy', label: 'Redundant database' }, { href: '/server/updates', label: 'Updates' }, { href: '/landing/edit', label: 'Front page' }] },
-      { href: '/account', label: 'My account', icon: ICON.user, show: !!me, children: [
+      // a locked app keeps only Password and MFA (sign out is at the bottom of the menu)
+      { href: accountHref(), label: 'My account', icon: ICON.user, show: !!me, children: locked() ? [{ href: '/account/security', label: 'Password and MFA' }] : [
         { href: '/account', label: 'Profile' }, { href: '/account/security', label: 'Password and MFA' }, { href: '/account/tokens', label: 'API tokens' }, { href: '/account/push', label: 'Notifications' }, { href: '/api/docs', label: 'API documentation', show: !app },
         { href: '/?full=1', label: 'Open the full application', show: !!app }] },
     ];
@@ -207,11 +271,13 @@
       <a class="brand" href="${esc(home())}"><img id="logo" data-logo alt="telemetry.digital" src="${esc(logoURL())}">${me || app ? `<span id="orgname" class="${app ? 'notranslate' : ''}">${esc(app ? app.name : (brand.org_name || brand.product))}</span>` : ''}</a>
       <span class="grow"></span>
       ${me ? '' : (brand.public_read ? '<span class="badge warn" title="http.public_read is enabled: anyone can read data without signing in. Demo instances only.">Read-only demo · sign in to change anything</span>' : '')}
-      ${bugButton(me ? 'only-mobile' : '')}
+      ${locked() ? '' : bugButton(me ? 'only-mobile' : '')}
       ${me ? '' : langSwitcher('langTop')}
     </div>`;
+    // a locked app shows no in-page links out of it either (sub-navigation of a page, e.g. My account)
+    if (locked()) for (const a of document.querySelectorAll('.subnav a[href]')) if (!appAllows(new URL(a.href, location.href).pathname)) a.hidden = true;
     // Desktop: the bug button lives in its own strip at the top of the page (in flow, sticky), never over page buttons.
-    if (me && !$('#bugBtnDesk')) { const host = $('main'); const strip = document.createElement('div'); strip.className = 'top-strip only-desktop'; const b = document.createElement('a'); b.id = 'bugBtnDesk'; b.className = 'btn ghost icon bug-btn'; b.href = '#'; b.title = 'Report a bug (opens your mail client, bugs@ctrl32.com)'; b.setAttribute('aria-label', 'Report a bug'); b.innerHTML = ICON.bug; b.onclick = (e) => { e.preventDefault(); location.href = bugMailto(); }; strip.appendChild(b); if (host) { host.prepend(strip); document.body.classList.add('has-strip'); } else document.body.appendChild(strip); }
+    if (me && !locked() && !$('#bugBtnDesk')) { const host = $('main'); const strip = document.createElement('div'); strip.className = 'top-strip only-desktop'; const b = document.createElement('a'); b.id = 'bugBtnDesk'; b.className = 'btn ghost icon bug-btn'; b.href = '#'; b.title = 'Report a bug (opens your mail client, bugs@ctrl32.com)'; b.setAttribute('aria-label', 'Report a bug'); b.innerHTML = ICON.bug; b.onclick = (e) => { e.preventDefault(); location.href = bugMailto(); }; strip.appendChild(b); if (host) { host.prepend(strip); document.body.classList.add('has-strip'); } else document.body.appendChild(strip); }
     wireBug();
     if (me) {
       document.body.classList.add('has-sidebar');
@@ -240,7 +306,7 @@
           <div class="side-user" title="${esc((me.roles || []).join(', '))}">${ICON.user}<div><b>${esc(me.username)}</b><br><span class="muted">${esc((me.roles || []).join(', ') || 'no roles')}</span></div></div>
           <button class="btn ghost" data-theme-toggle data-label type="button"></button>
           ${langSwitcher('langSide')}
-          <a class="btn ghost" href="/account" title="My account">${ICON.user}<span>My account</span></a>
+          <a class="btn ghost" href="${accountHref()}" title="My account">${ICON.user}<span>My account</span></a>
           <button class="btn ghost" id="signout" type="button" title="Sign out">${ICON.logout}<span>Sign out</span></button>
         </div>`;
       $('#signout').onclick = logout;

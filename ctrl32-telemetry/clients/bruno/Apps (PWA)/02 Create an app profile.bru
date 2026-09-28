@@ -12,8 +12,11 @@ post {
 
 body:json {
   {
+    "camera_layout": "auto",
     "enabled": true,
+    "locked": true,
     "name": "string",
+    "page_zoom": true,
     "reason": "string",
     "sections": [
       "string"
@@ -28,7 +31,7 @@ body:json {
 docs {
   Create an app profile
   
-  `start_url` must be a path of this application (`/video`, `/video/walls/{id}`, `/dashboards/{slug}` …): no other site, no `//`, no `javascript:`, not `/api/v1/` or `/app/`. `sections`: keys from `GET /api/v1/pwa-apps/options`, at least one. `warnings` names a short name longer than 12 characters.
+  `start_url` must be a path of this application (`/video`, `/video/walls/{id}`, `/dashboards/{slug}` …): no other site, no `//`, no `javascript:`, not `/api/v1/` or `/app/`. `sections`: keys from `GET /api/v1/pwa-apps/options`, at least one. `warnings` names a short name longer than 12 characters, and the start page of a locked app outside its sections. `locked`, `page_zoom`, `camera_layout` (auto, single, grid): see the PWAApp schema.
   
   Requires permission `content.write`.
 }

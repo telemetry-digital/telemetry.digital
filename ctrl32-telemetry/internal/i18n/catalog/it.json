@@ -2257,5 +2257,18 @@
  "This app does not exist or is switched off. Ask your administrator for the right address.": "Questa app non esiste o è disattivata. Chiedere all'amministratore l'indirizzo corretto.",
  "Up to 12 characters fit under the icon on most phones.": "Sulla maggior parte dei telefoni sotto l'icona entrano fino a 12 caratteri.",
  "app deleted": "app eliminata",
- "app saved": "app salvata"
+ "app saved": "app salvata",
+ "No way into the full application": "Nessun accesso all'applicazione completa",
+ "no page zoom": "nessuno zoom della pagina",
+ "In the app window": "Nella finestra dell'app",
+ "Locked to its sections — no way into the full application": "Bloccata sulle sue sezioni — nessun accesso all'applicazione completa",
+ "Pages outside the chosen sections open the start page instead; My account keeps only Password and MFA and Sign out. This limits the app's screens, not the user's rights: permissions stay what protects data.": "Le pagine fuori dalle sezioni scelte aprono invece la pagina iniziale; Il mio account mantiene solo Password e MFA ed Esci. Limita le schermate dell'app, non i diritti dell'utente: i dati restano protetti dai permessi.",
+ "Zoom the page with two fingers": "Zoom della pagina con due dita",
+ "Off: pinch and double tap do not enlarge the page (the camera picture still zooms with two fingers).": "Disattivato: pizzico e doppio tocco non ingrandiscono la pagina (l'immagine della telecamera si ingrandisce comunque con due dita).",
+ "Cameras in live view and on video walls": "Telecamere in diretta e sui videowall",
+ "automatic — one per row on phones": "automatico — una per riga sui telefoni",
+ "one camera per row": "una telecamera per riga",
+ "grid": "griglia",
+ "Grid": "Griglia",
+ "One camera per row": "Una telecamera per riga"
 }

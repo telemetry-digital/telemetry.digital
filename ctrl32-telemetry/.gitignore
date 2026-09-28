@@ -44,3 +44,6 @@ __pycache__/
 # licensor private keys never belong in the repository (docs/whitelabel.md)
 internal/license/trusted/*.key
 /ctrl32-telemetry
+
+# local instance of a feature worktree (binary, config, recordings)
+/camapp-dev/
