@@ -1,0 +1,30 @@
+meta {
+  name: Consent page the authorization request
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/mcp/authorize
+  body: none
+  auth: inherit
+}
+
+params:query {
+  client_id: 
+  redirect_uri: 
+  response_type: 
+  code_challenge: 
+  code_challenge_method: 
+  ~state: 
+  ~scope: 
+  ~resource: 
+}
+
+docs {
+  Consent page: the authorization request
+  
+  Used by the consent page `/oauth/authorize` in a signed-in browser: validates the OAuth request (client, redirect address, PKCE S256, scope, resource) and names the client. `error` and `redirect` when the request is refused in a way the client must learn.
+  
+  Requires a signed-in user or an API token (any permission).
+}

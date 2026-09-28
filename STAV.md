@@ -30,6 +30,7 @@
 | 0.60.0 | Vlastné inštalovateľné aplikácie (PWA): *Nastavenia → Aplikácie* — názov, názov na ploche, adresa `/app/{adresa}`, úvodná stránka (stránka, dashboard, videostena, kamera; len cesta tejto aplikácie), časti menu, farba; predvoľby Kamery, Videostena, Dashboardy, Inteligentná domácnosť; stránka inštalácie (Android/počítač tlačidlo, iPhone návod, QR), vlastný manifest; v okne aplikácie len zvolené časti menu + Môj účet, cesta späť „Otvoriť celú aplikáciu“; bez licencie white labelingu nesie plný názov produkt; migrácia 0041 (vetva `feature/pwa-apps`, spec 021, URS J-15a) | e2e `pwa_apps` 77, unit, headless `pwa_apps` |
 | 0.61.0 | Aplikácia na kamery pre mobil — voľby okna aplikácie: zamknutá na svoje časti (bez cesty do celej aplikácie), vypnuté zväčšovanie stránky dvoma prstami (obraz kamery sa zväčšuje), kamery v živom obraze a na videostenách jedna na riadok / mriežka / automaticky (prepínač na zariadení); PTZ podržaním s ikonami SVG, rýchlejšie prehrávanie záznamu naozaj zrýchli; preklady vo všetkých 19 jazykoch; migrácia 0042 (spec 021 doplnok, URS J-15b) | e2e `pwa_apps` 93, unit, headless `pwa_apps` |
 | 0.61.1 | Udalosti ONVIF z kamier Tapo cez prenášač: odber udalostí mimo `/onvif/` (`/event-…`) — server aj prenášač púšťajú mimo `/onvif/` len volania SOAP (POST, SOAP typ, obálka); treba nový server aj prenášač | unit `video`, e2e `video` 157/167 (všetky kontroly prenášača; 10 zlyhaní na Windows PC nesúvisí) |
+| 0.62.0 | AI asistenti cez MCP: `/mcp` (Model Context Protocol) — celé API ako nástroje generované z OpenAPI (286 z 336 operácií v 55 nástrojoch, zvyšok vylúčený s dôvodom, test stráži každú novú operáciu), volania cez tie isté obslužné funkcie (oprávnenia, dôvod, audit „via MCP“); OAuth 2.1 pre konektor v assistant.example (registrácia, súhlas, PKCE, tokeny len pre /mcp, obnova, zrušenie) alebo API token (AI assistant); predvolene vypnuté, *Nastavenia → AI asistenti*, *Môj účet → AI asistenti*; **čítanie cez AI zadarmo, zmeny cez AI s licenciou white labelingu** (bez nej len čítanie); migrácia 0043 (spec 022, ADR-0017, URS G-11, G-12) | unit, e2e `mcp` 87, headless `mcp`, skutočný klient AI assistant |
 
 Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (`tests/run-all.sh`) pre 0.54.0 (27. 9. 2026): všetko prešlo okrem 3 kontrol času NTP v `ops`, ktoré potrebujú internet (v tomto kontajneri nedostupný) — nesúvisí s kódom.
 
@@ -51,6 +52,9 @@ Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (
 
 ## Rozhodnutia
 
+- **28. 9. 2026: AI asistenti cez MCP — čítanie zadarmo, zmeny platené** tou istou licenciou ako white labeling (39 EUR
+  jednorazovo, navždy; jeden nákup odomkne oboje); platia všetky zmeny cez MCP, webové rozhranie a REST API ostávajú
+  zadarmo (ADR-0017, doplnok ADR-0016).
 - **27. 9. 2026: white labeling je platený — 39 EUR jednorazovo, navždy** (cena zmenená z 99 EUR 27. 9. 2026 večer: rovnako ako ctrl32 editor) (trvalá licencia na server/inštaláciu,
   overovaná offline; ADR-0016). Všetko ostatné ostáva zadarmo; bez licencie je pätička ctrl32 pevná. (História:
   26. 9. pripravený, v ten istý deň vrátený „nič platené“, 27. 9. obnovený s cenou.)

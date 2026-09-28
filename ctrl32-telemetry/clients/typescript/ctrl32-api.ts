@@ -604,6 +604,54 @@ export type LoginResponse = {
   user?: Me;
 };
 
+export type MCPConsent = {
+  can_enable?: boolean;
+  client_name?: string;
+  client_uri?: string;
+  /** AI access of the organization */
+  enabled?: boolean;
+  /** OAuth error to report to the client */
+  error?: string;
+  full_name?: string;
+  organization?: string;
+  read_only_requested?: boolean;
+  redirect?: string;
+  /** where the code goes */
+  redirect_host?: string;
+  user?: string;
+  /** without the license only reading can be approved */
+  write_licensed?: boolean;
+};
+
+export type MCPGrant = {
+  client_name?: string;
+  client_uri?: string;
+  created_at?: string;
+  id?: string;
+  last_used_at?: string | null;
+  read_only?: boolean;
+  redirect_host?: string;
+  revoked_at?: string | null;
+  revoked_reason?: string;
+  user?: string;
+};
+
+export type MCPSettings = {
+  /** OAuth metadata */
+  authorization_server?: string;
+  buy_url?: string;
+  /** user.admin */
+  can_edit?: boolean;
+  enabled?: boolean;
+  /** API operations offered as tools */
+  operations?: number;
+  tools?: number;
+  /** the MCP address to add in an AI assistant */
+  url?: string;
+  /** changes through assistants are licensed (the white-labeling license); without it assistants only read */
+  write_licensed?: boolean;
+};
+
 export type MapSettings = {
   attribution?: string;
   /** built-in OpenStreetMap source in use (read-only) */
@@ -3990,6 +4038,92 @@ export class Ctrl32Client {
     return this.request<{
     published_version?: number;
   }>('POST', `/api/v1/landing/versions/${encodeURIComponent(v)}/publish`, undefined, body, false);
+  }
+
+  /** Consent page: the authorization request
+   *
+   * Used by the consent page `/oauth/authorize` in a signed-in browser: validates the OAuth request (client, redirect address, PKCE S256, scope, resource) and names the client. `error` and `redirect` when the request is refused in a way the client must learn.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  getMcpAuthorize(query: { client_id: string; redirect_uri: string; response_type: string; /** code */ code_challenge: string; /** PKCE S256 */ code_challenge_method: string; /** S256 */ state?: string; scope?: string; /** mcp or mcp:read */ resource?: string; /** the MCP address */ }): Promise<MCPConsent> {
+    return this.request<MCPConsent>('GET', `/api/v1/mcp/authorize`, query, undefined, false);
+  }
+
+  /** Consent page: approve or deny
+   *
+   * Browser session only. Approving creates the grant (the user's permissions at this time, or reading only) and a single-use code valid for ten minutes; the answer names the address the browser goes to next (the client's redirect with `code` or `error`).
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  postMcpAuthorize(body: {
+    approve?: boolean;
+    client_id: string;
+    code_challenge: string;
+    /** S256 */
+    code_challenge_method: string;
+    /** reading only */
+    read_only?: boolean;
+    redirect_uri: string;
+    resource?: string;
+    /** code */
+    response_type: string;
+    scope?: string;
+    state?: string;
+  }): Promise<{
+    redirect?: string;
+  }> {
+    return this.request<{
+    redirect?: string;
+  }>('POST', `/api/v1/mcp/authorize`, undefined, body, false);
+  }
+
+  /** Connected AI assistants
+   *
+   * The assistants I approved (with all=1 the whole organization's, user.admin); revoked ones are listed for 30 days.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  getMcpGrants(query?: { all?: string; /** 1: every user of the organization (user.admin) */ }): Promise<{
+    grants?: MCPGrant[];
+  }> {
+    return this.request<{
+    grants?: MCPGrant[];
+  }>('GET', `/api/v1/mcp/grants`, query, undefined, false);
+  }
+
+  /** Disconnect an AI assistant
+   *
+   * Ends the approval and every token issued under it. The owner, or user.admin for anyone in the organization.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  deleteMcpGrantsId(id: string, query: { reason: string; /** reason for the audit trail */ }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/mcp/grants/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** AI access of the organization
+   *
+   * Whether AI assistants may connect (off by default), the MCP address to add in the assistant, and the number of tools and operations offered.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  getMcpSettings(): Promise<MCPSettings> {
+    return this.request<MCPSettings>('GET', `/api/v1/mcp/settings`, undefined, undefined, false);
+  }
+
+  /** Switch AI access on or off
+   *
+   * Audited with the reason. Switching off stops every connected assistant at once (their tokens are refused); switching on again lets them continue.
+   * 
+   * Requires permission `user.admin`. */
+  putMcpSettings(body: {
+    enabled: boolean;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<MCPSettings> {
+    return this.request<MCPSettings>('PUT', `/api/v1/mcp/settings`, undefined, body, false);
   }
 
   /** MQTT accounts and bridges

@@ -25,6 +25,7 @@ const (
 	principalKey ctxKey = iota
 	requestIDKey
 	badCredentialKey // set when an Authorization header was present but invalid
+	viaMCPKey        // set on requests an AI assistant makes through /mcp (mcp.go)
 )
 
 const sessionCookie = "ctrl32_session"
@@ -62,9 +63,10 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		}
 		var p *iam.Principal
 		if ah := r.Header.Get("Authorization"); strings.HasPrefix(ah, "Bearer ") {
-			if pp, err := s.iam.AuthenticateToken(r.Context(), strings.TrimSpace(ah[7:])); err == nil {
+			if pp, err := s.iam.AuthenticateToken(r.Context(), strings.TrimSpace(ah[7:])); err == nil && (pp.GrantID == "" || r.URL.Path == mcpPath) {
 				p = pp
 			} else {
+				// an access token issued to an AI client over OAuth is valid only at /mcp (its audience)
 				// An explicit but invalid credential is never downgraded to anonymous access.
 				s.log.Warn("invalid api token", "security", true, "remote", clientIP(r), "path", r.URL.Path)
 				r = r.WithContext(context.WithValue(r.Context(), badCredentialKey, true))
@@ -112,6 +114,11 @@ func (s *Server) require(perm string, fn http.HandlerFunc) http.Handler {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "multi-factor authentication must be set up", "code": "mfa_setup_required"})
 			return
 		}
+		if p.ReadOnly && !readOnly {
+			// an AI client the user approved for reading only (spec 022)
+			writeErr(w, http.StatusForbidden, "this AI access is read-only")
+			return
+		}
 		if perm != "" && !p.Has(perm) {
 			s.log.Warn("permission denied", "security", true, "user", p.Username, "perm", perm, "path", path)
 			writeErr(w, http.StatusForbidden, "permission denied: "+perm)
@@ -135,6 +142,12 @@ func (s *Server) audit(r *http.Request, action, entityType, entityID string, old
 		if p.TokenID != "" {
 			e.ActorType = "api_token"
 			e.ActorName = p.Username + " (token " + p.TokenID[:8] + ")"
+		}
+		switch {
+		case p.GrantID != "":
+			e.ActorName = p.Username + " (AI assistant " + p.ClientName + " via MCP)"
+		case r.Context().Value(viaMCPKey) != nil:
+			e.ActorName += " via MCP"
 		}
 	} else {
 		e.ActorType, e.ActorName = "system", "anonymous"

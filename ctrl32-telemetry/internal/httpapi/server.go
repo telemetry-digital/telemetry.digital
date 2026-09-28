@@ -63,6 +63,8 @@ type Server struct {
 	loginLimiter     *limiter
 	provisionLimiter *limiter
 	pairLimiter      *limiter
+	mcpLimiter       *limiter
+	oauthLimiter     *limiter
 	repl             *replication.Primary
 	live             *live.Hub
 	mb               *modbus.Manager
@@ -84,7 +86,7 @@ type Server struct {
 // New builds the handler tree.
 func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.Service, rep *report.Engine, ing *ingest.Ingest, con *console.Manager, ag *agent.Client, opc *opcua.Manager, log *slog.Logger, version string, hub *live.Hub, mbm *modbus.Manager, esc *escalate.Engine, eng *rules.Engine, pm *push.Manager, tc *timecheck.Checker, inc *incident.Manager, rp *replication.Primary, fl *flows.Engine, nt *notify.Notifier, sh *smarthome.Manager, vm *video.Manager) http.Handler {
 	s := &Server{cfg: cfg, pool: pool, br: br, iam: iamSvc, rep: rep, ing: ing, con: con, agent: ag, opc: opc, started: time.Now(), log: log.With("component", "http"), version: version, live: hub, mb: mbm, esc: esc, rules: eng, push: pm, tc: tc, incidents: inc, repl: rp, flows: fl, notifier: nt, smart: sh, video: vm,
-		loginLimiter: newLimiter(10, 10), provisionLimiter: newLimiter(20, 10), pairLimiter: newLimiter(5, 5)}
+		loginLimiter: newLimiter(10, 10), provisionLimiter: newLimiter(20, 10), pairLimiter: newLimiter(5, 5), mcpLimiter: newLimiter(300, 60), oauthLimiter: newLimiter(30, 20)}
 	if eng != nil {
 		eng.Commander = s
 	}
@@ -433,6 +435,26 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("DELETE /api/v1/tokens/{id}", s.require("token.manage", s.revokeToken))
 	mux.Handle("PUT /api/v1/branding", s.require("content.write", s.putBranding))
 	mux.Handle("GET /api/v1/branding/white-label", s.require("content.write", s.getWhiteLabel))
+	// AI assistants over MCP and their OAuth authorization (spec 022, mcp.go, oauth.go)
+	mux.HandleFunc("POST /mcp", s.mcpEndpoint)
+	mux.HandleFunc("GET /mcp", s.mcpEndpoint)
+	mux.HandleFunc("OPTIONS /mcp", s.mcpEndpoint)
+	mux.HandleFunc("GET /.well-known/oauth-protected-resource", s.oauthResourceMeta)
+	mux.HandleFunc("GET /.well-known/oauth-protected-resource/mcp", s.oauthResourceMeta)
+	mux.HandleFunc("GET /.well-known/oauth-authorization-server", s.oauthServerMeta)
+	mux.HandleFunc("GET /.well-known/oauth-authorization-server/mcp", s.oauthServerMeta)
+	mux.HandleFunc("POST /oauth/register", s.oauthRegister)
+	mux.HandleFunc("OPTIONS /oauth/register", s.oauthRegister)
+	mux.HandleFunc("POST /oauth/token", s.oauthToken)
+	mux.HandleFunc("OPTIONS /oauth/token", s.oauthToken)
+	mux.HandleFunc("POST /oauth/revoke", s.oauthRevoke)
+	mux.HandleFunc("OPTIONS /oauth/revoke", s.oauthRevoke)
+	mux.Handle("GET /api/v1/mcp/settings", s.require("", s.getMCPSettings))
+	mux.Handle("PUT /api/v1/mcp/settings", s.require("user.admin", s.putMCPSettings))
+	mux.Handle("GET /api/v1/mcp/grants", s.require("", s.listMCPGrants))
+	mux.Handle("DELETE /api/v1/mcp/grants/{id}", s.require("", s.revokeMCPGrant))
+	mux.Handle("GET /api/v1/mcp/authorize", s.require("", s.authorizeInfo))
+	mux.Handle("POST /api/v1/mcp/authorize", s.require("", s.authorizeDecide))
 	mux.Handle("GET /api/v1/pwa-apps", s.require("content.write", s.listPWAApps))
 	mux.Handle("GET /api/v1/pwa-apps/options", s.require("content.write", s.pwaAppOptions))
 	mux.Handle("POST /api/v1/pwa-apps", s.require("content.write", s.createPWAApp))
@@ -496,6 +518,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.HandleFunc("GET /display", page("display.html"))
 	mux.HandleFunc("GET /displays", page("displays.html"))
 	mux.HandleFunc("GET /api/docs", page("docs.html"))
+	mux.HandleFunc("GET /oauth/authorize", page("oauth.html")) // consent of an AI assistant (oauth.go)
 	mux.HandleFunc("GET /home", page("home.html"))
 	mux.HandleFunc("GET /energy", page("energy.html"))
 	mux.HandleFunc("GET /landing/edit", page("landing-edit.html"))
