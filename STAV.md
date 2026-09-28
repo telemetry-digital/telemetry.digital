@@ -56,8 +56,8 @@ Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (
 
 ## Čaká na používateľa
 
-- **Produkcia 28. 9. 2026: telemetry.digital beží 0.60.0 (overené cez `/healthz`); lic.ctrl32.com nasadený s telemetry.**
-  V `main` čaká na nasadenie 0.61.0 (migrácia 0042). Preklady do 16 jazykov zlúčené 28. 9. Kamery Tapo C210 („Byt“, 192.168.0.21) a C225 („Pivnica“,
+- **Produkcia 28. 9. 2026 11:00: telemetry.digital beží 0.61.0** (migrácia 0042, záloha `/opt/backup/ctrl32-pre-0.61.0-*`); lic.ctrl32.com nasadený s telemetry.
+  Preklady do 16 jazykov zlúčené 28. 9. Známa chyba: udalosti ONVIF z Tapo cez prenášač nechodia — kamera dáva adresu odberu `/event-…`, prenášač púšťa len `/onvif/…` (varovanie „camera events down“, obraz a PTZ fungujú). Nasadzovať z Windows cez `C:/Windows/System32/OpenSSH` (Git Bash ssh nevie cestu s „ÁČ“ ku known_hosts). Kamery Tapo C210 („Byt“, 192.168.0.21) a C225 („Pivnica“,
   192.168.0.197) cez prenášač na PC používateľa (`%USERPROFILE%\ctrl32-relay`, naplánovaná úloha „ctrl32 camera
   relay“): obraz, nahrávanie v slučke (limit 15 GB), zvuk G.711 len naživo, PTZ cez tunel (predvoľby C210 načítané).
   Používateľ má ešte vyskúšať PTZ a zvuk v prehliadači. Prenášač presunúť na Raspberry Pi (192.168.0.53) po nahratí
