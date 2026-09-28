@@ -42,6 +42,16 @@ var moreWidgets = []WidgetDef{
 	{Type: "radar", Label: "Radar", Group: "charts", Help: "Latest values on radial axes, one axis per datastream.", Binds: dsBind, MinBinds: 3, Default: [2]int{4, 3}, Params: []ScreenParam{pTitle, pDecimals, {Name: "y_max", Label: "Axis maximum (empty = auto)", Kind: "number"}}},
 	// lists
 	{Type: "ts_table", Label: "Time-series table", Group: "lists", Help: "One row per timestamp, one column per datastream.", Binds: dsBind, MinBinds: 1, Default: [2]int{6, 3}, Params: []ScreenParam{pTitle, pRangeAll, pDecimals, {Name: "limit", Label: "Rows", Kind: "number", Default: 50, Min: fptr(1), Max: fptr(1000)}}},
+	{Type: "period_table", Label: "Period table", Group: "lists", Help: "Values per day, week, month… in a table with export to Excel, CSV and PDF — e.g. a daily log of a fridge (minimum and maximum per day) or the monthly consumption of electricity meters.", Binds: dsBind, MinBinds: 1, Default: [2]int{6, 5}, Params: []ScreenParam{pTitle,
+		{Name: "interval", Label: "Row per", Kind: "select", Default: "day", Options: []string{"hour", "day", "week", "month", "year"}},
+		{Name: "values", Label: "Values", Kind: "select", Default: "min,max", Options: []string{"min,max", "min,max,avg", "avg", "min", "max", "last", "delta", "first,last,delta", "min,max,out", "count"}, Help: "delta = consumption of a meter (counter) in the period; first,last = readings at the start and the end"},
+		{Name: "period", Label: "Period", Kind: "select", Default: "this_month", Options: []string{"today", "yesterday", "this_week", "last_week", "this_month", "last_month", "this_year", "last_year", "last_7d", "last_30d", "last_12m"}},
+		{Name: "orientation", Label: "Rows", Kind: "select", Default: "periods", Options: []string{"periods", "datastreams"}},
+		{Name: "total", Label: "Total row", Kind: "bool", Default: false},
+		{Name: "low", Label: "Lower limit", Kind: "number", Help: "values below are marked (and counted by out)"},
+		{Name: "high", Label: "Upper limit", Kind: "number", Help: "values above are marked (and counted by out)"},
+		pDecimals,
+		{Name: "export", Label: "Export buttons", Kind: "bool", Default: true}}},
 	{Type: "entity_table", Label: "Entity table", Group: "lists", Help: "Latest values of many datastreams with search and sorting.", Binds: dsBind, MinBinds: 1, Default: [2]int{6, 4}, Params: []ScreenParam{pTitle, pDecimals, {Name: "show_time", Label: "Show time", Kind: "bool", Default: true}, {Name: "show_quality", Label: "Show quality", Kind: "bool", Default: true}, {Name: "search", Label: "Search box", Kind: "bool", Default: true}}},
 	// other
 	{Type: "clock", Label: "Clock", Group: "other", Help: "Current time and date, optionally in another time zone.", Default: [2]int{3, 2}, Params: []ScreenParam{pTitle, {Name: "format", Label: "Format", Kind: "select", Default: "24h", Options: []string{"24h", "12h"}}, {Name: "show_date", Label: "Show date", Kind: "bool", Default: true}, {Name: "tz", Label: "Time zone (IANA, empty = browser)", Kind: "text"}}},

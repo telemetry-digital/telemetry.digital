@@ -826,6 +826,54 @@ export type PWAAppInput = {
   theme_color?: string;
 };
 
+export type PeriodCell = {
+  avg?: number;
+  /** samples */
+  count?: number;
+  /** consumption */
+  delta?: number;
+  /** first reading */
+  first?: number;
+  /** a sample with quality other than ok */
+  flagged?: boolean;
+  /** last reading */
+  last?: number;
+  max?: number;
+  min?: number;
+  /** samples outside low/high */
+  out?: number;
+};
+
+export type PeriodTable = {
+  /** datastream id → a PeriodCell per period (same order as periods) */
+  cells?: Record<string, unknown>;
+  columns?: ({
+    datastream_id?: string;
+    kind?: string;
+    label?: string;
+    unit?: string;
+  })[];
+  from?: string;
+  high?: number;
+  interval?: string;
+  /** e.g. 2026-09 */
+  label?: string;
+  low?: number;
+  period?: string;
+  periods?: ({
+    end?: string;
+    label?: string;
+    start?: string;
+  })[];
+  /** exclusive */
+  to?: string;
+  /** datastream id → PeriodCell over the whole range */
+  totals?: Record<string, unknown>;
+  /** time zone of the periods */
+  tz?: string;
+  values?: string[];
+};
+
 export type Permission = {
   description?: string;
   name?: string;
@@ -4475,6 +4523,24 @@ export class Ctrl32Client {
   }>('POST', `/api/v1/organizations/${encodeURIComponent(id)}/reset-admin`, undefined, body, false);
   }
 
+  /** Values per period (daily log, monthly consumption)
+   *
+   * Aggregates of datastreams per local hour, day, week, month or year in the organization's time zone: minimum, maximum, average, first and last reading, consumption of a counter (sum of increases, a meter reset counts the new reading, the last reading before the period is the baseline), sample count and samples outside the limits. Every period of the range has a row, empty when there is no data. Used by the dashboard widget *Period table* (spec 023).
+   * 
+   * Requires permission `data.read`. */
+  getPeriodTable(query: { datastreams: string; /** comma-separated datastream ids (1–50) */ interval?: string; /** hour | day (default) | week | month | year — local periods of the organization's time zone */ values?: string; /** comma-separated: min, max, avg, first, last, delta (consumption of a counter), count, out (samples outside low/high); default min,max */ period?: string; /** today | yesterday | this_week | last_week | this_month (default) | last_month | this_year | last_year | last_7d | last_30d | last_12m | custom */ from?: string; /** custom: first day YYYY-MM-DD */ to?: string; /** custom: last day YYYY-MM-DD (included) */ shift?: number; /** move the period by whole periods, e.g. -1 = the one before */ low?: string; /** lower limit (out, flagging) */ high?: string; /** upper limit */ orientation?: string; /** periods (a row per period, default) | datastreams */ total?: string; /** 1: a total row */ decimals?: number; /** 0–6 (exports) */ label?: string; /** display name of a datastream, repeated in the order of datastreams */ title?: string; /** title of an export */ }): Promise<PeriodTable> {
+    return this.request<PeriodTable>('GET', `/api/v1/period-table`, query, undefined, false);
+  }
+
+  /** Export a period table
+   *
+   * The same table as `GET /api/v1/period-table` as `format` xlsx (default; title, period, organization and author above the table), csv (UTF-8 with BOM) or pdf (stored under Reports with hashes, like other PDF exports). Audited.
+   * 
+   * Requires permission `data.export`. */
+  getPeriodTableExport(query: { datastreams: string; /** comma-separated datastream ids (1–50) */ interval?: string; /** hour | day (default) | week | month | year — local periods of the organization's time zone */ values?: string; /** comma-separated: min, max, avg, first, last, delta (consumption of a counter), count, out (samples outside low/high); default min,max */ period?: string; /** today | yesterday | this_week | last_week | this_month (default) | last_month | this_year | last_year | last_7d | last_30d | last_12m | custom */ from?: string; /** custom: first day YYYY-MM-DD */ to?: string; /** custom: last day YYYY-MM-DD (included) */ shift?: number; /** move the period by whole periods, e.g. -1 = the one before */ low?: string; /** lower limit (out, flagging) */ high?: string; /** upper limit */ orientation?: string; /** periods (a row per period, default) | datastreams */ total?: string; /** 1: a total row */ decimals?: number; /** 0–6 (exports) */ label?: string; /** display name of a datastream, repeated in the order of datastreams */ title?: string; /** title of an export */ format?: string; /** xlsx | csv | pdf */ }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/period-table/export`, query, undefined, true);
+  }
+
   /** Permission catalog
    *
    * Requires a signed-in user or an API token (any permission). */
@@ -4749,6 +4815,13 @@ export class Ctrl32Client {
    * Same parameters and cursor pagination as `GET /api/v1/observations`. */
   getPublicTokenObservations(token: string, query: { datastream_id: string; from?: string; to?: string; bucket?: number; /** seconds */ limit?: number; cursor?: string; }): Promise<Observation[] | ObservationBuckets> {
     return this.request<Observation[] | ObservationBuckets>('GET', `/api/v1/public/${encodeURIComponent(token)}/observations`, query, undefined, false);
+  }
+
+  /** Period table (bound datastreams only)
+   *
+   * Same parameters and answer as `GET /api/v1/period-table`, only for datastreams bound in the shared dashboard. */
+  getPublicTokenPeriodTable(token: string): Promise<PeriodTable> {
+    return this.request<PeriodTable>('GET', `/api/v1/public/${encodeURIComponent(token)}/period-table`, undefined, undefined, false);
   }
 
   /** Live stream of the shared dashboard (SSE) */

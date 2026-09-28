@@ -337,5 +337,6 @@ func showcaseMore(w func(id, typ string, x, y, wd, h int, binds map[string][]str
 		w("slider", "slider", 3, y+16, 5, 2, devs, map[string]any{"title": "Slider", "key": "setpoint", "min": 0, "max": 100, "step": 5}),
 		w("rswitch", "round_switch", 8, y+16, 2, 3, devs, map[string]any{"title": "Round switch", "key": "run"}),
 		w("styled", "value", 10, y+16, 2, 3, dsb(first), map[string]any{"title": "Styled", "bg_color": "#0f172a", "text_color": "#f8fafc", "border_width": 0, "radius": 16, "shadow": true, "title_icon": "bolt", "value_size": 40, "sparkline": false}),
+		w("period", "period_table", 0, y+19, 12, 4, dsb(ds), map[string]any{"title": "Period table (daily min and max)", "interval": "day", "values": "min,max", "period": "last_7d", "total": true, "decimals": 1}),
 	}
 }

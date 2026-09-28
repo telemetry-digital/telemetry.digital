@@ -188,6 +188,60 @@
     el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Time</th>${cols.map((c) => `<th style="text-align:right" class="notranslate">${esc(c.d.label || c.d.key)}${c.d.unit ? ' [' + esc(c.d.unit) + ']' : ''}</th>`).join('')}</tr></thead><tbody>${ts.map((t) => `<tr><td>${esc(new Date(t).toLocaleString(document.documentElement.lang || undefined))}</td>${cols.map((c) => { const v = c.m.get(t); const cf = WG.condFormat(null, p, v); return `<td style="text-align:right${cf.value ? ';color:' + cf.value : ''}">${v == null ? '' : num(v, c.d.dec)}</td>`; }).join('')}</tr>`).join('') || `<tr><td colspan="${cols.length + 1}" class="muted">no data in this range</td></tr>`}</tbody></table></div>`;
   }, { needsDs: true, label: 'Time-series table' });
 
+  // Period table (spec 023): a row per local day/week/month… (or per datastream), values min/max/avg/first/last/
+  // consumption/count/out computed by the server in the organization's time zone; ◀ ▶ move the period; the export
+  // buttons download the same table as Excel, CSV or a PDF report (data.export, not on public links).
+  const PT_VALUE = { min: 'min', max: 'max', avg: 'average', first: 'start', last: 'end', delta: 'consumption', count: 'samples', out: 'out of limits' };
+  const tr = (s) => (window.ctrl32 && ctrl32.t ? ctrl32.t(s) : s);
+  function ptQuery(ctx, p, all, shift) {
+    const q = new URLSearchParams(); const list = ids(ctx);
+    q.set('datastreams', list.join(',')); q.set('interval', p.interval || 'day'); q.set('values', p.values || 'min,max'); q.set('period', p.period || 'this_month');
+    q.set('orientation', p.orientation || 'periods'); if (p.total) q.set('total', '1'); if (shift) q.set('shift', String(shift));
+    if (p.low != null && p.low !== '') q.set('low', String(p.low)); if (p.high != null && p.high !== '') q.set('high', String(p.high));
+    if (p.decimals != null && p.decimals !== '') q.set('decimals', String(p.decimals));
+    list.forEach((id, i) => { const d = sInfo(all, id, i, p); q.append('label', d.label || ''); });
+    return q;
+  }
+  function ptPeriodLabel(pr, interval) {
+    const d = new Date(pr.start), lang = document.documentElement.lang || undefined;
+    try {
+      if (interval === 'day') return d.toLocaleDateString(lang, { weekday: 'short', day: 'numeric', month: 'numeric', year: 'numeric' });
+      if (interval === 'month') return d.toLocaleDateString(lang, { month: 'long', year: 'numeric' });
+      if (interval === 'hour') return d.toLocaleString(lang, { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch (e) { /* old browser */ }
+    return pr.label;
+  }
+  const ptRender = async (el, p, ctx) => {
+    const all = await WG.datastreams(); const shift = el._shift || 0; const q = ptQuery(ctx, p, all, shift);
+    let t; try { t = await api('GET', P('/api/v1/period-table?' + q.toString())); } catch (x) { noData(el, x.message); return; }
+    const vals = t.values; const dec = (v, c) => (v === 'count' || v === 'out') ? 0 : (p.decimals ?? sInfo(all, c.datastream_id, 0, {}).dec ?? 2);
+    const out = (c, cell) => cell && cell.count && ((p.low != null && p.low !== '' && cell.min < p.low) || (p.high != null && p.high !== '' && cell.max > p.high));
+    const td = (c, cell, v, bold) => { const x = cell && cell.count ? (v === 'count' ? cell.count : v === 'out' ? cell.out : cell[v]) : null;
+      const bad = (v === 'min' && cell && cell.count && p.low != null && p.low !== '' && cell.min < p.low) || (v === 'max' && cell && cell.count && p.high != null && p.high !== '' && cell.max > p.high) || (v === 'out' && x > 0) || ((v === 'avg' || v === 'last' || v === 'first') && out(c, cell));
+      return `<td style="text-align:right;font-variant-numeric:tabular-nums${bold ? ';font-weight:700' : ''}${bad ? ';color:var(--bad,#dc2626);font-weight:700' : ''}"${cell && cell.flagged ? ` title="${esc(tr('contains samples of doubtful quality'))}"` : ''}>${x == null ? '' : num(x, dec(v, c))}${cell && cell.flagged ? ' <span class="muted">*</span>' : ''}</td>`; };
+    const vname = (v) => esc(tr(PT_VALUE[v] || v)); const multi = vals.length > 1;
+    const unitOfCol = (c, v) => (v === 'count' || v === 'out' || !c.unit) ? '' : ` [${esc(c.unit)}]`;
+    let head, body;
+    if ((p.orientation || 'periods') === 'datastreams') {
+      head = `<tr><th>${esc(tr('Datastream'))}</th>${t.periods.map((pr) => `<th colspan="${vals.length}" style="text-align:center">${esc(ptPeriodLabel(pr, t.interval))}</th>`).join('')}${p.total ? `<th colspan="${vals.length}" style="text-align:center">${esc(tr('Total'))}</th>` : ''}</tr>`;
+      if (multi) head += `<tr><th></th>${t.periods.map(() => vals.map((v) => `<th style="text-align:right">${vname(v)}</th>`).join('')).join('')}${p.total ? vals.map((v) => `<th style="text-align:right">${vname(v)}</th>`).join('') : ''}</tr>`;
+      body = t.columns.map((c) => `<tr><td class="notranslate">${esc(c.label)}${c.unit ? ` <span class="muted">[${esc(c.unit)}]</span>` : ''}</td>${t.periods.map((_, i) => vals.map((v) => td(c, t.cells[c.datastream_id][i], v)).join('')).join('')}${p.total ? vals.map((v) => td(c, t.totals[c.datastream_id], v, true)).join('') : ''}</tr>`).join('');
+    } else {
+      head = `<tr><th rowspan="${multi ? 2 : 1}">${esc(tr('Period'))}</th>${t.columns.map((c) => `<th colspan="${vals.length}" style="text-align:${multi ? 'center' : 'right'}" class="notranslate">${esc(c.label)}${multi ? '' : unitOfCol(c, vals[0]) + ' ' + `<span class="muted" style="font-weight:400">${vname(vals[0])}</span>`}</th>`).join('')}</tr>`;
+      if (multi) head += `<tr>${t.columns.map((c) => vals.map((v) => `<th style="text-align:right">${vname(v)}${unitOfCol(c, v)}</th>`).join('')).join('')}</tr>`;
+      body = t.periods.map((pr, i) => `<tr><td style="white-space:nowrap">${esc(ptPeriodLabel(pr, t.interval))}</td>${t.columns.map((c) => vals.map((v) => td(c, t.cells[c.datastream_id][i], v)).join('')).join('')}</tr>`).join('');
+      if (p.total) body += `<tr><td style="font-weight:700">${esc(tr('Total'))}</td>${t.columns.map((c) => vals.map((v) => td(c, t.totals[c.datastream_id], v, true)).join('')).join('')}</tr>`;
+    }
+    const pub = WG.isPublic();
+    const canExport = !pub && p.export !== false && !(ctx && ctx.edit) && (!window.ctrl32 || !ctrl32.can || ctrl32.can('data.export'));
+    const xq = new URLSearchParams(q); xq.set('title', p.title || tr('Period table'));
+    const btn = (f, lbl) => { xq.set('format', f); return `<a class="btn small ghost" href="/api/v1/period-table/export?${esc(xq.toString())}" download>${lbl}</a>`; };
+    el.innerHTML = `<div class="pt-bar" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px"><button class="btn small ghost pt-prev" type="button" title="${esc(tr('Previous'))}">◀</button><b class="notranslate" style="font-variant-numeric:tabular-nums">${esc(t.label)}</b><button class="btn small ghost pt-next" type="button" title="${esc(tr('Next'))}"${shift >= 0 ? ' disabled' : ''}>▶</button>${shift ? `<button class="btn small ghost pt-now" type="button">${esc(tr('Current'))}</button>` : ''}<span class="grow" style="flex:1"></span>${canExport ? btn('xlsx', 'Excel') + btn('csv', 'CSV') + btn('pdf', 'PDF') : ''}</div><div class="table-wrap" style="flex:1;min-height:0;overflow:auto"><table class="pt-table"><thead>${head}</thead><tbody>${body || `<tr><td class="muted">${esc(tr('no data in this range'))}</td></tr>`}</tbody></table></div>`;
+    for (const [cls, d] of [['.pt-prev', -1], ['.pt-next', 1], ['.pt-now', 0]]) { const b = el.querySelector(cls); if (b) b.onclick = async (e) => { e.stopPropagation(); el._shift = d === 0 ? 0 : Math.min(0, (el._shift || 0) + d); await ptRender(el, p, ctx); }; }
+    for (const a of el.querySelectorAll('.pt-bar a')) a.onclick = (e) => e.stopPropagation();
+  };
+  reg('period_table', ptRender, { needsDs: true, label: 'Period table' });
+
   reg('entity_table', async (el, p, ctx) => {
     const rows = await many(ctx, p); let sortK = el._sortK || 'name', dir = el._dir || 1, q = el._q || '';
     const draw = () => {

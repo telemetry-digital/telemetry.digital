@@ -1,0 +1,21 @@
+meta {
+  name: Period table (bound datastreams only)
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public/:token/period-table
+  body: none
+  auth: inherit
+}
+
+params:path {
+  token: 
+}
+
+docs {
+  Period table (bound datastreams only)
+  
+  Same parameters and answer as `GET /api/v1/period-table`, only for datastreams bound in the shared dashboard.
+}
