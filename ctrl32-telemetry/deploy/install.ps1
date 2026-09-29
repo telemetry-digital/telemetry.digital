@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   ctrl32 telemetry — one-command installer for Windows Server / Windows 10+ (x64, PowerShell 5.1 or newer).
 
@@ -10,6 +10,8 @@
     .\install.ps1 -OrgName "Acme s.r.o." -PgPort 5432 -HttpPort 8080
   Internet profile with your own certificate (no reverse proxy on Windows):
     .\install.ps1 -Domain telemetry.example.com -TlsCert C:\certs\fullchain.pem -TlsKey C:\certs\privkey.pem
+  Reachable from anywhere through a Cloudflare Tunnel (no open ports, no certificate, no public IP; docs/cloudflare-tunnel.md):
+    .\install.ps1 -Domain kamery.zakaznik.sk -CloudflareToken eyJhIjoi...
 
   What it does (idempotent, re-run safe):
     1. creates C:\Program Files\ctrl32-telemetry (binary, typst, PostgreSQL) and C:\ProgramData\ctrl32-telemetry (config, data, logs, backups)
@@ -19,6 +21,8 @@
     4. writes config.toml (secrets kept on re-run), restricts the data directory to SYSTEM and Administrators
     5. applies schema migrations, registers and starts the Windows service "ctrl32-telemetry", opens firewall ports
     6. creates the first administrator; the one-time password is saved in admin-bootstrap.txt (delete after first login)
+  7. with -CloudflareToken: installs cloudflared as the Windows service "Cloudflared" connected to your tunnel; the server
+     listens on 127.0.0.1 only and no firewall port is opened (profile internet: TLS by Cloudflare, MFA for everyone)
   -Uninstall removes the services and firewall rules (data stays unless -Purge). -DryRun prints the plan only.
 #>
 [CmdletBinding()]
@@ -38,6 +42,8 @@ param(
   [string]$Domain = "",
   [string]$TlsCert = "",
   [string]$TlsKey = "",
+  [string]$CloudflareToken = "",
+  [string]$CloudflaredUrl = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe",
   [string]$OrgName = "My organization",
   [switch]$NoStart,
   [switch]$DryRun,
@@ -50,11 +56,15 @@ $ErrorActionPreference = "Stop"
 function Log($msg) { Write-Host "[ctrl32] $msg" -ForegroundColor Cyan }
 function Warn($msg) { Write-Host "[ctrl32] $msg" -ForegroundColor Yellow }
 function Die($msg) { Write-Host "[ctrl32] error: $msg" -ForegroundColor Red; exit 1 }
-function Rand32 { $b = New-Object byte[] 24; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); ([Convert]::ToBase64String($b) -replace '[/+=]', '').Substring(0, 30) }
+function Rand32 { $b = New-Object byte[] 48; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); ([Convert]::ToBase64String($b) -replace '[/+=]', '').Substring(0, 30) }
 function Step($desc, [scriptblock]$action) { if ($DryRun) { Write-Host "[dry-run] $desc" -ForegroundColor DarkGray } else { Log $desc; & $action } }
 function TomlPath($p) { return ($p -replace '\\', '/') }
 
 $Exe = Join-Path $InstallDir "ctrl32-telemetry.exe"
+$Cloudflared = Join-Path $InstallDir "cloudflared.exe"
+$Tunnel = $CloudflareToken -ne ""
+if ($Tunnel -and $Domain -eq "") { Die "-CloudflareToken needs -Domain: the public hostname of the tunnel (Cloudflare Zero Trust -> Networks -> Tunnels -> Public hostname)" }
+if ($Tunnel -and ($TlsCert -ne "" -or $TlsKey -ne "")) { Die "-CloudflareToken and -TlsCert/-TlsKey exclude each other: Cloudflare terminates TLS" }
 $Typst = Join-Path $InstallDir "typst.exe"
 $PgDir = Join-Path $InstallDir "pgsql"
 $PgData = Join-Path $DataDir "pgdata"
@@ -80,6 +90,9 @@ if ($Uninstall) {
       Stop-Service -Name $PgService -Force -ErrorAction SilentlyContinue
       & (Join-Path $PgDir "bin\pg_ctl.exe") unregister -N $PgService | Out-Null
     }
+  }
+  if ((Get-Service -Name "Cloudflared" -ErrorAction SilentlyContinue) -and (Test-Path $Cloudflared)) {
+    Step "removing the Cloudflare Tunnel service Cloudflared" { & $Cloudflared service uninstall 2>$null | Out-Null }
   }
   Step "removing firewall rules" { Get-NetFirewallRule -DisplayName "ctrl32 telemetry*" -ErrorAction SilentlyContinue | Remove-NetFirewallRule }
   if ($Purge) {
@@ -181,8 +194,13 @@ DO `$`$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='ctrl32') THEN
 # ---- 4. config ------------------------------------------------------------------------------------------
 if (-not (Test-Path $Config)) {
   Step "writing $Config" {
-    if ($Domain -ne "") {
-      if ($TlsCert -eq "" -or $TlsKey -eq "") { Die "-Domain requires -TlsCert and -TlsKey (PEM); there is no reverse proxy on Windows" }
+    if ($Tunnel) {
+      # behind the Cloudflare Tunnel: cloudflared connects to 127.0.0.1, Cloudflare terminates TLS
+      $profile = "internet"; $base = "https://$Domain"
+      $http = "listen = `"127.0.0.1:$HttpPort`"`nbase_url = `"$base`""
+      $mqtt = "listen = `"127.0.0.1:$MqttPort`"`nws_listen = `"127.0.0.1:1884`""
+    } elseif ($Domain -ne "") {
+      if ($TlsCert -eq "" -or $TlsKey -eq "") { Die "-Domain requires -TlsCert and -TlsKey (PEM), or -CloudflareToken for a Cloudflare Tunnel" }
       Copy-Item -Force $TlsCert (Join-Path $DataDir "tls\fullchain.pem"); Copy-Item -Force $TlsKey (Join-Path $DataDir "tls\privkey.pem")
       $profile = "internet"; $listen = ":443"; $base = "https://$Domain"
       $http = "listen = `"$listen`"`nbase_url = `"$base`"`ntls_cert = `"$(TomlPath (Join-Path $DataDir 'tls\fullchain.pem'))`"`ntls_key = `"$(TomlPath (Join-Path $DataDir 'tls\privkey.pem'))`""
@@ -240,7 +258,10 @@ pg_dump = "$(TomlPath (Join-Path $PgBin 'pg_dump.exe'))"
 "@
     Set-Content -Path $Config -Value $toml -Encoding UTF8
   }
-} else { Log "keeping existing $Config" }
+} else {
+  Log "keeping existing $Config"
+  if ($Tunnel) { Warn "for the tunnel the existing config needs: profile = `"internet`", [http] listen = `"127.0.0.1:$HttpPort`", base_url = `"https://$Domain`", [mqtt] listen on 127.0.0.1 - edit $Config and restart the service" }
+}
 
 # ---- 5. migrations, service, firewall -------------------------------------------------------------------
 Step "applying schema migrations" { & $Exe migrate -config $Config }
@@ -251,12 +272,22 @@ Step "registering Windows service $AgentService (backups, updates, restarts from
   if (-not (Get-Service -Name $AgentService -ErrorAction SilentlyContinue)) { & $Exe service install-agent -config $Config }
   New-Item -ItemType Directory -Force -Path (Join-Path $DataDir 'backups') | Out-Null
 }
-Step "opening firewall ports" {
+if ($Tunnel) { Log "Cloudflare Tunnel: no inbound firewall port is opened" } else { Step "opening firewall ports" {
   $ports = @(@("HTTP", $(if ($Domain -ne "") { 443 } else { $HttpPort })), @("MQTT", $MqttPort))
   if ($Domain -ne "") { $ports += ,@("MQTT TLS", 8883) }
   foreach ($p in $ports) {
     $name = "ctrl32 telemetry $($p[0])"
     if (-not (Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue)) { New-NetFirewallRule -DisplayName $name -Direction Inbound -Protocol TCP -LocalPort $p[1] -Action Allow | Out-Null }
+  }
+} }
+if ($Tunnel) {
+  Step "installing cloudflared (Cloudflare Tunnel) as the Windows service Cloudflared" {
+    Invoke-WebRequest -UseBasicParsing -Uri $CloudflaredUrl -OutFile "$Cloudflared.download"
+    if (Get-Service -Name "Cloudflared" -ErrorAction SilentlyContinue) { & $Cloudflared service uninstall 2>$null | Out-Null; Start-Sleep -Seconds 2 }
+    Move-Item -Force "$Cloudflared.download" $Cloudflared
+    & $Cloudflared service install $CloudflareToken
+    if ($LASTEXITCODE -ne 0) { Die "cloudflared service install failed (check the token)" }
+    Start-Sleep -Seconds 3; Get-Service -Name "Cloudflared" | Format-List Status, StartType | Out-String | Write-Host
   }
 }
 if (-not $NoStart) {
@@ -274,4 +305,5 @@ Step "creating the first administrator" {
 }
 
 Log "done. Service: Get-Service $AppService · logs: $(Join-Path $DataDir 'logs\server.log') · config: $Config"
-if ($Domain -ne "") { Log "UI: https://$Domain/  ·  MQTT: ${Domain}:8883 (TLS)" } else { Log "UI: http://$([System.Net.Dns]::GetHostName()):$HttpPort/  ·  MQTT: port $MqttPort (intranet, no TLS)" }
+if ($Tunnel) { Log "UI: https://$Domain/ through the Cloudflare Tunnel (no open ports). In Cloudflare the public hostname $Domain must point to http://localhost:$HttpPort (service type HTTP)." }
+elseif ($Domain -ne "") { Log "UI: https://$Domain/  ·  MQTT: ${Domain}:8883 (TLS)" } else { Log "UI: http://$([System.Net.Dns]::GetHostName()):$HttpPort/  ·  MQTT: port $MqttPort (intranet, no TLS)" }

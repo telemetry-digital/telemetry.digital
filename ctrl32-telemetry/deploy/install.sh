@@ -11,6 +11,8 @@
 #   5. applies schema migrations, installs and starts the systemd service
 #   6. with --domain: runs Caddy (Docker, host network) for automatic HTTPS and syncs the certificate for MQTT/TLS 8883
 #   7. with --demo: seeds a demo organization and prints the device token
+#   8. with --cloudflare-token: installs cloudflared (systemd service) connected to your Cloudflare Tunnel instead of Caddy;
+#      the server listens on 127.0.0.1 only, no port is opened (docs/cloudflare-tunnel.md)
 #
 # Options:
 #   --domain NAME        public hostname (enables profile "internet", Caddy, MQTT TLS on 8883)
@@ -20,6 +22,7 @@
 #   --db-port N          host port for the Docker PostgreSQL (default 5432, or 5433 if 5432 is taken)
 #   --public-read        allow unauthenticated read-only API/UI (demo instances only)
 #   --demo               seed demo data and print the device token
+#   --cloudflare-token T reach the server through a Cloudflare Tunnel (needs --domain = the tunnel's public hostname)
 #   --no-start           install everything but do not start the service
 set -euo pipefail
 
@@ -38,6 +41,7 @@ DB_PORT=""
 PUBLIC_READ=false
 DEMO=false
 START=true
+CF_TOKEN=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -49,6 +53,7 @@ while [[ $# -gt 0 ]]; do
     --public-read) PUBLIC_READ=true; shift;;
     --demo) DEMO=true; shift;;
     --no-start) START=false; shift;;
+    --cloudflare-token) CF_TOKEN="$2"; shift 2;;
     -h|--help) sed -n '2,25p' "$0"; exit 0;;
     *) echo "unknown option: $1" >&2; exit 2;;
   esac
@@ -61,6 +66,7 @@ rand() { head -c 32 /dev/urandom | base64 | tr -d '/+=\n' | head -c 32; }
 [[ $EUID -eq 0 ]] || die "run as root (sudo)"
 command -v systemctl >/dev/null || die "systemd is required"
 ARCH=$(uname -m); case "$ARCH" in x86_64) ARCH=amd64;; aarch64|arm64) ARCH=arm64;; *) die "unsupported architecture $ARCH";; esac
+[[ -z "$CF_TOKEN" || -n "$DOMAIN" ]] || die "--cloudflare-token needs --domain: the public hostname of the tunnel"
 
 # 1. user and directories --------------------------------------------------------------------------
 if ! id -u "$USER_NAME" >/dev/null 2>&1; then
@@ -193,7 +199,7 @@ public_read = $PUBLIC_READ
 [mqtt]
 listen = "127.0.0.1:1883"
 ws_listen = "127.0.0.1:1884"
-$( [[ -n "$DOMAIN" ]] && printf 'tls_listen = ":8883"\ntls_cert = "%s/tls/fullchain.pem"\ntls_key = "%s/tls/privkey.pem"\n' "$ETC" "$ETC" )
+$( [[ -n "$DOMAIN" && -z "$CF_TOKEN" ]] && printf 'tls_listen = ":8883"\ntls_cert = "%s/tls/fullchain.pem"\ntls_key = "%s/tls/privkey.pem"\n' "$ETC" "$ETC" )
 
 [db]
 url = "postgres://ctrl32_app:${DB_APP_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable"
@@ -306,7 +312,17 @@ systemctl enable "$APP-agent" >/dev/null
 if $START; then systemctl restart "$APP-agent"; fi
 
 # 6. reverse proxy with automatic HTTPS + MQTT certificate sync --------------------------------------
-if [[ -n "$DOMAIN" ]]; then
+if [[ -n "$CF_TOKEN" ]]; then
+  # Cloudflare Tunnel instead of Caddy: cloudflared connects out to Cloudflare and forwards to 127.0.0.1:8080
+  log "installing cloudflared (Cloudflare Tunnel)"
+  curl -fsSL -o /usr/local/bin/cloudflared.new "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$ARCH" || die "cannot download cloudflared"
+  chmod 0755 /usr/local/bin/cloudflared.new
+  if systemctl list-unit-files cloudflared.service >/dev/null 2>&1 && systemctl cat cloudflared >/dev/null 2>&1; then cloudflared service uninstall >/dev/null 2>&1 || true; fi
+  mv /usr/local/bin/cloudflared.new /usr/local/bin/cloudflared
+  cloudflared service install "$CF_TOKEN" >/dev/null 2>&1 || die "cloudflared service install failed (check the token)"
+  systemctl enable --now cloudflared >/dev/null 2>&1 || true
+  log "Cloudflare Tunnel connected; in Cloudflare the public hostname $DOMAIN must point to http://localhost:8080"
+elif [[ -n "$DOMAIN" ]]; then
   command -v docker >/dev/null 2>&1 || die "--domain requires Docker for Caddy (native TLS/ACME in the binary comes in a later version)"
   SSLIP="$(curl -fsS4 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}').sslip.io"
   if [[ -f "$OPT/caddy.json" ]]; then log "Caddy is managed from the UI ($OPT/caddy.json) — keeping its configuration"; else
@@ -335,7 +351,11 @@ $DOMAIN, $SSLIP {
 	}
 	reverse_proxy 127.0.0.1:8080
 }
+
+# additional sites: $OPT/caddy-sites/*.caddy
+import sites/*.caddy
 EOF
+  install -d -m 0755 "$OPT/caddy-sites"
   cat > "$OPT/docker-compose.caddy.yml" <<EOF
 name: ${APP}-caddy
 services:
@@ -346,6 +366,7 @@ services:
     network_mode: host
     volumes:
       - $OPT/Caddyfile:/etc/caddy/Caddyfile:ro
+      - $OPT/caddy-sites:/etc/caddy/sites:ro
       - /var/www/ctrl32:/srv/ctrl32:ro
       - ${APP}-caddy-data:/data
       - ${APP}-caddy-config:/config
@@ -400,4 +421,6 @@ if $DEMO; then
 fi
 
 log "done. Service: systemctl status $APP · logs: journalctl -u $APP -f · config: $CONFIG"
-[[ -n "$DOMAIN" ]] && log "UI: https://$DOMAIN/  ·  MQTT: $DOMAIN:8883 (TLS)  ·  after the first certificate: $OPT/mqtt-certs-sync.sh" || log "UI: $BASE_URL/  ·  MQTT: localhost:1883"
+if [[ -n "$CF_TOKEN" ]]; then log "UI: https://$DOMAIN/ through the Cloudflare Tunnel (no open ports)  ·  MQTT: localhost:1883"
+elif [[ -n "$DOMAIN" ]]; then log "UI: https://$DOMAIN/  ·  MQTT: $DOMAIN:8883 (TLS)  ·  after the first certificate: $OPT/mqtt-certs-sync.sh"
+else log "UI: $BASE_URL/  ·  MQTT: localhost:1883"; fi

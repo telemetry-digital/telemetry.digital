@@ -18,7 +18,10 @@ var (
 	wgConfFile = "/etc/wireguard/wg0.conf"
 
 	caddyStateFile, caddyEnvFile, caddyFile, caddyCompose, caddyDocker, certSyncScript, tlsChain string
-	wgDir, wgStateFile, wgPeersFile, wgKeyFile, backupStateFile                                  string
+	// caddySites holds additional sites (*.caddy) the Caddyfile imports, e.g. remote management; kept when the
+	// Caddyfile is regenerated from the UI
+	caddySites                                                  string
+	wgDir, wgStateFile, wgPeersFile, wgKeyFile, backupStateFile string
 )
 
 func init() {
@@ -44,6 +47,7 @@ func derivePaths() {
 	caddyEnvFile = filepath.Join(optDir, "caddy.env")
 	caddyFile = filepath.Join(optDir, "Caddyfile")
 	caddyCompose = filepath.Join(optDir, "docker-compose.caddy.yml")
+	caddySites = filepath.Join(optDir, "caddy-sites")
 	caddyDocker = filepath.Join(optDir, "caddy-cloudflare.Dockerfile")
 	certSyncScript = filepath.Join(optDir, "mqtt-certs-sync.sh")
 	tlsChain = filepath.Join(etcDir, "tls", "fullchain.pem")

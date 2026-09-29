@@ -465,6 +465,8 @@ func caddyfileFor(cs caddyStored) string {
 		b.WriteString("\ttls {\n\t\tdns cloudflare {env.CF_API_TOKEN}\n\t}\n")
 	}
 	b.WriteString("\thandle /install.sh {\n\t\troot * /srv/ctrl32\n\t\tfile_server\n\t}\n\thandle /install.ps1 {\n\t\troot * /srv/ctrl32\n\t\tfile_server\n\t}\n\thandle_path /dl/* {\n\t\troot * /srv/ctrl32/dl\n\t\tfile_server browse\n\t}\n\treverse_proxy 127.0.0.1:8080\n}\n")
+	// additional sites of the host (e.g. remote management, docs/remote-management.md) survive a regeneration
+	b.WriteString("\n# additional sites: " + caddySites + "/*.caddy\nimport sites/*.caddy\n")
 	return b.String()
 }
 
@@ -474,7 +476,7 @@ func composeFor(image string, withEnv bool) string {
 		env = "    env_file:\n      - " + caddyEnvFile + "\n"
 	}
 	return "name: ctrl32-telemetry-caddy\nservices:\n  caddy:\n    image: " + image + "\n    container_name: " + caddyContainer + "\n    restart: unless-stopped\n    network_mode: host\n" + env +
-		"    volumes:\n      - " + caddyFile + ":/etc/caddy/Caddyfile:ro\n      - /var/www/ctrl32:/srv/ctrl32:ro\n      - ctrl32-telemetry-caddy-data:/data\n      - ctrl32-telemetry-caddy-config:/config\nvolumes:\n  ctrl32-telemetry-caddy-data:\n    name: ctrl32-telemetry-caddy-data\n  ctrl32-telemetry-caddy-config:\n    name: ctrl32-telemetry-caddy-config\n"
+		"    volumes:\n      - " + caddyFile + ":/etc/caddy/Caddyfile:ro\n      - " + caddySites + ":/etc/caddy/sites:ro\n      - /var/www/ctrl32:/srv/ctrl32:ro\n      - ctrl32-telemetry-caddy-data:/data\n      - ctrl32-telemetry-caddy-config:/config\nvolumes:\n  ctrl32-telemetry-caddy-data:\n    name: ctrl32-telemetry-caddy-data\n  ctrl32-telemetry-caddy-config:\n    name: ctrl32-telemetry-caddy-config\n"
 }
 
 const cloudflareDockerfile = "FROM caddy:2-builder-alpine AS builder\nRUN xcaddy build --with github.com/caddy-dns/cloudflare\nFROM caddy:2-alpine\nCOPY --from=builder /usr/bin/caddy /usr/bin/caddy\n"
@@ -568,12 +570,16 @@ func (a *Server) hCaddy(w http.ResponseWriter, r *http.Request) {
 		_ = os.Remove(caddyEnvFile)
 	}
 	// validate the new Caddyfile before touching the running proxy
+	if err := os.MkdirAll(caddySites, 0o755); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
 	tmp := caddyFile + ".new"
 	if err := writeFileAtomic(tmp, []byte(caddyfileFor(cs)), 0o644); err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}
-	if out, err := run(ctx, 2*time.Minute, "docker", "run", "--rm", "-e", "CF_API_TOKEN=validation", "-v", tmp+":/etc/caddy/Caddyfile:ro", image, "caddy", "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"); err != nil {
+	if out, err := run(ctx, 2*time.Minute, "docker", "run", "--rm", "-e", "CF_API_TOKEN=validation", "-v", tmp+":/etc/caddy/Caddyfile:ro", "-v", caddySites+":/etc/caddy/sites:ro", image, "caddy", "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"); err != nil {
 		_ = os.Remove(tmp)
 		writeErr(w, 400, "Caddy rejected the configuration: "+firstLine(out))
 		return
