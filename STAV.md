@@ -63,7 +63,11 @@ Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (
 
 ## Čaká na používateľa
 
-- **Produkcia 28. 9. 2026 22:20: telemetry.digital beží 0.63.0** (tabuľka za obdobie s exportom, `docs/period-tables.md`; MCP; prístup AI v organizácii zatiaľ vypnutý — zapína používateľ v Nastavenia → AI asistenti; konektor v assistant.example: `https://telemetry.digital/mcp`; zmeny cez AI potrebujú licenciu white labelingu; záloha `/opt/backup/ctrl32-pre-0.62.0-*`; prenášač na PC tiež 0.61.1, stará binárka `ctrl32-telemetry-0.58.0.exe.bak`); lic.ctrl32.com nasadený s telemetry.
+- **MeshCentral (vzdialená správa PC) 29. 9. 2026:** beží na produkčnom serveri (Docker `meshcentral`, 127.0.0.1:4430, stránka
+  `/opt/ctrl32-telemetry/caddy-sites/meshcentral.caddy`); čaká na DNS záznam A `mesh.telemetry.digital` → 2.29.5.17 (Cloudflare,
+  DNS only) — potom `docker restart meshcentral` (načíta certifikát cez certUrl). Heslo admina: `/root/meshcentral-admin.txt` a
+  `%USERPROFILE%\.ctrl32-remote\meshcentral-admin.txt`; pri prvom prihlásení nastaviť 2FA a súbory zmazať.
+- **Produkcia 29. 9. 2026 13:21: telemetry.digital beží 0.63.1** (tabuľka za obdobie s exportom, `docs/period-tables.md`; MCP; prístup AI v organizácii zatiaľ vypnutý — zapína používateľ v Nastavenia → AI asistenti; konektor v assistant.example: `https://telemetry.digital/mcp`; zmeny cez AI potrebujú licenciu white labelingu; záloha `/opt/backup/ctrl32-pre-0.62.0-*`; prenášač na PC tiež 0.61.1, stará binárka `ctrl32-telemetry-0.58.0.exe.bak`); lic.ctrl32.com nasadený s telemetry.
   Preklady do 16 jazykov zlúčené 28. 9. Udalosti ONVIF z Tapo cez prenášač opravené v 0.61.1 (odber `/event-…`); od výmeny prenášača žiadne „camera events down“, prvú skutočnú udalosť pohybu ešte overiť. Nasadzovať z Windows cez `C:/Windows/System32/OpenSSH` (Git Bash ssh nevie cestu s „ÁČ“ ku known_hosts). Kamery Tapo C210 („Byt“, 192.168.0.21) a C225 („Pivnica“,
   192.168.0.197) cez prenášač na PC používateľa (`%USERPROFILE%\ctrl32-relay`, naplánovaná úloha „ctrl32 camera
   relay“): obraz, nahrávanie v slučke (limit 15 GB), zvuk G.711 len naživo, PTZ cez tunel (predvoľby C210 načítané).
