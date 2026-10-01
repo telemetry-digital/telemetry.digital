@@ -20,7 +20,7 @@ import (
 const (
 	brandingLogoMaxBytes = 256 * 1024
 	productName          = "ctrl32 telemetry"
-	productGitHub        = "https://github.com/telemetry-digital/ctrl32-telemetry"
+	productGitHub        = "https://github.com/telemetry-digital"
 	productLicensePath   = "/license"
 )
 
