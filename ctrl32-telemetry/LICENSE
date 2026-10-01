@@ -1,5 +1,5 @@
 ctrl32 telemetry
-Copyright 2026 telemetry.digital
+Copyright 2026 Pavol Krnáč
 
 ctrl32 telemetry is free of charge and will stay free of charge. It is
 licensed under the Apache License, Version 2.0 (reproduced in full below),
@@ -33,9 +33,9 @@ ADDITIONAL CONDITIONS
    approved open-source license. All other rights and obligations are those
    of the Apache License, Version 2.0.
 
-Software:  ctrl32 telemetry (https://github.com/telemetry-digital/ctrl32-telemetry)
+Software:  ctrl32 telemetry (https://github.com/telemetry-digital)
 License:   Apache License, Version 2.0, with the Additional Conditions above
-Licensor:  telemetry.digital
+Licensor:  Pavol Krnáč
 
 ------------------------------------------------------------------------------
 

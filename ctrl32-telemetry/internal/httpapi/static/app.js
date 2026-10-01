@@ -31,7 +31,7 @@
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   let brand = { product: 'ctrl32 telemetry', version: '', org_name: '', logo_url: '/logo.svg', theme: { primary: '#e30613', font: '', mode: 'auto', radius: 'small', font_scale: 'normal' },
-    footer: { text: 'ctrl32 · telemetry', github: 'https://github.com/telemetry-digital/ctrl32-telemetry', license: '/license' } };
+    footer: { text: 'ctrl32 · telemetry', github: 'https://github.com/telemetry-digital', license: '/license' } };
   let csrf = null, me = null, meLoaded = false;
 
   // ---- theme ------------------------------------------------------------------------------------
