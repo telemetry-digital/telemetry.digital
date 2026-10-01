@@ -1,6 +1,6 @@
 # Implementation Plan: Visual flow editor
 
-**Branch**: `assistant/jolly-sagan-nzolwc` | **Spec**: [spec.md](spec.md)
+**Branch**: `main` | **Spec**: [spec.md](spec.md)
 
 ## Summary
 An in-process flow engine (`internal/flows`) with a closed node library and a typed expression language, flows as

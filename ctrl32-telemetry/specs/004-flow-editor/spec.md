@@ -1,6 +1,6 @@
 # Feature Specification: Visual flow editor (Node-RED style automation)
 
-**Feature Branch**: `assistant/jolly-sagan-nzolwc`
+**Feature Branch**: `main`
 
 **Created**: 2026-09-25
 

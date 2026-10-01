@@ -1,6 +1,6 @@
 # Implementation Plan: Paid white labeling
 
-**Branch**: `assistant/jolly-sagan-nzolwc` | **Date**: 2026-09-26 | **Spec**: [spec.md](spec.md)
+**Branch**: `main` | **Date**: 2026-09-26 | **Spec**: [spec.md](spec.md)
 
 ## Summary
 An offline license mechanism (Ed25519 tokens, public keys embedded, `tools/licgen`) and per-organization white-label

@@ -1,6 +1,6 @@
 # Feature Specification: Cameras — widget, player controls, timeshift, remote sites, PWA
 
-**Feature Branch**: `assistant/jolly-sagan-nzolwc`
+**Feature Branch**: `main`
 
 **Created**: 2026-09-26
 

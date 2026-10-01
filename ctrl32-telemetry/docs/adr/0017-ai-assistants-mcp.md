@@ -1,13 +1,13 @@
 # ADR-0017: AI assistants over MCP — the whole API as tools, OAuth 2.1, off by default
 
 **Status:** accepted 28 Sep 2026 (user: "MCP server, kompletne stopercentne všade" — the whole system for AI assistants;
-chosen options: MCP in the server with OAuth so it works as a assistant.example connector, tools per area, everything the user's
+chosen options: MCP in the server with OAuth so it works as a custom connector of AI assistants, tools per area, everything the user's
 permissions allow; then "na čítanie zdarma a aj na zápis platené" — reading free, writing paid, together with the
 white-labeling license, for every change through MCP). Builds on ADR-0010 (API first, tokens) and ADR-0007 (security
 baseline); amends ADR-0016 (a second paid capability).
-**Context:** Users want to work with the system through AI assistants (assistant on the web, desktop and phone, assistant
-Code). The Model Context Protocol is the common way assistants reach other systems; assistant.example custom connectors require
-Streamable HTTP and OAuth 2.1 with dynamic client registration.
+**Context:** Users want to work with the system through AI assistants (MCP clients on the web, desktop and phone, in a
+terminal or a code editor). The Model Context Protocol is the common way assistants reach other systems; custom
+connectors of web assistants require Streamable HTTP and OAuth 2.1 with dynamic client registration.
 
 ## Decision
 
@@ -26,7 +26,7 @@ Streamable HTTP and OAuth 2.1 with dynamic client registration.
 5. **OAuth 2.1 authorization server in the product**: dynamic client registration (public clients only), consent page
    in the signed-in browser session, PKCE S256 only, single-use codes, one-hour access tokens valid only at `/mcp`,
    rotating refresh tokens, revocation, resource and authorization-server metadata. Personal API tokens also work at
-   `/mcp` (AI assistant, scripts). Browser sessions are not accepted at `/mcp`.
+   `/mcp` (command-line assistants, scripts). Browser sessions are not accepted at `/mcp`.
 6. **SAFETY FIRST**: AI access is **off** per organization until a `user.admin` switches it on with a reason. The user
    chooses *all my permissions* or *reading only* at consent; reading only is enforced by the API too. Switching off
    refuses every connected assistant at once; disconnecting ends an approval and its tokens. Assistants do not manage

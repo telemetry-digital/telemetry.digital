@@ -1,6 +1,6 @@
 # Implementation Plan: SCADA process pictures and editor
 
-**Branch**: `assistant/jolly-sagan-nzolwc` | **Date**: 2026-09-25 | **Spec**: [spec.md](spec.md)
+**Branch**: `main` | **Date**: 2026-09-25 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `specs/001-scada-process-pictures/spec.md`
 

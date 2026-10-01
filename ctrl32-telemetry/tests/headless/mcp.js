@@ -42,12 +42,12 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   expect("Settings → AI assistants", await until(`document.querySelector('section[data-section=ai]').classList.contains('active') && !!document.querySelector('#aiUrl').textContent`), true);
   await ev(`(() => { const f = document.querySelector('#aiForm'); f.enabled.checked = true; f.reason.value = 'headless probe: assistants allowed'; f.requestSubmit(); })()`);
   expect("switched on", await until(`/on/.test(document.querySelector('#aiOn').textContent)`), true);
-  expect("address and AI assistant command", await ev(`document.querySelector('#aiCli').textContent.startsWith('assistant mcp add --transport http ctrl32 ') && document.querySelector('#aiUrl').textContent.endsWith('/mcp')`), true);
+  expect("address and the API token header", await ev(`document.querySelector('#aiHeader').textContent.startsWith('Authorization: Bearer c32_') && document.querySelector('#aiUrl').textContent.endsWith('/mcp')`), true);
   await shot("mcp-settings.png");
 
   // an assistant registers and sends the user to the consent page (signed out first: sign-in leads back)
   const redirect = "http://127.0.0.1:45871/callback";
-  const reg = await ev(`fetch('/oauth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_name:'assistant',redirect_uris:['${redirect}'],token_endpoint_auth_method:'none'})}).then(r=>r.json())`);
+  const reg = await ev(`fetch('/oauth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_name:'Assistant',redirect_uris:['${redirect}'],token_endpoint_auth_method:'none'})}).then(r=>r.json())`);
   expect("client registered", !!reg.client_id, true);
   const verifier = crypto.randomBytes(48).toString("base64url");
   const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
@@ -57,7 +57,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   expect("signed out: to sign-in with next", await ev(`location.pathname + ' ' + new URLSearchParams(location.search).get('next').startsWith('/oauth/authorize?')`), "/login true");
   await ev(`(() => { const f = document.querySelector('#f'); f.username.value = 'admin'; f.password.value = 'admin1234'; f.requestSubmit(); })()`);
   expect("back on the consent page after sign-in", await until(`location.pathname === '/oauth/authorize' && !document.querySelector('#ask').hidden`, 10000), true);
-  expect("consent names the assistant, user and where the code goes", await ev(`[document.querySelector('#client').textContent, document.querySelector('#user').textContent.includes('admin'), document.querySelector('#host').textContent].join(' | ')`), "assistant | true | 127.0.0.1:45871");
+  expect("consent names the assistant, user and where the code goes", await ev(`[document.querySelector('#client').textContent, document.querySelector('#user').textContent.includes('admin'), document.querySelector('#host').textContent].join(' | ')`), "Assistant | true | 127.0.0.1:45871");
   await shot("mcp-consent.png");
   await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
   await sleep(300);
@@ -78,7 +78,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
 
   // My account → AI assistants: the connected assistant, disconnect with a reason
   await go("/account/ai", 2500);
-  expect("My account lists the assistant", await until(`[...document.querySelectorAll('#aiTable tbody tr')].some(tr => tr.textContent.includes('assistant') && tr.textContent.includes('reading only'))`), true);
+  expect("My account lists the assistant", await until(`[...document.querySelectorAll('#aiTable tbody tr')].some(tr => tr.textContent.includes('Assistant') && tr.textContent.includes('reading only'))`), true);
   await shot("mcp-account.png");
   await ev(`window.prompt = () => 'headless probe: disconnect'`);
   const before = await ev(`document.querySelectorAll('[data-grant]').length`);

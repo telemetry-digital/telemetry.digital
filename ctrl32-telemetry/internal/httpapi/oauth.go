@@ -1,7 +1,7 @@
 package httpapi
 
 // OAuth 2.1 authorization server for AI assistants (spec 022, ADR-0017). The MCP endpoint is the only protected
-// resource; an assistant such as assistant finds this server from the 401 of /mcp (RFC 9728), registers itself (RFC 7591),
+// resource; an AI assistant (MCP client) finds this server from the 401 of /mcp (RFC 9728), registers itself (RFC 7591),
 // sends the user to the consent page with PKCE (S256 only), and exchanges the code for a one-hour access token and a
 // rotating refresh token (90 days since the last use). Public clients only (no client secrets), exact redirect
 // addresses (a loopback address may change its port, RFC 8252), single-use codes valid for ten minutes, a reused code

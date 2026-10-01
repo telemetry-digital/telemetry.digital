@@ -82,13 +82,13 @@
 <section data-section="ai">
   <div class="page-head"><h1>AI assistants</h1></div>
   <div class="card">
-    <p class="muted">AI assistants such as assistant connect to this application over MCP and act with your permissions. Every change they make carries a reason and is written to the audit trail with the note “via MCP”.</p>
+    <p class="muted">AI assistants connect to this application over MCP and act with your permissions. Every change they make carries a reason and is written to the audit trail with the note “via MCP”.</p>
     <p id="aiState"></p>
     <p class="muted" style="font-size:13px" id="aiLic" hidden>This server has no license for changes through AI assistants: the assistant can only read.</p>
     <div id="aiHow" hidden>
-      <p><b>Connect:</b> in the assistant add a custom connector with this address, then sign in and approve it:</p>
+      <p>In your AI assistant add a custom connector (MCP server) with this address, then sign in here and approve it.</p>
       <div class="secret notranslate" id="aiUrl"></div>
-      <p class="muted" style="font-size:13px">assistant (web, desktop, phone): Settings → Connectors → Add custom connector. AI assistant: <code class="notranslate" id="aiCli"></code></p>
+      <p class="muted" style="font-size:13px">Assistants that take a header instead: the address above and a personal API token (My account → API tokens) in this header: <code class="notranslate" id="aiHeader" style="white-space:nowrap">Authorization: Bearer c32_…</code></p>
     </div>
     <div class="table-wrap"><table id="aiTable"><thead><tr><th>Assistant</th><th>Access</th><th>Connected</th><th>Last used</th><th>State</th><th></th></tr></thead><tbody></tbody></table></div>
   </div>
@@ -113,7 +113,7 @@ const TITLES = {profile: 'Profile', security: 'Password and MFA', tokens: 'API t
 async function loadAI(){
   const st = await api('GET','/api/v1/mcp/settings');
   $('#aiState').innerHTML = st.enabled ? '<span class="badge ok">' + esc(ctrl32.t('AI access is on in your organization')) + '</span>' : '<span class="badge">' + esc(ctrl32.t('AI access is switched off in your organization')) + '</span>' + (st.can_edit ? ' <a href="/settings/ai">' + esc(ctrl32.t('Settings → AI assistants')) + '</a>' : '');
-  $('#aiHow').hidden = !st.enabled; $('#aiLic').hidden = !st.enabled || st.write_licensed; $('#aiUrl').textContent = st.url; $('#aiCli').textContent = 'assistant mcp add --transport http ctrl32 ' + st.url;
+  $('#aiHow').hidden = !st.enabled; $('#aiLic').hidden = !st.enabled || st.write_licensed; $('#aiUrl').textContent = st.url;
   const r = await api('GET','/api/v1/mcp/grants');
   $('#aiTable tbody').innerHTML = r.grants.map(g => `<tr><td><b class="notranslate">${esc(g.client_name)}</b><div class="muted notranslate" style="font-size:12px">${esc(g.redirect_host)}</div></td><td>${g.read_only ? esc(ctrl32.t('reading only')) : esc(ctrl32.t('my permissions'))}</td><td>${fmt(g.created_at)}</td><td>${g.last_used_at ? fmt(g.last_used_at) : '—'}</td><td>${g.revoked_at ? '<span class="badge bad">' + esc(ctrl32.t('disconnected')) + '</span>' : '<span class="badge ok">' + esc(ctrl32.t('connected')) + '</span>'}</td><td>${g.revoked_at ? '' : `<button class="btn small danger" type="button" data-grant="${esc(g.id)}">${esc(ctrl32.t('Disconnect'))}</button>`}</td></tr>`).join('') || `<tr><td colspan="6" class="muted">${esc(ctrl32.t('no assistant connected yet'))}</td></tr>`;
   for(const b of document.querySelectorAll('[data-grant]')) b.onclick = async () => { const reason = ctrl32.ask('Reason for disconnecting the assistant:'); if(!reason) return; try{ await api('DELETE', `/api/v1/mcp/grants/${b.dataset.grant}?reason=${encodeURIComponent(reason)}`); ctrl32.toast(ctrl32.t('assistant disconnected'),'ok'); loadAI(); }catch(x){ ctrl32.toast(x.message,'bad'); } };

@@ -1,6 +1,6 @@
 # Feature Specification: Camera relay as a service
 
-**Feature Branch**: `assistant/jolly-sagan-nzolwc`
+**Feature Branch**: `main`
 
 **Created**: 2026-09-27
 

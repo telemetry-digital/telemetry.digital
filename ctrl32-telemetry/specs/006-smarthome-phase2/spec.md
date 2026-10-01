@@ -1,6 +1,6 @@
 # Feature Specification: Smart home phase 2 — native devices, MQTT flow nodes, colour, outage incidents
 
-**Feature Branch**: `assistant/jolly-sagan-nzolwc`
+**Feature Branch**: `main`
 
 **Created**: 2026-09-26
 

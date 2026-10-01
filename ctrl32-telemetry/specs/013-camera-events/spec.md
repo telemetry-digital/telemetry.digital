@@ -1,6 +1,6 @@
 # Feature Specification: Camera events, recording on events, PTZ, discovery
 
-**Feature Branch**: `assistant/jolly-sagan-nzolwc`
+**Feature Branch**: `main`
 
 **Created**: 2026-09-26
 

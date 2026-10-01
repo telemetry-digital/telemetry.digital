@@ -8,7 +8,7 @@
 
 **Input**: The user (28. 9. 2026): "ďalšia vec čo ideme dopĺňať kompletne stopercentne všade mcp server a tým pádom by to
 malo byť uzavreté" — an MCP server covering the whole system; after it the product is to be only polished. Chosen:
-MCP in the server with OAuth (works as a assistant.example connector), tools per area, everything the user's permissions allow.
+MCP in the server with OAuth (works as a custom connector of AI assistants), tools per area, everything the user's permissions allow.
 
 **Related**: ADR-0017, ADR-0010 (API first, tokens), ADR-0007 (security baseline); URS G-11, G-12; constitution I
 (security), II (API first).
@@ -22,16 +22,16 @@ MCP in the server with OAuth (works as a assistant.example connector), tools per
 - Off by default per organization (SAFETY FIRST); switching needs `user.admin` and a reason.
 - Reading through assistants is free; changes through assistants are paid (user, 28. 9. 2026): the same license as
   white labeling unlocks them. Only MCP changes are paid — the web UI and the REST API stay free.
-- assistant.example custom connectors need OAuth 2.1 with dynamic client registration and PKCE; AI assistant and scripts may use
-  a personal API token.
+- Custom connectors of web assistants need OAuth 2.1 with dynamic client registration and PKCE; command-line assistants
+  and scripts may use a personal API token.
 
 ## User Scenarios
 
 1. An administrator opens *Settings → AI assistants*, switches AI access on with a reason and copies the address.
-2. A user adds the address as a custom connector in assistant, is sent to the sign-in page, signs in, chooses *Reading
-   only* and presses *Allow*. assistant answers "which devices are offline and since when" from live data.
-3. The same user connects AI assistant with an API token and asks it to create a dashboard; AI assistant asks before the
-   change; the audit trail shows "user (token …) via MCP" with the reason.
+2. A user adds the address as a custom connector in an AI assistant, is sent to the sign-in page, signs in, chooses
+   *Reading only* and presses *Allow*. The assistant answers "which devices are offline and since when" from live data.
+3. The same user connects a command-line assistant with an API token and asks it to create a dashboard; the assistant
+   asks before the change; the audit trail shows "user (token …) via MCP" with the reason.
 4. The user disconnects the assistant under *My account → AI assistants*; its next call is refused.
 5. The administrator switches AI access off; every connected assistant is refused at once.
 
@@ -61,9 +61,9 @@ MCP in the server with OAuth (works as a assistant.example connector), tools per
   reason, audited). Off: `/mcp` answers 403, consent and token requests are refused.
 - FR-008 Approvals: `GET /api/v1/mcp/grants` (own; `all=1` the organization's for `user.admin`), `DELETE
   /api/v1/mcp/grants/{id}?reason=` (owner or `user.admin`) ends the approval and its tokens; audited.
-- FR-009 UI: *Settings → AI assistants* (switch with reason, address, how to connect for assistant, AI assistant and other
-  clients, connected assistants of the organization with disconnect), *My account → AI assistants* (own assistants,
-  disconnect), consent page `/oauth/authorize`; translations in all 19 catalogs.
+- FR-009 UI: *Settings → AI assistants* (switch with reason, address, how to connect for assistants with custom
+  connectors, assistants that take a header and other clients, connected assistants of the organization with
+  disconnect), *My account → AI assistants* (own assistants, disconnect), consent page `/oauth/authorize`; translations in all 19 catalogs.
 - FR-011 Without the server's license for changes (`white_label`) every assistant is read-only: no change tools,
   a change is refused with an explanation (the license, reading free), `ctrl32://me` says `changes_licensed: false`,
   the consent page offers only *Reading only*; settings and My account show the note and the Buy link.
@@ -82,5 +82,5 @@ MCP in the server with OAuth (works as a assistant.example connector), tools per
 - SC-003 Headless `mcp`: settings (switch on, address), consent reached signed out (sign-in with next), consent page on
   desktop and phone, approval with reading only, redirect with code/state/iss, code exchange, My account list and
   disconnect.
-- SC-004 A real client: AI assistant (`assistant -p` with `--mcp-config`) lists sites and devices and creates a site with a
-  reason through the dev server.
+- SC-004 A real client: a command-line AI assistant (non-interactive, MCP configuration file) lists sites and devices
+  and creates a site with a reason through the dev server.

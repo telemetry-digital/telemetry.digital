@@ -173,17 +173,17 @@ func utf8ok(s string) bool { return strings.ToValidUTF8(s, "?") == s }
 
 func TestOAuthRedirects(t *testing.T) {
 	for u, ok := range map[string]bool{
-		"https://assistant.example/api/mcp/auth_callback": true,
-		"http://localhost:33418/callback":         true,
-		"http://127.0.0.1:5000/cb":                true,
-		"http://[::1]:5000/cb":                    true,
-		"cursor://anysphere.cursor-mcp/oauth":     true,
-		"http://example.com/cb":                   false,
-		"javascript:alert(1)":                     false,
-		"https://x.example/cb#frag":               false,
-		"https://user:pw@x.example/cb":            false,
-		"data:text/html,x":                        false,
-		"https:///nohost":                         false,
+		"https://assistant.example/oauth/callback": true,
+		"http://localhost:33418/callback":          true,
+		"http://127.0.0.1:5000/cb":                 true,
+		"http://[::1]:5000/cb":                     true,
+		"cursor://anysphere.cursor-mcp/oauth":      true,
+		"http://example.com/cb":                    false,
+		"javascript:alert(1)":                      false,
+		"https://x.example/cb#frag":                false,
+		"https://user:pw@x.example/cb":             false,
+		"data:text/html,x":                         false,
+		"https:///nohost":                          false,
 	} {
 		if validRedirect(u) != ok {
 			t.Errorf("validRedirect(%q) = %v", u, !ok)

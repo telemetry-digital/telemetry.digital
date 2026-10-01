@@ -278,7 +278,7 @@
 <section data-section="ai">
   <div class="page-head"><h1>AI assistants</h1></div>
   <div class="card">
-    <p class="muted">AI assistants such as assistant connect over MCP (Model Context Protocol) and can do everything this application offers — with the permissions of the user who approves them, never more. Every change carries a reason and goes to the audit trail with the note “via MCP”. Camera sound, unmasked pictures and evidence need their own permissions, as in the web UI.</p>
+    <p class="muted">AI assistants connect over MCP (Model Context Protocol) and can do everything this application offers — with the permissions of the user who approves them, never more. Every change carries a reason and goes to the audit trail with the note “via MCP”. Camera sound, unmasked pictures and evidence need their own permissions, as in the web UI.</p>
     <form id="aiForm" class="form">
       <p id="aiOn"></p>
       <p class="muted" style="font-size:13px" id="aiLic"></p>
@@ -293,8 +293,8 @@
     <p>MCP address of this server:</p>
     <div class="secret notranslate" id="aiUrl"></div>
     <ul>
-      <li><b class="notranslate">assistant</b> <span>(web, desktop, phone): Settings → Connectors → Add custom connector, paste the address, then sign in here and approve the assistant.</span></li>
-      <li><b class="notranslate">AI assistant</b>: <code class="notranslate" id="aiCli"></code> <span>— sign-in opens in the browser; or with an API token:</span> <code class="notranslate" id="aiCliTok"></code></li>
+      <li>In your AI assistant add a custom connector (MCP server) with this address, then sign in here and approve it.</li>
+      <li>Assistants that take a header instead: the address above and a personal API token (My account → API tokens) in this header: <code class="notranslate" id="aiHeader" style="white-space:nowrap">Authorization: Bearer c32_…</code></li>
       <li><b>Other MCP clients</b>: <span>Streamable HTTP at the address above, OAuth 2.1 (discovery from the 401 answer) or an API token as</span> <code class="notranslate">Authorization: Bearer</code>.</li>
     </ul>
     <p class="muted" id="aiCount"></p>
@@ -371,8 +371,7 @@ async function settingsAI(){
   for (const el of f.elements) el.disabled = !st.can_edit;
   $('#aiLic').innerHTML = st.write_licensed ? '<span class="badge ok">' + esc(ctrl32.t('Changes through AI are licensed')) + '</span>'
     : esc(ctrl32.t('Reading is free. Changes through AI assistants need the license of this server (white labeling and AI changes, 39 EUR once, forever) — System → License.')) + (st.buy_url ? ` <a href="${esc(st.buy_url)}" target="_blank" rel="noopener">${esc(ctrl32.t('Buy'))}</a>` : '');
-  $('#aiUrl').textContent = st.url; $('#aiCli').textContent = 'assistant mcp add --transport http ctrl32 ' + st.url;
-  $('#aiCliTok').textContent = 'assistant mcp add --transport http ctrl32 ' + st.url + ' --header "Authorization: Bearer c32_…"';
+  $('#aiUrl').textContent = st.url;
   $('#aiCount').textContent = ctrl32.t('API operations offered') + ': ' + st.operations + ' · ' + ctrl32.t('MCP tools') + ': ' + st.tools;
   f.onsubmit = async e => { e.preventDefault(); $('#aiErr').textContent = '';
     try { await api('PUT','/api/v1/mcp/settings',{enabled: f.enabled.checked, reason: f.reason.value}); ctrl32.toast(ctrl32.t('saved'),'ok'); settingsAI(); } catch(x){ $('#aiErr').textContent = x.message; } };

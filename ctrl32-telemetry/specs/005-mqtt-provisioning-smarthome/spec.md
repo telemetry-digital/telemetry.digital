@@ -1,6 +1,6 @@
 # Feature Specification: MQTT provisioning and smart-home devices (Home Assistant style)
 
-**Feature Branch**: `assistant/jolly-sagan-nzolwc`
+**Feature Branch**: `main`
 
 **Created**: 2026-09-26
 
