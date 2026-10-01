@@ -1,6 +1,6 @@
 # Implementation Plan: Energy overview and scenes
 
-**Branch**: `assistant/jolly-sagan-nzolwc` | **Date**: 2026-09-26 | **Spec**: [spec.md](spec.md)
+**Branch**: `main` | **Date**: 2026-09-26 | **Spec**: [spec.md](spec.md)
 
 ## Summary
 A SQL aggregation of meter increases per bucket in the organization's time zone with roles and prices, an Energy page,

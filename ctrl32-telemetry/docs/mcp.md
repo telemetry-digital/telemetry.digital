@@ -1,6 +1,6 @@
 # AI assistants over MCP
 
-Since 0.62.0 an AI assistant — assistant on the web, on the desktop or on a phone, AI assistant, or any other client of the
+Since 0.62.0 an AI assistant — on the web, on the desktop, on a phone, in a terminal or a code editor: any client of the
 [Model Context Protocol](https://modelcontextprotocol.io/) — can work in ctrl32 telemetry on behalf of a user: read
 data, find out why an alarm fired, create a dashboard, change a flow, send a command to a device or turn a camera. It
 does so through the same API as the web UI, with the permissions of the user who approved it, and every change it makes
@@ -22,8 +22,8 @@ assistants*).
 
 | Client | How |
 |---|---|
-| assistant (assistant.example, desktop and mobile apps) | *Settings → Connectors → Add custom connector*, paste the address. assistant opens the sign-in page of this server; sign in, choose *Everything my permissions allow* or *Reading only* and press *Allow*. |
-| AI assistant | `assistant mcp add --transport http ctrl32 https://<server>/mcp` — the sign-in opens in the browser. Or with a personal API token: `assistant mcp add --transport http ctrl32 https://<server>/mcp --header "Authorization: Bearer c32_…"` |
+| Web, desktop and phone assistants with custom connectors | In your AI assistant add a custom connector (MCP server) with the address. The assistant opens the sign-in page of this server; sign in, choose *Everything my permissions allow* or *Reading only* and press *Allow*. |
+| Command-line and code assistants | Add an HTTP MCP server with the address. If the client supports OAuth, the sign-in opens in the browser; otherwise give it a personal API token (*My account → API tokens*) as the header `Authorization: Bearer c32_…`. |
 | Other clients | Streamable HTTP at the address; OAuth 2.1 is discovered from the 401 answer (RFC 9728 → RFC 8414), clients register themselves (RFC 7591). A personal API token (*My account → API tokens*) works as `Authorization: Bearer`. |
 
 Every user sees and disconnects their own assistants under *My account → AI assistants*; an administrator sees and

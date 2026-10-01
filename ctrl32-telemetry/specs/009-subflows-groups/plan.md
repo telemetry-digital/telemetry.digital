@@ -1,6 +1,6 @@
 # Implementation Plan: Subflows, Split and groups
 
-**Branch**: `assistant/jolly-sagan-nzolwc` | **Date**: 2026-09-26 | **Spec**: [spec.md](spec.md)
+**Branch**: `main` | **Date**: 2026-09-26 | **Spec**: [spec.md](spec.md)
 
 ## Summary
 Subflows are stored as flows of kind `subflow`; the engine expands subflow nodes into prefixed copies of the pinned

@@ -1,6 +1,6 @@
 # Feature Specification: Energy overview and scenes
 
-**Feature Branch**: `assistant/jolly-sagan-nzolwc`
+**Feature Branch**: `main`
 
 **Created**: 2026-09-26
 

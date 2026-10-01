@@ -1,6 +1,6 @@
 # Implementation Plan: MQTT provisioning and smart-home devices
 
-**Branch**: `assistant/jolly-sagan-nzolwc` | **Date**: 2026-09-26 | **Spec**: [spec.md](spec.md)
+**Branch**: `main` | **Date**: 2026-09-26 | **Spec**: [spec.md](spec.md)
 
 ## Summary
 Provisioning profiles with ThingsBoard-compatible provisioning over MQTT and HTTP, the ThingsBoard device API on the

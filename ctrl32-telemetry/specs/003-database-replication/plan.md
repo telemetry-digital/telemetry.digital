@@ -1,6 +1,6 @@
 # Implementation Plan: Redundant database
 
-**Branch**: `assistant/jolly-sagan-nzolwc` | **Spec**: [spec.md](spec.md)
+**Branch**: `main` | **Spec**: [spec.md](spec.md)
 
 ## Summary
 PostgreSQL physical streaming replication orchestrated by ctrl32: one-time pairing code, replication carried inside

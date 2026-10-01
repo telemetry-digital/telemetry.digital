@@ -1,6 +1,6 @@
 # Implementation Plan: Smart home phase 2
 
-**Branch**: `assistant/jolly-sagan-nzolwc` | **Date**: 2026-09-26 | **Spec**: [spec.md](spec.md)
+**Branch**: `main` | **Date**: 2026-09-26 | **Spec**: [spec.md](spec.md)
 
 ## Summary
 Native adapters that synthesize Home Assistant discovery configs (Shelly Gen2+ over RPC, Tasmota native discovery),

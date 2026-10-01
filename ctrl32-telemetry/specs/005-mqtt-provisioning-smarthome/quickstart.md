@@ -1,6 +1,6 @@
 # Quickstart: validate spec 005
 
-Prerequisites: dev server (`/tmp/assistant-0/dev/up.sh` or `tests/run-all.sh`), `go build ./tools/mqttsim`.
+Prerequisites: dev server (`bash deploy/dev/dev.sh up` or `tests/run-all.sh`), `go build ./tools/mqttsim`.
 
 1. **Fleet provisioning (US1)**: `POST /api/v1/provision-profiles` → key and secret;
    `mqttsim tb -broker tcp://127.0.0.1:1883 -key … -secret … -name sensor-1` provisions, reconnects with the token,

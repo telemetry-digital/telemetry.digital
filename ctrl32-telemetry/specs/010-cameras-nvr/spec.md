@@ -1,6 +1,6 @@
 # Feature Specification: Cameras — recording and video walls
 
-**Feature Branch**: `assistant/jolly-sagan-nzolwc`
+**Feature Branch**: `main`
 
 **Created**: 2026-09-26
 

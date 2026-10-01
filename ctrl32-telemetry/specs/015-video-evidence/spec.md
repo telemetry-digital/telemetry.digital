@@ -1,6 +1,6 @@
 # Feature Specification: Video evidence (holds, fingerprints, signed packages)
 
-**Feature Branch**: `assistant/jolly-sagan-nzolwc`
+**Feature Branch**: `main`
 
 **Created**: 2026-09-27
 

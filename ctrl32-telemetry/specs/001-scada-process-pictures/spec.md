@@ -1,6 +1,6 @@
 # Feature Specification: SCADA process pictures and editor
 
-**Feature Branch**: `assistant/jolly-sagan-nzolwc`
+**Feature Branch**: `main`
 
 **Created**: 2026-09-25
 

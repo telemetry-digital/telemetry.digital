@@ -10,5 +10,5 @@
       login `?next=`; a new approval replaces the earlier one
 - [x] T006 Organization switch and approvals API (settings, grants, disconnect), OpenAPI tag and schemas, apigen
 - [x] T007 UI: Settings → AI assistants, My account → AI assistants, menu entry; translations in 19 catalogs (47 strings)
-- [x] T008 Tests: unit (httpapi, mcp), e2e `mcp` (87), headless `mcp` with screenshots, a real client (AI assistant)
+- [x] T008 Tests: unit (httpapi, mcp), e2e `mcp` (87), headless `mcp` with screenshots, a real client (a command-line AI assistant)
 - [x] T009 Docs: `docs/mcp.md`, ADR-0017, threat model, URS G-11/G-12, README, JOURNAL, STAV
