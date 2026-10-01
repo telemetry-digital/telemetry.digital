@@ -17,7 +17,7 @@ sed -i.bak "s/^version: .*/version: \"$VERSION\"/" "$W/ctrl32_camera_relay/confi
   git init -q -b main
   git -c core.autocrlf=false add -A
   git update-index --chmod=+x ctrl32_camera_relay/run.sh
-  git -c user.name="ctrl32 telemetry" -c user.email="bugs@ctrl32.com" commit -q -m "ctrl32 camera relay $VERSION"
+  git -c user.name="ctrl32 telemetry" -c user.email="info@telemetry.digital" commit -q -m "ctrl32 camera relay $VERSION"
   git clone -q --bare . ha-addons.git
   git -C ha-addons.git update-server-info
   tar czf ha-addons.tgz ha-addons.git

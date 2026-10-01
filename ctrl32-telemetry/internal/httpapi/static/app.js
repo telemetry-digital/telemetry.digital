@@ -253,9 +253,9 @@
   // Bug report: opens the mail client with the context filled in (page, version, organization, user, browser).
   function bugMailto() {
     const body = ['Describe the problem (what you did, what you expected, what happened):', '', '', '--- context ---', 'Page: ' + location.href, 'Version: ' + (brand.version || ''), 'Organization: ' + (brand.org_name || ''), 'User: ' + (me ? me.username : 'anonymous'), 'Browser: ' + navigator.userAgent, 'Time: ' + new Date().toISOString()].join('\n');
-    return 'mailto:bugs@ctrl32.com?subject=' + encodeURIComponent('[ctrl32 telemetry ' + (brand.version || '') + '] bug report') + '&body=' + encodeURIComponent(body);
+    return 'mailto:info@telemetry.digital?subject=' + encodeURIComponent('[ctrl32 telemetry ' + (brand.version || '') + '] bug report') + '&body=' + encodeURIComponent(body);
   }
-  function bugButton(cls) { return `<a class="btn ghost icon ${cls}" id="bugBtn" href="#" title="Report a bug (opens your mail client, bugs@ctrl32.com)" aria-label="Report a bug">${ICON.bug}</a>`; }
+  function bugButton(cls) { return `<a class="btn ghost icon ${cls}" id="bugBtn" href="#" title="Report a bug (opens your mail client, info@telemetry.digital)" aria-label="Report a bug">${ICON.bug}</a>`; }
   function wireBug() { const b = $('#bugBtn'); if (b) b.onclick = (e) => { e.preventDefault(); location.href = bugMailto(); }; }
   function renderShell() {
     const header = $('header.topbar');
@@ -277,7 +277,7 @@
     // a locked app shows no in-page links out of it either (sub-navigation of a page, e.g. My account)
     if (locked()) for (const a of document.querySelectorAll('.subnav a[href]')) if (!appAllows(new URL(a.href, location.href).pathname)) a.hidden = true;
     // Desktop: the bug button lives in its own strip at the top of the page (in flow, sticky), never over page buttons.
-    if (me && !locked() && !$('#bugBtnDesk')) { const host = $('main'); const strip = document.createElement('div'); strip.className = 'top-strip only-desktop'; const b = document.createElement('a'); b.id = 'bugBtnDesk'; b.className = 'btn ghost icon bug-btn'; b.href = '#'; b.title = 'Report a bug (opens your mail client, bugs@ctrl32.com)'; b.setAttribute('aria-label', 'Report a bug'); b.innerHTML = ICON.bug; b.onclick = (e) => { e.preventDefault(); location.href = bugMailto(); }; strip.appendChild(b); if (host) { host.prepend(strip); document.body.classList.add('has-strip'); } else document.body.appendChild(strip); }
+    if (me && !locked() && !$('#bugBtnDesk')) { const host = $('main'); const strip = document.createElement('div'); strip.className = 'top-strip only-desktop'; const b = document.createElement('a'); b.id = 'bugBtnDesk'; b.className = 'btn ghost icon bug-btn'; b.href = '#'; b.title = 'Report a bug (opens your mail client, info@telemetry.digital)'; b.setAttribute('aria-label', 'Report a bug'); b.innerHTML = ICON.bug; b.onclick = (e) => { e.preventDefault(); location.href = bugMailto(); }; strip.appendChild(b); if (host) { host.prepend(strip); document.body.classList.add('has-strip'); } else document.body.appendChild(strip); }
     wireBug();
     if (me) {
       document.body.classList.add('has-sidebar');
