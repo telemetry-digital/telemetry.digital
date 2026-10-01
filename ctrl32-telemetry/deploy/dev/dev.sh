@@ -4,7 +4,8 @@
 #   bash deploy/dev/dev.sh up        # PostgreSQL 18 in Docker, a fresh ctrl32_dev database, demo seed, server on :8080
 #   bash deploy/dev/dev.sh restart   # rebuild and restart the server, keep the data
 #   bash deploy/dev/dev.sh camsim    # simulated cameras (RTSP :8554, HTTP/ONVIF :8555)
-#   bash deploy/dev/dev.sh demo      # demo cameras, video walls, production screens, floor plan (needs camsim)
+#   bash deploy/dev/dev.sh demo      # demo cameras, video walls, production screens, floor plan (needs camsim), and the
+#                                    # documentation demo: cold chain, energy, alarms, flows, smart home, users (docs.py)
 #   bash deploy/dev/dev.sh stop      # stop server, camera simulator and the production feeder
 #
 # Without Docker (NO_DOCKER=1, or when the daemon is not running) a PostgreSQL 16+ at PG_ADMIN_URL is used.
@@ -86,8 +87,16 @@ case "${1:-}" in
     python3 production.py setup
     python3 floorplan.py
     start_bg production python3 production.py live
-    log "demo ready; the production feeder sends data every 10 s (log: $D/production.log)"
+    python3 docs.py setup
+    start_bg docs python3 docs.py live
+    read -r MU1 MP1 MU2 MP2 < <(python3 docs.py mqtt-creds)
+    (cd "$R" && go build -o "$D/mqttsim" ./tools/mqttsim)
+    # the zigbee2mqtt simulator raises its temperature by 0.1 °C a second: restart it every 2 minutes (21–33 °C)
+    start_bg homesim-z2m bash -c 'while true; do "$0" z2m -user "$1" -pass "$2" -wait 120; done' "$D/mqttsim" "$MU1" "$MP1"
+    start_bg homesim-tasmota "$D/mqttsim" tasmota -user "$MU1" -pass "$MP1" -id KUCHYNA -wait 864000
+    start_bg homesim-shelly "$D/mqttsim" shelly -user "$MU2" -pass "$MP2" -id KANCELARIA1 -wait 864000
+    log "demo ready; the production feeder sends data every 10 s, the cold chain and energy meters every 60 s (logs in $D)"
     ;;
-  stop) for n in production camsim server; do stop_one "$n"; done; log "stopped" ;;
+  stop) for n in production docs homesim-z2m homesim-tasmota homesim-shelly camsim server; do stop_one "$n"; done; log "stopped" ;;
   *) sed -n '2,12p' "$0"; exit 2 ;;
 esac
