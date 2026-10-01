@@ -2364,5 +2364,16 @@
  "Previous": "Előző",
  "Next": "Következő",
  "Current": "Aktuális",
- "contains samples of doubtful quality": "kétes minőségű mintákat tartalmaz"
+ "contains samples of doubtful quality": "kétes minőségű mintákat tartalmaz",
+ "Telemetry, SCADA, cameras and energy on your own server": "Telemetria, SCADA, kamerák és energia a saját szerverén",
+ "Devices and data": "Eszközök és adatok",
+ "MQTT, HTTP, LoRaWAN, OPC UA and Modbus — measurements kept as verifiable records": "MQTT, HTTP, LoRaWAN, OPC UA és Modbus — ellenőrizhető rekordként tárolt mérések",
+ "Dashboards and SCADA": "Irányítópultok és SCADA",
+ "live overviews, process screens, displays and video walls": "élő áttekintések, folyamatképernyők, kijelzők és videofalak",
+ "Video NVR": "Videó NVR",
+ "IP cameras recorded on your server, live view, playback and export, phone app": "a szerverén rögzített IP-kamerák, élőkép, visszajátszás és export, telefonos alkalmazás",
+ "Energy and reports": "Energia és jelentések",
+ "consumption of meters, daily logs, Excel and PDF": "mérők fogyasztása, napi naplók, Excel és PDF",
+ "Automation and AI": "Automatizálás és MI",
+ "flows, alarms with notifications, AI assistants": "folyamatok, riasztások értesítésekkel, MI-asszisztensek"
 }

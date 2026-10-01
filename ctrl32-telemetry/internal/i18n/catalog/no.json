@@ -2364,5 +2364,16 @@
  "Previous": "Forrige",
  "Next": "Neste",
  "Current": "Gjeldende",
- "contains samples of doubtful quality": "inneholder målinger av tvilsom kvalitet"
+ "contains samples of doubtful quality": "inneholder målinger av tvilsom kvalitet",
+ "Telemetry, SCADA, cameras and energy on your own server": "Telemetri, SCADA, kameraer og energi på din egen server",
+ "Devices and data": "Enheter og data",
+ "MQTT, HTTP, LoRaWAN, OPC UA and Modbus — measurements kept as verifiable records": "MQTT, HTTP, LoRaWAN, OPC UA og Modbus — målinger lagret som verifiserbare registreringer",
+ "Dashboards and SCADA": "Dashbord og SCADA",
+ "live overviews, process screens, displays and video walls": "live-oversikter, prosessbilder, skjermer og videovegger",
+ "Video NVR": "Video-NVR",
+ "IP cameras recorded on your server, live view, playback and export, phone app": "IP-kameraer tatt opp på serveren din, live, avspilling og eksport, telefonapp",
+ "Energy and reports": "Energi og rapporter",
+ "consumption of meters, daily logs, Excel and PDF": "forbruk på målere, daglige logger, Excel og PDF",
+ "Automation and AI": "Automatisering og KI",
+ "flows, alarms with notifications, AI assistants": "flyter, alarmer med varsler, KI-assistenter"
 }

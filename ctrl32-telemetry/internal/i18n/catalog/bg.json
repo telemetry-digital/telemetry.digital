@@ -2364,5 +2364,16 @@
  "Previous": "Предишен",
  "Next": "Следващ",
  "Current": "Текущ",
- "contains samples of doubtful quality": "съдържа проби със съмнително качество"
+ "contains samples of doubtful quality": "съдържа проби със съмнително качество",
+ "Telemetry, SCADA, cameras and energy on your own server": "Телеметрия, SCADA, камери и енергия на собствен сървър",
+ "Devices and data": "Устройства и данни",
+ "MQTT, HTTP, LoRaWAN, OPC UA and Modbus — measurements kept as verifiable records": "MQTT, HTTP, LoRaWAN, OPC UA и Modbus — измервания като проверими записи",
+ "Dashboards and SCADA": "Табла и SCADA",
+ "live overviews, process screens, displays and video walls": "живи прегледи, технологични екрани, дисплеи и видеостени",
+ "Video NVR": "Видео NVR",
+ "IP cameras recorded on your server, live view, playback and export, phone app": "IP камери, записвани на вашия сървър, на живо, възпроизвеждане и експорт, мобилно приложение",
+ "Energy and reports": "Енергия и отчети",
+ "consumption of meters, daily logs, Excel and PDF": "потребление на броячи, дневни записи, Excel и PDF",
+ "Automation and AI": "Автоматизация и ИИ",
+ "flows, alarms with notifications, AI assistants": "потоци, аларми с известия, AI асистенти"
 }

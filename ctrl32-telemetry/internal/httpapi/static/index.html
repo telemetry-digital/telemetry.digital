@@ -72,8 +72,8 @@
 <script src="/widgets-more.js"></script>
 <script src="/landing.js"></script>
 <script>
-// The front page for visitors (spec 012): the published page from the editor, otherwise the built-in one. A sign-in
-// button always stays in the header, whatever the page contains.
+// The front page for visitors (spec 012): the published page from the editor; without one the sign-in page, which
+// shows a short overview of the system. A sign-in button always stays in the header, whatever the page contains.
 async function showLanding(){
   let page = null;
   try { page = (await ctrl32.api('GET', '/api/v1/landing')).spec; } catch(e) { page = null; }
@@ -83,7 +83,7 @@ async function showLanding(){
     ctrl32Landing.render(sec, page, {});
     if(page.title) document.title = page.title;
     if(page.description){ const m = document.querySelector('meta[name="description"]'); if(m) m.content = page.description; }
-  } else document.querySelector('#landing').hidden = false;
+  } else { location.replace('/login'); return; } // no page of its own: the front page is the sign-in with a short overview
   const row = document.querySelector('header.topbar .row');
   if(row && !document.querySelector('#topSignin')){ const a = document.createElement('a'); a.id = 'topSignin'; a.className = 'btn primary small'; a.href = '/login'; a.textContent = ctrl32.t('Sign in'); row.appendChild(a); }
 }

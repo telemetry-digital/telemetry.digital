@@ -2364,5 +2364,16 @@
  "Previous": "Anterior",
  "Next": "Următor",
  "Current": "Curent",
- "contains samples of doubtful quality": "conține eșantioane de calitate îndoielnică"
+ "contains samples of doubtful quality": "conține eșantioane de calitate îndoielnică",
+ "Telemetry, SCADA, cameras and energy on your own server": "Telemetrie, SCADA, camere și energie pe propriul server",
+ "Devices and data": "Dispozitive și date",
+ "MQTT, HTTP, LoRaWAN, OPC UA and Modbus — measurements kept as verifiable records": "MQTT, HTTP, LoRaWAN, OPC UA și Modbus — măsurători păstrate ca înregistrări verificabile",
+ "Dashboards and SCADA": "Tablouri de bord și SCADA",
+ "live overviews, process screens, displays and video walls": "prezentări live, ecrane de proces, afișaje și pereți video",
+ "Video NVR": "NVR video",
+ "IP cameras recorded on your server, live view, playback and export, phone app": "camere IP înregistrate pe serverul dvs., live, redare și export, aplicație pentru telefon",
+ "Energy and reports": "Energie și rapoarte",
+ "consumption of meters, daily logs, Excel and PDF": "consumul contoarelor, jurnale zilnice, Excel și PDF",
+ "Automation and AI": "Automatizare și AI",
+ "flows, alarms with notifications, AI assistants": "fluxuri, alarme cu notificări, asistenți AI"
 }

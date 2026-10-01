@@ -2364,5 +2364,16 @@
  "Previous": "Προηγούμενο",
  "Next": "Επόμενο",
  "Current": "Τρέχον",
- "contains samples of doubtful quality": "περιέχει δείγματα αμφίβολης ποιότητας"
+ "contains samples of doubtful quality": "περιέχει δείγματα αμφίβολης ποιότητας",
+ "Telemetry, SCADA, cameras and energy on your own server": "Τηλεμετρία, SCADA, κάμερες και ενέργεια στον δικό σας διακομιστή",
+ "Devices and data": "Συσκευές και δεδομένα",
+ "MQTT, HTTP, LoRaWAN, OPC UA and Modbus — measurements kept as verifiable records": "MQTT, HTTP, LoRaWAN, OPC UA και Modbus — μετρήσεις ως επαληθεύσιμες εγγραφές",
+ "Dashboards and SCADA": "Πίνακες και SCADA",
+ "live overviews, process screens, displays and video walls": "ζωντανές επισκοπήσεις, οθόνες διεργασιών, οθόνες και βιντεοτοίχοι",
+ "Video NVR": "Βίντεο NVR",
+ "IP cameras recorded on your server, live view, playback and export, phone app": "IP κάμερες με εγγραφή στον διακομιστή σας, ζωντανά, αναπαραγωγή και εξαγωγή, εφαρμογή κινητού",
+ "Energy and reports": "Ενέργεια και αναφορές",
+ "consumption of meters, daily logs, Excel and PDF": "κατανάλωση μετρητών, ημερήσια αρχεία, Excel και PDF",
+ "Automation and AI": "Αυτοματισμός και AI",
+ "flows, alarms with notifications, AI assistants": "ροές, συναγερμοί με ειδοποιήσεις, βοηθοί AI"
 }
