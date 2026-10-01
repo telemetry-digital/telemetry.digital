@@ -60,14 +60,14 @@ form /oauth/register -H "Content-Type: application/json" --data "{\"client_name\
 check "http redirect outside loopback refused" "$(st) $(jx j.error)" "400 invalid_redirect_uri"
 form /oauth/register -H "Content-Type: application/json" --data "{\"client_name\":\"Evil\",\"redirect_uris\":[\"https://x.example/cb\"],\"token_endpoint_auth_method\":\"client_secret_basic\"}"
 check "confidential clients refused" "$(st) $(jx j.error)" "400 invalid_client_metadata"
-form /oauth/register -H "Content-Type: application/json" --data "{\"client_name\":\"E2E assistant $SUF\",\"redirect_uris\":[\"$REDIR\"],\"grant_types\":[\"authorization_code\",\"refresh_token\"],\"response_types\":[\"code\"],\"token_endpoint_auth_method\":\"none\",\"client_uri\":\"https://assistant.example\"}"
+form /oauth/register -H "Content-Type: application/json" --data "{\"client_name\":\"E2E Assistant $SUF\",\"redirect_uris\":[\"$REDIR\"],\"grant_types\":[\"authorization_code\",\"refresh_token\"],\"response_types\":[\"code\"],\"token_endpoint_auth_method\":\"none\",\"client_uri\":\"https://assistant.example\"}"
 check "client registered" "$(st) $(jx 'j.client_id.startsWith("c32c_") && j.token_endpoint_auth_method')" "201 none"
 CID=$(jx j.client_id)
 
 echo "== consent while AI access is off"
 pkce; Q=$(qs "$CID" "$REDIR" "$CH" "st-$SUF" mcp)
 curl -s -o "$TMP/b" -w '%{http_code}' "$BASE/oauth/authorize?$Q" > "$TMP/s"; check "consent page served" "$(st) $(grep -c '<h1>Connect an AI assistant</h1>' "$TMP/b")" "200 1"
-req GET "/api/v1/mcp/authorize?$Q"; check "consent info: off, the host the code goes to" "$(st) $(jx 'j.client_name + " | " + j.enabled + " | " + j.redirect_host')" "200 E2E assistant $SUF | false | 127.0.0.1:$((20000 + SUF % 10000))"
+req GET "/api/v1/mcp/authorize?$Q"; check "consent info: off, the host the code goes to" "$(st) $(jx 'j.client_name + " | " + j.enabled + " | " + j.redirect_host')" "200 E2E Assistant $SUF | false | 127.0.0.1:$((20000 + SUF % 10000))"
 DEC() { printf '{"response_type":"code","client_id":"%s","redirect_uri":"%s","code_challenge":"%s","code_challenge_method":"S256","state":"%s","scope":"%s","resource":"%s/mcp","approve":%s,"read_only":%s}' "$CID" "$REDIR" "$1" "$2" "$3" "$BASE" "$4" "$5"; }
 req POST /api/v1/mcp/authorize "$(DEC "$CH" "st-$SUF" mcp true false)"; check "approval refused while off" "$(st)" 403
 req PUT /api/v1/mcp/settings '{"enabled":true}'; check "switching on needs a reason" "$(st)" 400
@@ -123,7 +123,7 @@ check "tools of an administrator" "$(jx '[j.result.tools.length > 40, j.result.t
 check "read tools are marked read-only, change tools destructive" "$(jx 'j.result.tools.every(t => t.name.endsWith("_read") ? t.annotations.readOnlyHint && !t.annotations.destructiveHint : (t.name.endsWith("_change") ? t.annotations.destructiveHint && !t.annotations.readOnlyHint : true))')" true
 check "no tool manages AI access or API tokens" "$(jx 'JSON.stringify(j.result.tools).includes("/api/v1/mcp/") || JSON.stringify(j.result.tools).includes("/api/v1/tokens")')" false
 rpc "$AT" resources/read '{"uri":"ctrl32://me"}'
-check "resource: who I act as" "$(jx 'JSON.parse(j.result.contents[0].text).user + " " + JSON.parse(j.result.contents[0].text).ai_client')" "$USER E2E assistant $SUF"
+check "resource: who I act as" "$(jx 'JSON.parse(j.result.contents[0].text).user + " " + JSON.parse(j.result.contents[0].text).ai_client')" "$USER E2E Assistant $SUF"
 tool "$AT" api_reference '{"operations":["postSites"]}'
 check "api_reference: body schema with reason" "$(text | node -e 'const a=JSON.parse(require("fs").readFileSync(0)); console.log(a[0].tool + " " + !!a[0].body.properties.reason)')" "sites_change true"
 
@@ -146,9 +146,9 @@ curl -s -b "$JAR" -H "Content-Type: application/json" -H "X-CSRF-Token: $CSRF" -
 echo "== audit"
 req GET "/api/v1/export/audit?format=csv"
 grep "site.create" "$TMP/b" | grep -q "via MCP" && ok "the change names the assistant (via MCP)" || bad "no 'via MCP' in the audit trail: $(grep -i 'MCP site' "$TMP/b" | head -c 300)"
-grep -q "E2E assistant $SUF via MCP" "$TMP/b" && ok "…with the client's name" || bad "client name missing in the audit"
+grep -q "E2E Assistant $SUF via MCP" "$TMP/b" && ok "…with the client's name" || bad "client name missing in the audit"
 grep -q "mcp_settings.update" "$TMP/b" && ok "switching AI access audited" || bad "mcp_settings.update missing"
-grep "mcp_grant.create" "$TMP/b" | grep -q "E2E assistant $SUF" && ok "approval audited" || bad "mcp_grant.create missing"
+grep "mcp_grant.create" "$TMP/b" | grep -q "E2E Assistant $SUF" && ok "approval audited" || bad "mcp_grant.create missing"
 
 echo "== refresh token rotation"
 form /oauth/token -d grant_type=refresh_token -d "refresh_token=$RT" -d "client_id=$CID"
@@ -164,7 +164,7 @@ form /oauth/token -d grant_type=authorization_code -d "code=$C2" -d "client_id=$
 rpc "$AT3" tools/list; check "…and its tokens stop" "$(st)" 401
 
 echo "== a new approval replaces the earlier one"
-req GET /api/v1/mcp/grants; check "the earlier approval of this assistant was replaced (none left after the reused code)" "$(jx "j.grants.filter(g => !g.revoked_at && g.client_name === 'E2E assistant $SUF').length")" 0
+req GET /api/v1/mcp/grants; check "the earlier approval of this assistant was replaced (none left after the reused code)" "$(jx "j.grants.filter(g => !g.revoked_at && g.client_name === 'E2E Assistant $SUF').length")" 0
 echo "== reading only"
 pkce; req POST /api/v1/mcp/authorize "$(DEC "$CH" "ro-$SUF" "mcp:read" true true)"; C3=$(param "$(jx j.redirect)" code)
 form /oauth/token -d grant_type=authorization_code -d "code=$C3" -d "client_id=$CID" -d "redirect_uri=${REDIR/:$((20000 + SUF % 10000))/:5999}" -d "code_verifier=$VER"; check "loopback redirect must be the same as in the request" "$(st)" 400
@@ -221,8 +221,8 @@ req PUT /api/v1/mcp/settings '{"enabled":false,"reason":"e2e mcp: off at the end
 
 echo "== cleanup"
 [[ -n "$LIC_OURS" ]] && { req DELETE "/api/v1/server/license?reason=e2e%20mcp%20cleanup"; check "test license removed" "$(st)" 200; }
-req GET /api/v1/mcp/grants; for g in $(jx "j.grants.filter(g => !g.revoked_at && g.client_name === 'E2E assistant $SUF').map(g => g.id).join(' ')"); do req DELETE "/api/v1/mcp/grants/$g?reason=e2e%20cleanup"; done
-req GET /api/v1/mcp/grants; check "no assistant of this run left connected" "$(jx "j.grants.filter(g => !g.revoked_at && g.client_name === 'E2E assistant $SUF').length")" 0
+req GET /api/v1/mcp/grants; for g in $(jx "j.grants.filter(g => !g.revoked_at && g.client_name === 'E2E Assistant $SUF').map(g => g.id).join(' ')"); do req DELETE "/api/v1/mcp/grants/$g?reason=e2e%20cleanup"; done
+req GET /api/v1/mcp/grants; check "no assistant of this run left connected" "$(jx "j.grants.filter(g => !g.revoked_at && g.client_name === 'E2E Assistant $SUF').length")" 0
 req PATCH "/api/v1/users/$UID2" '{"disabled":true,"reason":"e2e cleanup"}'
 req GET /api/v1/tokens; TID=$(jx "j.find(t => t.name === 'mcp e2e' && !t.revoked_at).id"); req DELETE "/api/v1/tokens/$TID"
 echo; echo "passed $pass, failed $fail"; [[ $fail -eq 0 ]]
