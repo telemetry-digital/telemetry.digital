@@ -11,6 +11,17 @@
 <link rel="apple-touch-icon" href="/icon-192.png">
 <style>
   .login { max-width: 400px; margin: 32px auto; }
+  /* sign-in with a short overview of what the system does (the front page of a server without its own page) */
+  .login-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 48px; align-items: center; max-width: 980px; margin: 40px auto; }
+  .login-wrap .login { margin: 0; width: 100%; }
+  .login-intro h2 { font-size: 1.5em; line-height: 1.25; margin: 0 0 18px; }
+  .login-intro ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+  .login-intro li { display: grid; grid-template-columns: 36px 1fr; gap: 12px; align-items: start; }
+  .login-intro li .ic { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: var(--bg2); color: var(--primary); }
+  .login-intro li .ic svg { width: 20px; height: 20px; }
+  .login-intro li b { display: block; }
+  .login-intro li span.muted { font-size: 14px; }
+  @media (max-width: 860px) { .login-wrap { grid-template-columns: 1fr; gap: 28px; margin: 20px auto; } .login-intro { order: 2; } .login-wrap .login { order: 1; max-width: 400px; margin: 0 auto; } }
   .login h1 { font-size: 1.2em; }
   .links { display: flex; gap: 16px; justify-content: center; font-size: 14px; margin-top: 4px; }
   .qr { display: block; width: 200px; height: 200px; margin: 8px auto; background: #fff; padding: 6px; border-radius: var(--radius); }
@@ -19,6 +30,17 @@
 <body>
 <header class="topbar"></header>
 <main class="container">
+<div class="login-wrap">
+<aside class="login-intro" id="intro">
+  <h2>Telemetry, SCADA, cameras and energy on your own server</h2>
+  <ul>
+    <li><span class="ic" data-icon="device"></span><div><b>Devices and data</b><span class="muted">MQTT, HTTP, LoRaWAN, OPC UA and Modbus — measurements kept as verifiable records</span></div></li>
+    <li><span class="ic" data-icon="dashboard"></span><div><b>Dashboards and SCADA</b><span class="muted">live overviews, process screens, displays and video walls</span></div></li>
+    <li><span class="ic" data-icon="camera"></span><div><b>Video NVR</b><span class="muted">IP cameras recorded on your server, live view, playback and export, phone app</span></div></li>
+    <li><span class="ic" data-icon="bolt"></span><div><b>Energy and reports</b><span class="muted">consumption of meters, daily logs, Excel and PDF</span></div></li>
+    <li><span class="ic" data-icon="flow"></span><div><b>Automation and AI</b><span class="muted">flows, alarms with notifications, AI assistants</span></div></li>
+  </ul>
+</aside>
 <form id="f" class="card login form">
   <h1>Sign in</h1>
   <div class="muted" id="hint"></div>
@@ -43,6 +65,7 @@
   <button id="btn" class="btn primary" type="submit">Sign in</button>
   <div class="links" id="links"><a href="/forgot">Forgot password?</a><a href="/register">Request an account</a></div>
 </form>
+</div>
 </main>
 <script src="/app.js"></script>
 <script>
@@ -52,6 +75,7 @@ let pre=null, csrf=null, mode='login';
 const NEXT=(()=>{ const n=new URLSearchParams(location.search).get('next')||''; return /^\/(?![\/\\])/.test(n) ? n : ''; })();
 const goOn=()=>{ location.href = NEXT || ctrl32.home(); };
 ctrl32.ready().then(({me}) => { if(me && !me.must_change_password && !(me.mfa_required && !me.mfa_enabled)) goOn(); });
+for(const el of document.querySelectorAll('#intro [data-icon]')) el.innerHTML = (ctrl32.ICON && ctrl32.ICON[el.dataset.icon]) || '';
 async function post(u,b){ const h={'Content-Type':'application/json'}; if(csrf) h['X-CSRF-Token']=csrf; const r=await fetch(u,{method:'POST',headers:h,body:JSON.stringify(b),credentials:'same-origin'}); const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||r.status); return j; }
 async function me(){ const r=await fetch('/api/v1/auth/me',{credentials:'same-origin'}); if(!r.ok) return null; return r.json(); }
 function show(step,hint,btn){ for(const s of ['step1','step2','step3','step4']) $('#'+s).hidden = s!==step; $('#hint').textContent=hint; $('#btn').textContent=btn; $('#links').hidden = step!=='step1'; err.textContent=''; }

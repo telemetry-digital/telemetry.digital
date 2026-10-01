@@ -2364,5 +2364,16 @@
  "Previous": "Edellinen",
  "Next": "Seuraava",
  "Current": "Nykyinen",
- "contains samples of doubtful quality": "sisältää laadultaan epävarmoja näytteitä"
+ "contains samples of doubtful quality": "sisältää laadultaan epävarmoja näytteitä",
+ "Telemetry, SCADA, cameras and energy on your own server": "Telemetria, SCADA, kamerat ja energia omalla palvelimellasi",
+ "Devices and data": "Laitteet ja tiedot",
+ "MQTT, HTTP, LoRaWAN, OPC UA and Modbus — measurements kept as verifiable records": "MQTT, HTTP, LoRaWAN, OPC UA ja Modbus — mittaukset todennettavina tietueina",
+ "Dashboards and SCADA": "Koontinäytöt ja SCADA",
+ "live overviews, process screens, displays and video walls": "reaaliaikaiset yleiskuvat, prosessinäytöt, näytöt ja videoseinät",
+ "Video NVR": "Video-NVR",
+ "IP cameras recorded on your server, live view, playback and export, phone app": "palvelimellesi tallentavat IP-kamerat, live, toisto ja vienti, puhelinsovellus",
+ "Energy and reports": "Energia ja raportit",
+ "consumption of meters, daily logs, Excel and PDF": "mittareiden kulutus, päivälokit, Excel ja PDF",
+ "Automation and AI": "Automaatio ja AI",
+ "flows, alarms with notifications, AI assistants": "kulut, hälytykset ilmoituksineen, AI-avustajat"
 }

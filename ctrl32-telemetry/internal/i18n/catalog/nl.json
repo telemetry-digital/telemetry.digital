@@ -2364,5 +2364,16 @@
  "Previous": "Vorige",
  "Next": "Volgende",
  "Current": "Huidige",
- "contains samples of doubtful quality": "bevat metingen van twijfelachtige kwaliteit"
+ "contains samples of doubtful quality": "bevat metingen van twijfelachtige kwaliteit",
+ "Telemetry, SCADA, cameras and energy on your own server": "Telemetrie, SCADA, camera's en energie op uw eigen server",
+ "Devices and data": "Apparaten en gegevens",
+ "MQTT, HTTP, LoRaWAN, OPC UA and Modbus — measurements kept as verifiable records": "MQTT, HTTP, LoRaWAN, OPC UA en Modbus — metingen als verifieerbare registraties",
+ "Dashboards and SCADA": "Dashboards en SCADA",
+ "live overviews, process screens, displays and video walls": "live-overzichten, processchermen, displays en videowanden",
+ "Video NVR": "Video-NVR",
+ "IP cameras recorded on your server, live view, playback and export, phone app": "IP-camera's opgenomen op uw server, live, afspelen en export, telefoonapp",
+ "Energy and reports": "Energie en rapporten",
+ "consumption of meters, daily logs, Excel and PDF": "verbruik van meters, dagelijkse logs, Excel en PDF",
+ "Automation and AI": "Automatisering en AI",
+ "flows, alarms with notifications, AI assistants": "flows, alarmen met meldingen, AI-assistenten"
 }

@@ -2364,5 +2364,16 @@
  "Previous": "Předchozí",
  "Next": "Další",
  "Current": "Aktuální",
- "contains samples of doubtful quality": "obsahuje vzorky pochybné kvality"
+ "contains samples of doubtful quality": "obsahuje vzorky pochybné kvality",
+ "Telemetry, SCADA, cameras and energy on your own server": "Telemetrie, SCADA, kamery a energie na vlastním serveru",
+ "Devices and data": "Zařízení a data",
+ "MQTT, HTTP, LoRaWAN, OPC UA and Modbus — measurements kept as verifiable records": "MQTT, HTTP, LoRaWAN, OPC UA a Modbus — měření uložená jako ověřitelné záznamy",
+ "Dashboards and SCADA": "Dashboardy a SCADA",
+ "live overviews, process screens, displays and video walls": "živé přehledy, procesní obrazovky, obrazovky a videostěny",
+ "Video NVR": "Video NVR",
+ "IP cameras recorded on your server, live view, playback and export, phone app": "IP kamery nahrávané na vašem serveru, živý obraz, přehrávání a export, mobilní aplikace",
+ "Energy and reports": "Energie a reporty",
+ "consumption of meters, daily logs, Excel and PDF": "spotřeba měřidel, denní záznamy, Excel a PDF",
+ "Automation and AI": "Automatizace a AI",
+ "flows, alarms with notifications, AI assistants": "toky, alarmy s notifikacemi, AI asistenti"
 }

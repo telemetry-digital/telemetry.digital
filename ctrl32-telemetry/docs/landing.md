@@ -20,8 +20,10 @@ permission `system.admin`). Specification: `specs/012-landing-editor`.
 
 *Save draft* stores a new version (with a reason in the audit trail) without changing what visitors see. *Publish*
 stores and publishes at once. *Versions* lists every saved version: open one to continue from it, publish an older one,
-or *Show the built-in page again*. Visitors always get the published version; the first one starts from the built-in
-page, so nothing changes until you publish.
+or *Show the built-in page again*. Visitors always get the published version. Without a published page (0.63.2) the
+address `/` leads visitors straight to the sign-in page, which shows a short overview of the system next to the form
+(devices and data, dashboards and SCADA, video NVR, energy and reports, automation and AI); the editor's first draft
+starts from the built-in blocks, so nothing changes for visitors until you publish.
 
 ## Safety
 

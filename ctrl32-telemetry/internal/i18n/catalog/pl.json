@@ -2364,5 +2364,16 @@
  "Previous": "Poprzedni",
  "Next": "Następny",
  "Current": "Bieżący",
- "contains samples of doubtful quality": "zawiera próbki wątpliwej jakości"
+ "contains samples of doubtful quality": "zawiera próbki wątpliwej jakości",
+ "Telemetry, SCADA, cameras and energy on your own server": "Telemetria, SCADA, kamery i energia na własnym serwerze",
+ "Devices and data": "Urządzenia i dane",
+ "MQTT, HTTP, LoRaWAN, OPC UA and Modbus — measurements kept as verifiable records": "MQTT, HTTP, LoRaWAN, OPC UA i Modbus — pomiary przechowywane jako weryfikowalne zapisy",
+ "Dashboards and SCADA": "Pulpity i SCADA",
+ "live overviews, process screens, displays and video walls": "podglądy na żywo, ekrany procesowe, wyświetlacze i ściany wideo",
+ "Video NVR": "Wideo NVR",
+ "IP cameras recorded on your server, live view, playback and export, phone app": "kamery IP nagrywane na Twoim serwerze, podgląd, odtwarzanie i eksport, aplikacja na telefon",
+ "Energy and reports": "Energia i raporty",
+ "consumption of meters, daily logs, Excel and PDF": "zużycie liczników, dzienne zapisy, Excel i PDF",
+ "Automation and AI": "Automatyzacja i AI",
+ "flows, alarms with notifications, AI assistants": "przepływy, alarmy z powiadomieniami, asystenci AI"
 }
