@@ -24,8 +24,19 @@ From `ctrl32-telemetry/`:
 ```sh
 bash deploy/dev/dev.sh up        # PostgreSQL 18 in Docker, fresh database, demo seed, server on http://127.0.0.1:8080
 bash deploy/dev/dev.sh camsim    # simulated cameras (RTSP :8554, HTTP/ONVIF :8555)
-bash deploy/dev/dev.sh demo      # 40 cameras, 2 video walls, production dashboard and SCADA screen, floor plan
+bash deploy/dev/dev.sh demo      # 40 cameras, 2 video walls, production dashboard and SCADA screen, floor plan,
+                                 # plus the documentation demo (deploy/dev/demo/docs.py, below)
 ```
+
+The documentation demo (`python3 deploy/dev/demo/docs.py setup`, run by `dev.sh demo`; it can be run again and skips
+what exists, state in `.dev/docs.json`) fills the screens the other scripts leave empty: a cold chain of medicine fridges
+with 30 days of history, alarm rules, alarms and incidents, five electricity meters with 13 months of history for the
+Energy page, dashboards with period tables, the *overview* and *showcase* starter dashboards, automation rules and
+flows, smart-home MQTT accounts with simulated zigbee2mqtt, Tasmota and Shelly devices, a display, firmware with a
+campaign, users with a custom role, an API token, a report template with stored PDF reports and two PWA apps. It needs
+Docker's `ctrl32-pg-dev` container (or `CTRL32_DB_ADMIN_URL`) to add month partitions for the history; PDF reports need
+`typst` on PATH or next to the server binary in `.dev/`. Screenshots of every screen for the documentation:
+`BASE=http://127.0.0.1:8080 OUT=<folder> node tests/headless/docshots.js`.
 
 Sign in as **admin / admin1234**. After a code change: `bash deploy/dev/dev.sh restart`; to stop everything:
 `bash deploy/dev/dev.sh stop`. Local data, logs, recordings and binaries live in `ctrl32-telemetry/.dev/`
