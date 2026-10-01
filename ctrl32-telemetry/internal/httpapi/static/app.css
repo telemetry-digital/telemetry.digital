@@ -120,6 +120,8 @@ code, pre { font-family: var(--mono); font-size: 0.85em; }
 .drawer-nav .nav-link { padding: 12px 12px; font-size: 16px; }
 .drawer-foot { margin-top: auto; padding: 8px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
 .drawer-foot .btn { justify-content: flex-start; }
+/* the menu (sidebar, phone drawer and their buttons) has square corners whatever the theme radius (user, 2 Oct 2026) */
+.sidebar .nav-link, .sidebar .btn, .sidebar .lang-sel, #drawer .nav-link, #drawer .btn, #drawer .lang-sel, #menuBtn, #drawerClose { border-radius: 0 !important; }
 
 .footer { border-top: 1px solid var(--line); background: var(--bg2); color: var(--muted); font-size: 13px; padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); }
 .footer .row { flex-wrap: wrap; justify-content: center; gap: 12px; } .footer .grow { display: none; } .footer a { color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
