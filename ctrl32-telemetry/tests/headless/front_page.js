@@ -26,7 +26,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   const ev = async (expr) => { const r = await send("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true }); return r.result.result.value; };
   const expect = (name, got, want) => { const ok = typeof want === "function" ? want(got) : got === want; console.log((ok ? "ok   " : "FAIL ") + name + ": " + JSON.stringify(got)); if (!ok) problems.push(name + " = " + JSON.stringify(got)); };
   const shot = async (name) => { const s = await send("Page.captureScreenshot", { format: "png" }); fs.writeFileSync(out + "/" + name, Buffer.from(s.result.data, "base64")); };
-  const published = await new Promise((res) => http.get(base + "/api/v1/landing", (r) => { let d = ""; r.on("data", (c) => (d += c)); r.on("end", () => res(!!JSON.parse(d).spec)); }));
+  const published = await new Promise((res) => (base.startsWith("https") ? require("https") : http).get(base + "/api/v1/landing", (r) => { let d = ""; r.on("data", (c) => (d += c)); r.on("end", () => res(!!JSON.parse(d).spec)); }));
   await send("Page.navigate", { url: base + "/" }); await sleep(3000);
   if (published) {
     console.log("skip: this server publishes a front page of its own");
