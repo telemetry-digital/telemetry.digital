@@ -92,6 +92,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 		loginLimiter: newLimiter(10, 10), provisionLimiter: newLimiter(20, 10), pairLimiter: newLimiter(5, 5), mcpLimiter: newLimiter(300, 60), oauthLimiter: newLimiter(30, 20), stepUpLimiter: newLimiter(5, 5)}
 	if eng != nil {
 		eng.Commander = s
+		eng.HostAllowed = func(ctx context.Context, org, host string) bool { return flowRefs{s, ctx, org}.HostAllowed(host) }
 	}
 	if fl != nil {
 		fl.SetHost(newFlowHost(s))
@@ -291,6 +292,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("DELETE /api/v1/video/cameras/{id}", s.require("video.manage", s.deleteCamera))
 	mux.Handle("GET /api/v1/video/cameras/{id}/live", s.require("video.view", s.cameraLive))
 	mux.Handle("GET /api/v1/video/cameras/{id}/snapshot", s.require("video.view", s.cameraSnapshot))
+	mux.Handle("POST /api/v1/video/cameras/{id}/picture-saved", s.require("video.view", s.pictureSaved))
 	mux.Handle("GET /api/v1/video/cameras/{id}/recordings", s.require("video.playback", s.cameraRecordings))
 	mux.Handle("GET /api/v1/video/cameras/{id}/playback", s.require("video.playback", s.cameraPlayback))
 	mux.Handle("GET /api/v1/video/cameras/{id}/export", s.require("video.playback", s.cameraExport))

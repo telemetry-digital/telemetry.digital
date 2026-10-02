@@ -2481,5 +2481,20 @@
  "No firewall rules loaded yet.": "Ingen brannmurregler lastet inn ennå.",
  "Apply the VPN again": "Bruk VPN-et på nytt",
  "Peers and access rules are sent to the server agent again.": "Peers og tilgangsregler sendes til serveragenten på nytt.",
- "applied": "tatt i bruk"
+ "applied": "tatt i bruk",
+ "Incident key (open and resolve with the same key belong together)": "Hendelsesnøkkel (åpning og løsning med samme nøkkel hører sammen)",
+ "Acknowledge": "Kvitter",
+ "Reason for acknowledging this alarm:": "Begrunnelse for å kvittere alarmen:",
+ "alarm acknowledged": "alarm kvittert",
+ "outside the allowed range": "utenfor tillatt område",
+ "low battery (battery level at or below the limits)": "lavt batteri (nivå på eller under grensene)",
+ "power loss (value 0 = no power)": "strømbrudd (verdi 0 = ingen strøm)",
+ "door open (value other than 0)": "dør åpen (verdi ulik 0)",
+ "communication loss (no new value)": "kommunikasjonstap (ingen ny verdi)",
+ "Warning and action limits: the value at or above them.": "Varsel- og tiltaksgrenser: verdien på eller over dem.",
+ "Warning and action limits: the value at or below them.": "Varsel- og tiltaksgrenser: verdien på eller under dem.",
+ "Warning and action limits in the unit of the datastream (%, V).": "Varsel- og tiltaksgrenser i datastrømmens enhet (%, V).",
+ "No limits: a value of 0 (false) raises the alarm, any other value clears it.": "Ingen grenser: verdien 0 (usann) utløser alarmen, enhver annen verdi opphever den.",
+ "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).": "Ingen grenser: en verdi ulik 0 (sann) utløser alarmen etter forsinkelsen (hvor lenge døren kan stå åpen).",
+ "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.": "Grenser i sekunder uten ny verdi; tom = 1,5 × datastrømmens forventede intervall. En ny verdi opphever alarmen."
 }

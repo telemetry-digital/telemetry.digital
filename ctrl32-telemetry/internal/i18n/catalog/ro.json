@@ -2481,5 +2481,20 @@
  "No firewall rules loaded yet.": "Nu sunt încă încărcate reguli firewall.",
  "Apply the VPN again": "Aplică din nou VPN-ul",
  "Peers and access rules are sent to the server agent again.": "Participanții și regulile de acces sunt trimise din nou agentului serverului.",
- "applied": "aplicat"
+ "applied": "aplicat",
+ "Incident key (open and resolve with the same key belong together)": "Cheia incidentului (deschiderea și rezolvarea cu aceeași cheie merg împreună)",
+ "Acknowledge": "Confirmă",
+ "Reason for acknowledging this alarm:": "Motivul confirmării alarmei:",
+ "alarm acknowledged": "alarmă confirmată",
+ "outside the allowed range": "în afara intervalului permis",
+ "low battery (battery level at or below the limits)": "baterie descărcată (nivel la sau sub limite)",
+ "power loss (value 0 = no power)": "pierderea alimentării (valoarea 0 = fără alimentare)",
+ "door open (value other than 0)": "ușă deschisă (valoare diferită de 0)",
+ "communication loss (no new value)": "pierderea comunicației (nicio valoare nouă)",
+ "Warning and action limits: the value at or above them.": "Limite de avertizare și de acțiune: valoarea la sau peste ele.",
+ "Warning and action limits: the value at or below them.": "Limite de avertizare și de acțiune: valoarea la sau sub ele.",
+ "Warning and action limits in the unit of the datastream (%, V).": "Limite de avertizare și de acțiune în unitatea fluxului de date (%, V).",
+ "No limits: a value of 0 (false) raises the alarm, any other value clears it.": "Fără limite: valoarea 0 (fals) declanșează alarma, orice altă valoare o anulează.",
+ "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).": "Fără limite: o valoare diferită de 0 (adevărat) declanșează alarma după întârziere (cât timp poate rămâne ușa deschisă).",
+ "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.": "Limite în secunde fără o valoare nouă; gol = 1,5 × intervalul așteptat al fluxului de date. O valoare nouă anulează alarma."
 }

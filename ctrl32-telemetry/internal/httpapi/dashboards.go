@@ -215,9 +215,7 @@ func validateScreenSpecW(raw json.RawMessage) (map[string]any, []string, error) 
 	if len(sp.Elements) > 0 && !canvas {
 		return nil, nil, errors.New("drawing elements need the canvas layout (kind mimic)")
 	}
-	if len(sp.Widgets) == 0 && len(sp.Elements) == 0 {
-		return nil, nil, errNoContent
-	}
+	// an empty dashboard is allowed: "Dashboard — empty" starts with no widgets, and removing the last widget saves
 	if len(sp.Widgets) > 60 {
 		return nil, nil, errors.New("at most 60 widgets")
 	}
@@ -695,7 +693,7 @@ func (s *Server) bucketedObservations(w http.ResponseWriter, r *http.Request, ds
 		return
 	}
 	rows, err := s.pool.Query(r.Context(), `
-		SELECT date_bin(make_interval(secs => $4), measured_at, $2) AS t, avg(value)::float8, min(value)::float8, max(value)::float8, count(*), bool_or(quality <> 'ok')
+		SELECT date_bin(make_interval(secs => $4), measured_at, $2) AS t, avg(value)::float8, min(value)::float8, max(value)::float8, count(*), bool_or(quality NOT IN ('ok', 'backfilled'))
 		FROM core.observation WHERE datastream_id = $1::uuid AND ($5 = '' OR org_id = $5::uuid) AND measured_at >= $2 AND measured_at < $3 AND value IS NOT NULL
 		GROUP BY t ORDER BY t LIMIT 5000`, dsID, from, to, bucket, orgOf(p))
 	if err != nil {

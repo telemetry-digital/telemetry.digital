@@ -58,6 +58,12 @@ func (s *Server) shareOf(ctx context.Context, org, slug string) (*shareInfo, boo
 	if json.Unmarshal(raw, &si.Spec) != nil {
 		return nil, false
 	}
+	si.collect()
+	return si, true
+}
+
+// collect reads from the spec what its widgets and drawing elements may read.
+func (si *shareInfo) collect() {
 	widgets, _ := si.Spec["widgets"].([]any)
 	for _, x := range widgets {
 		w, _ := x.(map[string]any)
@@ -80,7 +86,8 @@ func (s *Server) shareOf(ctx context.Context, org, slug string) (*shareInfo, boo
 				}
 			}
 		}
-		if typ == "alarms" {
+		// the Alarms list and the Alarm count read the same public alarms: those of the dashboard's datastreams
+		if typ == "alarms" || typ == "alarm_count" {
 			si.HasAlarms = true
 		}
 		if typ == "camera" || typ == "camera_pin" {
@@ -105,7 +112,6 @@ func (s *Server) shareOf(ctx context.Context, org, slug string) (*shareInfo, boo
 			}
 		}
 	}
-	return si, true
 }
 
 // withPublicPrincipal delegates to an ordinary data handler under a read-only principal of the organization.

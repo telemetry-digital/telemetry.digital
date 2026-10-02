@@ -136,6 +136,16 @@ func TestParamsBoundsDefaultsWarnings(t *testing.T) {
 
 // The spec 002 part of the showcase passes validation without warnings and, with the original showcase types,
 // covers every widget type of the catalogue except the process symbols and the older control widgets (FR-010).
+// An empty dashboard (grid or canvas) is valid: "Dashboard — empty" and saving after removing every widget.
+func TestEmptyDashboardValid(t *testing.T) {
+	for _, js := range []string{`{"version":1,"kind":"dashboard","layout":{"type":"grid","columns":12,"row_height":96},"widgets":[]}`, `{"version":1}`,
+		`{"version":1,"kind":"mimic","layout":{"type":"canvas","width":1600,"height":900},"widgets":[],"elements":[]}`} {
+		if _, err := validateScreenSpec(json.RawMessage(js)); err != nil {
+			t.Errorf("%s: %v", js, err)
+		}
+	}
+}
+
 func TestShowcaseMoreValid(t *testing.T) {
 	w := func(id, typ string, x, y, wd, h int, binds map[string][]string, params map[string]any) map[string]any {
 		if binds == nil {

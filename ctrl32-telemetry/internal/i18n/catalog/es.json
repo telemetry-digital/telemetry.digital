@@ -2481,5 +2481,20 @@
  "No firewall rules loaded yet.": "Todavía no hay reglas de cortafuegos cargadas.",
  "Apply the VPN again": "Aplicar la VPN de nuevo",
  "Peers and access rules are sent to the server agent again.": "Los pares y las reglas de acceso se envían de nuevo al agente del servidor.",
- "applied": "aplicado"
+ "applied": "aplicado",
+ "Incident key (open and resolve with the same key belong together)": "Clave del incidente (abrir y resolver con la misma clave van juntos)",
+ "Acknowledge": "Reconocer",
+ "Reason for acknowledging this alarm:": "Motivo del reconocimiento de la alarma:",
+ "alarm acknowledged": "alarma reconocida",
+ "outside the allowed range": "fuera del rango permitido",
+ "low battery (battery level at or below the limits)": "batería baja (nivel en los límites o por debajo)",
+ "power loss (value 0 = no power)": "corte de alimentación (valor 0 = sin alimentación)",
+ "door open (value other than 0)": "puerta abierta (valor distinto de 0)",
+ "communication loss (no new value)": "pérdida de comunicación (ningún valor nuevo)",
+ "Warning and action limits: the value at or above them.": "Límites de aviso y de acción: el valor en ellos o por encima.",
+ "Warning and action limits: the value at or below them.": "Límites de aviso y de acción: el valor en ellos o por debajo.",
+ "Warning and action limits in the unit of the datastream (%, V).": "Límites de aviso y de acción en la unidad del flujo de datos (%, V).",
+ "No limits: a value of 0 (false) raises the alarm, any other value clears it.": "Sin límites: un valor 0 (falso) activa la alarma, cualquier otro valor la borra.",
+ "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).": "Sin límites: un valor distinto de 0 (verdadero) activa la alarma tras el retardo (cuánto tiempo puede permanecer abierta la puerta).",
+ "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.": "Límites en segundos sin un valor nuevo; vacío = 1,5 × el intervalo esperado del flujo de datos. Un valor nuevo borra la alarma."
 }

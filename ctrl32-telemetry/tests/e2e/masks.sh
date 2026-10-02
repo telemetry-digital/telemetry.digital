@@ -79,6 +79,8 @@ curl -s -b "$JAR" -o "$TMP/plain.jpg" "$BASE/api/v1/video/cameras/$CAM/snapshot?
 check "snapshot is a JPEG" "$(head -c 2 "$TMP/masked.jpg" | od -An -tx1 | tr -d ' ')" "ffd8"
 check "masked snapshot differs from the unmasked one" "$(cmp -s "$TMP/masked.jpg" "$TMP/plain.jpg" && echo same || echo different)" "different"
 ws "/api/v1/video/cameras/$CAM/live?unmask=1" 2; check "admin unmasked: no masks, flagged" "$(jx 'j.masks.length + " " + j.unmasked')" "0 true"
+req POST "/api/v1/video/cameras/$CAM/picture-saved" '{"unmasked":false}'; check "saving a masked picture: nothing to audit" "$(st) $(jx 'j.masked + " " + j.audited')" "200 true false"
+req POST "/api/v1/video/cameras/$CAM/picture-saved" "{\"unmasked\":true,\"at\":\"$(iso now)\"}"; check "admin saves the unmasked picture: audited" "$(st) $(jx 'j.audited')" "200 true"
 
 echo "== without video.unmask"
 U=$(req POST /api/v1/users "{\"username\":\"eng_$SUF\",\"full_name\":\"Engineer\",\"email\":\"eng$SUF@example.com\",\"roles\":[\"engineer\"],\"reason\":\"e2e\"}"; cat "$TMP/b")
@@ -90,10 +92,12 @@ check "engineer: playback yes, unmask no" "$(jx 'j.permissions.includes("video.p
 ws "/api/v1/video/cameras/$CAM/live?unmask=1" 2 "$J2"; check "asking for unmasked without the permission still masks" "$(jx 'j.masks.length + " " + j.unmasked')" "1 false"
 curl -s -b "$J2" -o /dev/null -w '%{http_code}' "$BASE/api/v1/video/cameras/$CAM/export?from=$FROM&to=$(iso now)" > "$TMP/s"; check "export of a masked camera refused" "$(st)" 403
 curl -s -b "$J2" -o "$TMP/e.jpg" "$BASE/api/v1/video/cameras/$CAM/snapshot?unmask=1"; check "snapshot stays masked" "$(cmp -s "$TMP/e.jpg" "$TMP/plain.jpg" && echo unmasked || echo masked)" masked
+req2 POST "/api/v1/video/cameras/$CAM/picture-saved" '{"unmasked":true}'; check "saving an unmasked picture without video.unmask refused" "$(st)" 403
 req PATCH "/api/v1/users/$UID2" '{"disabled":true,"reason":"e2e cleanup"}'
 
 echo "== audit and cleanup"
 req GET "/api/v1/export/audit?format=csv"; check "unmasked views audited" "$(grep -c 'video.unmask' "$TMP/b" | awk '{print ($1 >= 2)}')" 1
+check "the saved unmasked picture audited" "$(grep -c 'picture saved without privacy masks' "$TMP/b" | awk '{print ($1 >= 1)}')" 1
 req PUT "/api/v1/video/cameras/$CAM" '{"privacy_masks":[],"reason":"e2e"}'; check "masks removed" "$(jx 'j.privacy_masks.length')" 0
 req DELETE "/api/v1/video/cameras/$CAM?reason=e2e"; check "camera removed" "$(st)" 200
 echo; echo "passed $pass, failed $fail"; [[ $fail -eq 0 ]]

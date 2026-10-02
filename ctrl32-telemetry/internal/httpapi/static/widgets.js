@@ -27,11 +27,14 @@
   // sInfo: datastream info with the widget's per-series settings applied (label, colour, unit, decimals, hidden).
   function sInfo(all, id, i, p) { const d = dsInfo(all, id), c = ((p && p.series) || [])[i] || {}; return Object.assign({}, d, { label: c.label || '', unit: c.unit != null && c.unit !== '' ? c.unit : d.unit, color: c.color || color(i), dec: c.decimals ?? (p ? p.decimals : undefined), hidden: !!c.hidden }); }
   function bucketFor(range) { const ms = RANGE_MS[range] || RANGE_MS['24h']; const s = Math.round(ms / 600 / 1000); return s >= 60 ? Math.ceil(s / 60) * 60 : 0; }
+  // a doubtful sample: quality other than ok — backfilled samples (sent later from the device's buffer) are good data,
+  // as in the period table and the server's buckets
+  const suspect = (q) => q !== 'ok' && q !== 'backfilled';
   async function series(id, range) {
     const ms = RANGE_MS[range] || RANGE_MS['24h']; const from = new Date(Date.now() - ms).toISOString(); const b = bucketFor(range);
     if (b > 0) { const r = await api('GET', P(`/api/v1/observations?datastream_id=${id}&from=${encodeURIComponent(from)}&bucket=${b}`)); return r.points.map((p) => ({ t: new Date(p.t).getTime(), v: p.avg, min: p.min, max: p.max, flagged: p.flagged })); }
     const rows = await api('GET', P(`/api/v1/observations?datastream_id=${id}&from=${encodeURIComponent(from)}&limit=10000`));
-    return rows.filter((r) => r.value != null).map((r) => ({ t: new Date(r.measured_at).getTime(), v: r.value, flagged: r.quality !== 'ok' }));
+    return rows.filter((r) => r.value != null).map((r) => ({ t: new Date(r.measured_at).getTime(), v: r.value, flagged: suspect(r.quality) }));
   }
   async function hourly(id, range) {
     const ms = RANGE_MS[range] || RANGE_MS['7d']; const from = new Date(Date.now() - ms).toISOString();
@@ -58,7 +61,7 @@
   }
   async function seriesWin(id, t0, t1, agg, interval) {
     const plan = aggPlan(t0, t1, agg, interval); const from = encodeURIComponent(new Date(t0).toISOString()), to = encodeURIComponent(new Date(t1).toISOString());
-    if (!plan.bucket) { const rows = await api('GET', P(`/api/v1/observations?datastream_id=${id}&from=${from}&to=${to}&limit=10000`)); return { plan, points: rows.filter((r) => r.value != null).map((r) => ({ t: new Date(r.measured_at).getTime(), v: r.value, flagged: r.quality !== 'ok' })) }; }
+    if (!plan.bucket) { const rows = await api('GET', P(`/api/v1/observations?datastream_id=${id}&from=${from}&to=${to}&limit=10000`)); return { plan, points: rows.filter((r) => r.value != null).map((r) => ({ t: new Date(r.measured_at).getTime(), v: r.value, flagged: suspect(r.quality) })) }; }
     const r = await api('GET', P(`/api/v1/observations?datastream_id=${id}&from=${from}&to=${to}&bucket=${plan.bucket}`)); const f = agg || 'auto';
     const pick = (p) => f === 'min' ? p.min : f === 'max' ? p.max : f === 'sum' ? (p.avg == null ? null : p.avg * p.n) : f === 'count' ? p.n : p.avg;
     const band = f === 'auto' || f === 'avg';
@@ -173,7 +176,15 @@
   };
   W.alarms = async (el, p) => {
     const al = await api('GET', P('/api/v1/alarms')); const lim = p.limit || 10; const active = al.filter((a) => !a.cleared_at); const rows = active.concat(al.filter((a) => a.cleared_at)).slice(0, lim);
-    el.innerHTML = `<div class="muted" style="font-size:12px;margin-bottom:4px">${active.length} active</div><div class="table-wrap"><table><thead><tr><th>Raised</th><th>Severity</th><th>State</th><th>Key</th><th style="text-align:right">Value</th></tr></thead><tbody>${rows.map((a) => `<tr><td>${fmt(a.raised_at)}</td><td><span class="badge ${a.severity === 'action' ? 'bad' : 'warn'}">${esc(a.severity)}</span></td><td>${esc(a.state)}${a.cleared_at ? ' · cleared' : ''}</td><td>${esc(a.key || '')}</td><td style="text-align:right">${num(a.value, 2)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">no alarms</td></tr>'}</tbody></table></div>`;
+    // acknowledging (alarm.ack, with a reason; never on a public link) stops the escalation and fires the flows'
+    // Alarm trigger "acknowledged"
+    const canAck = !PUBLIC && window.ctrl32 && typeof ctrl32.can === 'function' && ctrl32.can('alarm.ack');
+    el.innerHTML = `<div class="muted" style="font-size:12px;margin-bottom:4px">${active.length} active</div><div class="table-wrap"><table><thead><tr><th>Raised</th><th>Severity</th><th>State</th><th>Key</th><th style="text-align:right">Value</th>${canAck ? '<th></th>' : ''}</tr></thead><tbody>${rows.map((a) => `<tr><td>${fmt(a.raised_at)}</td><td><span class="badge ${a.severity === 'action' ? 'bad' : 'warn'}">${esc(a.severity)}</span></td><td>${esc(a.state)}${a.cleared_at ? ' · cleared' : ''}</td><td>${esc(a.key || '')}</td><td style="text-align:right">${num(a.value, 2)}</td>${canAck ? `<td>${a.state === 'active' && !a.cleared_at ? `<button class="btn small" type="button" data-ack="${esc(a.id)}">Acknowledge</button>` : ''}</td>` : ''}</tr>`).join('') || `<tr><td colspan="${canAck ? 6 : 5}" class="muted">no alarms</td></tr>`}</tbody></table></div>`;
+    for (const b of el.querySelectorAll('[data-ack]')) b.onclick = async () => {
+      const reason = ctrl32.ask('Reason for acknowledging this alarm:'); if (!reason) return;
+      b.disabled = true;
+      try { await api('POST', '/api/v1/alarms/' + b.dataset.ack + '/ack', { reason }); if (ctrl32.toast) ctrl32.toast(ctrl32.t('alarm acknowledged'), 'ok'); await W.alarms(el, p); } catch (e) { b.disabled = false; if (ctrl32.toast) ctrl32.toast(e.message, 'bad'); }
+    };
   };
   W.devices = async (el, p, ctx) => {
     const ds = await devices(ctx.bindings && ctx.bindings.devices); const lim = p.limit || 20;
@@ -203,7 +214,10 @@
     if (h.html) { el.innerHTML = curHtml + h.html; return; }
     const attrs = (p.min != null ? ' min="' + p.min + '"' : '') + (p.max != null ? ' max="' + p.max + '"' : '') + ' step="' + (p.step || 'any') + '"';
     el.innerHTML = curHtml + '<div class="row" style="align-items:center;gap:6px;flex-wrap:wrap"><input class="ctl-value" type="number"' + attrs + ' value="' + (cur && cur.value != null ? cur.value : '') + '" style="width:110px"><span class="muted">' + esc(p.unit || '') + '</span>' + reasonInput() + '<button class="btn small primary ctl-send" type="button">Send</button></div><div class="ctl-out" style="font-size:12px;min-height:16px"></div>';
-    el.querySelector('.ctl-send').onclick = () => { const v = parseFloat(el.querySelector('.ctl-value').value); if (isNaN(v)) { el.querySelector('.ctl-out').innerHTML = '<span style="color:#d97706">enter a number</span>'; return; } ctlSend(el, ctx, p, v); };
+    el.querySelector('.ctl-send').onclick = () => { const v = parseFloat(el.querySelector('.ctl-value').value); if (isNaN(v)) { el.querySelector('.ctl-out').innerHTML = '<span style="color:#d97706">enter a number</span>'; return; }
+      // a typed value outside the widget's minimum and maximum is not sent
+      if ((p.min != null && p.min !== '' && v < +p.min) || (p.max != null && p.max !== '' && v > +p.max)) { el.querySelector('.ctl-out').innerHTML = '<span style="color:#d97706">outside the allowed range</span> <span class="muted">' + esc((p.min ?? '…') + ' – ' + (p.max ?? '…')) + '</span>'; return; }
+      ctlSend(el, ctx, p, v); };
   };
   W.switch = async (el, p, ctx) => {
     const h = ctlHead(ctx, p); const cur = await ctlCurrent(ctx, p);

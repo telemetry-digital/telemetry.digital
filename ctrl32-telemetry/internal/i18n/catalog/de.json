@@ -2481,5 +2481,20 @@
  "No firewall rules loaded yet.": "Noch keine Firewall-Regeln geladen.",
  "Apply the VPN again": "VPN erneut anwenden",
  "Peers and access rules are sent to the server agent again.": "Peers und Zugriffsregeln werden erneut an den Server-Agenten gesendet.",
- "applied": "angewendet"
+ "applied": "angewendet",
+ "Incident key (open and resolve with the same key belong together)": "Vorfallschlüssel (Öffnen und Lösen mit demselben Schlüssel gehören zusammen)",
+ "Acknowledge": "Quittieren",
+ "Reason for acknowledging this alarm:": "Grund für die Quittierung des Alarms:",
+ "alarm acknowledged": "Alarm quittiert",
+ "outside the allowed range": "außerhalb des zulässigen Bereichs",
+ "low battery (battery level at or below the limits)": "Batterie schwach (Ladestand auf oder unter den Grenzwerten)",
+ "power loss (value 0 = no power)": "Stromausfall (Wert 0 = keine Versorgung)",
+ "door open (value other than 0)": "Tür offen (Wert ungleich 0)",
+ "communication loss (no new value)": "Kommunikationsverlust (kein neuer Wert)",
+ "Warning and action limits: the value at or above them.": "Warn- und Aktionsgrenzwerte: der Wert auf oder über ihnen.",
+ "Warning and action limits: the value at or below them.": "Warn- und Aktionsgrenzwerte: der Wert auf oder unter ihnen.",
+ "Warning and action limits in the unit of the datastream (%, V).": "Warn- und Aktionsgrenzwerte in der Einheit des Datenstroms (%, V).",
+ "No limits: a value of 0 (false) raises the alarm, any other value clears it.": "Keine Grenzwerte: ein Wert von 0 (falsch) löst den Alarm aus, jeder andere Wert hebt ihn auf.",
+ "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).": "Keine Grenzwerte: ein Wert ungleich 0 (wahr) löst den Alarm nach der Verzögerung aus (wie lange die Tür offen bleiben darf).",
+ "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.": "Grenzwerte in Sekunden ohne neuen Wert; leer = 1,5 × das erwartete Intervall des Datenstroms. Ein neuer Wert hebt den Alarm auf."
 }

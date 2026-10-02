@@ -1,0 +1,30 @@
+meta {
+  name: Record a picture saved in the player
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/api/v1/video/cameras/:id/picture-saved
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "at": "string",
+    "unmasked": true
+  }
+}
+
+docs {
+  Record a picture saved in the player
+  
+  The player in the browser burns the privacy masks into a saved picture. A picture without them (a stream opened with unmask=1) may be saved only with video.unmask; it is audited (video.unmask).
+  
+  Requires permission `video.view`.
+}

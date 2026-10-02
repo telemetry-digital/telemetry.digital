@@ -983,20 +983,34 @@ func (h *flowHost) Incident(ctx context.Context, org, action, severity, title, d
 		return errors.New("incidents are not available")
 	}
 	if action == "resolve" {
-		var id string
-		if err := h.s.pool.QueryRow(ctx, `SELECT id::text FROM core.incident WHERE dedup_key = $1 AND status IN ('open', 'investigating')`, dedup).Scan(&id); err != nil {
-			return nil // nothing open
+		// an incident key pairs open and resolve nodes; without one the resolve covers every incident of the flow
+		q, arg := `SELECT id::text FROM core.incident WHERE org_id = $1::uuid AND dedup_key = $2 AND status IN ('open', 'investigating')`, dedup
+		if base, ok := strings.CutSuffix(dedup, flows.IncidentFlowWide); ok {
+			q, arg = `SELECT id::text FROM core.incident WHERE org_id = $1::uuid AND status IN ('open', 'investigating')
+				AND (left(dedup_key, length($2) + 1) = $2 || '/' OR left(dedup_key, length($2) + 1) = $2 || '#')`, base
 		}
-		in, _, err := h.s.incidents.Get(ctx, org, id, false)
+		rows, err := h.s.pool.Query(ctx, q, org, arg)
 		if err != nil {
 			return err
 		}
-		st, cause := "resolved", in.Cause
-		if cause == "" {
-			cause = "Resolved by the flow: " + title
+		ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			return err
 		}
-		_, err = h.s.incidents.Apply(ctx, in, incident.Update{Status: &st, Cause: &cause}, "flow")
-		return err
+		for _, id := range ids {
+			in, _, err := h.s.incidents.Get(ctx, org, id, false)
+			if err != nil {
+				return err
+			}
+			st, cause := "resolved", in.Cause
+			if cause == "" {
+				cause = "Resolved by the flow: " + title
+			}
+			if _, err := h.s.incidents.Apply(ctx, in, incident.Update{Status: &st, Cause: &cause}, "flow"); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	_, _, err := h.s.incidents.Open(ctx, incident.Incident{OrgID: org, Kind: "flow", Severity: severity, Title: title, Detail: detail, DedupKey: dedup, OpenedBy: "flow"})
 	return err

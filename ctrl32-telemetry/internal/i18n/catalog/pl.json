@@ -2481,5 +2481,20 @@
  "No firewall rules loaded yet.": "Nie załadowano jeszcze żadnych reguł zapory.",
  "Apply the VPN again": "Zastosuj ponownie VPN",
  "Peers and access rules are sent to the server agent again.": "Uczestnicy i reguły dostępu zostaną ponownie wysłane do agenta serwera.",
- "applied": "zastosowano"
+ "applied": "zastosowano",
+ "Incident key (open and resolve with the same key belong together)": "Klucz incydentu (otwarcie i rozwiązanie z tym samym kluczem należą do siebie)",
+ "Acknowledge": "Potwierdź",
+ "Reason for acknowledging this alarm:": "Powód potwierdzenia alarmu:",
+ "alarm acknowledged": "alarm potwierdzony",
+ "outside the allowed range": "poza dozwolonym zakresem",
+ "low battery (battery level at or below the limits)": "słaba bateria (poziom baterii na granicach lub poniżej)",
+ "power loss (value 0 = no power)": "zanik zasilania (wartość 0 = brak zasilania)",
+ "door open (value other than 0)": "drzwi otwarte (wartość inna niż 0)",
+ "communication loss (no new value)": "utrata komunikacji (brak nowej wartości)",
+ "Warning and action limits: the value at or above them.": "Progi ostrzeżenia i akcji: wartość na nich lub powyżej.",
+ "Warning and action limits: the value at or below them.": "Progi ostrzeżenia i akcji: wartość na nich lub poniżej.",
+ "Warning and action limits in the unit of the datastream (%, V).": "Progi ostrzeżenia i akcji w jednostce strumienia danych (%, V).",
+ "No limits: a value of 0 (false) raises the alarm, any other value clears it.": "Bez progów: wartość 0 (fałsz) wywołuje alarm, każda inna wartość go kasuje.",
+ "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).": "Bez progów: wartość inna niż 0 (prawda) wywołuje alarm po opóźnieniu (jak długo drzwi mogą pozostać otwarte).",
+ "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.": "Progi w sekundach bez nowej wartości; puste = 1,5 × oczekiwany interwał strumienia danych. Nowa wartość kasuje alarm."
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -78,7 +79,10 @@ type Engine struct {
 	// Commander and Deriver are set by the owners after construction.
 	Commander Commander
 	Deriver   Deriver
-	Tick      time.Duration
+	// HostAllowed: the organization's allow-list of HTTP hosts (Flows → Settings), which webhook actions obey like the
+	// flows' HTTP request nodes; nil allows none.
+	HostAllowed func(ctx context.Context, org, host string) bool
+	Tick        time.Duration
 
 	mu       sync.Mutex
 	rules    map[string]*rule
@@ -575,6 +579,9 @@ func (e *Engine) runAction(ctx context.Context, r *rule, a actionC, event string
 		res["detail"] = ch.Name
 		return e.deliverLogged(ctx, r, &ch, msg, res)
 	case "webhook":
+		if u, err := url.Parse(a.URL); err != nil || e.HostAllowed == nil || !e.HostAllowed(ctx, r.OrgID, u.Hostname()) {
+			return fail(errors.New("the webhook host is not on the organization's allow-list (Flows → Settings)"))
+		}
 		ch := notify.Channel{OrgID: r.OrgID, Name: "rule:" + r.Name, Kind: "webhook", Settings: notify.ChannelSettings{URL: a.URL, Secret: a.Secret}}
 		msg := e.message(r, a, event, vals)
 		msg.SentAt = time.Now().UTC()

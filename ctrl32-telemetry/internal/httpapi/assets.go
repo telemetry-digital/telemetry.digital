@@ -465,6 +465,47 @@ func (s *Server) listAlarmRules(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, s.alarmRulesFor(r, orgOf(p), r.URL.Query().Get("datastream_id")))
 }
 
+// alarmRuleProblem checks that a rule of the type can be evaluated as given (see internal/alarm): a type the engine
+// cannot evaluate, or limits it would ignore, are refused rather than stored silently.
+func (s *Server) alarmRuleProblem(r *http.Request, org, dsID, typ string, warning, action *float64, hysteresis float64) string {
+	switch typ {
+	case "high", "low":
+		if warning == nil && action == nil {
+			return "warning or action limit required"
+		}
+	case "low_battery":
+		if warning == nil && action == nil {
+			return "low_battery: a warning or action limit (battery level in the datastream's unit) required"
+		}
+	case "power_loss", "door_open":
+		if warning != nil || action != nil || hysteresis != 0 {
+			if typ == "power_loss" {
+				return "power_loss uses no limits or hysteresis: a value of 0 (false) means the power is lost"
+			}
+			return "door_open uses no limits or hysteresis: a value other than 0 (true) means open; the delay is how long it may stay open"
+		}
+	case "comm_loss":
+		if hysteresis != 0 {
+			return "comm_loss uses no hysteresis"
+		}
+		if (warning != nil && *warning <= 0) || (action != nil && *action <= 0) {
+			return "comm_loss: the limits are seconds without a new value (more than 0)"
+		}
+		if warning == nil && action == nil {
+			var has bool
+			_ = s.pool.QueryRow(r.Context(), `SELECT expected_interval IS NOT NULL FROM core.datastream WHERE id = $1::uuid AND org_id = $2::uuid`, dsID, org).Scan(&has)
+			if !has {
+				return "comm_loss: give a limit in seconds without a new value (warning or action), or an expected interval of the datastream"
+			}
+		}
+	case "sensor_fault":
+		return "sensor_fault cannot be evaluated: devices do not report sensor faults; use high/low limits on implausible values or comm_loss"
+	default:
+		return "type must be high, low, low_battery, power_loss, door_open or comm_loss"
+	}
+	return ""
+}
+
 // POST /api/v1/alarm-rules: closes the current rule of the same datastream+type and inserts the next version.
 func (s *Server) createAlarmRule(w http.ResponseWriter, r *http.Request) {
 	org, ok := s.mustOrg(w, r)
@@ -486,15 +527,8 @@ func (s *Server) createAlarmRule(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err.Error())
 		return
 	}
-	switch in.Type {
-	case "high", "low":
-		if in.Warning == nil && in.Action == nil {
-			writeErr(w, 400, "warning or action limit required")
-			return
-		}
-	case "comm_loss", "sensor_fault", "low_battery", "power_loss", "door_open":
-	default:
-		writeErr(w, 400, "type must be high, low, comm_loss, sensor_fault, low_battery, power_loss or door_open")
+	if msg := s.alarmRuleProblem(r, org, in.DatastreamID, in.Type, in.Warning, in.Action, in.Hysteresis); msg != "" {
+		writeErr(w, 400, msg)
 		return
 	}
 	if in.DelaySeconds < 0 || in.DelaySeconds > 86400*7 || in.Hysteresis < 0 {

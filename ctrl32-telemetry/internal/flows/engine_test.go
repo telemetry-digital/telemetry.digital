@@ -464,6 +464,50 @@ func TestFlowScene(t *testing.T) {
 	waitFor(t, "dry", func() bool { return len(debugTexts(e, "dry_action")) == 1 })
 }
 
+// An Incident node in resolve mode finds the incident opened by another node: both use the same incident key; a
+// resolve without a key covers every incident of the flow; an open without a key keys it by the node (as before).
+func TestFlowIncidentOpenResolvePair(t *testing.T) {
+	e, _, h, cancel := testEngine(t, `{"nodes":[{"id":"a","type":"inject","x":0,"y":0,"settings":{"value":"1"}},
+		{"id":"b","type":"inject","x":0,"y":100,"settings":{"value":"0"}},
+		{"id":"c","type":"inject","x":0,"y":200,"settings":{"value":"0"}},
+		{"id":"open","type":"incident","x":200,"y":0,"settings":{"action":"open","severity":"major","title":"Hot","key":"pump {{ topic }}"}},
+		{"id":"res","type":"incident","x":200,"y":100,"settings":{"action":"resolve","severity":"major","title":"Cool","key":"pump {{ topic }}"}},
+		{"id":"all","type":"incident","x":200,"y":200,"settings":{"action":"resolve","severity":"major","title":"All"}}],
+		"wires":[{"from":"a","port":0,"to":"open"},{"from":"b","port":0,"to":"res"},{"from":"c","port":0,"to":"all"}]}`)
+	defer cancel()
+	for _, n := range []string{"a", "b", "c"} {
+		if err := e.Inject(context.Background(), "org", "test", n, 1.0, "P1", false, nil, ""); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
+	waitFor(t, "incidents", func() bool { h.mu.Lock(); defer h.mu.Unlock(); return len(h.incident) == 3 })
+	want := []string{"open major Hot flow:org/test#pump P1", "resolve major Cool flow:org/test#pump P1", "resolve major All flow:org/test/*"}
+	for i, w := range want {
+		if h.incident[i] != w {
+			t.Errorf("incident call %d = %q, want %q", i, h.incident[i], w)
+		}
+	}
+	if k := IncidentKey("o", "f", "n1", "open", ""); k != "flow:o/f/n1" {
+		t.Errorf("open without a key = %q (existing flows keep their key)", k)
+	}
+}
+
+// The Manual inject node's Topic setting becomes the topic of its message.
+func TestFlowInjectTopic(t *testing.T) {
+	e, _, _, cancel := testEngine(t, `{"nodes":[{"id":"i","type":"inject","x":0,"y":0,"settings":{"value":"1","topic":"boiler"}},
+		{"id":"d","type":"debug","x":200,"y":0,"settings":{"expr":"topic"}}],"wires":[{"from":"i","port":0,"to":"d"}]}`)
+	defer cancel()
+	if err := e.Inject(context.Background(), "org", "test", "i", 1.0, "", false, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "debug", func() bool { d := debugTexts(e, "debug"); return len(d) == 1 && d[0] == "boiler" })
+	if err := e.Inject(context.Background(), "org", "test", "i", 1.0, "given", false, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "debug 2", func() bool { d := debugTexts(e, "debug"); return len(d) == 2 && d[1] == "given" })
+}
+
 // Camera events start flows; the camera mark node records on a camera (spec 013).
 func TestCameraEventAndMark(t *testing.T) {
 	js := `{"nodes":[{"id":"c","type":"camera_event","settings":{"camera":"` + srcA + `","kinds":["motion"],"phases":["start","end"]}},

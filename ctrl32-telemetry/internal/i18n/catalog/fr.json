@@ -2481,5 +2481,20 @@
  "No firewall rules loaded yet.": "Aucune règle de pare-feu chargée pour l'instant.",
  "Apply the VPN again": "Réappliquer le VPN",
  "Peers and access rules are sent to the server agent again.": "Les pairs et les règles d'accès sont renvoyés à l'agent serveur.",
- "applied": "appliqué"
+ "applied": "appliqué",
+ "Incident key (open and resolve with the same key belong together)": "Clé d'incident (ouverture et résolution avec la même clé vont ensemble)",
+ "Acknowledge": "Acquitter",
+ "Reason for acknowledging this alarm:": "Motif de l'acquittement de l'alarme :",
+ "alarm acknowledged": "alarme acquittée",
+ "outside the allowed range": "hors de la plage autorisée",
+ "low battery (battery level at or below the limits)": "batterie faible (niveau égal ou inférieur aux seuils)",
+ "power loss (value 0 = no power)": "coupure d'alimentation (valeur 0 = pas d'alimentation)",
+ "door open (value other than 0)": "porte ouverte (valeur différente de 0)",
+ "communication loss (no new value)": "perte de communication (aucune nouvelle valeur)",
+ "Warning and action limits: the value at or above them.": "Seuils d'avertissement et d'action : la valeur égale ou supérieure.",
+ "Warning and action limits: the value at or below them.": "Seuils d'avertissement et d'action : la valeur égale ou inférieure.",
+ "Warning and action limits in the unit of the datastream (%, V).": "Seuils d'avertissement et d'action dans l'unité du flux de données (%, V).",
+ "No limits: a value of 0 (false) raises the alarm, any other value clears it.": "Sans seuils : une valeur 0 (faux) déclenche l'alarme, toute autre valeur l'efface.",
+ "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).": "Sans seuils : une valeur différente de 0 (vrai) déclenche l'alarme après le délai (durée pendant laquelle la porte peut rester ouverte).",
+ "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.": "Seuils en secondes sans nouvelle valeur ; vide = 1,5 × l'intervalle attendu du flux de données. Une nouvelle valeur efface l'alarme."
 }

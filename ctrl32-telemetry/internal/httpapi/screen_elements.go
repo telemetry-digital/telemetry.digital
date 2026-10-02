@@ -7,7 +7,6 @@ package httpapi
 // so a stored picture can never carry markup, script or a reference outside the organization's own objects.
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"regexp"
@@ -520,5 +519,3 @@ func elementsOf(spec map[string]any) []map[string]any {
 	e, _ := spec["elements"].([]map[string]any)
 	return e
 }
-
-var errNoContent = errors.New("at least one widget or drawing element is required")

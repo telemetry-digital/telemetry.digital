@@ -378,6 +378,14 @@ func (s *Server) deletePolicy(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 409, "policy is used by "+strconv.FormatInt(used, 10)+" active alarm rule(s)")
 		return
 	}
+	// automation rules whose alarm action escalates through the policy (also disabled ones: they can be enabled again)
+	_ = s.pool.QueryRow(r.Context(), `SELECT count(*) FROM core.rule r WHERE r.org_id = $2::uuid AND r.revoked_at IS NULL
+		AND (jsonb_path_exists(r.spec, '$.actions[*] ? (@.escalation_policy_id == $p)', jsonb_build_object('p', $1::text))
+		  OR jsonb_path_exists(r.spec, '$.clear_actions[*] ? (@.escalation_policy_id == $p)', jsonb_build_object('p', $1::text)))`, id, org).Scan(&used)
+	if used > 0 {
+		writeErr(w, 409, "policy is used by "+strconv.FormatInt(used, 10)+" automation rule(s)")
+		return
+	}
 	tag, err := s.pool.Exec(r.Context(), `UPDATE core.escalation_policy SET revoked_at = now() WHERE id = $1::uuid AND org_id = $2::uuid AND revoked_at IS NULL`, id, org)
 	if err != nil || tag.RowsAffected() == 0 {
 		writeErr(w, 404, "policy not found")

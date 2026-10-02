@@ -41,6 +41,11 @@ func TestFromRule(t *testing.T) {
 	if len(byType["ds_value"]) != 2 || len(byType["join"]) != 1 || len(byType["rate_limit"]) != 1 || len(byType["incident"]) != 2 || len(byType["comment"]) != 1 {
 		t.Fatalf("unexpected nodes: %+v", byType)
 	}
+	// the resolve node made from the alarm action resolves what the open node opened
+	op, rs := byType["incident"][0].Settings, byType["incident"][1].Settings
+	if op["action"] != "open" || rs["action"] != "resolve" || op["key"] == nil || op["key"] != rs["key"] {
+		t.Fatalf("open %v and resolve %v do not share an incident key", op, rs)
+	}
 	cond := byType["stable_for"][0].Settings["condition"].(string)
 	if cond != "msg.temp > (msg.limit + 2) && msg.temp < 120" {
 		t.Fatalf("condition = %q", cond)

@@ -2481,5 +2481,20 @@
  "No firewall rules loaded yet.": "Még nincsenek betöltött tűzfalszabályok.",
  "Apply the VPN again": "VPN újbóli alkalmazása",
  "Peers and access rules are sent to the server agent again.": "A peerek és a hozzáférési szabályok újra elküldésre kerülnek a szerverügynöknek.",
- "applied": "alkalmazva"
+ "applied": "alkalmazva",
+ "Incident key (open and resolve with the same key belong together)": "Incidenskulcs (az azonos kulcsú megnyitás és megoldás összetartozik)",
+ "Acknowledge": "Nyugtázás",
+ "Reason for acknowledging this alarm:": "A riasztás nyugtázásának oka:",
+ "alarm acknowledged": "riasztás nyugtázva",
+ "outside the allowed range": "az engedélyezett tartományon kívül",
+ "low battery (battery level at or below the limits)": "alacsony akkumulátor (töltöttség a határértékeken vagy alattuk)",
+ "power loss (value 0 = no power)": "áramkimaradás (0 érték = nincs tápellátás)",
+ "door open (value other than 0)": "nyitott ajtó (0-tól eltérő érték)",
+ "communication loss (no new value)": "kommunikáció elvesztése (nincs új érték)",
+ "Warning and action limits: the value at or above them.": "Figyelmeztetési és beavatkozási határ: az érték rajtuk vagy felettük.",
+ "Warning and action limits: the value at or below them.": "Figyelmeztetési és beavatkozási határ: az érték rajtuk vagy alattuk.",
+ "Warning and action limits in the unit of the datastream (%, V).": "Figyelmeztetési és beavatkozási határ az adatfolyam mértékegységében (%, V).",
+ "No limits: a value of 0 (false) raises the alarm, any other value clears it.": "Nincs határérték: a 0 (hamis) érték riasztást vált ki, bármely más érték megszünteti.",
+ "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).": "Nincs határérték: a 0-tól eltérő (igaz) érték a késleltetés után riasztást vált ki (meddig maradhat nyitva az ajtó).",
+ "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.": "Határértékek másodpercben új érték nélkül; üres = az adatfolyam várt intervallumának 1,5-szerese. Új érték megszünteti a riasztást."
 }

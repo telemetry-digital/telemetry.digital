@@ -2481,5 +2481,20 @@
  "No firewall rules loaded yet.": "Nog geen firewallregels geladen.",
  "Apply the VPN again": "VPN opnieuw toepassen",
  "Peers and access rules are sent to the server agent again.": "Peers en toegangsregels worden opnieuw naar de serveragent gestuurd.",
- "applied": "toegepast"
+ "applied": "toegepast",
+ "Incident key (open and resolve with the same key belong together)": "Incidentsleutel (openen en oplossen met dezelfde sleutel horen bij elkaar)",
+ "Acknowledge": "Bevestigen",
+ "Reason for acknowledging this alarm:": "Reden voor het bevestigen van het alarm:",
+ "alarm acknowledged": "alarm bevestigd",
+ "outside the allowed range": "buiten het toegestane bereik",
+ "low battery (battery level at or below the limits)": "batterij bijna leeg (niveau op of onder de grenzen)",
+ "power loss (value 0 = no power)": "stroomuitval (waarde 0 = geen voeding)",
+ "door open (value other than 0)": "deur open (waarde anders dan 0)",
+ "communication loss (no new value)": "communicatieverlies (geen nieuwe waarde)",
+ "Warning and action limits: the value at or above them.": "Waarschuwings- en actiegrenzen: de waarde erop of erboven.",
+ "Warning and action limits: the value at or below them.": "Waarschuwings- en actiegrenzen: de waarde erop of eronder.",
+ "Warning and action limits in the unit of the datastream (%, V).": "Waarschuwings- en actiegrenzen in de eenheid van de datastroom (%, V).",
+ "No limits: a value of 0 (false) raises the alarm, any other value clears it.": "Geen grenzen: een waarde 0 (onwaar) geeft het alarm, elke andere waarde heft het op.",
+ "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).": "Geen grenzen: een waarde anders dan 0 (waar) geeft het alarm na de vertraging (hoe lang de deur open mag blijven).",
+ "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.": "Grenzen in seconden zonder nieuwe waarde; leeg = 1,5 × het verwachte interval van de datastroom. Een nieuwe waarde heft het alarm op."
 }

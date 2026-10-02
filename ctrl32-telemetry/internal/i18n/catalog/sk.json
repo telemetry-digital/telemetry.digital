@@ -2481,5 +2481,20 @@
  "No firewall rules loaded yet.": "Zatiaľ nie sú načítané žiadne pravidlá firewallu.",
  "Apply the VPN again": "Znova aplikovať VPN",
  "Peers and access rules are sent to the server agent again.": "Účastníci a pravidlá prístupu sa znova odošlú serverovému agentovi.",
- "applied": "aplikované"
+ "applied": "aplikované",
+ "Incident key (open and resolve with the same key belong together)": "Kľúč incidentu (otvorenie a vyriešenie s rovnakým kľúčom patria k sebe)",
+ "Acknowledge": "Potvrdiť",
+ "Reason for acknowledging this alarm:": "Dôvod potvrdenia alarmu:",
+ "alarm acknowledged": "alarm potvrdený",
+ "outside the allowed range": "mimo povoleného rozsahu",
+ "low battery (battery level at or below the limits)": "slabá batéria (úroveň batérie na limitoch alebo pod nimi)",
+ "power loss (value 0 = no power)": "výpadok napájania (hodnota 0 = bez napájania)",
+ "door open (value other than 0)": "otvorené dvere (hodnota iná ako 0)",
+ "communication loss (no new value)": "strata komunikácie (žiadna nová hodnota)",
+ "Warning and action limits: the value at or above them.": "Limity výstrahy a akcie: hodnota na nich alebo nad nimi.",
+ "Warning and action limits: the value at or below them.": "Limity výstrahy a akcie: hodnota na nich alebo pod nimi.",
+ "Warning and action limits in the unit of the datastream (%, V).": "Limity výstrahy a akcie v jednotke datastreamu (%, V).",
+ "No limits: a value of 0 (false) raises the alarm, any other value clears it.": "Bez limitov: hodnota 0 (nepravda) vyvolá alarm, každá iná hodnota ho zruší.",
+ "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).": "Bez limitov: hodnota iná ako 0 (pravda) vyvolá alarm po oneskorení (ako dlho môžu dvere zostať otvorené).",
+ "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.": "Limity v sekundách bez novej hodnoty; prázdne = 1,5 × očakávaný interval datastreamu. Nová hodnota alarm zruší."
 }

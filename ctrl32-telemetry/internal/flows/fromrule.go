@@ -152,8 +152,10 @@ func FromRule(name string, s rules.Spec) (Spec, []string) {
 				if sev == "" {
 					sev = "major"
 				}
-				n = add("incident", x, y, map[string]any{"action": "open", "severity": sev, "title": name})
-				resolves = append(resolves, map[string]any{"action": "resolve", "severity": sev, "title": name})
+				// the open and the resolve node share an incident key, so the cleared rule resolves what it opened
+				ik := fmt.Sprintf("alarm-%d", len(resolves)+1)
+				n = add("incident", x, y, map[string]any{"action": "open", "severity": sev, "title": name, "key": ik})
+				resolves = append(resolves, map[string]any{"action": "resolve", "severity": sev, "title": name, "key": ik})
 				if a.PolicyID != "" {
 					notes = append(notes, "an escalation policy of an alarm action is replaced by an incident")
 				}
