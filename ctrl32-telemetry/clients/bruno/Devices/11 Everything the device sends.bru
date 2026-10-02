@@ -1,0 +1,28 @@
+meta {
+  name: Everything the device sends
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/v1/devices/:id/telemetry
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~from: 
+  ~to: 
+}
+
+docs {
+  Everything the device sends
+  
+  Every key of the device: assigned datastreams (`source` datastream), keys without a datastream read from the raw messages of the last 90 days, at most 5000 messages (`unassigned`), and the keys of its status messages (`status`). Each with the latest value, its quality and time, statistics over `from`–`to` (default the last 24 hours, at most 366 days; values with quality sensor_fault are counted in `faults`, not in min/max/avg) and a sparkline of the last 24 hours (averages per 30 minutes).
+  
+  Requires permission `data.read`.
+}

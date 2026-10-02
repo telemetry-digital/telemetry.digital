@@ -3,6 +3,7 @@
 // of the product and is not configurable. Nothing user-specific is rendered before the session state is known.
 (function () {
   const ICON = {
+    shield: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3"/><path d="M9 12l2 2l4 -4"/></svg>',
     display: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="1"/><path d="M7 20h10"/><path d="M9 16v4"/><path d="M15 16v4"/></svg>',
     bolt: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3l0 7l6 0l-8 11l0 -7l-6 0l8 -11"/></svg>',
     home: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l-2 0l9 -9l9 9l-2 0"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7"/><path d="M10 12h4v4h-4z"/></svg>',
@@ -209,6 +210,9 @@
         { href: '/fota', label: 'Images' }, { href: '/fota/campaigns', label: 'Campaigns' }] },
       { href: '/users', label: 'Users', icon: ICON.users, show: can('user.admin'), sec: 'users', children: [
         { href: '/users', label: 'Accounts' }, { href: '/users/roles', label: 'Roles and permissions' }] },
+      { href: can('audit.read') ? '/audit' : '/audit/reports', label: 'Audit', icon: ICON.shield, show: can('audit.read') || can('report.sign'), children: [
+        { href: '/audit', label: 'Audit trail', show: can('audit.read') }, { href: '/audit/reviews', label: 'Reviews', show: can('audit.read') },
+        { href: '/audit/reports', label: 'Report signatures' }] },
       { href: '/settings', label: 'Settings', icon: ICON.settings, show: can('content.write'), sec: 'settings', children: [
         { href: '/settings/branding', label: 'Branding and theme' }, { href: '/settings/templates', label: 'Report templates' },
         { href: '/settings/reports', label: 'Stored reports' }, { href: '/settings/connectors', label: 'Connectors' },

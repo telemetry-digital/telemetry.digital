@@ -1,0 +1,23 @@
+meta {
+  name: Electronic signatures of a report
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/api/v1/reports/:id/signatures
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  Electronic signatures of a report
+  
+  Each signature with its manifestation (name, user name, roles, time in the organization's time zone, meaning) and whether it is valid: the manifest matches, the server's Ed25519 signature verifies and the stored PDF still has the signed hash.
+  
+  Requires permission `data.export`.
+}

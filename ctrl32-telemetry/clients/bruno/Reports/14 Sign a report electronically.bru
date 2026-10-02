@@ -1,0 +1,32 @@
+meta {
+  name: Sign a report electronically
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{baseUrl}}/api/v1/reports/:id/signatures
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "code": "string",
+    "comment": "string",
+    "meaning": "authored",
+    "password": "string"
+  }
+}
+
+docs {
+  Sign a report electronically
+  
+  The signer confirms with the password and, with two-factor sign-in, the authenticator code (5 failures a minute at most). Only in a browser session: API tokens and AI assistants cannot sign. The signature covers the SHA-256 of the stored PDF; the same meaning twice by the same user is refused (409). Audited.
+  
+  Requires permission `report.sign`.
+}

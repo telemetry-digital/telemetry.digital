@@ -75,6 +75,7 @@ code, pre { font-family: var(--mono); font-size: 0.85em; }
 .subnav a.active { color: var(--fg); border-bottom-color: var(--primary); }
 .subnav a:hover { text-decoration: none; color: var(--fg); }
 [data-section] { display: none; } [data-section].active { display: block; }
+.subnav a[data-section] { display: block; } /* tabs stay visible; only the sections they open are switched */
 .page-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .page-head h1 { margin: 0; }
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; font-size: 14px; }

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"regexp"
 	"strings"
@@ -284,11 +285,19 @@ func (s *Server) createDatastream(w http.ResponseWriter, r *http.Request) {
 		Kind             string   `json:"kind"`
 		ExpectedInterval string   `json:"expected_interval"`
 		Accuracy         *float64 `json:"accuracy"`
+		Range            *dsRange `json:"range"`
 		Reason           string   `json:"reason"`
 	}
 	if err := decodeJSON(r, &in, 4096); err != nil {
 		writeErr(w, 400, err.Error())
 		return
+	}
+	if msg := in.Range.problem(); msg != "" {
+		writeErr(w, 400, msg)
+		return
+	}
+	if in.Range == nil {
+		in.Range = &dsRange{}
 	}
 	in.Key = strings.TrimSpace(strings.ToLower(in.Key))
 	if !dsKeyRe.MatchString(in.Key) {
@@ -312,16 +321,17 @@ func (s *Server) createDatastream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var id string
-	err := s.pool.QueryRow(r.Context(), `INSERT INTO core.datastream (org_id, asset_id, key, quantity, unit, kind, expected_interval, accuracy)
-		SELECT $1::uuid, a.id, $3, $4, $5, $6, NULLIF($7,'')::interval, $8 FROM core.asset a WHERE a.id = $2::uuid AND a.org_id = $1::uuid RETURNING id::text`,
-		org, in.AssetID, in.Key, in.Quantity, in.Unit, in.Kind, in.ExpectedInterval, in.Accuracy).Scan(&id)
+	err := s.pool.QueryRow(r.Context(), `INSERT INTO core.datastream (org_id, asset_id, key, quantity, unit, kind, expected_interval, accuracy, attributes)
+		SELECT $1::uuid, a.id, $3, $4, $5, $6, NULLIF($7,'')::interval, $8, jsonb_strip_nulls(jsonb_build_object('range_min', $9::float8, 'range_max', $10::float8))
+		FROM core.asset a WHERE a.id = $2::uuid AND a.org_id = $1::uuid RETURNING id::text`,
+		org, in.AssetID, in.Key, in.Quantity, in.Unit, in.Kind, in.ExpectedInterval, in.Accuracy, in.Range.Min, in.Range.Max).Scan(&id)
 	if err != nil {
 		s.log.Warn("datastream create", "err", err)
 		writeErr(w, 409, "datastream could not be created (asset not found, duplicate key or invalid interval)")
 		return
 	}
-	s.audit(r, "datastream.create", "datastream", id, nil, map[string]any{"asset_id": in.AssetID, "key": in.Key, "quantity": in.Quantity, "unit": in.Unit, "kind": in.Kind, "expected_interval": in.ExpectedInterval, "accuracy": in.Accuracy}, in.Reason)
-	writeJSON(w, 201, map[string]any{"id": id, "asset_id": in.AssetID, "key": in.Key, "quantity": in.Quantity, "unit": in.Unit, "kind": in.Kind, "expected_interval": in.ExpectedInterval})
+	s.audit(r, "datastream.create", "datastream", id, nil, map[string]any{"asset_id": in.AssetID, "key": in.Key, "quantity": in.Quantity, "unit": in.Unit, "kind": in.Kind, "expected_interval": in.ExpectedInterval, "accuracy": in.Accuracy, "range": in.Range}, in.Reason)
+	writeJSON(w, 201, map[string]any{"id": id, "asset_id": in.AssetID, "key": in.Key, "quantity": in.Quantity, "unit": in.Unit, "kind": in.Kind, "expected_interval": in.ExpectedInterval, "range_min": in.Range.Min, "range_max": in.Range.Max})
 }
 
 func (s *Server) patchDatastream(w http.ResponseWriter, r *http.Request) {
@@ -335,6 +345,7 @@ func (s *Server) patchDatastream(w http.ResponseWriter, r *http.Request) {
 		Unit             *string  `json:"unit"`
 		ExpectedInterval *string  `json:"expected_interval"`
 		Accuracy         *float64 `json:"accuracy"`
+		Range            *dsRange `json:"range"` // physical range; a null bound removes it
 		Reason           string   `json:"reason"`
 	}
 	if err := decodeJSON(r, &in, 4096); err != nil {
@@ -344,13 +355,24 @@ func (s *Server) patchDatastream(w http.ResponseWriter, r *http.Request) {
 	if !reasonOf(w, in.Reason) {
 		return
 	}
+	if msg := in.Range.problem(); msg != "" {
+		writeErr(w, 400, msg)
+		return
+	}
 	var q, u, iv string
 	var acc *float64
-	if err := s.pool.QueryRow(r.Context(), `SELECT quantity, unit, COALESCE(expected_interval::text,''), accuracy::float8 FROM core.datastream WHERE id = $1::uuid AND org_id = $2::uuid`, id, org).Scan(&q, &u, &iv, &acc); err != nil {
+	var rng dsRange
+	if err := s.pool.QueryRow(r.Context(), `SELECT quantity, unit, COALESCE(expected_interval::text,''), accuracy::float8,
+		CASE WHEN jsonb_typeof(attributes->'range_min') = 'number' THEN (attributes->>'range_min')::float8 END,
+		CASE WHEN jsonb_typeof(attributes->'range_max') = 'number' THEN (attributes->>'range_max')::float8 END
+		FROM core.datastream WHERE id = $1::uuid AND org_id = $2::uuid`, id, org).Scan(&q, &u, &iv, &acc, &rng.Min, &rng.Max); err != nil {
 		writeErr(w, 404, "datastream not found")
 		return
 	}
 	old := map[string]any{"quantity": q, "unit": u, "expected_interval": iv, "accuracy": acc}
+	if in.Range != nil {
+		old["range"] = rng
+	}
 	if in.Quantity != nil {
 		q = strings.TrimSpace(strings.ToLower(*in.Quantity))
 	}
@@ -367,12 +389,46 @@ func (s *Server) patchDatastream(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "invalid quantity or unit")
 		return
 	}
-	if _, err := s.pool.Exec(r.Context(), `UPDATE core.datastream SET quantity = $3, unit = $4, expected_interval = NULLIF($5,'')::interval, accuracy = $6 WHERE id = $1::uuid AND org_id = $2::uuid`, id, org, q, u, iv, acc); err != nil {
+	if in.Range != nil {
+		rng = *in.Range
+	}
+	if _, err := s.pool.Exec(r.Context(), `UPDATE core.datastream SET quantity = $3, unit = $4, expected_interval = NULLIF($5,'')::interval, accuracy = $6,
+		attributes = CASE WHEN $7 THEN (attributes - 'range_min' - 'range_max') || jsonb_strip_nulls(jsonb_build_object('range_min', $8::float8, 'range_max', $9::float8)) ELSE attributes END
+		WHERE id = $1::uuid AND org_id = $2::uuid`, id, org, q, u, iv, acc, in.Range != nil, rng.Min, rng.Max); err != nil {
 		writeErr(w, 400, "update failed (invalid interval?)")
 		return
 	}
-	s.audit(r, "datastream.update", "datastream", id, old, map[string]any{"quantity": q, "unit": u, "expected_interval": iv, "accuracy": acc}, in.Reason)
-	writeJSON(w, 200, map[string]any{"id": id, "quantity": q, "unit": u, "expected_interval": iv, "accuracy": acc})
+	if in.Range != nil && s.ing != nil {
+		s.ing.InvalidateAll()
+	}
+	after := map[string]any{"quantity": q, "unit": u, "expected_interval": iv, "accuracy": acc}
+	if in.Range != nil {
+		after["range"] = rng
+	}
+	s.audit(r, "datastream.update", "datastream", id, old, after, in.Reason)
+	writeJSON(w, 200, map[string]any{"id": id, "quantity": q, "unit": u, "expected_interval": iv, "accuracy": acc, "range_min": rng.Min, "range_max": rng.Max})
+}
+
+// dsRange is the physical (measuring) range of a datastream, kept in its attributes (range_min, range_max): a value
+// outside it is stored with quality sensor_fault (internal/ingest).
+type dsRange struct {
+	Min *float64 `json:"min"`
+	Max *float64 `json:"max"`
+}
+
+func (g *dsRange) problem() string {
+	if g == nil {
+		return ""
+	}
+	for _, v := range []*float64{g.Min, g.Max} {
+		if v != nil && (math.IsNaN(*v) || math.IsInf(*v, 0)) {
+			return "range: bounds must be finite numbers"
+		}
+	}
+	if g.Min != nil && g.Max != nil && *g.Min >= *g.Max {
+		return "range: min must be below max"
+	}
+	return ""
 }
 
 // GET /api/v1/datastreams/{id}: datastream with asset, site, current device, current alarm rules and last observation.
@@ -381,13 +437,16 @@ func (s *Server) getDatastream(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var ds struct {
 		ID, Key, Quantity, Unit, Kind, Interval, AssetID, Asset, AssetType, SiteID, Site string
-		Accuracy                                                                         *float64
+		Accuracy, RangeMin, RangeMax                                                     *float64
 		Created                                                                          time.Time
 	}
 	err := s.pool.QueryRow(r.Context(), `SELECT d.id::text, d.key, d.quantity, d.unit, d.kind, COALESCE(d.expected_interval::text,''), d.accuracy::float8, d.created_at,
-		a.id::text, a.name, a.type, st.id::text, st.name FROM core.datastream d JOIN core.asset a ON a.id = d.asset_id JOIN core.site st ON st.id = a.site_id
+		a.id::text, a.name, a.type, st.id::text, st.name,
+		CASE WHEN jsonb_typeof(d.attributes->'range_min') = 'number' THEN (d.attributes->>'range_min')::float8 END,
+		CASE WHEN jsonb_typeof(d.attributes->'range_max') = 'number' THEN (d.attributes->>'range_max')::float8 END
+		FROM core.datastream d JOIN core.asset a ON a.id = d.asset_id JOIN core.site st ON st.id = a.site_id
 		WHERE d.id = $1::uuid AND ($2 = '' OR d.org_id = $2::uuid)`, id, orgOf(p)).
-		Scan(&ds.ID, &ds.Key, &ds.Quantity, &ds.Unit, &ds.Kind, &ds.Interval, &ds.Accuracy, &ds.Created, &ds.AssetID, &ds.Asset, &ds.AssetType, &ds.SiteID, &ds.Site)
+		Scan(&ds.ID, &ds.Key, &ds.Quantity, &ds.Unit, &ds.Kind, &ds.Interval, &ds.Accuracy, &ds.Created, &ds.AssetID, &ds.Asset, &ds.AssetType, &ds.SiteID, &ds.Site, &ds.RangeMin, &ds.RangeMax)
 	if err != nil {
 		writeErr(w, 404, "datastream not found")
 		return
@@ -427,7 +486,7 @@ func (s *Server) getDatastream(w http.ResponseWriter, r *http.Request) {
 		rr.Close()
 	}
 	writeJSON(w, 200, map[string]any{
-		"datastream": map[string]any{"id": ds.ID, "key": ds.Key, "quantity": ds.Quantity, "unit": ds.Unit, "kind": ds.Kind, "expected_interval": ds.Interval, "accuracy": ds.Accuracy, "created_at": ds.Created},
+		"datastream": map[string]any{"id": ds.ID, "key": ds.Key, "quantity": ds.Quantity, "unit": ds.Unit, "kind": ds.Kind, "expected_interval": ds.Interval, "accuracy": ds.Accuracy, "range_min": ds.RangeMin, "range_max": ds.RangeMax, "created_at": ds.Created},
 		"asset":      map[string]any{"id": ds.AssetID, "name": ds.Asset, "type": ds.AssetType}, "site": map[string]any{"id": ds.SiteID, "name": ds.Site},
 		"device": device, "rules": ruleRefs, "alarm_rules": rules, "last_observation": last,
 	})
@@ -499,9 +558,11 @@ func (s *Server) alarmRuleProblem(r *http.Request, org, dsID, typ string, warnin
 			}
 		}
 	case "sensor_fault":
-		return "sensor_fault cannot be evaluated: devices do not report sensor faults; use high/low limits on implausible values or comm_loss"
+		if warning != nil || action != nil || hysteresis != 0 {
+			return "sensor_fault uses no limits or hysteresis: a value with quality sensor_fault (flagged by the device, or outside the datastream's physical range) raises it; the delay is how long the fault may last"
+		}
 	default:
-		return "type must be high, low, low_battery, power_loss, door_open or comm_loss"
+		return "type must be high, low, low_battery, power_loss, door_open, comm_loss or sensor_fault"
 	}
 	return ""
 }

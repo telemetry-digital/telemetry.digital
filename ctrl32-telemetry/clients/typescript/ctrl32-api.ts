@@ -50,6 +50,21 @@ export type AlarmRule = {
   warning?: number | null;
 };
 
+export type Annotation = {
+  category?: "note" | "expected_event" | "maintenance" | "calibration" | "sensor_fault" | "data_issue";
+  created_at?: string;
+  created_by?: string;
+  datastream_id?: string;
+  from?: string;
+  id?: string;
+  retract_reason?: string;
+  retracted_at?: string;
+  retracted_by?: string;
+  text?: string;
+  /** = from for one observation */
+  to?: string;
+};
+
 export type Asset = {
   attributes?: Record<string, unknown>;
   created_at?: string;
@@ -346,6 +361,9 @@ export type Datastream = {
   key?: string;
   kind?: "gauge" | "counter" | "state" | "event";
   quantity?: string;
+  range_max?: number | null;
+  /** physical range (detail only); outside = sensor_fault */
+  range_min?: number | null;
   unit?: string;
 };
 
@@ -408,6 +426,31 @@ export type DisplayContent = {
   popup?: "none" | "wall" | "all";
   /** 5–600 */
   popup_seconds?: number;
+};
+
+export type ESignature = {
+  comment?: string;
+  id?: string;
+  /** server key */
+  key_id?: string;
+  meaning?: "authored" | "reviewed" | "approved" | "verified" | "responsible";
+  method?: "password" | "password_totp";
+  /** why it is not valid */
+  problem?: string;
+  /** SHA-256 of the signed record version */
+  record_hash?: string;
+  record_id?: string;
+  record_type?: "report" | "audit_review";
+  roles?: string[];
+  signed_at?: string;
+  /** time in the organization's time zone */
+  signed_at_local?: string;
+  /** user name */
+  signer?: string;
+  /** full name */
+  signer_name?: string;
+  tz?: string;
+  valid?: boolean;
 };
 
 export type Error = {
@@ -879,6 +922,13 @@ export type Permission = {
   name?: string;
 };
 
+export type PhysicalRange = {
+  /** highest value */
+  max?: number | null;
+  /** lowest value the sensor can measure */
+  min?: number | null;
+};
+
 export type Policy = {
   four_eyes_assignments?: boolean;
   four_eyes_commands?: boolean;
@@ -995,14 +1045,29 @@ export type ReplicationNode = {
 };
 
 export type Report = {
-  created_at?: string;
-  created_by?: string;
+  /** audit chain head printed in the report */
+  audit_seq?: number;
+  bytes?: number;
+  /** SHA-256 of data.json */
+  data_hash?: string;
+  /** SHA-256 of the PDF */
   file_hash?: string;
+  generated_at?: string;
+  generated_by?: string;
   id?: string;
   kind?: string;
-  params?: Record<string, unknown>;
-  signed?: boolean;
-  size_bytes?: number;
+  /** parameters of the report */
+  scope?: Record<string, unknown>;
+  signatures?: ({
+    /** the report still has the signed hash */
+    hash_matches?: boolean;
+    meaning?: string;
+    signed_at?: string;
+    signer?: string;
+    signer_name?: string;
+  })[];
+  template_id?: string;
+  template_ver?: number;
 };
 
 export type Role = {
@@ -1184,6 +1249,37 @@ export type StreamInfo = {
   kbps?: number;
   state?: string;
   width?: number;
+};
+
+export type TelemetryKey = {
+  asset?: string;
+  datastream_id?: string;
+  key?: string;
+  kind?: string;
+  last?: {
+    at?: string;
+    quality?: string;
+    received_at?: string;
+    value?: number | null;
+    value_json?: unknown;
+  } | null;
+  quantity?: string;
+  /** assignment start */
+  since?: string;
+  source?: "datastream" | "unassigned" | "status";
+  spark?: number[][];
+  stats?: TelemetryStats;
+  unit?: string;
+};
+
+export type TelemetryStats = {
+  avg?: number | null;
+  /** of them with quality sensor_fault (not in min/max/avg) */
+  faults?: number;
+  max?: number | null;
+  min?: number | null;
+  /** values in the range */
+  n?: number;
 };
 
 export type Theme = {
@@ -1454,7 +1550,7 @@ export class Ctrl32Client {
 
   /** Create an alarm rule (new version)
    *
-   * A rule of the same type on the same datastream is superseded (its `valid_to` is set); the new row carries the next version number. With the policy `four_eyes_limits` the call answers 202 with a pending change request instead. Types: `high`/`low` (value at or above/below the limits), `low_battery` (battery level at or below the limits), `power_loss` (value 0 = power lost; no limits), `door_open` (value other than 0 = open; no limits), `comm_loss` (no new value for longer than the limits in seconds; without limits 1.5 × the expected interval). `sensor_fault` is refused (devices do not report sensor faults). The condition must hold for `delay_seconds` before the alarm is raised.
+   * A rule of the same type on the same datastream is superseded (its `valid_to` is set); the new row carries the next version number. With the policy `four_eyes_limits` the call answers 202 with a pending change request instead. Types: `high`/`low` (value at or above/below the limits), `low_battery` (battery level at or below the limits), `power_loss` (value 0 = power lost; no limits), `door_open` (value other than 0 = open; no limits), `comm_loss` (no new value for longer than the limits in seconds; without limits 1.5 × the expected interval), `sensor_fault` (a value with quality sensor_fault — flagged by the device with `fault` in its telemetry, or outside the datastream's physical range; no limits; the next value with another quality clears it). Value rules skip values with quality sensor_fault. The condition must hold for `delay_seconds` before the alarm is raised.
    * 
    * Requires permission `config.write`. */
   postAlarmRules(body: {
@@ -1513,6 +1609,51 @@ export class Ctrl32Client {
   }>('POST', `/api/v1/alarms/${encodeURIComponent(id)}/ack`, undefined, body, false);
   }
 
+  /** Annotations of a datastream
+   *
+   * Annotations overlapping `from`–`to` (default the last 30 days); retracted ones only with `include_retracted=1`.
+   * 
+   * Requires permission `data.read`. */
+  getAnnotations(query: { datastream_id: string; from?: string; /** RFC 3339 */ to?: string; /** RFC 3339 */ include_retracted?: string; /** 1 */ }): Promise<Annotation[]> {
+    return this.request<Annotation[]>('GET', `/api/v1/annotations`, query, undefined, false);
+  }
+
+  /** Annotate observations
+   *
+   * A comment on one observation (`to` omitted or equal to `from`) or on a period of a datastream; the data does not change. Shown on charts and written to the observation exports. Audited.
+   * 
+   * Requires permission `data.annotate`. */
+  postAnnotations(body: {
+    /** default note */
+    category?: "note" | "expected_event" | "maintenance" | "calibration" | "sensor_fault" | "data_issue";
+    datastream_id: string;
+    from: string;
+    /** 1–1000 characters */
+    text: string;
+    /** optional, at most 366 days after from */
+    to?: string;
+  }): Promise<Annotation> {
+    return this.request<Annotation>('POST', `/api/v1/annotations`, undefined, body, false);
+  }
+
+  /** Retract an annotation
+   *
+   * Annotations are records: a retraction is a new record with the reason; the retracted annotation is no longer shown or exported. Audited.
+   * 
+   * Requires permission `data.annotate`. */
+  postAnnotationsIdRetract(id: string, body: {
+    /** 3–1000 characters */
+    reason: string;
+  }): Promise<{
+    id?: string;
+    retraction_id?: string;
+  }> {
+    return this.request<{
+    id?: string;
+    retraction_id?: string;
+  }>('POST', `/api/v1/annotations/${encodeURIComponent(id)}/retract`, undefined, body, false);
+  }
+
   /** List assets
    *
    * Requires permission `data.read`. */
@@ -1549,6 +1690,77 @@ export class Ctrl32Client {
     type?: string;
   }): Promise<Asset> {
     return this.request<Asset>('PATCH', `/api/v1/assets/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Audit trail of the organization
+   *
+   * Newest first, filtered by period (default the last 7 days), action, actor and entity type (substrings); `before` = the `next_before` of the previous page. Each entry shows the latest review that covered it.
+   * 
+   * Requires permission `audit.read`. */
+  getAudit(query?: { from?: string; /** RFC 3339 */ to?: string; /** RFC 3339 */ action?: string; actor?: string; entity_type?: string; before?: number; /** sequence number */ limit?: number; /** at most 500, default 100 */ }): Promise<{
+    entries?: ({
+      action?: string;
+      actor?: string;
+      actor_type?: string;
+      entity_id?: string;
+      entity_type?: string;
+      hash?: string;
+      new_value?: unknown;
+      old_value?: unknown;
+      reason?: string;
+      /** latest review covering it: id, by, at, outcome */
+      review?: Record<string, unknown>;
+      seq?: number;
+      ts?: string;
+    })[];
+    next_before?: string;
+  }> {
+    return this.request<{
+    entries?: ({
+      action?: string;
+      actor?: string;
+      actor_type?: string;
+      entity_id?: string;
+      entity_type?: string;
+      hash?: string;
+      new_value?: unknown;
+      old_value?: unknown;
+      reason?: string;
+      /** latest review covering it: id, by, at, outcome */
+      review?: Record<string, unknown>;
+      seq?: number;
+      ts?: string;
+    })[];
+    next_before?: string;
+  }>('GET', `/api/v1/audit`, query, undefined, false);
+  }
+
+  /** Reviews of the audit trail
+   *
+   * Newest first, each with its signature and whether it is valid.
+   * 
+   * Requires permission `audit.read`. */
+  getAuditReviews(query?: { limit?: number; /** at most 500, default 50 */ }): Promise<(Record<string, unknown>)[]> {
+    return this.request<(Record<string, unknown>)[]>('GET', `/api/v1/audit/reviews`, query, undefined, false);
+  }
+
+  /** Record a review of the audit trail
+   *
+   * A period (`from`, `to`; ended, at most 366 days) or one entry (`seq`) of the organization's audit trail: the review records the first and last entry, their number and the hash of the last one, the outcome and a comment (required with findings), and is signed with the meaning reviewed. The reviewer confirms with the password and, with two-factor sign-in, the authenticator code; only in a browser session. Audited.
+   * 
+   * Requires permission `audit.review`. */
+  postAuditReviews(body: {
+    code?: string;
+    /** at most 2000 characters */
+    comment?: string;
+    from?: string;
+    outcome: "no_findings" | "findings";
+    password: string;
+    /** one entry instead of a period */
+    seq?: number;
+    to?: string;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/audit/reviews`, undefined, body, false);
   }
 
   /** Verify the audit hash chain
@@ -2229,6 +2441,7 @@ export class Ctrl32Client {
     kind: "gauge" | "counter" | "state" | "event";
     /** temperature, humidity, power_active, … */
     quantity: string;
+    range?: PhysicalRange;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
     unit?: string;
@@ -2286,11 +2499,14 @@ export class Ctrl32Client {
 
   /** Update a datastream
    *
+   * `range` replaces the physical range (a null bound removes it); without `range` the range stays.
+   * 
    * Requires permission `config.write`. */
   patchDatastreamsId(id: string, body: {
     accuracy?: number | null;
     expected_interval?: string;
     quantity?: string;
+    range?: PhysicalRange;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
     unit?: string;
@@ -2646,6 +2862,163 @@ export class Ctrl32Client {
     /** true on success */
     ok?: boolean;
   }>('POST', `/api/v1/devices/${encodeURIComponent(id)}/revoke`, undefined, body, false);
+  }
+
+  /** Everything the device sends
+   *
+   * Every key of the device: assigned datastreams (`source` datastream), keys without a datastream read from the raw messages of the last 90 days, at most 5000 messages (`unassigned`), and the keys of its status messages (`status`). Each with the latest value, its quality and time, statistics over `from`–`to` (default the last 24 hours, at most 366 days; values with quality sensor_fault are counted in `faults`, not in min/max/avg) and a sparkline of the last 24 hours (averages per 30 minutes).
+   * 
+   * Requires permission `data.read`. */
+  getDevicesIdTelemetry(id: string, query?: { from?: string; /** RFC 3339 */ to?: string; /** RFC 3339 */ }): Promise<{
+    device_id?: string;
+    from?: string;
+    generated_at?: string;
+    keys?: TelemetryKey[];
+    raw_window_days?: number;
+    to?: string;
+  }> {
+    return this.request<{
+    device_id?: string;
+    from?: string;
+    generated_at?: string;
+    keys?: TelemetryKey[];
+    raw_window_days?: number;
+    to?: string;
+  }>('GET', `/api/v1/devices/${encodeURIComponent(id)}/telemetry`, query, undefined, false);
+  }
+
+  /** Create a datastream for a key and assign it
+   *
+   * For a key the device publishes without a datastream: a new datastream on the chosen asset, assigned to the device at once. Values stored from the next message; earlier ones stay in the raw messages. With the policy `four_eyes_assignments` the call answers 202 with a pending change request instead.
+   * 
+   * Requires permission `device.manage`. */
+  postDevicesIdTelemetryAssign(id: string, body: {
+    asset_id: string;
+    /** the telemetry key */
+    key: string;
+    kind?: "gauge" | "counter" | "state" | "event";
+    /** default: the key */
+    quantity?: string;
+    range?: {
+      max?: number | null;
+      min?: number | null;
+    };
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    unit?: string;
+  }): Promise<{
+    asset_id?: string;
+    assignment_id?: string;
+    datastream_id?: string;
+    key?: string;
+    kind?: string;
+    quantity?: string;
+    unit?: string;
+  }> {
+    return this.request<{
+    asset_id?: string;
+    assignment_id?: string;
+    datastream_id?: string;
+    key?: string;
+    kind?: string;
+    quantity?: string;
+    unit?: string;
+  }>('POST', `/api/v1/devices/${encodeURIComponent(id)}/telemetry/assign`, undefined, body, false);
+  }
+
+  /** Export the values of one key
+   *
+   * CSV or Excel, oldest first, at most 100 000 rows; columns measured_at, received_at, value, value_json, unit, quality, time_source, annotation. Audited.
+   * 
+   * Requires permission `data.export`. */
+  getDevicesIdTelemetryExport(id: string, query: { key: string; source?: string; /** datastream (default) | unassigned | status */ from?: string; /** RFC 3339 */ to?: string; /** RFC 3339 */ format?: string; /** csv (default) | xlsx */ }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/devices/${encodeURIComponent(id)}/telemetry/export`, query, undefined, true);
+  }
+
+  /** Chart of one key
+   *
+   * Raw points while there are at most 5000 in the range (`agg` auto or none), otherwise buckets (`bucket` seconds, 0 = about 300 buckets) with the average, minimum and maximum; `agg` min or max shows that aggregate as the value. Datastream keys carry their annotations.
+   * 
+   * Requires permission `data.read`. */
+  getDevicesIdTelemetrySeries(id: string, query: { key: string; source?: string; /** datastream (default) | unassigned | status */ from?: string; /** RFC 3339 */ to?: string; /** RFC 3339 */ agg?: string; /** auto | none | avg | min | max */ bucket?: number; /** seconds, 0 = automatic */ }): Promise<{
+    annotations?: Annotation[];
+    /** 0 = raw points */
+    bucket_s?: number;
+    datastream_id?: string;
+    from?: string;
+    key?: string;
+    points?: ({
+      max?: number;
+      min?: number;
+      n?: number;
+      quality?: string;
+      t?: string;
+      v?: number | null;
+    })[];
+    source?: string;
+    stats?: TelemetryStats;
+    to?: string;
+    /** raw messages beyond the read limit were not read */
+    truncated?: boolean;
+    unit?: string;
+  }> {
+    return this.request<{
+    annotations?: Annotation[];
+    /** 0 = raw points */
+    bucket_s?: number;
+    datastream_id?: string;
+    from?: string;
+    key?: string;
+    points?: ({
+      max?: number;
+      min?: number;
+      n?: number;
+      quality?: string;
+      t?: string;
+      v?: number | null;
+    })[];
+    source?: string;
+    stats?: TelemetryStats;
+    to?: string;
+    /** raw messages beyond the read limit were not read */
+    truncated?: boolean;
+    unit?: string;
+  }>('GET', `/api/v1/devices/${encodeURIComponent(id)}/telemetry/series`, query, undefined, false);
+  }
+
+  /** Values of one key, newest first
+   *
+   * Paged by `cursor` (from `next_cursor`), at most 500 a page (default 50).
+   * 
+   * Requires permission `data.read`. */
+  getDevicesIdTelemetryValues(id: string, query: { key: string; source?: string; /** datastream (default) | unassigned | status */ from?: string; /** RFC 3339 */ to?: string; /** RFC 3339 */ cursor?: string; limit?: number; }): Promise<{
+    /** empty on the last page */
+    next_cursor?: string;
+    rows?: ({
+      annotation?: string;
+      /** measured (or received) time */
+      at?: string;
+      quality?: string;
+      received_at?: string;
+      time_source?: string;
+      value?: number | null;
+      value_json?: unknown;
+    })[];
+  }> {
+    return this.request<{
+    /** empty on the last page */
+    next_cursor?: string;
+    rows?: ({
+      annotation?: string;
+      /** measured (or received) time */
+      at?: string;
+      quality?: string;
+      received_at?: string;
+      time_source?: string;
+      value?: number | null;
+      value_json?: unknown;
+    })[];
+  }>('GET', `/api/v1/devices/${encodeURIComponent(id)}/telemetry/values`, query, undefined, false);
   }
 
   /** Issue or rotate the device token
@@ -3268,7 +3641,7 @@ export class Ctrl32Client {
 
   /** Export observations
    *
-   * `format` csv (default), jsonl or pdf (a signed report stored under Reports). Flagged rows (quality other than ok) are marked.
+   * `format` csv (default), jsonl or pdf (a signed report stored under Reports). Flagged rows (quality other than ok) are marked. The column `annotation` carries the comments of the annotations covering each observation (` | ` between several).
    * 
    * Requires permission `data.export`. */
   getExportObservations(query: { datastream_id: string; from?: string; /** RFC 3339 */ to?: string; /** RFC 3339 */ format?: string; /** csv | jsonl | pdf */ limit?: number; }): Promise<Response> {
@@ -5559,6 +5932,45 @@ export class Ctrl32Client {
     return this.request<Response>('GET', `/api/v1/reports/${encodeURIComponent(id)}/file`, undefined, undefined, true);
   }
 
+  /** Electronic signatures of a report
+   *
+   * Each signature with its manifestation (name, user name, roles, time in the organization's time zone, meaning) and whether it is valid: the manifest matches, the server's Ed25519 signature verifies and the stored PDF still has the signed hash.
+   * 
+   * Requires permission `data.export`. */
+  getReportsIdSignatures(id: string): Promise<{
+    file_hash?: string;
+    /** the stored file matches its recorded hash */
+    file_ok?: boolean;
+    problem?: string;
+    report_id?: string;
+    signatures?: ESignature[];
+  }> {
+    return this.request<{
+    file_hash?: string;
+    /** the stored file matches its recorded hash */
+    file_ok?: boolean;
+    problem?: string;
+    report_id?: string;
+    signatures?: ESignature[];
+  }>('GET', `/api/v1/reports/${encodeURIComponent(id)}/signatures`, undefined, undefined, false);
+  }
+
+  /** Sign a report electronically
+   *
+   * The signer confirms with the password and, with two-factor sign-in, the authenticator code (5 failures a minute at most). Only in a browser session: API tokens and AI assistants cannot sign. The signature covers the SHA-256 of the stored PDF; the same meaning twice by the same user is refused (409). Audited.
+   * 
+   * Requires permission `report.sign`. */
+  postReportsIdSignatures(id: string, body: {
+    /** authenticator code, with two-factor sign-in */
+    code?: string;
+    /** at most 500 characters */
+    comment?: string;
+    meaning: "authored" | "reviewed" | "approved" | "verified" | "responsible";
+    password: string;
+  }): Promise<ESignature> {
+    return this.request<ESignature>('POST', `/api/v1/reports/${encodeURIComponent(id)}/signatures`, undefined, body, false);
+  }
+
   /** Roles of the organization
    *
    * Built-in roles (immutable) and organization roles with their permission sets and member counts.
@@ -6311,10 +6723,10 @@ export class Ctrl32Client {
 
   /** Live events (Server-Sent Events)
    *
-   * Long-lived `text/event-stream`. Events: `hello`, `observation` {datastream_id, key, value, measured_at}, `device` {device_id, connected}, `alarm` {alarm_id, datastream_id, state, severity, value}, `command` {device_id, command_id, method, status, detail}; `ping` every 25 s with the count of dropped events. Filters: `datastreams` (comma-separated ids), `devices` (`all` or ids), `alarms=1`.
+   * Long-lived `text/event-stream`. Events: `hello`, `observation` {datastream_id, key, value, measured_at}, `device` {device_id, connected}, `alarm` {alarm_id, datastream_id, state, severity, value}, `command` {device_id, command_id, method, status, detail}, `device_data` {device_id, state: telemetry|status, detail: {values, faults}} (with `device_data=1`: the keys of a telemetry message that have no datastream, every key of a status message, and the keys the device flagged as faulty); `ping` every 25 s with the count of dropped events. Filters: `datastreams` (comma-separated ids), `devices` (`all` or ids), `alarms=1`, `device_data=1`.
    * 
    * Requires permission `data.read`. */
-  getStream(query?: { datastreams?: string; /** comma-separated datastream ids */ devices?: string; /** all, or comma-separated device ids */ alarms?: string; /** 1 to include alarm events */ }): Promise<Response> {
+  getStream(query?: { datastreams?: string; /** comma-separated datastream ids */ devices?: string; /** all, or comma-separated device ids */ alarms?: string; /** 1 to include alarm events */ device_data?: string; /** 1 to include device_data events of the filtered devices */ }): Promise<Response> {
     return this.request<Response>('GET', `/api/v1/stream`, query, undefined, true);
   }
 

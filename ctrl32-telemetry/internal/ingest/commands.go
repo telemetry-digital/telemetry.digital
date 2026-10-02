@@ -98,6 +98,14 @@ func (in *Ingest) InvalidateDevice(deviceID string) {
 	in.dsMu.Unlock()
 }
 
+// InvalidateAll drops the cached datastream mappings of every device (a datastream's physical range changed).
+func (in *Ingest) InvalidateAll() {
+	in.dsMu.Lock()
+	in.dsMap = map[string]map[string]string{}
+	in.dsTime = map[string]time.Time{}
+	in.dsMu.Unlock()
+}
+
 // ---- ThingsBoard device API (spec 005 research R2) --------------------------------------------------------------
 
 type rpcRef struct {

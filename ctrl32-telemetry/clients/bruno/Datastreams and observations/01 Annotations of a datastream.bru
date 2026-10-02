@@ -1,0 +1,26 @@
+meta {
+  name: Annotations of a datastream
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/annotations
+  body: none
+  auth: inherit
+}
+
+params:query {
+  datastream_id: 
+  ~from: 
+  ~to: 
+  ~include_retracted: 
+}
+
+docs {
+  Annotations of a datastream
+  
+  Annotations overlapping `from`–`to` (default the last 30 days); retracted ones only with `include_retracted=1`.
+  
+  Requires permission `data.read`.
+}

@@ -1,0 +1,32 @@
+meta {
+  name: Chart of one key
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/v1/devices/:id/telemetry/series
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  key: 
+  ~source: 
+  ~from: 
+  ~to: 
+  ~agg: 
+  ~bucket: 
+}
+
+docs {
+  Chart of one key
+  
+  Raw points while there are at most 5000 in the range (`agg` auto or none), otherwise buckets (`bucket` seconds, 0 = about 300 buckets) with the average, minimum and maximum; `agg` min or max shows that aggregate as the value. Datastream keys carry their annotations.
+  
+  Requires permission `data.read`.
+}

@@ -140,6 +140,12 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await page("devices-new-dialog", "/devices", { wait: 3000, click: "#newBtn" });
   const d2 = dev("esp32-demo"); // an MQTT device: every tab (an HTTP device has the overview only)
   for (const tab of ["overview", "datastreams", "commands", "attributes", "console", "messages"]) await page(`devices-device-${tab}`, `/devices/${d2}/${tab}`, { wait: 3500 });
+  // the Telemetry tab (0.67.0) of logger T2: a datastream, keys without a datastream (docs.py records) and status keys
+  const t2 = dev("logger-t2");
+  const telRow = (row) => `(() => { const tr = document.querySelector('#telTable tr[data-row="${row}"]'); if (tr) tr.click(); return !!tr; })()`;
+  await page("devices-device-telemetry", `/devices/${t2}/telemetry`, { wait: 4000 });
+  await page("devices-device-telemetry-chart", `/devices/${t2}/telemetry`, { wait: 4000, before: telRow("datastream:temp"), afterWait: 3000, clip: "#telDetail", pad: 4 });
+  await page("devices-device-telemetry-unassigned", `/devices/${t2}/telemetry`, { wait: 4000, before: telRow("unassigned:door"), afterWait: 3000, clip: "#telDetail", pad: 4 });
   await page("devices-sites", "/assets/sites");
   await page("devices-assets", "/assets", { wait: 3000 });
   await page("devices-new-asset-dialog", "/assets", { wait: 3000, click: "#newAssetBtn" });
@@ -251,6 +257,14 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await page("admin-users", "/users", { wait: 3000 });
   await page("admin-new-user-dialog", "/users", { wait: 3000, click: "#newUserBtn" });
   await page("admin-roles", "/users/roles", { wait: 3000, full: true, maxH: 3600 });
+  // audit trail, reviews and report signatures (0.67.0); the administrator reads them, the dialogs of the quality
+  // reviewer are opened by script (the administrator has neither audit.review nor report.sign)
+  await page("admin-audit-trail", "/audit", { wait: 3500 });
+  await page("admin-audit-reviews", "/audit/reviews", { wait: 3000 });
+  await page("admin-audit-review-dialog", "/audit", { wait: 3500, before: "(() => { document.querySelector('#reviewPeriodBtn').hidden = false; document.querySelector('#reviewPeriodBtn').click(); return true; })()", afterWait: 800, clip: "#reviewDlg", pad: -4 });
+  await page("admin-audit-report-signatures", "/audit/reports", { wait: 3000 });
+  await page("admin-audit-sign-dialog", "/audit/reports", { wait: 3000, before: "(() => { const f = document.querySelector('#signForm'); f.dataset.id = 'x'; document.querySelector('#signWhat').textContent = 'observations · ' + new Date().toLocaleString() + ' · SHA-256 3f9a1c0e5b7d2a64…'; document.querySelector('#signDlg').showModal(); return true; })()", afterWait: 800, clip: "#signDlg", pad: -4 });
+  await page("admin-audit-signatures-dialog", "/audit/reports", { wait: 3000, before: "(() => { const b = [...document.querySelectorAll('[data-sigs]')].find((x) => x.closest('tr').textContent.includes('Reviewed')) || document.querySelector('[data-sigs]'); if (b) b.click(); return !!b; })()", afterWait: 1500, clip: "#sigDlg", pad: -4 });
   await page("admin-new-role-dialog", "/users/roles", { wait: 3000, click: "#newRoleBtn" });
   // the server administrator's own account: server_admin and org_admin, both locked for oneself (0.65.0)
   if (wanted("admin-user-server-admin")) {

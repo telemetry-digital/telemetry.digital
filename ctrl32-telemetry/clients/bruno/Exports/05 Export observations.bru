@@ -21,7 +21,7 @@ params:query {
 docs {
   Export observations
   
-  `format` csv (default), jsonl or pdf (a signed report stored under Reports). Flagged rows (quality other than ok) are marked.
+  `format` csv (default), jsonl or pdf (a signed report stored under Reports). Flagged rows (quality other than ok) are marked. The column `annotation` carries the comments of the annotations covering each observation (` | ` between several).
   
   Requires permission `data.export`.
 }

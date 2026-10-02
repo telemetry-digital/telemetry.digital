@@ -2,17 +2,28 @@
 // alarms, writes the append-only alarm log and triggers notifications (URS C-01, C-05, C-07, C-10).
 //
 // Rule types (all per datastream):
+//
 //   - high, low: the value at or above (high) / at or below (low) the warning and action limits; cleared when the
 //     value is back inside the limit by the hysteresis.
+//
 //   - low_battery: the datastream carries a battery level (%, V, …); like low.
+//
 //   - power_loss: the datastream carries the supply state; a value of 0 (false) means the power is lost (action);
 //     any other value clears it. No limits.
+//
 //   - door_open: the datastream carries a door contact; a value other than 0 (true) means open (warning); 0 clears
 //     it. The delay is how long the door may stay open. No limits.
+//
 //   - comm_loss: no new value for longer than the limits in seconds (warning, action); without limits 1.5 × the
 //     datastream's expected interval (action). Checked on a clock; a new value clears it.
 //
-// sensor_fault rules are refused when saved (devices do not report sensor faults); stored ones are not evaluated.
+//   - sensor_fault: a value stored with quality sensor_fault (the device flagged the sensor as faulty, or the value
+//     is outside the datastream's physical range; see ingest) raises it (action); the next value with another quality
+//     clears it. No limits; the delay is how long the fault may last.
+//
+// A value with quality sensor_fault is not a reading: the value rules (high, low, low_battery, power_loss, door_open)
+// skip it, so a disconnected probe reporting -127 °C raises a sensor fault, not a low-temperature alarm. It still
+// proves that the device communicates (comm_loss).
 //
 // Delay: the condition must hold for the rule's delay before the alarm is raised (in measurement time between
 // observations; a clock raises a pending alarm when no newer value ended the condition). A value back in band during
@@ -37,7 +48,19 @@ import (
 )
 
 // Evaluated lists the rule types the engine evaluates.
-var Evaluated = []string{"high", "low", "low_battery", "power_loss", "door_open", "comm_loss"}
+var Evaluated = []string{"high", "low", "low_battery", "power_loss", "door_open", "comm_loss", "sensor_fault"}
+
+// FaultQuality is the observation quality of a value from a faulty sensor.
+const FaultQuality = "sensor_fault"
+
+// applies reports whether a rule is evaluated on an observation.
+func applies(r rule, o ingest.Observation) bool {
+	switch r.Type {
+	case "comm_loss", "sensor_fault":
+		return true // any stored value: communication is there; its quality tells the fault
+	}
+	return o.Value != nil && o.Quality != FaultQuality
+}
 
 type rule struct {
 	ID         string
@@ -101,7 +124,7 @@ func (e *Engine) OnObservations(ctx context.Context, obs []ingest.Observation) {
 			continue
 		}
 		for _, r := range rules {
-			if r.Type != "comm_loss" && o.Value == nil {
+			if !applies(r, o) {
 				continue
 			}
 			if err := e.evaluate(ctx, o, r); err != nil {
@@ -209,6 +232,16 @@ func (e *Engine) evaluate(ctx context.Context, o ingest.Observation, r rule) err
 	if r.Type == "comm_loss" {
 		// a value arrived: the communication is back
 		return e.decide(ctx, o, r, "", 0, true)
+	}
+	if r.Type == "sensor_fault" {
+		v := 0.0
+		if o.Value != nil {
+			v = *o.Value
+		}
+		if o.Quality == FaultQuality {
+			return e.decide(ctx, o, r, "action", v, false)
+		}
+		return e.decide(ctx, o, r, "", v, true)
 	}
 	v := *o.Value
 	sev := severity(r, v)

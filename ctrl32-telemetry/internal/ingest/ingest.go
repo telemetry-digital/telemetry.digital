@@ -55,6 +55,7 @@ type Ingest struct {
 	dsMu    sync.Mutex
 	dsMap   map[string]map[string]string // device id -> key -> datastream id (cache)
 	dsTime  map[string]time.Time
+	dsRange map[string]Range    // datastream id -> physical range (cached with dsMap)
 	auto    map[string]autoInfo // device id -> automatic datastreams on/off (cache)
 	rpcSeq  atomic.Int64
 	rpcMu   sync.Mutex
@@ -62,6 +63,29 @@ type Ingest struct {
 	console ConsoleSink
 	// OnCommand is called when a device acknowledges a command (live data hook).
 	OnCommand func(CommandEvent)
+	// OnDeviceData is called after a telemetry or status message of a device was stored (live data hook for the
+	// Telemetry tab of the device page): kind is "telemetry" or "status"; values are the keys the message carried
+	// that are not stored as observations (keys without a datastream; every key of a status message).
+	OnDeviceData func(DeviceData)
+}
+
+// DeviceData describes a stored telemetry or status message for live streams.
+type DeviceData struct {
+	OrgID, DeviceID, Kind string
+	At                    time.Time
+	Values                map[string]any
+	Faults                []string // keys the device flagged as faulty
+}
+
+// Range is the physical (measuring) range of a datastream: a value outside it cannot be a real reading and is
+// stored with quality sensor_fault. Either bound may be missing.
+type Range struct {
+	Min, Max *float64
+}
+
+// Outside reports whether v lies outside the range.
+func (r Range) Outside(v float64) bool {
+	return (r.Min != nil && v < *r.Min) || (r.Max != nil && v > *r.Max)
 }
 
 // CommandEvent describes an acknowledged command for live streams.
@@ -74,7 +98,7 @@ type CommandEvent struct {
 // New creates the ingest layer.
 func New(pool *pgxpool.Pool, br *broker.Broker, log *slog.Logger, sinks ...Sink) *Ingest {
 	return &Ingest{pool: pool, br: br, log: log.With("component", "ingest"), sinks: sinks,
-		dsMap: map[string]map[string]string{}, dsTime: map[string]time.Time{}}
+		dsMap: map[string]map[string]string{}, dsTime: map[string]time.Time{}, dsRange: map[string]Range{}}
 }
 
 // AddSink registers another observation sink (the rules engine is created after ingest).
@@ -222,6 +246,8 @@ func (in *Ingest) IngestTelemetryResult(ctx context.Context, dev *broker.Device,
 	var decodeErr *string
 	var rows []Observation
 	unknown := map[string]struct{}{}
+	unknownVals := map[string]any{} // newest value of every key without a datastream (live hook)
+	faults := map[string]struct{}{}
 
 	if perr != nil {
 		status = "error"
@@ -256,9 +282,13 @@ func (in *Ingest) IngestTelemetryResult(ctx context.Context, dev *broker.Device,
 				quality = "clock_suspect"
 			}
 			for k, v := range s.Values {
+				if s.Faulty(k) {
+					faults[k] = struct{}{}
+				}
 				dsID, ok := keys[k]
 				if !ok {
 					unknown[k] = struct{}{}
+					unknownVals[k] = v.Any()
 					continue
 				}
 				o := Observation{OrgID: dev.OrgID, DatastreamID: dsID, Key: k, MeasuredAt: measuredAt, Quality: quality, Backfilled: s.Backfilled}
@@ -269,6 +299,11 @@ func (in *Ingest) IngestTelemetryResult(ctx context.Context, dev *broker.Device,
 						f = 1
 					}
 					o.Value = &f
+				}
+				// Sensor fault: flagged by the device, or a number outside the datastream's physical range. It wins
+				// over the other qualities: the value is not a reading at all.
+				if s.Faulty(k) || (o.Value != nil && in.rangeOf(dsID).Outside(*o.Value)) {
+					o.Quality = "sensor_fault"
 				}
 				rows = append(rows, obsWithJSON(o, v, timeSource))
 			}
@@ -374,6 +409,14 @@ func (in *Ingest) IngestTelemetryResult(ctx context.Context, dev *broker.Device,
 	for _, s := range in.sinks {
 		s.OnObservations(ctx, rows)
 	}
+	if in.OnDeviceData != nil {
+		dd := DeviceData{OrgID: dev.OrgID, DeviceID: dev.ID, Kind: "telemetry", At: receivedAt, Values: unknownVals}
+		for k := range faults {
+			dd.Faults = append(dd.Faults, k)
+		}
+		sort.Strings(dd.Faults)
+		in.OnDeviceData(dd)
+	}
 	res := TelemetryResult{Status: status, Detail: derefStr(decodeErr), Observations: len(rows)}
 	for k := range unknown {
 		res.UnknownKeys = append(res.UnknownKeys, k)
@@ -393,6 +436,12 @@ func (in *Ingest) handleStatus(ctx context.Context, dev *broker.Device, _ string
 		in.log.Error("status update failed", "err", err)
 	}
 	in.storeRaw(ctx, dev, pk, "ok", nil)
+	if in.OnDeviceData != nil {
+		var vals map[string]any
+		if json.Unmarshal(pk.Payload, &vals) == nil {
+			in.OnDeviceData(DeviceData{OrgID: dev.OrgID, DeviceID: dev.ID, Kind: "status", At: time.Now().UTC(), Values: vals})
+		}
+	}
 }
 
 func (in *Ingest) handleAttributes(ctx context.Context, dev *broker.Device, _ string, pk packets.Packet) {
@@ -448,7 +497,9 @@ func (in *Ingest) datastreamsFor(ctx context.Context, dev *broker.Device) (map[s
 	in.dsMu.Unlock()
 
 	rows, err := in.pool.Query(ctx, `
-		SELECT ds.key, ds.id::text, coalesce(ds.attributes->>'source_key', '')
+		SELECT ds.key, ds.id::text, coalesce(ds.attributes->>'source_key', ''),
+		       CASE WHEN jsonb_typeof(ds.attributes->'range_min') = 'number' THEN (ds.attributes->>'range_min')::float8 END,
+		       CASE WHEN jsonb_typeof(ds.attributes->'range_max') = 'number' THEN (ds.attributes->>'range_max')::float8 END
 		FROM core.assignment a JOIN core.datastream ds ON ds.id = a.to_id
 		WHERE a.kind = 'device_datastream' AND a.from_id = $1::uuid AND a.valid_to IS NULL`, dev.ID)
 	if err != nil {
@@ -456,10 +507,15 @@ func (in *Ingest) datastreamsFor(ctx context.Context, dev *broker.Device) (map[s
 	}
 	defer rows.Close()
 	m := map[string]string{}
+	ranges := map[string]Range{}
 	for rows.Next() {
 		var k, id, src string
-		if err := rows.Scan(&k, &id, &src); err != nil {
+		var rg Range
+		if err := rows.Scan(&k, &id, &src, &rg.Min, &rg.Max); err != nil {
 			return nil, err
+		}
+		if rg.Min != nil || rg.Max != nil {
+			ranges[id] = rg
 		}
 		m[k] = id
 		if src != "" {
@@ -472,8 +528,21 @@ func (in *Ingest) datastreamsFor(ctx context.Context, dev *broker.Device) (map[s
 	in.dsMu.Lock()
 	in.dsMap[dev.ID] = m
 	in.dsTime[dev.ID] = time.Now()
+	for _, id := range m {
+		delete(in.dsRange, id)
+	}
+	for id, rg := range ranges {
+		in.dsRange[id] = rg
+	}
 	in.dsMu.Unlock()
 	return m, nil
+}
+
+// rangeOf returns the physical range of a datastream loaded with the device's datastreams (none when not set).
+func (in *Ingest) rangeOf(dsID string) Range {
+	in.dsMu.Lock()
+	defer in.dsMu.Unlock()
+	return in.dsRange[dsID]
 }
 
 // obsWithJSON attaches structured values and the time source (kept out of the exported struct).

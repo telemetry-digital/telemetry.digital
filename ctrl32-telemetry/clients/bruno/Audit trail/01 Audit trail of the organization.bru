@@ -1,0 +1,29 @@
+meta {
+  name: Audit trail of the organization
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/audit
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~from: 
+  ~to: 
+  ~action: 
+  ~actor: 
+  ~entity_type: 
+  ~before: 
+  ~limit: 
+}
+
+docs {
+  Audit trail of the organization
+  
+  Newest first, filtered by period (default the last 7 days), action, actor and entity type (substrings); `before` = the `next_before` of the previous page. Each entry shows the latest review that covered it.
+  
+  Requires permission `audit.read`.
+}

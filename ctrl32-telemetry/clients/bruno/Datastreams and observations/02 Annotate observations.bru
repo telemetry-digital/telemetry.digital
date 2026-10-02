@@ -1,0 +1,29 @@
+meta {
+  name: Annotate observations
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/annotations
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "category": "note",
+    "datastream_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "from": "2026-09-24T12:00:00Z",
+    "text": "string",
+    "to": "2026-09-24T12:00:00Z"
+  }
+}
+
+docs {
+  Annotate observations
+  
+  A comment on one observation (`to` omitted or equal to `from`) or on a period of a datastream; the data does not change. Shown on charts and written to the observation exports. Audited.
+  
+  Requires permission `data.annotate`.
+}

@@ -150,7 +150,8 @@
   <div class="page-head"><h1>Stored reports</h1></div>
   <div class="card">
   <p class="muted">Every generated PDF is a record: data hash, file hash and the audit chain head at generation time. Downloads verify the file against its recorded hash.</p>
-  <div class="table-wrap"><table id="reports"><thead><tr><th>Generated</th><th>Kind</th><th>By</th><th>Template</th><th>Size</th><th>File hash</th><th></th></tr></thead><tbody></tbody></table></div>
+  <div class="table-wrap"><table id="reports"><thead><tr><th>Generated</th><th>Kind</th><th>By</th><th>Template</th><th>Size</th><th>File hash</th><th>Signatures</th><th></th></tr></thead><tbody></tbody></table></div>
+  <p class="muted" style="margin-bottom:0;font-size:12px">Reports are signed electronically under <a href="/audit/reports">Audit → Report signatures</a> (permission report.sign).</p>
   </div>
 </section>
 
@@ -485,8 +486,8 @@ $('#saveBtn').onclick = async () => { $('#tplErr').textContent=''; if(!$('#tplRe
     await api('PUT',`/api/v1/report-templates/${$('#kind').value}`, payload); $('#tplReason').value=''; ctrl32.toast('new version saved','ok'); loadTemplate(); }catch(x){ $('#tplErr').textContent=x.message; } };
 $('#revertBtn').onclick = async () => { $('#tplErr').textContent=''; try{ await api('DELETE',`/api/v1/report-templates/${$('#kind').value}?locale=${encodeURIComponent($('#locale').value)}&reason=${encodeURIComponent($('#tplReason').value||'revert')}`); ctrl32.toast('reverted to built-in','ok'); loadTemplate(); }catch(x){ $('#tplErr').textContent=x.message; } };
 async function reports(){ try{ const rs = await api('GET','/api/v1/reports?limit=100');
-  $('#reports tbody').innerHTML = rs.map(r=>`<tr><td>${fmt(r.generated_at)}</td><td>${esc(r.kind)}</td><td>${esc(r.generated_by)}</td><td>${r.template_id?('v'+r.template_ver):'built-in'}</td><td>${(r.bytes/1024).toFixed(0)} KiB</td><td><code>${esc(r.file_hash.slice(0,16))}…</code></td><td><a href="/api/v1/reports/${r.id}/file">download</a></td></tr>`).join('') || '<tr><td colspan="7" class="muted">none yet</td></tr>';
-}catch(x){ $('#reports tbody').innerHTML=`<tr><td colspan="7" class="muted">${esc(x.message)}</td></tr>`; } }
+  $('#reports tbody').innerHTML = rs.map(r=>`<tr><td>${fmt(r.generated_at)}</td><td>${esc(r.kind)}</td><td>${esc(r.generated_by)}</td><td>${r.template_id?('v'+r.template_ver):'built-in'}</td><td>${(r.bytes/1024).toFixed(0)} KiB</td><td><code>${esc(r.file_hash.slice(0,16))}…</code></td><td>${(r.signatures||[]).length ? (r.signatures||[]).map(s=>`<span class="badge ${s.hash_matches?'ok':'bad'}" title="${esc(s.signer_name+' · '+fmt(s.signed_at))}">${esc(s.meaning)}</span>`).join(' ') : '<span class="muted">—</span>'}</td><td><a href="/api/v1/reports/${r.id}/file">download</a></td></tr>`).join('') || '<tr><td colspan="8" class="muted">none yet</td></tr>';
+}catch(x){ $('#reports tbody').innerHTML=`<tr><td colspan="8" class="muted">${esc(x.message)}</td></tr>`; } }
 function connStatus(c){ const s = c.status;
   if(c.revoked_at) return '<span class="badge bad">revoked</span>';
   if(c.kind === 'chirpstack_http') return '<span class="badge ok">active</span>';

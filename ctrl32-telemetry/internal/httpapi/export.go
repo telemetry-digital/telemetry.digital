@@ -59,9 +59,13 @@ func (s *Server) exportObservations(w http.ResponseWriter, r *http.Request) {
 	}
 	p := PrincipalFrom(r.Context())
 	spec := exportSpec{
-		name:    "observations_" + safePrefix(dsID),
-		columns: []string{"measured_at", "received_at", "value", "value_json", "quality", "time_source", "decoder_version", "calibration_version", "series_version", "raw_id"},
-		query: `SELECT o.measured_at, o.received_at, o.value::text, o.value_json::text, o.quality, o.time_source, o.decoder_version, o.calibration_version::text, o.series_version::text, o.raw_id::text
+		name: "observations_" + safePrefix(dsID),
+		// annotation (0.67.0): the comments of the annotations covering the observation, oldest first, " | " between
+		columns: []string{"measured_at", "received_at", "value", "value_json", "quality", "time_source", "decoder_version", "calibration_version", "series_version", "raw_id", "annotation"},
+		query: `SELECT o.measured_at, o.received_at, o.value::text, o.value_json::text, o.quality, o.time_source, o.decoder_version, o.calibration_version::text, o.series_version::text, o.raw_id::text,
+		               (SELECT string_agg(a.text, ' | ' ORDER BY a.ts_from) FROM core.annotation a
+		                WHERE a.datastream_id = o.datastream_id AND a.retracts IS NULL AND o.measured_at BETWEEN a.ts_from AND a.ts_to
+		                  AND NOT EXISTS (SELECT 1 FROM core.annotation x WHERE x.retracts = a.id))
 		        FROM core.observation o JOIN core.datastream ds ON ds.id = o.datastream_id
 		        WHERE o.datastream_id = $1::uuid AND ($2 = '' OR ds.org_id = $2::uuid) AND o.measured_at >= $3 AND o.measured_at < $4
 		        ORDER BY o.measured_at LIMIT $5`,
@@ -84,8 +88,11 @@ func (s *Server) exportObservations(w http.ResponseWriter, r *http.Request) {
 		_ = s.pool.QueryRow(r.Context(), `SELECT warning::float8, action::float8 FROM core.alarm_rule WHERE datastream_id = $1::uuid AND enabled AND valid_to IS NULL AND type IN ('high','low') ORDER BY valid_from DESC LIMIT 1`, dsID).Scan(&warning, &action)
 		spec.title = fmt.Sprintf("Observations — %s / %s", asset, key)
 		spec.scope = map[string]any{"asset": asset, "datastream": key, "quantity": quantity, "unit": unit, "datastream_id": dsID}
-		spec.columns = []string{"measured_at", "received_at", "value", "quality", "time_source", "decoder_version"}
-		spec.query = `SELECT o.measured_at, o.received_at, o.value::text, o.quality, o.time_source, o.decoder_version
+		spec.columns = []string{"measured_at", "received_at", "value", "quality", "time_source", "decoder_version", "annotation"}
+		spec.query = `SELECT o.measured_at, o.received_at, o.value::text, o.quality, o.time_source, o.decoder_version,
+		               (SELECT string_agg(a.text, ' | ' ORDER BY a.ts_from) FROM core.annotation a
+		                WHERE a.datastream_id = o.datastream_id AND a.retracts IS NULL AND o.measured_at BETWEEN a.ts_from AND a.ts_to
+		                  AND NOT EXISTS (SELECT 1 FROM core.annotation x WHERE x.retracts = a.id))
 		        FROM core.observation o JOIN core.datastream ds ON ds.id = o.datastream_id
 		        WHERE o.datastream_id = $1::uuid AND ($2 = '' OR ds.org_id = $2::uuid) AND o.measured_at >= $3 AND o.measured_at < $4
 		        ORDER BY o.measured_at LIMIT $5`
@@ -108,6 +115,15 @@ func (s *Server) exportObservations(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			summary := map[string]any{"count": len(rows), "flagged": flagged}
+			annotated := 0
+			for _, row := range rows {
+				if a, ok := row["annotation"].(string); ok && a != "" {
+					annotated++
+				}
+			}
+			if annotated > 0 {
+				summary["annotated"] = annotated
+			}
 			if n > 0 {
 				summary["min"] = fmtF(mn)
 				summary["max"] = fmtF(mx)
