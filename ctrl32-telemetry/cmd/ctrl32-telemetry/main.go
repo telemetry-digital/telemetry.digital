@@ -529,7 +529,7 @@ func newIAM(cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) (*iam.S
 	return iam.New(pool, hasher, box, logger, cfg.Profile == "internet"), nil
 }
 
-// admin bootstrap: create the organization (if none) and the first org_admin; prints a one-time password.
+// admin bootstrap: create the organization (if none) and an administrator (org_admin + server_admin); prints a one-time password.
 // admin reset-password: set a new one-time password for a user.
 // admin seed-dashboard: create a starter dashboard (overview, showcase, mimic or plant) for an organization without a browser session.
 // admin purge: the authorised, logged deletion of a site, device, dashboard or the stored reports (purge.go).
@@ -622,7 +622,8 @@ func cmdAdmin(args []string) error {
 			}
 			fmt.Println("organization created:", *orgName)
 		}
-		u, err := svc.CreateUser(ctx, orgID, *username, *fullName, *email, pw, []string{"org_admin"}, "", "bootstrap")
+		// the administrator created from the host shell administers the server too (ADR-0019)
+		u, err := svc.CreateUser(ctx, orgID, *username, *fullName, *email, pw, []string{"org_admin", "server_admin"}, "", "bootstrap")
 		if err != nil {
 			return err
 		}

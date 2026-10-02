@@ -71,6 +71,7 @@ var mcpExclusions = map[string]string{
 	"GET /api/v1/public/{token}/hmi/objects/{slug}/svg": "graphic of a shared picture, fetched by the public page",
 	"POST /api/v1/vpn/peers":                            "issues a private key; needs the user's password (and authenticator code) again in the browser",
 	"POST /api/v1/vpn/peers/{id}/rotate":                "issues a private key; needs the user's password (and authenticator code) again in the browser",
+	"POST /api/v1/vpn/peers/{id}/grant":                 "opens network access into sites for a person; granted (and approved) by people in the browser",
 }
 
 // mcpExcluded gives the reason an operation is not offered to assistants ("" = offered).
@@ -192,7 +193,7 @@ func (b *mcpBackend) allowed(o *mcpOp) bool {
 	case "", "public":
 		return true
 	}
-	return b.p.Has(o.op.P)
+	return permOK(b.p, o.op.P)
 }
 
 func (b *mcpBackend) Tools(ctx context.Context) []mcp.Tool {

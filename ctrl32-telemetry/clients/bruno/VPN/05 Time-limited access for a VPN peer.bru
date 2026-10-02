@@ -1,0 +1,30 @@
+meta {
+  name: Time-limited access for a VPN peer
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/vpn/peers/:id/grant
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "minutes": 1,
+    "reason": "string"
+  }
+}
+
+docs {
+  Time-limited access for a VPN peer
+  
+  Enables the peer — and every rule that names it — for `minutes` (15 to 43200); afterwards it is disabled again (audited `vpn.peer_expire`). A new grant replaces the open one. With four eyes for VPN access (policy four_eyes_vpn) a grant for a technician (`user` peer) is held as a change request (202, Settings → Approvals) and starts when a different user approves it. Needs the license (402 `license_required`).
+  
+  Requires one of the permissions `system.admin`, `vpn.manage`.
+}

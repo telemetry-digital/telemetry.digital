@@ -191,6 +191,13 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "password generation failed")
 		return
 	}
+	if perms, err := s.iam.PermissionsOfRoles(r.Context(), p.OrgID, in.Roles); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	} else if perms[iam.ServerPermission] && !p.Has(iam.ServerPermission) {
+		writeJSON(w, 403, map[string]string{"error": "granting server administration (server_admin) needs system.admin", "code": "server_admin_required"})
+		return
+	}
 	u, err := s.iam.CreateUser(r.Context(), p.OrgID, in.Username, in.FullName, in.Email, pw, in.Roles, p.UserID, in.Reason)
 	if err != nil {
 		writeErr(w, 400, err.Error())
@@ -234,6 +241,19 @@ func (s *Server) patchUser(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "user not found")
 		return
 	}
+	// Server-side protection (not only the dialog): accounts of server administrators are changed by server
+	// administrators only, nobody disables themselves or drops their own administration roles, and the last server
+	// administrator stays.
+	if id != p.UserID && !s.guardServerAdminTarget(w, r, p, id) {
+		return
+	}
+	var wantRoles []string
+	if in.Roles != nil {
+		wantRoles = *in.Roles
+	}
+	if (in.Roles != nil || (in.Disabled != nil && *in.Disabled)) && !s.checkRoleChange(w, r, p, id, wantRoles, in.Disabled != nil && *in.Disabled) {
+		return
+	}
 	if in.FullName != nil || in.Email != nil {
 		name, email := before.FullName, ""
 		if before.Email != nil {
@@ -251,18 +271,6 @@ func (s *Server) patchUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if in.Roles != nil {
-		if id == p.UserID {
-			keepsAdmin := false
-			for _, role := range *in.Roles {
-				if role == "org_admin" {
-					keepsAdmin = true
-				}
-			}
-			if !keepsAdmin {
-				writeErr(w, 400, "you cannot remove your own org_admin role")
-				return
-			}
-		}
 		if err := s.iam.SetRoles(r.Context(), p.OrgID, id, *in.Roles, p.UserID, in.Reason); err != nil {
 			writeErr(w, 400, err.Error())
 			return
@@ -295,6 +303,9 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 	u, err := s.iam.GetUser(r.Context(), id)
 	if err != nil || u.OrgID != p.OrgID {
 		writeErr(w, 404, "user not found")
+		return
+	}
+	if !s.guardServerAdminTarget(w, r, p, id) {
 		return
 	}
 	pw, _ := iam.RandomPassword()

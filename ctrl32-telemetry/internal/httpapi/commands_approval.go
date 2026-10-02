@@ -224,10 +224,10 @@ func (s *Server) getPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pol := s.iam.Policy(r.Context(), org)
-	writeJSON(w, 200, map[string]any{"four_eyes_commands": pol.FourEyesCommands, "four_eyes_limits": pol.FourEyesLimits, "four_eyes_assignments": pol.FourEyesAssignments, "mfa_required_all": pol.MFARequiredAll, "mfa_required_roles": pol.MFARequiredRoles, "password_min_length": pol.PasswordMinLength})
+	writeJSON(w, 200, map[string]any{"four_eyes_commands": pol.FourEyesCommands, "four_eyes_limits": pol.FourEyesLimits, "four_eyes_assignments": pol.FourEyesAssignments, "four_eyes_vpn": pol.FourEyesVPN, "mfa_required_all": pol.MFARequiredAll, "mfa_required_roles": pol.MFARequiredRoles, "password_min_length": pol.PasswordMinLength})
 }
 
-// PUT /api/v1/settings/policy {four_eyes_commands?, four_eyes_limits?, four_eyes_assignments?, reason}
+// PUT /api/v1/settings/policy {four_eyes_commands?, four_eyes_limits?, four_eyes_assignments?, four_eyes_vpn?, reason}
 func (s *Server) putPolicy(w http.ResponseWriter, r *http.Request) {
 	org, ok := s.mustOrg(w, r)
 	if !ok {
@@ -237,6 +237,7 @@ func (s *Server) putPolicy(w http.ResponseWriter, r *http.Request) {
 		FourEyes    *bool  `json:"four_eyes_commands"`
 		Limits      *bool  `json:"four_eyes_limits"`
 		Assignments *bool  `json:"four_eyes_assignments"`
+		VPN         *bool  `json:"four_eyes_vpn"`
 		Reason      string `json:"reason"`
 	}
 	if err := decodeJSON(r, &in, 4096); err != nil {
@@ -256,8 +257,11 @@ func (s *Server) putPolicy(w http.ResponseWriter, r *http.Request) {
 	if in.Assignments != nil {
 		set["four_eyes_assignments"] = *in.Assignments
 	}
+	if in.VPN != nil {
+		set["four_eyes_vpn"] = *in.VPN
+	}
 	if len(set) == 0 {
-		writeErr(w, 400, "four_eyes_commands, four_eyes_limits or four_eyes_assignments required")
+		writeErr(w, 400, "four_eyes_commands, four_eyes_limits, four_eyes_assignments or four_eyes_vpn required")
 		return
 	}
 	old := s.iam.Policy(r.Context(), org)
@@ -266,7 +270,7 @@ func (s *Server) putPolicy(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "update failed")
 		return
 	}
-	s.audit(r, "organization.policy", "organization", org, map[string]any{"four_eyes_commands": old.FourEyesCommands, "four_eyes_limits": old.FourEyesLimits, "four_eyes_assignments": old.FourEyesAssignments}, set, in.Reason)
+	s.audit(r, "organization.policy", "organization", org, map[string]any{"four_eyes_commands": old.FourEyesCommands, "four_eyes_limits": old.FourEyesLimits, "four_eyes_assignments": old.FourEyesAssignments, "four_eyes_vpn": old.FourEyesVPN}, set, in.Reason)
 	pol := s.iam.Policy(r.Context(), org)
-	writeJSON(w, 200, map[string]any{"four_eyes_commands": pol.FourEyesCommands, "four_eyes_limits": pol.FourEyesLimits, "four_eyes_assignments": pol.FourEyesAssignments})
+	writeJSON(w, 200, map[string]any{"four_eyes_commands": pol.FourEyesCommands, "four_eyes_limits": pol.FourEyesLimits, "four_eyes_assignments": pol.FourEyesAssignments, "four_eyes_vpn": pol.FourEyesVPN})
 }

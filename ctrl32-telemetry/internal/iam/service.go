@@ -39,11 +39,12 @@ type Policy struct {
 	FourEyesCommands     bool     `json:"four_eyes_commands"`    // URS H-08: a command waits for approval by a different user before it is executed
 	FourEyesLimits       bool     `json:"four_eyes_limits"`      // URS H-08: alarm rule changes become change requests
 	FourEyesAssignments  bool     `json:"four_eyes_assignments"` // URS H-08: device ↔ datastream assignments become change requests
+	FourEyesVPN          bool     `json:"four_eyes_vpn"`         // ADR-0018: VPN access of technicians (user peers) needs a second person's approval
 }
 
 func defaultPolicy() Policy {
 	return Policy{SessionIdleMinutes: 30, SessionAbsoluteHours: 8, LockoutThreshold: 5, LockoutMinutes: 15, PasswordMinLength: 12,
-		MFARequiredRoles: []string{"org_admin", "qa", "engineer"}}
+		MFARequiredRoles: []string{"server_admin", "org_admin", "qa", "engineer"}}
 }
 
 // Service is the IAM facade used by HTTP handlers and the CLI.

@@ -25,12 +25,13 @@ import (
 // in a transaction, compiled into the complete state (internal/vpn) and sent to the privileged agent, which applies
 // the interface and the nftables table together. The transaction commits only when the agent applied the state, so
 // the database and the host never disagree; on failure both stay as they were and the error is shown. Everything
-// needs system.admin, every change carries a reason into the audit trail, and showing a client configuration (it
+// needs system.admin or, for the own organization, vpn.manage (vpn_scope.go), every change carries a reason into the audit trail, and showing a client configuration (it
 // holds a private key) needs the password again (and the authenticator code when two-factor sign-in is on).
 //
 //	GET  /api/v1/vpn                          interface, firewall, licence, peers with live state, rules, services
 //	POST /api/v1/vpn/peers                    {name, kind, org_id, device_id, subnets, expires_at, note, reason, password, code} -> config once
 //	PATCH /api/v1/vpn/peers/{id}              {name, enabled, subnets, expires_at, org_id, device_id, note, reason}
+//	POST /api/v1/vpn/peers/{id}/grant         {minutes, reason}: time-limited access (four eyes: held for approval)
 //	POST /api/v1/vpn/peers/{id}/rotate        {reason, password, code} -> new keys, config once
 //	POST /api/v1/vpn/peers/{id}/remove        {reason}
 //	POST /api/v1/vpn/rules                    {name, sources, dest_type, dest_peer_id, dest_cidr, protocol, ports, enabled, reason}
@@ -55,6 +56,7 @@ type vpnPeerRow struct {
 
 type vpnRuleRow struct {
 	vpn.Rule
+	OrgID     string // owner organization ("" = the whole server)
 	CreatedAt time.Time
 	CreatedBy string
 	UpdatedAt time.Time
@@ -96,7 +98,7 @@ func loadVPNPeers(ctx context.Context, q dbQuerier) ([]vpnPeerRow, error) {
 
 func loadVPNRules(ctx context.Context, q dbQuerier) ([]vpnRuleRow, error) {
 	rows, err := q.Query(ctx, `SELECT id::text, name, sources, dest_type, coalesce(dest_peer_id::text, ''), coalesce(dest_cidr::text, ''), protocol, ports, enabled,
-		created_at, created_by, updated_at FROM core.vpn_rule WHERE removed_at IS NULL ORDER BY created_at, id`)
+		created_at, created_by, updated_at, coalesce(org_id::text, '') FROM core.vpn_rule WHERE removed_at IS NULL ORDER BY created_at, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +107,7 @@ func loadVPNRules(ctx context.Context, q dbQuerier) ([]vpnRuleRow, error) {
 	for rows.Next() {
 		var r vpnRuleRow
 		var src []byte
-		if err := rows.Scan(&r.ID, &r.Name, &src, &r.DestType, &r.DestPeerID, &r.DestCIDR, &r.Protocol, &r.Ports, &r.Enabled, &r.CreatedAt, &r.CreatedBy, &r.UpdatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &src, &r.DestType, &r.DestPeerID, &r.DestCIDR, &r.Protocol, &r.Ports, &r.Enabled, &r.CreatedAt, &r.CreatedBy, &r.UpdatedAt, &r.OrgID); err != nil {
 			return nil, err
 		}
 		_ = json.Unmarshal(src, &r.Sources)
@@ -152,7 +154,11 @@ func (s *Server) vpnServices(st *agent.WireGuardState) []map[string]any {
 	if _, port, err := net.SplitHostPort(s.cfg.MQTT.TLSListen); err == nil && port != "" {
 		out = append(out, map[string]any{"key": "mqtt_tls", "name": "MQTT with TLS", "protocol": "tcp", "ports": port})
 	}
-	out = append(out, map[string]any{"key": "ssh", "name": "SSH (administration of the host)", "protocol": "tcp", "ports": "22"})
+	if st != nil && st.Mode == agent.ModeUserspace {
+		// Windows hub (ADR-0020): TCP services are relayed to 127.0.0.1; there is no SSH to offer
+		return out
+	}
+	out = append(out, map[string]any{"key": "ssh", "name": "SSH (administration of the host)", "protocol": "tcp", "ports": "22", "server_only": true})
 	return out
 }
 
@@ -180,14 +186,20 @@ func ruleJSON(r vpnRuleRow) map[string]any {
 		src = []vpn.Source{}
 	}
 	return map[string]any{"id": r.ID, "name": r.Name, "sources": src, "dest_type": r.DestType, "dest_peer_id": r.DestPeerID, "dest_cidr": r.DestCIDR,
-		"protocol": r.Protocol, "ports": r.Ports, "enabled": r.Enabled, "created_at": r.CreatedAt, "created_by": r.CreatedBy, "updated_at": r.UpdatedAt}
+		"protocol": r.Protocol, "ports": r.Ports, "enabled": r.Enabled, "created_at": r.CreatedAt, "created_by": r.CreatedBy, "updated_at": r.UpdatedAt, "org_id": r.OrgID}
 }
 
 // GET /api/v1/vpn
 func (s *Server) getVPN(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	sc := vpnScopeOf(PrincipalFrom(ctx))
+	scope := "server"
+	if !sc.server {
+		scope = "organization"
+	}
 	out := map[string]any{"agent": map[string]any{"configured": s.agent.Configured(), "connected": false}, "supported": false,
-		"licensed": s.vpnLicensed(ctx), "free_limit": vpn.FreePeerLimit, "buy_url": s.cfg.License.BuyURL}
+		"licensed": s.vpnLicensed(ctx), "free_limit": vpn.FreePeerLimit, "buy_url": s.cfg.License.BuyURL, "scope": scope, "four_eyes": s.vpnFourEyes(r),
+		"grant_minutes": map[string]int{"min": grantMinMinutes, "max": grantMaxMinutes}}
 	var st *agent.WireGuardState
 	if s.agent.Configured() {
 		var err error
@@ -209,8 +221,21 @@ func (s *Server) getVPN(w http.ResponseWriter, r *http.Request) {
 		}
 		iface := *st
 		iface.Peers = nil
+		if !sc.server {
+			iface.Firewall.Ruleset = "" // the compiled table names every organization's addresses
+		}
 		out["interface"] = iface
-		out["services"] = s.vpnServices(st)
+		svc := s.vpnServices(st)
+		if !sc.server {
+			kept := []map[string]any{}
+			for _, x := range svc {
+				if so, _ := x["server_only"].(bool); !so {
+					kept = append(kept, x)
+				}
+			}
+			svc = kept
+		}
+		out["services"] = svc
 	}
 	peers, err := loadVPNPeers(ctx, s.pool)
 	if err != nil {
@@ -223,14 +248,28 @@ func (s *Server) getVPN(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now()
+	grants, pending := s.vpnGrantInfo(ctx)
 	pl := make([]map[string]any, 0, len(peers))
 	for _, p := range peers {
-		pl = append(pl, peerJSON(p, live, now))
+		if !sc.owns(p.OrgID) {
+			continue
+		}
+		m := peerJSON(p, live, now)
+		if g, ok := grants[p.ID]; ok {
+			m["grant"] = g
+		}
+		if c, ok := pending[p.ID]; ok {
+			m["pending_grant"] = c
+		}
+		pl = append(pl, m)
 	}
 	rl := make([]map[string]any, 0, len(rules))
 	for _, r := range rules {
-		rl = append(rl, ruleJSON(r))
+		if sc.owns(r.OrgID) {
+			rl = append(rl, ruleJSON(r))
+		}
 	}
+	// peers_used counts every peer of the server: the free limit is per server
 	out["peers"], out["rules"], out["peers_used"] = pl, rl, len(peers)
 	writeJSON(w, 200, out)
 }
@@ -272,7 +311,7 @@ func (s *Server) vpnReady(w http.ResponseWriter, r *http.Request) (*agent.WireGu
 		return nil, netip.Prefix{}, false
 	}
 	if !st.Supported {
-		writeErr(w, 501, "the VPN is managed on Linux servers only (Windows: a later version)")
+		writeErr(w, 501, "the agent of this server does not manage the VPN")
 		return nil, netip.Prefix{}, false
 	}
 	srv, err := vpn.ServerPrefix(st.Address)
@@ -450,7 +489,10 @@ func (s *Server) clientConfig(st *agent.WireGuardState, srv netip.Prefix, p vpn.
 	}
 	if p.Kind == vpn.KindSite {
 		out["templates"] = vpn.RouterTemplates(c)
+		out["template_keys"] = vpn.RouterTemplateKeys
 	}
+	out["client_templates"] = vpn.ClientTemplates(c)
+	out["client_template_keys"] = vpn.ClientTemplateKeys
 	return out
 }
 
@@ -498,6 +540,22 @@ func (s *Server) createVPNPeer(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "note: at most 200 characters")
 		return
 	}
+	sc := vpnScopeOf(pr)
+	if !sc.server {
+		// an organization's VPN manager adds peers of the own organization only
+		if in.OrgID != nil && *in.OrgID != "" && *in.OrgID != sc.org {
+			writeErr(w, 403, "peers of another organization or of the whole server are managed by server administrators")
+			return
+		}
+		o := sc.org
+		in.OrgID = &o
+	}
+	// four eyes: a technician's access starts only after a second person approved a grant
+	held := in.Kind == vpn.KindUser && s.vpnFourEyes(r) && changeFrom(r.Context()) == nil
+	if held && in.ExpiresAt != nil && *in.ExpiresAt != "" {
+		writeJSON(w, 409, map[string]string{"error": "four eyes for VPN access is on: add the technician without an expiry, then request a time-limited grant", "code": "approval_required"})
+		return
+	}
 	if !s.stepUp(w, r, in.Password, in.Code) {
 		return
 	}
@@ -521,7 +579,7 @@ func (s *Server) createVPNPeer(w http.ResponseWriter, r *http.Request) {
 		if err := vpn.CheckAdd(licensed, len(rows), in.Kind, expires != nil); err != nil {
 			return nil, err
 		}
-		p := vpn.Peer{Name: name, Kind: in.Kind, Enabled: true, ExpiresAt: expires}
+		p := vpn.Peer{Name: name, Kind: in.Kind, Enabled: !held, ExpiresAt: expires}
 		for _, o := range rows {
 			if strings.EqualFold(o.Name, name) {
 				return nil, vpnBad("a peer with that name exists")
@@ -567,9 +625,9 @@ func (s *Server) createVPNPeer(w http.ResponseWriter, r *http.Request) {
 		for i, x := range p.Subnets {
 			sub[i] = x.String()
 		}
-		if err := tx.QueryRow(ctx, `INSERT INTO core.vpn_peer (name, kind, org_id, device_id, address, public_key, subnets, expires_at, note, created_by)
-			VALUES ($1, $2, $3::uuid, $4::uuid, $5::inet, $6, $7::cidr[], $8, $9, $10) RETURNING id::text`,
-			p.Name, p.Kind, nullStr(p.OrgID), nullStr(p.DeviceID), p.Address.String()+"/32", p.PublicKey, sub, p.ExpiresAt, note, pr.Username).Scan(&p.ID); err != nil {
+		if err := tx.QueryRow(ctx, `INSERT INTO core.vpn_peer (name, kind, org_id, device_id, address, public_key, subnets, expires_at, note, created_by, enabled)
+			VALUES ($1, $2, $3::uuid, $4::uuid, $5::inet, $6, $7::cidr[], $8, $9, $10, $11) RETURNING id::text`,
+			p.Name, p.Kind, nullStr(p.OrgID), nullStr(p.DeviceID), p.Address.String()+"/32", p.PublicKey, sub, p.ExpiresAt, note, pr.Username, p.Enabled).Scan(&p.ID); err != nil {
 			return nil, err
 		}
 		created = p
@@ -583,6 +641,9 @@ func (s *Server) createVPNPeer(w http.ResponseWriter, r *http.Request) {
 	srv, _ := vpn.ServerPrefix(st.Address)
 	out := s.clientConfig(st, srv, created, priv, psk, all)
 	out["peer"] = peerJSON(vpnPeerRow{Peer: created, Note: note, CreatedAt: time.Now(), CreatedBy: pr.Username, UpdatedAt: time.Now()}, nil, time.Now())
+	if held {
+		out["approval_required"] = true // disabled until a second person approves a time-limited grant
+	}
 	writeJSON(w, 201, out)
 }
 
@@ -611,6 +672,9 @@ func (s *Server) patchVPNPeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	licensed := s.vpnLicensed(r.Context())
+	pr := PrincipalFrom(r.Context())
+	sc := vpnScopeOf(pr)
+	fourEyes := s.vpnFourEyes(r) && changeFrom(r.Context()) == nil
 	var before, after map[string]any
 	_, ok := s.vpnChange(w, r, func(ctx context.Context, tx pgx.Tx, srv netip.Prefix, st *agent.WireGuardState) (map[string]string, error) {
 		rows, err := loadVPNPeers(ctx, tx)
@@ -618,8 +682,14 @@ func (s *Server) patchVPNPeer(w http.ResponseWriter, r *http.Request) {
 			return nil, err
 		}
 		cur, found := findPeer(rows, id)
-		if !found {
-			return nil, &vpnErr{code: 404, msg: "peer not found"}
+		if !found || !sc.owns(cur.OrgID) {
+			return nil, vpnPeerNotFound()
+		}
+		if !sc.server && in.OrgID != nil && *in.OrgID != sc.org {
+			return nil, &vpnErr{code: 403, msg: "a peer cannot be moved to another organization or to the whole server by an organization"}
+		}
+		if fourEyes && cur.Kind == vpn.KindUser && ((in.Enabled != nil && *in.Enabled && !cur.Enabled) || in.ExpiresAt != nil) {
+			return nil, &vpnErr{code: 409, msg: "four eyes for VPN access is on: request a time-limited grant for the technician (a second person approves it)", key: "approval_required"}
 		}
 		before = peerAudit(cur.Peer, cur.Note)
 		p, note := cur.Peer, cur.Note
@@ -700,6 +770,21 @@ func (s *Server) patchVPNPeer(w http.ResponseWriter, r *http.Request) {
 			WHERE id = $1::uuid`, id, p.Name, sub, p.ExpiresAt, p.Enabled, nullStr(p.OrgID), nullStr(p.DeviceID), note); err != nil {
 			return nil, err
 		}
+		switch {
+		case cur.Enabled && !p.Enabled:
+			if err := endGrants(ctx, tx, id, pr.Username, "disabled: "+strings.TrimSpace(in.Reason)); err != nil {
+				return nil, err
+			}
+		case in.ExpiresAt != nil && p.ExpiresAt == nil:
+			if err := endGrants(ctx, tx, id, pr.Username, "expiry cleared: "+strings.TrimSpace(in.Reason)); err != nil {
+				return nil, err
+			}
+		case in.ExpiresAt != nil:
+			// the open grant follows the new end of the access
+			if _, err := tx.Exec(ctx, `UPDATE core.vpn_grant SET ends_at = $2 WHERE peer_id = $1::uuid AND ended_at IS NULL AND starts_at < $2`, id, *p.ExpiresAt); err != nil {
+				return nil, err
+			}
+		}
 		after = peerAudit(p, note)
 		return nil, nil
 	})
@@ -725,6 +810,7 @@ func (s *Server) rotateVPNPeer(w http.ResponseWriter, r *http.Request) {
 	if !reasonOf(w, in.Reason) || !s.stepUp(w, r, in.Password, in.Code) {
 		return
 	}
+	sc := vpnScopeOf(PrincipalFrom(r.Context()))
 	var p vpn.Peer
 	var priv, psk, oldKey string
 	var all []vpn.Peer
@@ -734,8 +820,8 @@ func (s *Server) rotateVPNPeer(w http.ResponseWriter, r *http.Request) {
 			return nil, err
 		}
 		cur, found := findPeer(rows, id)
-		if !found {
-			return nil, &vpnErr{code: 404, msg: "peer not found"}
+		if !found || !sc.owns(cur.OrgID) {
+			return nil, vpnPeerNotFound()
 		}
 		p, oldKey = cur.Peer, cur.PublicKey
 		if priv, p.PublicKey, err = vpn.GenerateKey(); err != nil {
@@ -779,11 +865,19 @@ func (s *Server) removeVPNPeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pr := PrincipalFrom(r.Context())
+	sc := vpnScopeOf(pr)
 	var name string
 	var rulesRemoved, rulesChanged int
 	_, ok := s.vpnChange(w, r, func(ctx context.Context, tx pgx.Tx, srv netip.Prefix, st *agent.WireGuardState) (map[string]string, error) {
+		var org string
+		if err := tx.QueryRow(ctx, `SELECT coalesce(org_id::text, '') FROM core.vpn_peer WHERE id = $1::uuid AND removed_at IS NULL`, id).Scan(&org); err != nil || !sc.owns(org) {
+			return nil, vpnPeerNotFound()
+		}
 		if err := tx.QueryRow(ctx, `UPDATE core.vpn_peer SET removed_at = now(), removed_by = $2, enabled = false WHERE id = $1::uuid AND removed_at IS NULL RETURNING name`, id, pr.Username).Scan(&name); err != nil {
 			return nil, &vpnErr{code: 404, msg: "peer not found"}
+		}
+		if err := endGrants(ctx, tx, id, pr.Username, "peer removed"); err != nil {
+			return nil, err
 		}
 		rules, err := loadVPNRules(ctx, tx)
 		if err != nil {
@@ -845,6 +939,7 @@ func (s *Server) saveVPNRule(w http.ResponseWriter, r *http.Request, id string) 
 	pr := PrincipalFrom(r.Context())
 	rule := vpn.Rule{ID: id, Name: strings.TrimSpace(in.Name), Sources: in.Sources, DestType: in.DestType, DestPeerID: strings.TrimSpace(in.DestPeerID),
 		DestCIDR: strings.TrimSpace(in.DestCIDR), Protocol: in.Protocol, Ports: in.Ports, Enabled: in.Enabled == nil || *in.Enabled}
+	sc := vpnScopeOf(pr)
 	var before any
 	_, ok := s.vpnChange(w, r, func(ctx context.Context, tx pgx.Tx, srv netip.Prefix, st *agent.WireGuardState) (map[string]string, error) {
 		rows, err := loadVPNPeers(ctx, tx)
@@ -852,11 +947,29 @@ func (s *Server) saveVPNRule(w http.ResponseWriter, r *http.Request, id string) 
 			return nil, err
 		}
 		peers := map[string]vpn.Peer{}
+		byID := map[string]vpnPeerRow{}
 		for _, p := range rows {
 			peers[p.ID] = p.Peer
+			byID[p.ID] = p
+		}
+		if !sc.server {
+			// an organization's VPN manager does not learn about peers of others: unknown ids look the same
+			for _, src := range rule.Sources {
+				if src.Type == vpn.SrcPeer && !sc.owns(byID[src.ID].OrgID) {
+					return nil, &vpnErr{code: 404, msg: "source peer not found"}
+				}
+			}
+			if (rule.DestType == vpn.DstPeer || rule.DestType == vpn.DstSite) && !sc.owns(byID[rule.DestPeerID].OrgID) {
+				return nil, &vpnErr{code: 404, msg: "destination not found"}
+			}
 		}
 		if err := vpn.ValidateRule(&rule, peers); err != nil {
 			return nil, vpnBad(err.Error())
+		}
+		if !sc.server {
+			if err := s.checkOrgRule(&rule, sc.org, byID); err != nil {
+				return nil, err
+			}
 		}
 		for _, src := range rule.Sources {
 			if src.Type == vpn.SrcOrg {
@@ -873,9 +986,9 @@ func (s *Server) saveVPNRule(w http.ResponseWriter, r *http.Request, id string) 
 			if n >= vpn.MaxRules {
 				return nil, vpnBad(fmt.Sprintf("at most %d access rules", vpn.MaxRules))
 			}
-			return nil, tx.QueryRow(ctx, `INSERT INTO core.vpn_rule (name, sources, dest_type, dest_peer_id, dest_cidr, protocol, ports, enabled, created_by)
-				VALUES ($1, $2::jsonb, $3, $4::uuid, $5::cidr, $6, $7, $8, $9) RETURNING id::text`,
-				rule.Name, string(src), rule.DestType, nullStr(rule.DestPeerID), nullStr(rule.DestCIDR), rule.Protocol, rule.Ports, rule.Enabled, pr.Username).Scan(&rule.ID)
+			return nil, tx.QueryRow(ctx, `INSERT INTO core.vpn_rule (name, sources, dest_type, dest_peer_id, dest_cidr, protocol, ports, enabled, created_by, org_id)
+				VALUES ($1, $2::jsonb, $3, $4::uuid, $5::cidr, $6, $7, $8, $9, $10::uuid) RETURNING id::text`,
+				rule.Name, string(src), rule.DestType, nullStr(rule.DestPeerID), nullStr(rule.DestCIDR), rule.Protocol, rule.Ports, rule.Enabled, pr.Username, nullStr(sc.org)).Scan(&rule.ID)
 		}
 		rules, err := loadVPNRules(ctx, tx)
 		if err != nil {
@@ -883,7 +996,7 @@ func (s *Server) saveVPNRule(w http.ResponseWriter, r *http.Request, id string) 
 		}
 		found := false
 		for _, ru := range rules {
-			if ru.ID == id {
+			if ru.ID == id && sc.owns(ru.OrgID) {
 				found, before = true, ruleJSON(ru)
 			}
 		}
@@ -936,9 +1049,11 @@ func (s *Server) removeVPNRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pr := PrincipalFrom(r.Context())
+	sc := vpnScopeOf(pr)
 	var name string
 	_, ok := s.vpnChange(w, r, func(ctx context.Context, tx pgx.Tx, srv netip.Prefix, st *agent.WireGuardState) (map[string]string, error) {
-		if err := tx.QueryRow(ctx, `UPDATE core.vpn_rule SET removed_at = now(), removed_by = $2 WHERE id = $1::uuid AND removed_at IS NULL RETURNING name`, id, pr.Username).Scan(&name); err != nil {
+		if err := tx.QueryRow(ctx, `UPDATE core.vpn_rule SET removed_at = now(), removed_by = $2 WHERE id = $1::uuid AND removed_at IS NULL
+			AND ($3 = '' OR org_id::text = $3) RETURNING name`, id, pr.Username, sc.org).Scan(&name); err != nil {
 			return nil, &vpnErr{code: 404, msg: "rule not found"}
 		}
 		return nil, nil
@@ -1012,8 +1127,16 @@ func (s *Server) vpnTick(force bool) {
 	}
 	rows.Close()
 	for _, e := range expired {
+		nw := map[string]any{"name": e.name, "enabled": false}
+		// a time-limited access grant ends with it (approved by, window)
+		var gid, req, appr string
+		var ends time.Time
+		if s.pool.QueryRow(ctx, `UPDATE core.vpn_grant SET ended_at = now(), ended_by = 'vpn expiry', end_reason = 'expired' WHERE peer_id = $1::uuid AND ended_at IS NULL
+			RETURNING id::text, requested_by, coalesce(approved_by, ''), ends_at`, e.id).Scan(&gid, &req, &appr, &ends) == nil {
+			nw["grant"] = map[string]any{"id": gid, "requested_by": req, "approved_by": appr, "ends_at": ends}
+		}
 		_, _, _ = audit.Append(ctx, s.pool, audit.Entry{OrgID: e.org, ActorType: "system", ActorName: "vpn expiry", Action: "vpn.peer_expire", EntityType: "vpn_peer", EntityID: e.id,
-			New: map[string]any{"name": e.name, "enabled": false}, Reason: "time-limited access expired"})
+			New: nw, Reason: "time-limited access expired"})
 		s.log.Info("vpn access expired", "peer", e.name)
 	}
 	if len(expired) == 0 && !force {

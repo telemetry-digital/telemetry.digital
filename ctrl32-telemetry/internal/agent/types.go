@@ -96,14 +96,18 @@ type WireGuardState struct {
 	MQTT       string          `json:"mqtt,omitempty"` // broker address inside the VPN
 	Peers      []WireGuardPeer `json:"peers"`
 	UpdatedAt  time.Time       `json:"updated_at,omitempty"`
-	// Supported is false where the agent does not manage WireGuard (Windows: a later phase).
+	// Supported is false where the agent does not manage WireGuard.
 	Supported bool `json:"supported"`
+	// Mode: "kernel" (Linux: kernel WireGuard and the nftables table), "userspace" (Windows: WireGuard and the access
+	// rules inside the agent, ADR-0020) or "simulation" (development and tests); empty when not supported.
+	Mode string `json:"mode,omitempty"`
 	// Simulated: development/test agent ([agent] vpn_simulate) — files are rendered, nothing is applied to the host.
 	Simulated bool        `json:"simulated,omitempty"`
 	Firewall  VPNFirewall `json:"firewall"`
 }
 
-// VPNFirewall is the state of the nftables table that filters traffic from the VPN (default deny).
+// VPNFirewall is the state of the filter of traffic from the VPN (default deny): the nftables table on Linux, the
+// in-process filter of the userspace hub on Windows (Ruleset is then its rules text).
 type VPNFirewall struct {
 	Applied   bool      `json:"applied"` // the table is loaded (in simulation: rendered)
 	Rules     int       `json:"rules"`   // access rules in the table

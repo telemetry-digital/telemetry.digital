@@ -62,7 +62,8 @@ type Server struct {
 	// host access of the VPN operations (vpn.go): replaced by fakes in tests and by the simulation
 	exec          func(ctx context.Context, timeout time.Duration, name string, args ...string) (string, error)
 	simulate      bool
-	vpnHost       bool // the host can run the VPN (Linux); tests set it on any platform
+	vpnHost       bool         // the host can run the VPN with kernel WireGuard and nftables (Linux); tests set it on any platform
+	hub           userspaceHub // Windows: WireGuard and the access rules inside the agent (ADR-0020); nil elsewhere
 	localNets     func() []netip.Prefix
 	setForwarding func(on bool) error
 }
@@ -72,7 +73,7 @@ func NewServer(socket, cfgPath, version, updateURL string, log *slog.Logger) *Se
 		updateURL = "https://telemetry.digital/dl"
 	}
 	return &Server{socket: socket, cfgPath: cfgPath, version: version, updateURL: strings.TrimRight(updateURL, "/"), log: log, started: time.Now(), pgContainer: pgContainerDefault,
-		exec: run, localNets: vpn.LocalNets, setForwarding: setWGForwarding, vpnHost: !isWindows()}
+		exec: run, localNets: vpn.LocalNets, setForwarding: setWGForwarding, vpnHost: !isWindows(), hub: newUserspaceHub(log)}
 }
 
 // SetDBTools configures where the database tooling is (config [agent] pg_dump / pg_container).
@@ -99,7 +100,15 @@ func (a *Server) Serve(ctx context.Context) error {
 		_ = os.Chmod(a.socket, 0o660)
 	}
 	srv := &http.Server{Handler: a.routes(), ReadHeaderTimeout: 10 * time.Second}
-	go func() { <-ctx.Done(); _ = srv.Close(); _ = os.Remove(a.socket) }()
+	go func() {
+		<-ctx.Done()
+		_ = srv.Close()
+		_ = os.Remove(a.socket)
+		if a.vpnMode() == ModeUserspace {
+			a.hub.Stop()
+		}
+	}()
+	a.startHubFromFiles()
 	a.log.Info("agent listening", "socket", a.socket, "version", a.version)
 	if !a.simulate {
 		go a.runScheduler(ctx)

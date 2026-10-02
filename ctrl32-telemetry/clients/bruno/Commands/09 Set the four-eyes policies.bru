@@ -15,6 +15,7 @@ body:json {
     "four_eyes_assignments": true,
     "four_eyes_commands": true,
     "four_eyes_limits": true,
+    "four_eyes_vpn": true,
     "reason": "string"
   }
 }
@@ -22,7 +23,7 @@ body:json {
 docs {
   Set the four-eyes policies
   
-  `four_eyes_commands`: commands wait for approval. `four_eyes_limits`: alarm rule changes become change requests. `four_eyes_assignments`: device ↔ datastream assignments become change requests. At least one field.
+  `four_eyes_commands`: commands wait for approval. `four_eyes_limits`: alarm rule changes become change requests. `four_eyes_assignments`: device ↔ datastream assignments become change requests. `four_eyes_vpn`: VPN access of technicians needs a grant approved by a second person. At least one field.
   
   Requires permission `user.admin`.
 }

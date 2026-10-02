@@ -1,5 +1,8 @@
 # ADR-0018: Own WireGuard VPN management — hub and spoke, access rules with default deny, nftables
 
+**Amended by ADR-0020** (2 Oct 2026): Windows servers run a userspace WireGuard hub in the agent that enforces the same
+access rules in-process.
+
 **Status:** accepted 2 Oct 2026 (owner: "VPN phase 1 … our own WireGuard network management, Netmaker-like but our own
 code"; goals: technician access to PLC/HMI at sites, site-to-site through a router or Raspberry Pi, devices sending data
 through the tunnel, a general company VPN; "basic is free, more with the licence"; Linux first, Windows phase 2, cloud

@@ -23,7 +23,7 @@ body:json {
 docs {
   Approve a change request
   
-  A different user than the requester, holding the permission of the change (config.write for limits, device.manage for assignments). The original call is replayed under the approver's identity; `code` and `result` are its response.
+  A different user than the requester, holding the permission of the change (config.write for limits, device.manage for assignments, vpn.manage or system.admin for VPN access grants). The original call is replayed under the approver's identity; `code` and `result` are its response.
   
   Requires a signed-in user or an API token (any permission).
 }

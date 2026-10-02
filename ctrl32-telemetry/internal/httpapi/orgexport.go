@@ -15,7 +15,8 @@ import (
 
 // Full organization export (URS J-09: "plný export organizácie jedným kliknutím", draft Annex 11 12.9):
 // one ZIP with the configuration as JSON, every record class as CSV for the requested period, and a manifest
-// with SHA-256 of each file. Streamed; no temporary files. Requires system.admin.
+// with SHA-256 of each file. Streamed; no temporary files. Requires user.admin (an organization administrator task;
+// before 0.65.0 system.admin, which org_admin then held — ADR-0019).
 //
 //	GET /api/v1/export/organization?from=&to=   (default: last 365 days)
 
