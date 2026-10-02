@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-26
 
-**Status**: Implemented (first 0.43.0 on 26 Sep 2026, reverted the same day; reinstated in 0.57.0 on 27 Sep 2026 as a perpetual license, 39 EUR one-time, ADR-0016)
+**Status**: Implemented (first 0.43.0 on 26 Sep 2026, reverted the same day; reinstated in 0.57.0 on 27 Sep 2026 as a perpetual license, 99,- EUR one-time, ADR-0016)
 
 **Input**: User description: "Predpríprava white labeling, bude platený" (prepare white labeling; it will be paid).
 
@@ -41,7 +41,7 @@ In Settings → Branding and theme, the organization sets its product name, foot
 page, the installed app, e-mails, the authenticator app and PDF reports show its brand instead of ctrl32 telemetry.
 
 ### User Story 4 - Perpetual license, removal and optional expiry (Priority: P2)
-The white-label license is sold once (39 EUR) and never expires; System → License shows it as perpetual. When it is
+The white-label license is sold once (99,- EUR) and never expires; System → License shows it as perpetual. When it is
 removed (or a license issued with an expiry date expires), the fixed ctrl32 footer returns; the settings stay.
 
 ### Edge Cases

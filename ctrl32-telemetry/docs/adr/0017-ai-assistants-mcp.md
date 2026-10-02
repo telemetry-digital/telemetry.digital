@@ -32,7 +32,7 @@ connectors of web assistants require Streamable HTTP and OAuth 2.1 with dynamic 
    refuses every connected assistant at once; disconnecting ends an approval and its tokens. Assistants do not manage
    API tokens or AI access and do not get sign-in or two-factor operations.
 7. **Reading is free, changes are paid**: changes through an assistant (every `<area>_change` tool) need the paid
-   license of the server — the same license as white labeling (feature `white_label`, 39 EUR once, forever; one
+   license of the server — the same license as white labeling (feature `white_label`, 99,- EUR once, forever; one
    purchase unlocks both). Without it every assistant is read-only (change tools not offered, changes refused with an
    explanation, consent offers only reading). Only MCP is affected: the web UI and the REST API with personal tokens
    stay free (ADR-0002, ADR-0010).
