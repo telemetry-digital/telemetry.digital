@@ -1,5 +1,9 @@
 # ADR-0018: Own WireGuard VPN management — hub and spoke, access rules with default deny, nftables
 
+**Amended by ADR-0021** (2 Oct 2026, 0.69.0): phase 3 — a server without a public address joins another telemetry
+server (e.g. a cloud hub) through an uplink: a site peer with `uplink = true` on the hub, its own default-deny uplink
+rules on the customer server, and an HTTPS transport for networks that block UDP. Decision 1 ("no NAT traversal") is
+lifted for this case: the customer server connects out.
 **Amended by ADR-0020** (2 Oct 2026): Windows servers run a userspace WireGuard hub in the agent that enforces the same
 access rules in-process. **Amended by ADR-0019 and the phase 2 amendment below** (0.65.0): management per organization,
 time-limited access grants and four eyes for technicians' access; decision 9 is superseded.

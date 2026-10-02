@@ -1,0 +1,26 @@
+meta {
+  name: Switch the uplinks transport
+  type: http
+  seq: 16
+}
+
+post {
+  url: {{baseUrl}}/api/v1/vpn/uplink/transport
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "reason": "string",
+    "transport": "udp"
+  }
+}
+
+docs {
+  Switch the uplink's transport
+  
+  `udp` or `https` (only when the token carries the HTTPS transport).
+  
+  Requires permission `system.admin`.
+}

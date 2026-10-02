@@ -3,7 +3,12 @@
 // restarts, Caddy (domain/TLS), WireGuard with its VPN firewall and binary updates. Nothing here builds shell commands from input.
 package agent
 
-import "time"
+import (
+	"time"
+
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/uptunnel"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/vpn"
+)
 
 // Status is everything the server screen shows about the host.
 type Status struct {
@@ -104,6 +109,52 @@ type WireGuardState struct {
 	// Simulated: development/test agent ([agent] vpn_simulate) — files are rendered, nothing is applied to the host.
 	Simulated bool        `json:"simulated,omitempty"`
 	Firewall  VPNFirewall `json:"firewall"`
+	// Uplink is this server's connection to a hub (VPN phase 3, uplink.go); nil where the agent cannot run one.
+	Uplink *UplinkState `json:"uplink,omitempty"`
+}
+
+// UplinkState is the uplink of this server to a hub: the stored configuration (without keys) and the live tunnel.
+type UplinkState struct {
+	Configured      bool             `json:"configured"`
+	Mode            string           `json:"mode"`      // kernel | userspace | simulation
+	Transport       string           `json:"transport"` // udp | https
+	Name            string           `json:"name,omitempty"`
+	HubEndpoint     string           `json:"hub_endpoint,omitempty"`
+	HubPublicKey    string           `json:"hub_public_key,omitempty"`
+	PublicKey       string           `json:"public_key,omitempty"`
+	Address         string           `json:"address,omitempty"`     // this server's address in the hub's VPN
+	VPNNet          string           `json:"vpn_net,omitempty"`     // the hub's VPN range
+	HubAddress      string           `json:"hub_address,omitempty"` // the hub's own VPN address
+	Subnets         []string         `json:"subnets,omitempty"`     // the LAN subnets offered to the hub
+	HTTPSAvailable  bool             `json:"https_available"`
+	TunnelHost      string           `json:"tunnel_host,omitempty"`
+	Tunnel          *uptunnel.Status `json:"tunnel,omitempty"`
+	Running         bool             `json:"running"`
+	Online          bool             `json:"online"`
+	LatestHandshake time.Time        `json:"latest_handshake,omitzero"`
+	Endpoint        string           `json:"endpoint,omitempty"`
+	RxBytes         int64            `json:"rx_bytes"`
+	TxBytes         int64            `json:"tx_bytes"`
+	ConnectedAt     time.Time        `json:"connected_at,omitzero"`
+	LANForward      []string         `json:"lan_forward,omitempty"`
+	Firewall        VPNFirewall      `json:"firewall"`
+}
+
+// UplinkRequest connects to a hub (or replaces the configuration) with a pasted token and the compiled rules.
+type UplinkRequest struct {
+	Token     string       `json:"token"`
+	Transport string       `json:"transport"`
+	Rules     []vpn.FwRule `json:"rules"`
+}
+
+// UplinkRulesRequest applies new compiled uplink access rules.
+type UplinkRulesRequest struct {
+	Rules []vpn.FwRule `json:"rules"`
+}
+
+// UplinkTransportRequest switches the transport.
+type UplinkTransportRequest struct {
+	Transport string `json:"transport"`
 }
 
 // VPNFirewall is the state of the filter of traffic from the VPN (default deny): the nftables table on Linux, the

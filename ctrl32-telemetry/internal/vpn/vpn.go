@@ -73,6 +73,7 @@ type Peer struct {
 	PublicKey string
 	Enabled   bool
 	ExpiresAt *time.Time
+	Uplink    bool // a site that is another telemetry server connected through an uplink (phase 3, uplink.go)
 }
 
 // Active reports whether the peer may connect now: enabled and not expired.
@@ -553,6 +554,11 @@ func prefixStrings(ps []netip.Prefix) []string {
 // subnets of the other sites (the server's firewall decides what is actually reachable).
 func ClientAllowedIPs(server netip.Prefix, kind, selfID string, peers []Peer) []string {
 	out := []string{server.Masked().String()}
+	for _, p := range peers {
+		if p.ID == selfID && p.Uplink {
+			return HubAllowedIPs(server) // a customer server behind an uplink is reached by the hub's range only
+		}
+	}
 	if kind == KindDevice {
 		return out
 	}

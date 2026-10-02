@@ -86,6 +86,9 @@ func (a *Server) SetSimulation(dir string) {
 	}
 	a.localNets = func() []netip.Prefix { return nil }
 	a.setForwarding = func(bool) error { return nil }
+	a.ifForwarding = func(string) (bool, error) { return false, nil }
+	a.setIfForwarding = func(string, bool) error { return nil }
+	a.tunnelWatchEvery = 0
 }
 
 // setWGForwarding switches IPv4 forwarding for packets that arrive on wg0 only (the host's other interfaces keep
@@ -129,6 +132,7 @@ func (a *Server) wgState(ctx context.Context) WireGuardState {
 	if !out.Supported {
 		return out
 	}
+	out.Uplink = a.uplinkState(ctx)
 	out.Mode = a.vpnMode()
 	if out.Mode == ModeUserspace {
 		return a.hubState(out, peers, vs)
@@ -407,6 +411,16 @@ func (a *Server) hApplyVPN(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err.Error())
 		return
 	}
+	var subnets []string
+	for _, p := range d.Peers {
+		if p.Enabled {
+			subnets = append(subnets, p.Subnets...)
+		}
+	}
+	if err := a.uplinkConflict(netip.Prefix{}, subnets); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
 	// carry the preshared keys over by public key (a rotation or a new peer sends a new one)
 	psk := map[string]string{}
 	created := map[string]wgPeerStored{}
@@ -505,6 +519,12 @@ func (a *Server) hSetWireGuard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Address = srv.String()
+	if in.Enabled {
+		if err := a.uplinkConflict(srv, nil); err != nil {
+			writeErr(w, 409, err.Error())
+			return
+		}
+	}
 	in.Endpoint = strings.TrimSpace(in.Endpoint)
 	if in.Endpoint != "" {
 		host, port, err := net.SplitHostPort(in.Endpoint)

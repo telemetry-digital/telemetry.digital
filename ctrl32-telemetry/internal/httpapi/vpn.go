@@ -69,7 +69,7 @@ type dbQuerier interface {
 
 func loadVPNPeers(ctx context.Context, q dbQuerier) ([]vpnPeerRow, error) {
 	rows, err := q.Query(ctx, `SELECT p.id::text, p.name, p.kind, coalesce(p.org_id::text, ''), coalesce(p.device_id::text, ''), host(p.address), p.public_key,
-		p.subnets::text[], p.enabled, p.expires_at, p.note, p.created_at, p.created_by, p.updated_at, p.key_rotated_at, coalesce(o.name, ''), coalesce(d.name, '')
+		p.subnets::text[], p.enabled, p.expires_at, p.note, p.created_at, p.created_by, p.updated_at, p.key_rotated_at, coalesce(o.name, ''), coalesce(d.name, ''), p.uplink
 		FROM core.vpn_peer p LEFT JOIN core.organization o ON o.id = p.org_id LEFT JOIN core.device d ON d.id = p.device_id
 		WHERE p.removed_at IS NULL ORDER BY p.address`)
 	if err != nil {
@@ -82,7 +82,7 @@ func loadVPNPeers(ctx context.Context, q dbQuerier) ([]vpnPeerRow, error) {
 		var addr string
 		var subnets []string
 		if err := rows.Scan(&p.ID, &p.Name, &p.Kind, &p.OrgID, &p.DeviceID, &addr, &p.PublicKey, &subnets, &p.Enabled, &p.ExpiresAt, &p.Note,
-			&p.CreatedAt, &p.CreatedBy, &p.UpdatedAt, &p.KeyRotatedAt, &p.OrgName, &p.DeviceName); err != nil {
+			&p.CreatedAt, &p.CreatedBy, &p.UpdatedAt, &p.KeyRotatedAt, &p.OrgName, &p.DeviceName, &p.Uplink); err != nil {
 			return nil, err
 		}
 		p.Address, _ = netip.ParseAddr(addr)
@@ -170,9 +170,11 @@ func peerJSON(p vpnPeerRow, live map[string]agent.WireGuardPeer, now time.Time) 
 	m := map[string]any{"id": p.ID, "name": p.Name, "kind": p.Kind, "org_id": p.OrgID, "org_name": p.OrgName, "device_id": p.DeviceID, "device_name": p.DeviceName,
 		"address": p.Address.String(), "subnets": subnets, "public_key": p.PublicKey, "enabled": p.Enabled, "expires_at": p.ExpiresAt,
 		"expired": p.ExpiresAt != nil && !now.Before(*p.ExpiresAt), "active": p.Active(now), "note": p.Note, "created_at": p.CreatedAt, "created_by": p.CreatedBy,
-		"updated_at": p.UpdatedAt, "key_rotated_at": p.KeyRotatedAt, "online": false, "rx_bytes": 0, "tx_bytes": 0}
+		"updated_at": p.UpdatedAt, "key_rotated_at": p.KeyRotatedAt, "online": false, "rx_bytes": 0, "tx_bytes": 0, "uplink": p.Uplink}
 	if l, ok := live[p.PublicKey]; ok {
 		m["online"], m["rx_bytes"], m["tx_bytes"], m["endpoint"] = l.Online, l.RxBytes, l.TxBytes, l.Endpoint
+		// an uplink over the HTTPS transport reaches WireGuard through the web service on the loopback address
+		m["via_https"] = p.Uplink && strings.HasPrefix(l.Endpoint, "127.0.0.1:")
 		if !l.LatestHandshake.IsZero() {
 			m["latest_handshake"] = l.LatestHandshake
 		}
@@ -271,6 +273,17 @@ func (s *Server) getVPN(w http.ResponseWriter, r *http.Request) {
 	}
 	// peers_used counts every peer of the server: the free limit is per server
 	out["peers"], out["rules"], out["peers_used"] = pl, rl, len(peers)
+	if sc.server {
+		// VPN phase 3: this server's uplink to a hub, its rules, and whether issued uplink tokens carry the HTTPS transport
+		if err := s.uplinkView(ctx, st, out); err != nil {
+			writeErr(w, 500, "query failed")
+			return
+		}
+	}
+	if m, ok := out["interface"].(agent.WireGuardState); ok {
+		m.Uplink = nil
+		out["interface"] = m
+	}
 	writeJSON(w, 200, out)
 }
 
@@ -420,6 +433,7 @@ type peerInput struct {
 	ExpiresAt *string   `json:"expires_at"` // RFC 3339; "" clears
 	Enabled   *bool     `json:"enabled"`
 	Note      *string   `json:"note"`
+	Uplink    bool      `json:"uplink"` // a site that is another telemetry server (VPN phase 3): an uplink token instead of router texts
 	Reason    string    `json:"reason"`
 	Password  string    `json:"password"`
 	Code      string    `json:"code"`
@@ -476,7 +490,10 @@ func nullStr(s string) any {
 }
 
 // clientConfig builds what the peer's owner gets once: the configuration, its QR code and, for a site, router texts.
-func (s *Server) clientConfig(st *agent.WireGuardState, srv netip.Prefix, p vpn.Peer, priv, psk string, all []vpn.Peer) map[string]any {
+func (s *Server) clientConfig(st *agent.WireGuardState, srv netip.Prefix, p vpn.Peer, priv, psk, tunnelKey string, all []vpn.Peer) map[string]any {
+	if p.Uplink {
+		return s.uplinkConfig(st, srv, p, priv, psk, tunnelKey)
+	}
 	c := vpn.Client{Name: p.Name, Kind: p.Kind, PrivateKey: priv, Address: p.Address.String(), VPNNet: srv.Masked().String(), VPNBits: srv.Bits(), DNS: st.DNS,
 		ServerPublicKey: st.PublicKey, PresharedKey: psk, Endpoint: st.Endpoint, AllowedIPs: vpn.ClientAllowedIPs(srv, p.Kind, p.ID, all)}
 	for _, sn := range p.Subnets {
@@ -502,7 +519,7 @@ func peerAudit(p vpn.Peer, note string) map[string]any {
 		sub = append(sub, s.String())
 	}
 	return map[string]any{"name": p.Name, "kind": p.Kind, "org_id": p.OrgID, "device_id": p.DeviceID, "address": p.Address.String(), "subnets": sub,
-		"enabled": p.Enabled, "expires_at": p.ExpiresAt, "public_key": p.PublicKey, "note": note}
+		"enabled": p.Enabled, "expires_at": p.ExpiresAt, "public_key": p.PublicKey, "note": note, "uplink": p.Uplink}
 }
 
 // POST /api/v1/vpn/peers
@@ -526,6 +543,10 @@ func (s *Server) createVPNPeer(w http.ResponseWriter, r *http.Request) {
 	}
 	if !vpn.ValidKind(in.Kind) {
 		writeErr(w, 400, "kind must be device, user or site")
+		return
+	}
+	if in.Uplink && in.Kind != vpn.KindSite {
+		writeErr(w, 400, "an uplink (another telemetry server) is a site: kind site")
 		return
 	}
 	var subnets []string
@@ -561,12 +582,15 @@ func (s *Server) createVPNPeer(w http.ResponseWriter, r *http.Request) {
 	}
 	licensed := s.vpnLicensed(r.Context())
 	var created vpn.Peer
-	var priv, psk string
+	var priv, psk, tunnelKey string
 	var all []vpn.Peer
 	st, ok := s.vpnChange(w, r, func(ctx context.Context, tx pgx.Tx, srv netip.Prefix, st *agent.WireGuardState) (map[string]string, error) {
 		rows, err := loadVPNPeers(ctx, tx)
 		if err != nil {
 			return nil, err
+		}
+		if in.Uplink && strings.TrimSpace(st.Endpoint) == "" {
+			return nil, vpnBad("set the endpoint for peers first (Server settings): the remote server connects to it")
 		}
 		exp := ""
 		if in.ExpiresAt != nil {
@@ -579,7 +603,7 @@ func (s *Server) createVPNPeer(w http.ResponseWriter, r *http.Request) {
 		if err := vpn.CheckAdd(licensed, len(rows), in.Kind, expires != nil); err != nil {
 			return nil, err
 		}
-		p := vpn.Peer{Name: name, Kind: in.Kind, Enabled: !held, ExpiresAt: expires}
+		p := vpn.Peer{Name: name, Kind: in.Kind, Enabled: !held, ExpiresAt: expires, Uplink: in.Uplink}
 		for _, o := range rows {
 			if strings.EqualFold(o.Name, name) {
 				return nil, vpnBad("a peer with that name exists")
@@ -589,7 +613,7 @@ func (s *Server) createVPNPeer(w http.ResponseWriter, r *http.Request) {
 			if p.Subnets, err = vpn.ParseSubnets(subnets, srv); err != nil {
 				return nil, vpnBad(err.Error())
 			}
-			if len(p.Subnets) == 0 {
+			if len(p.Subnets) == 0 && !p.Uplink { // an uplink may offer only the server itself
 				return nil, vpnBad("a site needs at least one routed subnet (the LAN behind the router, e.g. 192.168.10.0/24)")
 			}
 			if err := vpn.CheckSubnetConflicts(p.Subnets, "", plainPeers(rows)); err != nil {
@@ -625,9 +649,17 @@ func (s *Server) createVPNPeer(w http.ResponseWriter, r *http.Request) {
 		for i, x := range p.Subnets {
 			sub[i] = x.String()
 		}
-		if err := tx.QueryRow(ctx, `INSERT INTO core.vpn_peer (name, kind, org_id, device_id, address, public_key, subnets, expires_at, note, created_by, enabled)
-			VALUES ($1, $2, $3::uuid, $4::uuid, $5::inet, $6, $7::cidr[], $8, $9, $10, $11) RETURNING id::text`,
-			p.Name, p.Kind, nullStr(p.OrgID), nullStr(p.DeviceID), p.Address.String()+"/32", p.PublicKey, sub, p.ExpiresAt, note, pr.Username, p.Enabled).Scan(&p.ID); err != nil {
+		var tunnelHash any
+		if p.Uplink && s.uplinkTunnelURL() != "" {
+			var h string
+			if tunnelKey, h, err = vpn.GenerateTunnelKey(); err != nil {
+				return nil, err
+			}
+			tunnelHash = h
+		}
+		if err := tx.QueryRow(ctx, `INSERT INTO core.vpn_peer (name, kind, org_id, device_id, address, public_key, subnets, expires_at, note, created_by, enabled, uplink, tunnel_key_hash)
+			VALUES ($1, $2, $3::uuid, $4::uuid, $5::inet, $6, $7::cidr[], $8, $9, $10, $11, $12, $13) RETURNING id::text`,
+			p.Name, p.Kind, nullStr(p.OrgID), nullStr(p.DeviceID), p.Address.String()+"/32", p.PublicKey, sub, p.ExpiresAt, note, pr.Username, p.Enabled, p.Uplink, tunnelHash).Scan(&p.ID); err != nil {
 			return nil, err
 		}
 		created = p
@@ -639,7 +671,7 @@ func (s *Server) createVPNPeer(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "vpn.peer_add", "vpn_peer", created.ID, nil, peerAudit(created, note), in.Reason)
 	srv, _ := vpn.ServerPrefix(st.Address)
-	out := s.clientConfig(st, srv, created, priv, psk, all)
+	out := s.clientConfig(st, srv, created, priv, psk, tunnelKey, all)
 	out["peer"] = peerJSON(vpnPeerRow{Peer: created, Note: note, CreatedAt: time.Now(), CreatedBy: pr.Username, UpdatedAt: time.Now()}, nil, time.Now())
 	if held {
 		out["approval_required"] = true // disabled until a second person approves a time-limited grant
@@ -792,6 +824,9 @@ func (s *Server) patchVPNPeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "vpn.peer_update", "vpn_peer", id, before, after, in.Reason)
+	if e, _ := after["enabled"].(bool); !e {
+		s.uplinkTunnel.Close(id)
+	}
 	writeJSON(w, 200, map[string]any{"ok": true, "peer": after})
 }
 
@@ -812,7 +847,7 @@ func (s *Server) rotateVPNPeer(w http.ResponseWriter, r *http.Request) {
 	}
 	sc := vpnScopeOf(PrincipalFrom(r.Context()))
 	var p vpn.Peer
-	var priv, psk, oldKey string
+	var priv, psk, oldKey, tunnelKey string
 	var all []vpn.Peer
 	st, ok := s.vpnChange(w, r, func(ctx context.Context, tx pgx.Tx, srv netip.Prefix, st *agent.WireGuardState) (map[string]string, error) {
 		rows, err := loadVPNPeers(ctx, tx)
@@ -830,7 +865,16 @@ func (s *Server) rotateVPNPeer(w http.ResponseWriter, r *http.Request) {
 		if psk, err = vpn.GeneratePSK(); err != nil {
 			return nil, err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE core.vpn_peer SET public_key = $2, key_rotated_at = now(), updated_at = now() WHERE id = $1::uuid`, id, p.PublicKey); err != nil {
+		// an uplink gets a new secret of the HTTPS transport too (the old token stops working completely)
+		var tunnelHash any
+		if p.Uplink && s.uplinkTunnelURL() != "" {
+			var h string
+			if tunnelKey, h, err = vpn.GenerateTunnelKey(); err != nil {
+				return nil, err
+			}
+			tunnelHash = h
+		}
+		if _, err := tx.Exec(ctx, `UPDATE core.vpn_peer SET public_key = $2, tunnel_key_hash = $3, key_rotated_at = now(), updated_at = now() WHERE id = $1::uuid`, id, p.PublicKey, tunnelHash); err != nil {
 			return nil, err
 		}
 		for _, o := range rows {
@@ -845,8 +889,9 @@ func (s *Server) rotateVPNPeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "vpn.peer_rotate", "vpn_peer", id, map[string]any{"public_key": oldKey}, map[string]any{"public_key": p.PublicKey, "name": p.Name}, in.Reason)
+	s.uplinkTunnel.Close(id)
 	srv, _ := vpn.ServerPrefix(st.Address)
-	out := s.clientConfig(st, srv, p, priv, psk, all)
+	out := s.clientConfig(st, srv, p, priv, psk, tunnelKey, all)
 	out["peer"] = map[string]any{"id": p.ID, "name": p.Name, "public_key": p.PublicKey, "address": p.Address.String()}
 	writeJSON(w, 200, out)
 }
@@ -910,6 +955,7 @@ func (s *Server) removeVPNPeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "vpn.peer_remove", "vpn_peer", id, map[string]any{"name": name}, map[string]any{"rules_removed": rulesRemoved, "rules_changed": rulesChanged}, in.Reason)
+	s.uplinkTunnel.Close(id)
 	writeJSON(w, 200, map[string]any{"ok": true, "rules_removed": rulesRemoved, "rules_changed": rulesChanged})
 }
 
@@ -1100,7 +1146,13 @@ func (s *Server) vpnTick(force bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	st, err := s.agent.WireGuard(ctx)
-	if err != nil || !st.Supported || st.PublicKey == "" {
+	if err != nil || !st.Supported {
+		return
+	}
+	if force {
+		s.uplinkTick(ctx, st) // the uplink to a hub works without this server's own VPN
+	}
+	if st.PublicKey == "" {
 		return
 	}
 	srv, err := vpn.ServerPrefix(st.Address)

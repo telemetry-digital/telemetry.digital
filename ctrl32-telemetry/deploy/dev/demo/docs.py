@@ -9,7 +9,7 @@
                        a technician, a gateway and access rules; needs the agent's VPN simulation and a licence)
                        ; 0.67.0: keys without a datastream and status of a logger, a sensor fault, annotations, a
                        signed report and a signed audit review (records)
-  docs.py vpn          only the VPN part (phase 1 and 2: an organization administrator olivia.grant, four eyes for
+  docs.py vpn          only the VPN part (phases 1 to 3: an organization administrator olivia.grant, four eyes for
                        technicians' access, an approved and a pending access grant)
   docs.py live         keeps the cold chain and the energy meters current (a sample every 60 s)
   docs.py mqtt-creds   prints "user pass" of the smart-home MQTT accounts (used by dev.sh to start the simulators)
@@ -648,12 +648,76 @@ def records():
     login()
     return {"emma_password": pw, "report": rep and rep["id"]}
 
+def _x25519_pub(priv):
+    """X25519 public key of a 32-byte private key (RFC 7748; the demo needs a valid key pair without extra modules)."""
+    p, a24 = 2 ** 255 - 19, 121665
+    k = bytearray(priv); k[0] &= 248; k[31] = (k[31] & 127) | 64
+    k = int.from_bytes(k, "little")
+    x1, x2, z2, x3, z3, swap = 9, 1, 0, 9, 1, 0
+    for t in reversed(range(255)):
+        kt = (k >> t) & 1
+        swap ^= kt
+        if swap: x2, x3, z2, z3 = x3, x2, z3, z2
+        swap = kt
+        A, B_ = (x2 + z2) % p, (x2 - z2) % p
+        AA, BB = A * A % p, B_ * B_ % p
+        E, C, D = (AA - BB) % p, (x3 + z3) % p, (x3 - z3) % p
+        DA, CB = D * A % p, C * B_ % p
+        x3, z3 = (DA + CB) ** 2 % p, x1 * (DA - CB) ** 2 % p
+        x2, z2 = AA * BB % p, E * (AA + a24 * E) % p
+    if swap: x2, z2 = x3, z3
+    return (x2 * pow(z2, p - 2, p) % p).to_bytes(32, "little")
+
+
+def _wg_keys():
+    import base64
+    priv = bytearray(os.urandom(32)); priv[0] &= 248; priv[31] = (priv[31] & 127) | 64
+    return base64.b64encode(bytes(priv)).decode(), base64.b64encode(_x25519_pub(bytes(priv))).decode()
+
+
+def vpn3():
+    """VPN phase 3 (0.69.0): this server as a hub with a customer server connected through an uplink (a "Server
+    (uplink)" peer with its LAN and two access rules), and — for the customer side of the pictures — this server's own
+    uplink to another hub (a cloud hub in 10.99.0.0/16; its token is made here with fresh keys, so the uplink waits for
+    a hub that does not exist) with three uplink rules. Needs what vpn() needs; runs again without duplicating."""
+    import base64
+    v = call("GET", "/api/v1/vpn")
+    if not v.get("supported") or not v.get("licensed"):
+        print("skip vpn3: needs the server agent with the VPN and a licence"); return None
+    pw = os.environ.get("CTRL32_PASS", "admin1234")
+    peers = {p["name"]: p for p in v["peers"]}
+    name = "Customer A - Brno server"
+    if name not in peers:
+        call("POST", "/api/v1/vpn/peers", {"name": name, "kind": "site", "uplink": True, "subnets": ["192.168.50.0/24"], "note": "telemetry server in the Brno plant LAN, no public address", "reason": R, "password": pw})
+        peers = {p["name"]: p for p in call("GET", "/api/v1/vpn")["peers"]}
+    up = peers[name]["id"]
+    rules = {r["name"] for r in call("GET", "/api/v1/vpn")["rules"]}
+    for body in ({"name": "Technicians → Customer A web interface", "sources": [{"type": "kind", "kind": "user"}], "dest_type": "peer", "dest_peer_id": up, "protocol": "tcp", "ports": "443"},
+                 {"name": "Technicians → Customer A PLC (Modbus 502)", "sources": [{"type": "kind", "kind": "user"}], "dest_type": "site", "dest_peer_id": up, "dest_cidr": "192.168.50.20", "protocol": "tcp", "ports": "502"}):
+        if body["name"] not in rules:
+            call("POST", "/api/v1/vpn/rules", dict(body, enabled=True, reason=R))
+    have = {r["name"] for r in call("GET", "/api/v1/vpn").get("uplink_rules", [])}
+    for body in ({"name": "Hub technicians → web interface", "dest_type": "server", "protocol": "tcp", "ports": "443"},
+                 {"name": "Service technician → packing line PLC", "src_cidr": "10.99.0.21", "dest_type": "lan", "dest_cidr": "192.168.20.15", "protocol": "tcp", "ports": "102, 502"},
+                 {"name": "Hub → ping the LAN", "dest_type": "lan", "protocol": "icmp"}):
+        if body["name"] not in have:
+            call("POST", "/api/v1/vpn/uplink/rules", dict(body, enabled=True, reason=R))
+    if not (v.get("uplink") or {}).get("configured"):
+        priv, _ = _wg_keys(); _, hub = _wg_keys()
+        psk = base64.b64encode(os.urandom(32)).decode()
+        tok = {"name": "Nitra plant server", "endpoint": "hub.telemetry-cloud.example:51820", "hub_public_key": hub, "preshared_key": psk, "private_key": priv,
+               "address": "10.99.0.12", "vpn_net": "10.99.0.0/16", "hub_address": "10.99.0.1", "subnets": ["192.168.20.0/24"],
+               "tunnel_url": "https://hub.telemetry-cloud.example/api/v1/vpn/uplink/tunnel", "tunnel_key": base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip("=")}
+        token = "ctrl32-uplink-v1." + base64.urlsafe_b64encode(json.dumps(tok).encode()).decode().rstrip("=")
+        call("POST", "/api/v1/vpn/uplink", {"token": token, "transport": "udp", "reason": "remote service through the cloud hub (contract 2026-31)", "password": pw})
+    return {"uplink_peer": up}
+
 
 def setup():
     login()
     partitions()
     cold_chain(); energy(); dashboards(); overviews(); rules(); flows(); mqtt_accounts(); home(); display(); firmware(); people(); settings(); incidents(); records()
-    st["vpn"] = vpn(); st["vpn2"] = vpn2(); save()
+    st["vpn"] = vpn(); st["vpn2"] = vpn2(); st["vpn3"] = vpn3(); save()
     print("docs demo ready:", ", ".join(st))
 
 
@@ -684,4 +748,4 @@ if __name__ == "__main__":
     if cmd == "mqtt-creds":
         m = st["mqtt"]; print(m["auto"]["user"], m["auto"]["pass"], m["inbox"]["user"], m["inbox"]["pass"])
     else:
-        {"setup": setup, "live": live, "vpn": lambda: (login(), st.update(vpn=vpn(), vpn2=vpn2()), save())}[cmd]()
+        {"setup": setup, "live": live, "vpn": lambda: (login(), st.update(vpn=vpn(), vpn2=vpn2(), vpn3=vpn3()), save())}[cmd]()

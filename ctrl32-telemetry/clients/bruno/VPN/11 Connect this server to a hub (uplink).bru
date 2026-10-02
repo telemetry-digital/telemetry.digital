@@ -1,0 +1,29 @@
+meta {
+  name: Connect this server to a hub (uplink)
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/v1/vpn/uplink
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "code": "string",
+    "password": "string",
+    "reason": "string",
+    "token": "string",
+    "transport": "udp"
+  }
+}
+
+docs {
+  Connect this server to a hub (uplink)
+  
+  VPN phase 3. Pastes the uplink token issued by a hub (another telemetry server with a public address: on the hub, *Add peer → Server (uplink)*). The agent brings up an outbound-only WireGuard interface (`wg1` on Linux; inside the agent on Windows) with a keepalive of 25 s, and applies this server's own uplink rules: everything that arrives from the hub is dropped unless an uplink rule allows it. `transport`: `udp` (default) or `https` (WireGuard over a WebSocket through the hub's HTTPS port, when UDP is blocked; the token must carry it). With an uplink already connected the configuration is replaced (after *Rotate key* on the hub). The hub's range must not overlap this server's networks or own VPN (409). Needs the caller's `password` again (and `code` with two-factor sign-in).
+  
+  Requires permission `system.admin`.
+}

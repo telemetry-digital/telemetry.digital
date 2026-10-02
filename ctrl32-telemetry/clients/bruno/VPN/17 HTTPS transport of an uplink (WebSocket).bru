@@ -1,0 +1,19 @@
+meta {
+  name: HTTPS transport of an uplink (WebSocket)
+  type: http
+  seq: 17
+}
+
+get {
+  url: {{baseUrl}}/api/v1/vpn/uplink/tunnel
+  body: none
+  auth: inherit
+}
+
+docs {
+  HTTPS transport of an uplink (WebSocket)
+  
+  The hub's end of the HTTPS transport: a customer server's agent opens a WebSocket with `Authorization: Bearer <tunnel key>` from its uplink token; each binary message is one WireGuard datagram, relayed to this server's WireGuard port on the loopback address. Only enabled, unexpired uplink peers; the key is stored as SHA-256. Not called by users.
+  
+  Requires permission `uplink`.
+}

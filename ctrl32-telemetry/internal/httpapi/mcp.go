@@ -78,6 +78,7 @@ var mcpExclusions = map[string]string{
 	"GET /api/v1/video/inventory":                       "a file for people (Excel, CSV, PDF); assistants read the same settings with the camera list",
 	"GET /api/v1/video/inventory/template":              "an empty file for people to fill in",
 	"POST /api/v1/video/inventory/import":               "uploads a file from the user's computer; done in the browser or with the command line, after checking the preview",
+	"POST /api/v1/vpn/uplink":                           "connects this server to an outside network with a pasted private key; needs the user's password (and authenticator code) again in the browser",
 }
 
 // mcpExcluded gives the reason an operation is not offered to assistants ("" = offered).
@@ -86,7 +87,7 @@ func mcpExcluded(op *apiOp) string {
 		return r
 	}
 	switch op.P {
-	case "device", "connector", "relay", "display", "replica token":
+	case "device", "connector", "relay", "display", "replica token", "uplink":
 		return "authenticated with a " + op.P + " credential, not by a user"
 	}
 	switch op.T {

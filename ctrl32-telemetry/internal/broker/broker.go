@@ -63,21 +63,23 @@ func New(cfg *config.Config, pool *pgxpool.Pool, log *slog.Logger) (*Broker, err
 			return nil, fmt.Errorf("mqtt tcp listener: %w", err)
 		}
 	}
-	if cfg.MQTT.VPNListen != "" {
-		// The VPN address exists only once WireGuard is up (possibly after us at boot): keep trying in the background.
+	// The VPN addresses exist only once WireGuard is up (possibly after us at boot): keep trying in the background.
+	for id, addr := range map[string]string{"vpn": cfg.MQTT.VPNListen, "uplink": cfg.MQTT.UplinkListen} {
+		if addr == "" {
+			continue
+		}
 		go func() {
-			addr := cfg.MQTT.VPNListen
 			for i := 0; ; i++ {
 				time.Sleep(3 * time.Second)
-				l := listeners.NewTCP(listeners.Config{ID: "vpn", Address: addr})
+				l := listeners.NewTCP(listeners.Config{ID: id, Address: addr})
 				if err := srv.AddListener(l); err != nil {
 					if i%20 == 0 {
-						log.Warn("mqtt vpn listener not ready", "addr", addr, "err", err)
+						log.Warn("mqtt "+id+" listener not ready", "addr", addr, "err", err)
 					}
 					continue
 				}
 				go l.Serve(srv.EstablishConnection)
-				log.Info("mqtt vpn listener started", "addr", addr)
+				log.Info("mqtt "+id+" listener started", "addr", addr)
 				return
 			}
 		}()

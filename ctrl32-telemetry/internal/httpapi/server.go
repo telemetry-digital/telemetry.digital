@@ -41,6 +41,7 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/report"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/rules"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/smarthome"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/uptunnel"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/video"
 )
 
@@ -84,13 +85,15 @@ type Server struct {
 	lic               licenseCache
 	vpnMu             sync.Mutex // one VPN change at a time (vpn.go)
 	stepUpLimiter     *limiter
-	credExportLimiter *limiter // exports with camera passwords per user (camera_inventory.go)
+	credExportLimiter *limiter          // exports with camera passwords per user (camera_inventory.go)
+	uplinkTunnel      *uptunnel.Handler // VPN phase 3: the hub's end of the uplinks' HTTPS transport (vpn_uplink.go)
 }
 
 // New builds the handler tree.
 func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.Service, rep *report.Engine, ing *ingest.Ingest, con *console.Manager, ag *agent.Client, opc *opcua.Manager, log *slog.Logger, version string, hub *live.Hub, mbm *modbus.Manager, esc *escalate.Engine, eng *rules.Engine, pm *push.Manager, tc *timecheck.Checker, inc *incident.Manager, rp *replication.Primary, fl *flows.Engine, nt *notify.Notifier, sh *smarthome.Manager, vm *video.Manager) http.Handler {
 	s := &Server{cfg: cfg, pool: pool, br: br, iam: iamSvc, rep: rep, ing: ing, con: con, agent: ag, opc: opc, started: time.Now(), log: log.With("component", "http"), version: version, live: hub, mb: mbm, esc: esc, rules: eng, push: pm, tc: tc, incidents: inc, repl: rp, flows: fl, notifier: nt, smart: sh, video: vm,
 		loginLimiter: newLimiter(10, 10), provisionLimiter: newLimiter(20, 10), pairLimiter: newLimiter(5, 5), mcpLimiter: newLimiter(300, 60), oauthLimiter: newLimiter(30, 20), stepUpLimiter: newLimiter(5, 5), credExportLimiter: newLimiter(1, 3)}
+	s.uplinkTunnel = s.newUplinkTunnel()
 	if eng != nil {
 		eng.Commander = s
 		eng.HostAllowed = func(ctx context.Context, org, host string) bool { return flowRefs{s, ctx, org}.HostAllowed(host) }
@@ -429,6 +432,14 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("PUT /api/v1/vpn/rules/{id}", s.require("system.admin|vpn.manage", s.putVPNRule))
 	mux.Handle("POST /api/v1/vpn/rules/{id}/remove", s.require("system.admin|vpn.manage", s.removeVPNRule))
 	mux.Handle("POST /api/v1/vpn/apply", s.require("system.admin", s.applyVPN))
+	// VPN phase 3: this server's uplink to a hub (system.admin), and the hub's end of the HTTPS transport (vpn_uplink.go)
+	mux.Handle("POST /api/v1/vpn/uplink", s.require("system.admin", s.connectUplink))
+	mux.Handle("POST /api/v1/vpn/uplink/transport", s.require("system.admin", s.uplinkTransport))
+	mux.Handle("POST /api/v1/vpn/uplink/disconnect", s.require("system.admin", s.disconnectUplink))
+	mux.Handle("POST /api/v1/vpn/uplink/rules", s.require("system.admin", s.createUplinkRule))
+	mux.Handle("PUT /api/v1/vpn/uplink/rules/{id}", s.require("system.admin", s.putUplinkRule))
+	mux.Handle("POST /api/v1/vpn/uplink/rules/{id}/remove", s.require("system.admin", s.removeUplinkRule))
+	mux.HandleFunc("GET /api/v1/vpn/uplink/tunnel", s.uplinkTunnelWS) // vpn.UplinkTunnelPath; authenticated with the uplink's secret, not a session
 	mux.Handle("POST /api/v1/server/update", s.require("system.admin", s.serverUpdate))
 	mux.Handle("GET /api/v1/server/backups", s.require("system.admin", s.serverBackups))
 	mux.Handle("POST /api/v1/server/backups", s.require("system.admin", s.serverBackupCreate))

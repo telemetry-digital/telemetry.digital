@@ -380,7 +380,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   const wantVpn = !only || only.split(",").some((s) => s.startsWith("vpn") || "vpn-".startsWith(s));
   const vpnState = wantVpn ? await api("/api/v1/vpn") : null;
   if (vpnState && vpnState.supported) {
-    const noSim = "(() => { const fix = () => { const n = document.querySelector('#note'); if (n && !n.hidden && /Simulation/.test(n.textContent)) n.hidden = true; document.querySelectorAll('#kvServer .badge').forEach((b) => { if (/simulation/i.test(b.textContent)) b.remove(); }); document.querySelectorAll('#kvServer dd').forEach((d) => { if (d.textContent.trim() === 'simulation' && d.previousElementSibling) { d.previousElementSibling.remove(); d.remove(); } }); }; fix(); if (!window.__noSim) { window.__noSim = new MutationObserver(fix); window.__noSim.observe(document.body, { subtree: true, childList: true }); } return true; })()";
+    const noSim = "(() => { const fix = () => { const n = document.querySelector('#note'); if (n && !n.hidden && /Simulation/.test(n.textContent)) n.hidden = true; document.querySelectorAll('#kvServer .badge').forEach((b) => { if (/simulation/i.test(b.textContent)) b.remove(); }); document.querySelectorAll('#kvServer dd, #kvUplink dd').forEach((d) => { if (d.textContent.trim() === 'simulation' && d.previousElementSibling) { d.previousElementSibling.remove(); d.remove(); } }); }; fix(); if (!window.__noSim) { window.__noSim = new MutationObserver(fix); window.__noSim.observe(document.body, { subtree: true, childList: true }); } return true; })()";
     const vpnGo = async () => { await go("/server/vpn", 3500); await ev(noSim); await sleep(300); };
     const created = [];
     if (wanted("vpn-page")) { await vpnGo(); await shot("vpn-page", { full: true, maxH: 2400 }); }
@@ -445,6 +445,40 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
       await ev("(() => { const b = document.querySelector('#grantPresets [data-min=\"480\"]'); if (b) b.click(); document.querySelector('#grantForm').reason.value = 'Night shift 2 Oct, line 1 alarms'; return true; })()"); await sleep(400);
       await shot("vpn-grant", { clip: "#grantDlg", pad: -6 });
     }
+    // VPN phase 3 (0.69.0, docs.py vpn3): a customer server added as "Server (uplink)" and its uplink token shown once,
+    // and this server's own uplink to a cloud hub — the card, the connect dialog, an uplink rule, the transport, the
+    // generated table. The demo's hub does not exist, so the uplink waits for it (shown as such).
+    if (wanted("vpn-add-uplink") || wanted("vpn-uplink-token")) {
+      const fillUp = fillPeer("uplink", "Customer B - Graz server", "f.subnets.value = '192.168.60.0/24'; f.note.value = 'telemetry server in the Graz plant, no public address';");
+      if (wanted("vpn-add-uplink")) { await vpnGo(); await ev(fillUp); await sleep(800); await shot("vpn-add-uplink"); }
+      if (wanted("vpn-uplink-token")) {
+        await vpnGo(); await ev(fillUp); await sleep(500); await submitPeer();
+        await ev("document.querySelector('#peerResult').scrollIntoView({block: 'start'}); true"); await sleep(400);
+        await shot("vpn-uplink-token", { clip: "#peerDlg", pad: -6 });
+        const st4 = await api("/api/v1/vpn"); const p = ((st4 && st4.peers) || []).find((x) => x.name === "Customer B - Graz server");
+        if (p) await ev(`ctrl32.api('POST', '/api/v1/vpn/peers/${p.id}/remove', {reason: 'peer created for the documentation pictures'}).then(() => true)`);
+      }
+    }
+    if (vpnState.uplink && vpnState.uplink.configured) {
+      if (wanted("vpn-uplink-card")) { await vpnGo(); await shot("vpn-uplink-card", { clip: "#uplinkCard", pad: 8 }); }
+      if (wanted("vpn-uplink-connect")) {
+        await vpnGo();
+        await ev("(() => { document.querySelector('#uplinkConnectBtn').click(); const f = document.querySelector('#uplinkForm'); f.token.value = 'ctrl32-uplink-v1.eyJuYW1lIjoiTml0cmEgcGxhbnQgc2VydmVyIiwiZW5kcG9pbnQiOiJodWIudGVsZW1ldHJ5LWNsb3VkLmV4YW1wbGU6NTE4MjAiLCJodWJfcHVibGljX2tleSI6Ik9MNHg0TmxabjJ4M1ZKa25HWG41N3J0ZDBhWnpLdjFsYXBEMmtCSDl5QW89IiwicHJlc2hhcmVkX2tleSI6IuKApiJ9'; f.reason.value = 'Remote service through the cloud hub (contract 2026-31)'; f.password.value = 'admin1234'; return true; })()"); await sleep(600);
+        await shot("vpn-uplink-connect", { clip: "#uplinkDlg", pad: -6 });
+      }
+      if (wanted("vpn-uplink-rule")) {
+        await vpnGo();
+        await ev("(() => { const r = [...document.querySelectorAll('#uplinkRules tbody tr')].find((t) => /PLC/.test(t.textContent)); if (r) r.querySelector('[data-uredit]').click(); return !!r; })()"); await sleep(800);
+        await ev("(() => { document.querySelector('#uplinkRuleForm').reason.value = 'Service contract 2026-31, packing line'; return true; })()");
+        await shot("vpn-uplink-rule", { clip: "#uplinkRuleDlg", pad: -6 });
+      }
+      if (wanted("vpn-uplink-transport")) {
+        await vpnGo(); await click("#uplinkTransportBtn", 800);
+        await ev("(() => { const f = document.querySelector('#uplinkTrForm'); f.transport.value = 'https'; f.reason.value = 'UDP blocked by the plant firewall'; return true; })()"); await sleep(300);
+        await shot("vpn-uplink-transport", { clip: "#uplinkTrDlg", pad: -6 });
+      }
+      if (wanted("vpn-uplink-firewall")) { await vpnGo(); await click("#uplinkFwBtn"); await ev("(() => { const t = document.querySelector('#fwText'); t.style.maxHeight = 'none'; return true; })()"); await sleep(300); await shot("vpn-uplink-firewall", { clip: "#fwDlg", pad: -6 }); }
+    } else if (["vpn-uplink-card", "vpn-uplink-connect", "vpn-uplink-rule", "vpn-uplink-transport", "vpn-uplink-firewall"].some(wanted)) problems.push("vpn-uplink: this server has no uplink (run deploy/dev/demo/docs.py vpn)");
     // the organization's administrator (org_admin, no server administration; docs.py vpn2): Settings → VPN
     const orgAdmin = process.env.ORG_ADMIN || "olivia.grant", orgPass = process.env.ORG_ADMIN_PASS || "Olivia-docs-2026!";
     if (["vpn-organization", "vpn-organization-rule", "vpn-organization-approval"].some(wanted)) {

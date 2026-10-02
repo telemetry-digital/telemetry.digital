@@ -1365,6 +1365,10 @@ export type VPNPeer = {
   subnets?: string[];
   tx_bytes?: number;
   updated_at?: string;
+  /** a site that is another telemetry server connected through an uplink */
+  uplink?: boolean;
+  /** the uplink uses the HTTPS transport */
+  via_https?: boolean;
 };
 
 export type VPNRule = {
@@ -1408,6 +1412,58 @@ export type VPNSource = {
   /** type kind */
   kind?: "device" | "user" | "site";
   type: "all" | "kind" | "peer" | "org";
+};
+
+export type VPNUplink = {
+  /** this server's address in the hub's VPN */
+  address?: string;
+  /** this server is connected to a hub */
+  configured?: boolean;
+  connected_at?: string;
+  endpoint?: string;
+  /** applied, rules, forward, applied_at, error, ruleset (table inet ctrl32_uplink, or the agent's rules text on Windows) */
+  firewall?: Record<string, unknown>;
+  /** the token carries the HTTPS transport */
+  https_available?: boolean;
+  hub_address?: string;
+  hub_endpoint?: string;
+  hub_public_key?: string;
+  lan_forward?: string[];
+  latest_handshake?: string;
+  mode?: "kernel" | "userspace" | "simulation";
+  /** this server's name on the hub */
+  name?: string;
+  /** handshake within 3 minutes */
+  online?: boolean;
+  /** this server's uplink key */
+  public_key?: string;
+  running?: boolean;
+  rx_bytes?: number;
+  subnets?: string[];
+  transport?: "udp" | "https";
+  /** HTTPS transport: connected, since, error */
+  tunnel?: Record<string, unknown>;
+  tunnel_host?: string;
+  tx_bytes?: number;
+  /** the hub's VPN range */
+  vpn_net?: string;
+};
+
+export type VPNUplinkRuleInput = {
+  /** lan: a host or subnet inside the offered networks (empty = all of them) */
+  dest_cidr?: string;
+  dest_type: "server" | "lan";
+  /** default true */
+  enabled?: boolean;
+  /** 1–80 */
+  name: string;
+  /** tcp/udp: "443, 502"; empty = all */
+  ports?: string;
+  protocol: "tcp" | "udp" | "icmp" | "any";
+  /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+  reason: string;
+  /** an address or subnet inside the hub's VPN range; empty = the whole range */
+  src_cidr?: string;
 };
 
 export type VideoSettings = {
@@ -8032,6 +8088,11 @@ export class Ctrl32Client {
     simulated?: boolean;
     /** the agent manages the VPN on this host (Linux: kernel WireGuard and nftables; Windows: userspace hub) */
     supported?: boolean;
+    uplink?: VPNUplink;
+    /** uplink tokens issued by this server carry the HTTPS transport (it has an https base URL) */
+    uplink_https?: boolean;
+    uplink_rules?: (Record<string, unknown>)[];
+    uplink_services?: (Record<string, unknown>)[];
   }> {
     return this.request<{
     /** configured, connected, error */
@@ -8060,6 +8121,11 @@ export class Ctrl32Client {
     simulated?: boolean;
     /** the agent manages the VPN on this host (Linux: kernel WireGuard and nftables; Windows: userspace hub) */
     supported?: boolean;
+    uplink?: VPNUplink;
+    /** uplink tokens issued by this server carry the HTTPS transport (it has an https base URL) */
+    uplink_https?: boolean;
+    uplink_rules?: (Record<string, unknown>)[];
+    uplink_services?: (Record<string, unknown>)[];
   }>('GET', `/api/v1/vpn`, undefined, undefined, false);
   }
 
@@ -8105,6 +8171,8 @@ export class Ctrl32Client {
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
     subnets?: string[];
+    /** site only: another telemetry server (uplink); the answer carries `uplink_token` instead of `config`; subnets optional */
+    uplink?: boolean;
   }): Promise<{
     allowed_ips?: string[];
     /** four eyes: the technician is added disabled; request a grant */
@@ -8118,6 +8186,8 @@ export class Ctrl32Client {
     };
     /** wg-quick configuration with the private key (shown once) */
     config?: string;
+    /** uplink: the token carries the HTTPS transport */
+    https_transport?: boolean;
     peer?: VPNPeer;
     /** data URL of a PNG QR code of the configuration */
     qr?: string;
@@ -8133,6 +8203,8 @@ export class Ctrl32Client {
       rutos?: string;
       wg_quick?: string;
     };
+    /** uplink: the token to paste on the remote server (holds its private key; shown once) */
+    uplink_token?: string;
   }> {
     return this.request<{
     allowed_ips?: string[];
@@ -8147,6 +8219,8 @@ export class Ctrl32Client {
     };
     /** wg-quick configuration with the private key (shown once) */
     config?: string;
+    /** uplink: the token carries the HTTPS transport */
+    https_transport?: boolean;
     peer?: VPNPeer;
     /** data URL of a PNG QR code of the configuration */
     qr?: string;
@@ -8162,6 +8236,8 @@ export class Ctrl32Client {
       rutos?: string;
       wg_quick?: string;
     };
+    /** uplink: the token to paste on the remote server (holds its private key; shown once) */
+    uplink_token?: string;
   }>('POST', `/api/v1/vpn/peers`, undefined, body, false);
   }
 
@@ -8313,5 +8389,110 @@ export class Ctrl32Client {
     /** true on success */
     ok?: boolean;
   }>('POST', `/api/v1/vpn/rules/${encodeURIComponent(id)}/remove`, undefined, body, false);
+  }
+
+  /** Connect this server to a hub (uplink)
+   *
+   * VPN phase 3. Pastes the uplink token issued by a hub (another telemetry server with a public address: on the hub, *Add peer → Server (uplink)*). The agent brings up an outbound-only WireGuard interface (`wg1` on Linux; inside the agent on Windows) with a keepalive of 25 s, and applies this server's own uplink rules: everything that arrives from the hub is dropped unless an uplink rule allows it. `transport`: `udp` (default) or `https` (WireGuard over a WebSocket through the hub's HTTPS port, when UDP is blocked; the token must carry it). With an uplink already connected the configuration is replaced (after *Rotate key* on the hub). The hub's range must not overlap this server's networks or own VPN (409). Needs the caller's `password` again (and `code` with two-factor sign-in).
+   * 
+   * Requires permission `system.admin`. */
+  postVpnUplink(body: {
+    /** authenticator code when two-factor sign-in is on */
+    code?: string;
+    /** your password (step-up) */
+    password: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** the uplink token from the hub (ctrl32-uplink-v1.…) */
+    token: string;
+    transport?: "udp" | "https";
+  }): Promise<{
+    ok?: boolean;
+    rules_applied?: number;
+    uplink?: VPNUplink;
+  }> {
+    return this.request<{
+    ok?: boolean;
+    rules_applied?: number;
+    uplink?: VPNUplink;
+  }>('POST', `/api/v1/vpn/uplink`, undefined, body, false);
+  }
+
+  /** Disconnect this server from its hub
+   *
+   * Stops the uplink interface, removes its firewall table and deletes its keys. The uplink rules are kept for the next connection.
+   * 
+   * Requires permission `system.admin`. */
+  postVpnUplinkDisconnect(body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    ok?: boolean;
+    uplink?: VPNUplink;
+  }> {
+    return this.request<{
+    ok?: boolean;
+    uplink?: VPNUplink;
+  }>('POST', `/api/v1/vpn/uplink/disconnect`, undefined, body, false);
+  }
+
+  /** Add an uplink access rule
+   *
+   * What the hub may reach on this server (default deny): from the hub's VPN range or an address/subnet inside it (`src_cidr`, empty = the whole range) to `server` (this server's uplink address, e.g. the web interface) or `lan` (a host or subnet of the networks offered to the hub, `dest_cidr`; empty = all of them; forwarded with masquerade, so LAN devices see this server). The hub's own access rules must allow the technician too. Without a connected uplink the rule is stored and applied on connecting.
+   * 
+   * Requires permission `system.admin`. */
+  postVpnUplinkRules(body: VPNUplinkRuleInput): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/vpn/uplink/rules`, undefined, body, false);
+  }
+
+  /** Change an uplink access rule
+   *
+   * Requires permission `system.admin`. */
+  putVpnUplinkRulesId(id: string, body: VPNUplinkRuleInput): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('PUT', `/api/v1/vpn/uplink/rules/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Remove an uplink access rule
+   *
+   * Requires permission `system.admin`. */
+  postVpnUplinkRulesIdRemove(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/vpn/uplink/rules/${encodeURIComponent(id)}/remove`, undefined, body, false);
+  }
+
+  /** Switch the uplink's transport
+   *
+   * `udp` or `https` (only when the token carries the HTTPS transport).
+   * 
+   * Requires permission `system.admin`. */
+  postVpnUplinkTransport(body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    transport: "udp" | "https";
+  }): Promise<{
+    ok?: boolean;
+    uplink?: VPNUplink;
+  }> {
+    return this.request<{
+    ok?: boolean;
+    uplink?: VPNUplink;
+  }>('POST', `/api/v1/vpn/uplink/transport`, undefined, body, false);
+  }
+
+  /** HTTPS transport of an uplink (WebSocket)
+   *
+   * The hub's end of the HTTPS transport: a customer server's agent opens a WebSocket with `Authorization: Bearer <tunnel key>` from its uplink token; each binary message is one WireGuard datagram, relayed to this server's WireGuard port on the loopback address. Only enabled, unexpired uplink peers; the key is stored as SHA-256. Not called by users.
+   * 
+   * Requires permission `uplink`. */
+  getVpnUplinkTunnel(): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('GET', `/api/v1/vpn/uplink/tunnel`, undefined, undefined, false);
   }
 }
