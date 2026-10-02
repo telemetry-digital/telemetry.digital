@@ -241,10 +241,15 @@ func Run(ctx context.Context, cfg WorkerConfig, stdin io.Reader, w *writer) erro
 		}
 		n++
 		st.FramesIn++
-		if !last.IsZero() && at.Sub(last) < period-period/10 {
+		// pictures are analysed on a schedule of the wanted rate (8 of a camera's 10 pictures per second, not every
+		// second picture): a picture is taken when it is at most a quarter period before its due time
+		if !last.IsZero() && at.Before(last.Add(-period/4)) {
 			continue
 		}
-		last = at
+		if last.IsZero() || at.Sub(last) > period {
+			last = at // the start, or a gap in the stream
+		}
+		last = last.Add(period) // the next due time
 		Tensor(buf, tensor)
 		t0 := time.Now()
 		res, _, err := sess.Run(tensor, []int64{1, 3, InputSize, InputSize})

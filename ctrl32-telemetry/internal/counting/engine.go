@@ -484,7 +484,10 @@ func (e *Engine) OnObservations(ctx context.Context, obs []ingest.Observation) {
 	}
 	e.mu.Unlock()
 	for _, p := range todo {
+		// the sink waits when the queue is full (a device sending its history): slower, but nothing is lost
 		select {
+		case <-time.After(2 * time.Minute):
+			e.log.Warn("sensor passages queue stuck: a passage was dropped", "input", p.ref.ID)
 		case e.jobs <- func() {
 			c, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -495,8 +498,6 @@ func (e *Engine) OnObservations(ctx context.Context, obs []ingest.Observation) {
 				_, _ = e.pool.Exec(c, `UPDATE core.counting_input SET last_values = last_values || jsonb_build_object($2::text, $3::float8) WHERE id = $1::uuid`, p.ref.ID, p.ds, p.v)
 			}
 		}:
-		default:
-			e.log.Warn("sensor passages queue full: a passage was dropped", "input", p.ref.ID)
 		}
 	}
 }

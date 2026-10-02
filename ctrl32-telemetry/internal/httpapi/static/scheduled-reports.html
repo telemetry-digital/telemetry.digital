@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scheduled reports</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  .sr-presets { display: flex; gap: 6px; flex-wrap: wrap; }
+  .sr-next { font-size: 13px; color: var(--muted); min-height: 18px; }
+  .sr-checks label { display: inline-flex; gap: 6px; align-items: center; margin-right: 14px; flex-direction: row; }
+  .sr-checks input[type=checkbox] { width: auto; margin: 0; }
+  #list td.actions { white-space: nowrap; flex-wrap: nowrap; }
+  #srDlg { width: min(720px, 96vw); }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<nav class="subnav">
+  <a href="/settings/branding" data-section="branding">Branding and theme</a>
+  <a href="/settings/templates" data-section="templates">Report templates</a>
+  <a href="/settings/reports" data-section="reports">Stored reports</a>
+  <a href="/settings/scheduled-reports" data-section="scheduled" class="active">Scheduled reports</a>
+  <a href="/settings/notifications" data-section="notifications">Notifications</a>
+</nav>
+<div class="page-head"><h1>Scheduled reports</h1><span class="grow"></span><button class="btn primary" type="button" id="newBtn">New scheduled report</button></div>
+<div class="card muted" id="smtpNote" hidden><span class="badge warn">e-mail is not configured</span> <span>Reports are made but cannot be sent until the server has an SMTP server ([smtp] in config.toml).</span></div>
+<p class="muted">A report is made for the previous day, week or month in the organization's time zone and mailed with PDF and/or Excel attachments on a schedule. Content: a summary of object counting, a period table of a dashboard, or a report template. Every delivery is recorded below the report.</p>
+<div class="table-wrap card"><table id="list"><thead><tr><th>Report</th><th>Content</th><th>Period</th><th>Schedule</th><th>Recipients</th><th>Next run</th><th>Last run</th><th></th></tr></thead><tbody></tbody></table></div>
+<div class="card" id="runsCard" hidden><h2 style="margin-top:0"><span>Delivery log</span> · <span class="notranslate" id="runsName"></span></h2>
+  <div class="table-wrap"><table id="runs"><thead><tr><th>Time</th><th>Trigger</th><th>Period</th><th>Status</th><th class="num">Recipients</th><th>Attachments</th><th>Error</th><th>By</th></tr></thead><tbody></tbody></table></div></div>
+
+<dialog id="srDlg"><form class="form" id="srForm">
+  <h2 style="margin-top:0" id="srTitle">Scheduled report</h2>
+  <label>Name <input name="name" required maxlength="80" placeholder="Daily visitors"></label>
+  <div class="row2"><label>Content <select name="type"><option value="counting">Object counting summary</option><option value="period_table">Period table of a dashboard</option><option value="template">Report template</option></select></label>
+    <label>Period <select name="period"><option value="previous_day">previous day</option><option value="previous_week">previous week (Monday to Sunday)</option><option value="previous_month">previous month</option></select></label></div>
+  <label data-for="counting">Area <select name="area_id" class="notranslate"></select></label>
+  <label data-for="period_table">Period table <select name="table" class="notranslate"></select></label>
+  <div class="row2" data-for="template"><label>Template <select name="kind"><option value="observations">observations of a datastream</option><option value="alarms">alarms</option></select></label>
+    <label>Datastream <select name="datastream_id" class="notranslate"></select></label></div>
+  <div><div class="muted">Schedule (cron, time zone <span id="tz" class="notranslate"></span>)</div>
+    <div class="sr-presets"><button class="btn small" type="button" data-p="0 7 * * *">daily 07:00</button><button class="btn small" type="button" data-p="0 7 * * 1">Monday 07:00</button><button class="btn small" type="button" data-p="0 7 1 * *">1st of the month 07:00</button></div>
+    <input name="cron" required maxlength="120" class="notranslate" placeholder="0 7 * * 1" style="margin-top:6px">
+    <div class="sr-next" id="next"></div></div>
+  <div><div class="muted">Recipients</div><div class="sr-checks" id="channels"></div>
+    <label>Other addresses (one per line) <textarea name="addresses" rows="2" placeholder="manager@example.com"></textarea></label></div>
+  <div class="sr-checks"><label><input type="checkbox" name="attach_pdf" checked> PDF</label><label><input type="checkbox" name="attach_xlsx" checked> Excel (CSV for templates)</label><label><input type="checkbox" name="enabled" checked> Enabled</label></div>
+  <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+  <div class="err" id="srErr"></div>
+  <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn danger" type="button" id="srDelete" hidden>Remove</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+</form></dialog>
+</main>
+<script src="/app.js"></script>
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s), esc = ctrl32.esc, api = ctrl32.api, t = ctrl32.t;
+  const PERIOD = { previous_day: 'previous day', previous_week: 'previous week', previous_month: 'previous month' };
+  const CONTENT = { counting: 'Object counting summary', period_table: 'Period table of a dashboard', template: 'Report template' };
+  const STATUS = { sent: 'ok', partial: 'warn', failed: 'bad' };
+  let OPT = null, LIST = [], EDIT = null, DS = [];
+  const when = (v) => (v ? new Date(v).toLocaleString(document.documentElement.lang || undefined, { dateStyle: 'short', timeStyle: 'short' }) : '—');
+  function contentLabel(r) {
+    const c = r.content;
+    if (c.type === 'counting') { const a = OPT.areas.find((x) => x.id === c.area_id); return `${t(CONTENT.counting)}: <span class="notranslate">${esc(a ? a.name : '?')}</span>`; }
+    if (c.type === 'period_table') { const w = OPT.period_tables.find((x) => x.dashboard === c.dashboard && x.widget === c.widget); return `${t(CONTENT.period_table)}: <span class="notranslate">${esc(w ? (w.title || w.widget) + ' · ' + w.dashboard_name : c.dashboard)}</span>`; }
+    return `${t(CONTENT.template)}: ${esc(t(c.kind === 'alarms' ? 'alarms' : 'observations of a datastream'))}`;
+  }
+  async function load() {
+    OPT = await api('GET', '/api/v1/scheduled-reports/options');
+    const r = await api('GET', '/api/v1/scheduled-reports'); LIST = r.reports;
+    $('#smtpNote').hidden = r.smtp;
+    $('#list tbody').innerHTML = LIST.map((x) => `<tr><td class="notranslate">${esc(x.name)}${x.enabled ? '' : ` <span class="badge">${esc(t('off'))}</span>`}</td><td>${contentLabel(x)}</td><td>${esc(t(PERIOD[x.period]))}</td><td class="notranslate"><code>${esc(x.cron)}</code></td>
+      <td>${x.recipients.channels.length ? `<span>${x.recipients.channels.length}</span> <span>${esc(t('channels'))}</span>` : ''} ${x.recipients.addresses.length ? `<span>${x.recipients.addresses.length}</span> <span>${esc(t('addresses'))}</span>` : ''}</td>
+      <td>${esc(when(x.next_run_at))}</td><td>${x.last_status ? `<span class="badge ${STATUS[x.last_status] || ''}">${esc(t(x.last_status))}</span> ${esc(when(x.last_run_at))}` : '—'}</td>
+      <td class="actions"><button class="btn small" type="button" data-send="${x.id}">Send now</button><button class="btn small" type="button" data-runs="${x.id}">Delivery log</button><button class="btn small" type="button" data-edit="${x.id}">Edit</button></td></tr>`).join('') || `<tr><td colspan="8" class="muted">${esc(t('No scheduled reports yet'))}</td></tr>`;
+    for (const b of document.querySelectorAll('[data-edit]')) b.onclick = () => open(LIST.find((x) => x.id === b.dataset.edit));
+    for (const b of document.querySelectorAll('[data-runs]')) b.onclick = () => runs(LIST.find((x) => x.id === b.dataset.runs));
+    for (const b of document.querySelectorAll('[data-send]')) b.onclick = async () => {
+      b.disabled = true;
+      try { const r = await api('POST', `/api/v1/scheduled-reports/${b.dataset.send}/send`); ctrl32.toast(r.status === 'sent' ? t('report sent') : (t(r.status) + ': ' + (r.error || '')), r.status === 'sent' ? 'ok' : 'bad'); await load(); runs(LIST.find((x) => x.id === b.dataset.send)); } catch (x) { ctrl32.toast(x.message, 'bad'); }
+      b.disabled = false;
+    };
+  }
+  async function runs(r) {
+    const list = await api('GET', `/api/v1/scheduled-reports/${r.id}/runs`);
+    $('#runsCard').hidden = false; $('#runsName').textContent = r.name;
+    $('#runs tbody').innerHTML = list.map((x) => `<tr><td>${esc(when(x.started_at))}</td><td>${esc(t(x.trigger === 'manual' ? 'send now' : 'schedule'))}</td><td>${esc(x.period_from ? new Date(x.period_from).toLocaleDateString() + ' – ' + new Date(new Date(x.period_to) - 1).toLocaleDateString() : '')}</td><td><span class="badge ${STATUS[x.status] || ''}">${esc(t(x.status))}</span></td><td class="num">${x.recipients}</td><td class="notranslate">${x.attachments.map((a) => `${esc(a.name)} <span class="muted">(${Math.round(a.bytes / 1024)} kB)</span>`).join('<br>')}</td><td class="notranslate">${esc(x.error || '')}</td><td class="notranslate">${esc(x.actor)}</td></tr>`).join('') || `<tr><td colspan="8" class="muted">${esc(t('nothing yet'))}</td></tr>`;
+  }
+  function show() { const ty = $('#srForm').type.value; for (const el of document.querySelectorAll('[data-for]')) el.hidden = el.dataset.for !== ty; $('#srForm').datastream_id.closest('label').hidden = $('#srForm').kind.value !== 'observations'; }
+  let pv = null;
+  function preview() {
+    clearTimeout(pv);
+    pv = setTimeout(async () => {
+      const cron = $('#srForm').cron.value.trim(); if (!cron) { $('#next').textContent = ''; return; }
+      try { const r = await api('POST', '/api/v1/scheduled-reports/preview-cron', { cron, count: 3 }); $('#next').textContent = t('Next runs') + ': ' + r.next.map((x) => new Date(x).toLocaleString(document.documentElement.lang || undefined, { timeZone: r.tz, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })).join(' · '); }
+      catch (x) { $('#next').textContent = x.message; }
+    }, 300);
+  }
+  async function open(r) {
+    EDIT = r || null;
+    if (!DS.length) DS = await api('GET', '/api/v1/datastreams');
+    const f = $('#srForm'); f.reset(); $('#srErr').textContent = '';
+    $('#srTitle').textContent = t(r ? 'Edit scheduled report' : 'New scheduled report');
+    $('#tz').textContent = OPT.tz;
+    f.area_id.innerHTML = OPT.areas.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
+    f.table.innerHTML = OPT.period_tables.map((w) => `<option value="${esc(w.dashboard)}|${esc(w.widget)}">${esc((w.title || w.widget) + ' · ' + w.dashboard_name)}</option>`).join('');
+    f.datastream_id.innerHTML = DS.map((d) => `<option value="${d.id}">${esc(d.asset)} / ${esc(d.key)}</option>`).join('');
+    $('#channels').innerHTML = OPT.channels.map((c) => `<label><input type="checkbox" value="${c.id}"> <span class="notranslate">${esc(c.name)}</span> <span class="muted">(${c.recipients})</span></label>`).join('') || `<span class="muted">${esc(t('No e-mail channels (Settings → Notifications)'))}</span>`;
+    f.attach_pdf.disabled = !OPT.pdf;
+    if (r) {
+      f.name.value = r.name; f.type.value = r.content.type; f.period.value = r.period; f.cron.value = r.cron;
+      if (r.content.area_id) f.area_id.value = r.content.area_id;
+      if (r.content.dashboard) f.table.value = r.content.dashboard + '|' + r.content.widget;
+      if (r.content.kind) f.kind.value = r.content.kind;
+      if (r.content.datastream_id) f.datastream_id.value = r.content.datastream_id;
+      for (const c of document.querySelectorAll('#channels input')) c.checked = r.recipients.channels.includes(c.value);
+      f.addresses.value = r.recipients.addresses.join('\n');
+      f.attach_pdf.checked = r.attach_pdf; f.attach_xlsx.checked = r.attach_xlsx; f.enabled.checked = r.enabled;
+    } else { f.cron.value = '0 7 * * *'; f.attach_pdf.checked = OPT.pdf; }
+    $('#srDelete').hidden = !r;
+    show(); preview();
+    $('#srDlg').showModal();
+  }
+  $('#newBtn').onclick = () => open(null);
+  $('#srForm').type.onchange = show; $('#srForm').kind.onchange = show;
+  $('#srForm').cron.oninput = preview;
+  for (const b of document.querySelectorAll('[data-p]')) b.onclick = () => { $('#srForm').cron.value = b.dataset.p; preview(); };
+  $('#srForm').onsubmit = async (e) => {
+    e.preventDefault(); const f = e.target;
+    const content = { type: f.type.value };
+    if (content.type === 'counting') content.area_id = f.area_id.value;
+    if (content.type === 'period_table') { const [d, w] = f.table.value.split('|'); content.dashboard = d; content.widget = w; }
+    if (content.type === 'template') { content.kind = f.kind.value; if (content.kind === 'observations') content.datastream_id = f.datastream_id.value; }
+    const body = { name: f.name.value, content, period: f.period.value, cron: f.cron.value,
+      recipients: { channels: [...document.querySelectorAll('#channels input:checked')].map((c) => c.value), addresses: f.addresses.value.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean) },
+      attach_pdf: f.attach_pdf.checked && !f.attach_pdf.disabled, attach_xlsx: f.attach_xlsx.checked, enabled: f.enabled.checked, reason: f.reason.value };
+    try { if (EDIT) await api('PUT', `/api/v1/scheduled-reports/${EDIT.id}`, body); else await api('POST', '/api/v1/scheduled-reports', body); $('#srDlg').close(); ctrl32.toast(t('saved'), 'ok'); load(); } catch (x) { $('#srErr').textContent = x.message; }
+  };
+  $('#srDelete').onclick = async () => {
+    const r = $('#srForm').reason.value; if (!r) { $('#srErr').textContent = t('reason required'); return; }
+    try { await api('DELETE', `/api/v1/scheduled-reports/${EDIT.id}?reason=${encodeURIComponent(r)}`); $('#srDlg').close(); load(); } catch (x) { $('#srErr').textContent = x.message; }
+  };
+  ctrl32.ready({ requireAuth: true, requirePerm: 'config.write' }).then(load);
+})();
+</script>
+</body>
+</html>

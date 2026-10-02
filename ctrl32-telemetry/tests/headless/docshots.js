@@ -19,7 +19,7 @@ const pass = process.env.PASS || "admin1234";
 const lang = process.env.UI_LANG || "en";
 const only = process.env.ONLY || "";
 const tmp = process.env.TEMP || require("os").tmpdir();
-const port = 9391;
+const port = +(process.env.CDP_PORT || 9391); // another port when several runs share the PC
 fs.mkdirSync(out, { recursive: true });
 const profile = tmp + "/cdp-profile-docshots";
 fs.rmSync(profile, { recursive: true, force: true });
@@ -388,6 +388,46 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
       const q = new URLSearchParams({ response_type: "code", client_id: reg.client_id, redirect_uri: "http://127.0.0.1:33418/callback", code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", code_challenge_method: "S256", state: "docs", scope: "mcp", resource: base + "/mcp" });
       await page("ai-consent", "/oauth/authorize?" + q.toString(), { wait: 3000 });
     } else problems.push("ai-consent: client registration failed");
+  }
+
+  // ---- object counting (spec 029; the demo: docs.py counting)
+  const ca = ((await api("/api/v1/counting/areas")) || { areas: [] }).areas;
+  const bld = ca.find((a) => a.name === "Nitra plant – main building") || ca[0];
+  const park = ca.find((a) => a.kind === "car_park");
+  const ccams = (await api("/api/v1/counting/cameras")) || [];
+  const entCam = ccams.find((c) => c.camera === "Main entrance camera") || ccams.find((c) => c.enabled);
+  const roadCam = ccams.find((c) => c.camera === "Plant road camera");
+  if (bld) {
+    const yday = (() => { const d = new Date(Date.now() - 864e5); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
+    const day = async () => { await ev(`(() => { localStorage.setItem('ctrl32.counting.area', ${JSON.stringify(bld.id)}); return true; })()`); };
+    if (wanted("counting-overview")) { await go("/counting", 1000); await day(); await go(`/counting?area=${bld.id}`, 4000); await shot("counting-overview", { full: true, maxH: 3200 }); }
+    if (wanted("counting-yesterday")) { await go(`/counting?area=${bld.id}`, 3000); await click("#prev", 3000); await shot("counting-yesterday", { full: true, maxH: 3200 }); }
+    if (wanted("counting-hours")) { await go(`/counting?area=${bld.id}`, 3000); await click("#prev", 3000); await shot("counting-hours", { clip: "js:document.querySelector('#hourChart').closest('.card')" }); }
+    if (wanted("counting-entrances")) { await go(`/counting?area=${bld.id}`, 3000); await click("#prev", 3000); await shot("counting-entrances", { clip: "js:document.querySelector('#entTable').closest('.oc-two')" }); }
+    await page("counting-correct-dialog", `/counting?area=${bld.id}`, { wait: 3500, click: "#correctBtn" });
+    await page("counting-alarm-dialog", `/counting?area=${bld.id}`, { wait: 3500, click: "#alarmBtn" });
+    await page("counting-export-dialog", `/counting?area=${bld.id}`, { wait: 3500, click: "#exportBtn" });
+    if (park && wanted("counting-car-park")) { await go(`/counting?area=${park.id}`, 3000); await click("#prev", 3500); await shot("counting-car-park", { full: true, maxH: 3600 }); }
+    if (park && wanted("counting-speeds")) { await go(`/counting?area=${park.id}`, 3000); await click("#prev", 3500); await shot("counting-speeds", { clip: "#speeds" }); }
+    await page("counting-areas", "/counting/areas", { wait: 3000 });
+    await page("counting-area-dialog", "/counting/areas", { wait: 3000, click: `[data-edit="${bld.id}"]`, clickWait: 1500 });
+    await page("counting-new-area-dialog", "/counting/areas", { wait: 3000, click: "#newArea", clickWait: 1500 });
+    await page("counting-sensors", "/counting/sensors", { wait: 3000 });
+    await page("counting-sensor-dialog", "/counting/sensors", { wait: 3000, click: "[data-in]", clickWait: 2000 });
+    await page("counting-cameras", "/counting/cameras", { wait: 3500 });
+    if (entCam && wanted("counting-camera-editor")) { await go(`/counting/cameras?camera=${entCam.camera_id}`, 16000); await shot("counting-camera-editor", { full: true, maxH: 2600 }); }
+    if (entCam && wanted("counting-camera-picture")) { await go(`/counting/cameras?camera=${entCam.camera_id}`, 16000); await shot("counting-camera-picture", { clip: "#ocEd" }); }
+    if (roadCam && wanted("counting-speed-editor")) { await go(`/counting/cameras?camera=${roadCam.camera_id}`, 14000); await shot("counting-speed-editor", { full: true, maxH: 2600 }); }
+    const vd = dashes.find((d) => d.name === "Visitors and vehicles");
+    if (vd) await page("counting-dashboard", `/dashboards/${vd.slug}`, { wait: 7000 });
+    await page("admin-scheduled-reports", "/settings/scheduled-reports", { wait: 3000 });
+    const reps = ((await api("/api/v1/scheduled-reports")) || { reports: [] }).reports;
+    const r1 = reps.find((r) => r.name === "Main building – daily visitors") || reps[0];
+    if (r1) {
+      await page("admin-scheduled-report-dialog", "/settings/scheduled-reports", { wait: 3000, click: `[data-edit="${r1.id}"]`, clickWait: 2000 });
+      await page("admin-scheduled-report-log", "/settings/scheduled-reports", { wait: 3000, click: `[data-runs="${r1.id}"]`, clickWait: 2000, full: true });
+    }
+    if (wanted("counting-phone")) { await viewport(390, 844, true); await go(`/counting?area=${bld.id}`, 4000); await click("#prev", 3000); await shot("counting-phone", { full: true, maxH: 2600 }); await viewport(1440, 900, false); }
   }
 
   // ---- account

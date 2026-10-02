@@ -6,6 +6,9 @@
                        a display, firmware and a campaign, users and a custom role, an API token, a report template and
                        stored reports, a PWA app, the "overview" and "showcase" starter dashboards, and the VPN (a site,
                        a technician, a gateway and access rules; needs the agent's VPN simulation and a licence)
+  docs.py counting     only object counting: the main building of the Nitra plant (three entrances, 30 days of people
+                       counts), the car park (cars, trucks, a speed section on the plant road), a dashboard, scheduled
+                       e-mail reports and cameras with counting lines (CTRL32_DEMO_DETECTOR=1 switches the detector on)
   docs.py vpn          only the VPN part (phase 1 and 2: an organization administrator olivia.grant, four eyes for
                        technicians' access, an approved and a pending access grant)
   docs.py live         keeps the cold chain and the energy meters current (a sample every 60 s)
@@ -578,10 +581,171 @@ def vpn2():
     return {"org_admin": ORG_ADMIN}
 
 
+# ---------------------------------------------------------------------------------------------- object counting
+CAMSIM = os.environ.get("CTRL32_CAMSIM", "rtsp://127.0.0.1:8554").rstrip("/")
+
+
+def shift_profile(h, wd):
+    """Passages of one hour of a working day (wd 0–4), Saturday (5) or Sunday (6) at the three entrances of the
+    main building and the gate of the car park: shifts at 06:00 and 14:00 through the staff entrance, office and
+    visitors through the main entrance, drivers at the loading dock."""
+    k = 1.0 if wd < 5 else (0.25 if wd == 5 else 0.06)
+    main_in = {7: 38, 8: 30, 9: 12, 10: 9, 11: 8, 12: 10, 13: 11, 14: 7, 15: 5, 16: 3}.get(h, 0)
+    main_out = {9: 4, 10: 6, 11: 8, 12: 14, 13: 9, 14: 8, 15: 26, 16: 38, 17: 22, 18: 6}.get(h, 0)
+    staff_in = {5: 74, 13: 68, 21: 4}.get(h, 0)
+    staff_out = {14: 70, 15: 4, 22: 66}.get(h, 0)
+    dock = {6: 3, 7: 4, 8: 5, 9: 4, 10: 5, 11: 4, 12: 2, 13: 4, 14: 5, 15: 3, 16: 2, 17: 1}.get(h, 0)
+    cars_in = {5: 52, 6: 8, 7: 30, 8: 18, 9: 7, 10: 6, 11: 5, 12: 6, 13: 48, 14: 6, 15: 3, 21: 3}.get(h, 0)
+    cars_out = {9: 3, 10: 4, 11: 5, 12: 8, 13: 6, 14: 50, 15: 22, 16: 30, 17: 16, 18: 5, 22: 46}.get(h, 0)
+    trucks = {6: 2, 7: 3, 8: 4, 9: 3, 10: 4, 11: 3, 12: 2, 13: 3, 14: 4, 15: 2, 16: 2, 17: 1}.get(h, 0)
+    return k, dict(main_in=main_in, main_out=main_out, staff_in=staff_in, staff_out=staff_out, dock_in=dock, dock_out=dock,
+                   cars_in=cars_in, cars_out=cars_out, trucks_in=trucks, trucks_out=trucks)
+
+
+@once("counting")
+def counting():
+    """Object counting (spec 029): the main building of the Nitra plant with three entrances and the car park with a
+    gate and a speed section on the plant road; 30 days of hourly passages from people counters (light barriers and
+    the gate loop, through the device protocol), vehicle speeds, a dashboard, scheduled e-mail reports and a camera
+    with counting lines. CTRL32_CAMSIM: the camera simulator (default rtsp://127.0.0.1:8554); CTRL32_DEMO_DETECTOR=1
+    switches the detector on for the entrance camera (camsim -clip with a recording of people)."""
+    sites = call("GET", "/api/v1/sites")
+    site = next((s for s in sites if s["name"] == "Nitra plant"), None)
+    sid = site["id"] if site else call("POST", "/api/v1/sites", {"name": "Nitra plant", "address": "Priemyselná 5, Nitra", "reason": R})["id"]
+    areas = {a["name"]: a for a in call("GET", "/api/v1/counting/areas")["areas"]}
+    if "Nitra plant – main building" not in areas:
+        call("POST", "/api/v1/counting/areas", {"site_id": sid, "name": "Nitra plant – main building", "kind": "building", "groups": ["people"], "reset_time": "03:00",
+                                                "limits": {"people": 300}, "entrances": ["Main entrance", "Staff entrance", "Loading dock"], "reason": "people counting of the main building (fire safety: at most 300 people)"})
+    if "Nitra plant – car park" not in areas:
+        call("POST", "/api/v1/counting/areas", {"site_id": sid, "name": "Nitra plant – car park", "kind": "car_park", "groups": ["vehicles", "cars", "trucks"], "reset_time": "03:00",
+                                                "limits": {"vehicles": 160}, "entrances": ["Gate"], "reason": "free spaces of the car park (160 spaces)"})
+    areas = {a["name"]: a for a in call("GET", "/api/v1/counting/areas")["areas"]}
+    bld, park = areas["Nitra plant – main building"], areas["Nitra plant – car park"]
+    ent = {e["name"]: e["id"] for e in bld["entrances"]}
+    gate = park["entrances"][0]["id"]
+    # the counters: one device with a datastream per direction and entrance (light barriers, the gate loop)
+    a = asset(sid, "sensor", "Entrance counters")
+    dev, tok = device("people-counters-nitra", "People counters – Nitra plant")
+    keys = ["main_in", "main_out", "staff_in", "staff_out", "dock_in", "dock_out", "cars_in", "cars_out", "trucks_in", "trucks_out"]
+    ds = {k: stream(a, dev, k, "count", "", "gauge") for k in keys}
+    inputs = {i["name"] for i in call("GET", "/api/v1/counting/inputs")}
+    for name, en, k, g in (("Light barrier – main entrance", ent["Main entrance"], "main", "people"), ("Turnstile – staff entrance", ent["Staff entrance"], "staff", "people"),
+                           ("Light barrier – loading dock", ent["Loading dock"], "dock", "people"), ("Gate loop – cars", gate, "cars", "cars"), ("Gate loop – trucks", gate, "trucks", "trucks")):
+        if name not in inputs:
+            call("POST", "/api/v1/counting/inputs", {"entrance_id": en, "name": name, "group": g, "in_datastream_id": ds[k + "_in"], "out_datastream_id": ds[k + "_out"], "mode": "increment", "reason": R})
+    # cameras: the entrance camera counts people crossing the door line; the gate camera measures speed between two lines
+    cams = {c["name"]: c["id"] for c in call("GET", "/api/v1/video/cameras")}
+    if "Main entrance camera" not in cams:
+        cams["Main entrance camera"] = call("POST", "/api/v1/video/cameras", {"name": "Main entrance camera", "location": "Nitra plant – main building", "url": CAMSIM + "/clip/h264/640x360", "record": "off", "reason": R})["id"]
+    if "Plant road camera" not in cams:
+        cams["Plant road camera"] = call("POST", "/api/v1/video/cameras", {"name": "Plant road camera", "location": "Nitra plant – car park", "url": CAMSIM + "/gate/h264/640x360", "record": "off", "reason": R})["id"]
+    detector = os.environ.get("CTRL32_DEMO_DETECTOR") == "1"
+    call("PUT", f"/api/v1/counting/cameras/{cams['Main entrance camera']}", {"enabled": detector, "fps": 8, "model": "nano", "config": {"anchor": "bottom", "lines": [
+        {"id": "door", "name": "Door line", "a": {"x": 0.02, "y": 0.62}, "b": {"x": 0.98, "y": 0.62}, "in": "right", "classes": ["person"], "entrance_id": ent["Main entrance"]}]},
+        "reason": "count visitors at the main entrance with the camera"})
+    road = call("PUT", f"/api/v1/counting/cameras/{cams['Plant road camera']}", {"enabled": False, "fps": 10, "model": "nano", "config": {"anchor": "bottom", "lines": [
+        {"id": "ra", "name": "Road A", "a": {"x": 0.05, "y": 0.42}, "b": {"x": 0.95, "y": 0.42}, "in": "right", "classes": ["car", "truck", "bus", "motorcycle"], "entrance_id": ""},
+        {"id": "rb", "name": "Road B", "a": {"x": 0.05, "y": 0.78}, "b": {"x": 0.95, "y": 0.78}, "in": "right", "classes": ["car", "truck", "bus", "motorcycle"], "entrance_id": ""}],
+        "sections": [{"id": "road", "name": "Plant road", "line_a": "ra", "line_b": "rb", "distance_m": 18, "limit_kmh": 30, "area_id": park["id"]}]},
+        "reason": "speed on the plant road (limit 30 km/h)"})
+    sec_asset = road["config"]["sections"][0]["asset_id"]
+    sp = next(d["id"] for d in call("GET", "/api/v1/datastreams") if d["asset_id"] == sec_asset and d["key"] == "vehicle_speed")
+    ol = next(d["id"] for d in call("GET", "/api/v1/datastreams") if d["asset_id"] == sec_asset and d["key"] == "over_limit")
+    sdev, stok = device("plant-road-history", "Plant road – speed history import")
+    for d in (sp, ol):
+        call("POST", f"/api/v1/devices/{sdev}/datastreams", {"datastream_id": d, "reason": "history of the speed section (demo)"})
+    # 30 days of history, an hour at a time: arrivals at :20, departures at :40 (the occupancy never needs clamping)
+    rng = random.Random(29)
+    start = (NOW // 3600 - 30 * 24) * 3600
+    ins, outs, speeds = [], [], []
+    for t in range(start, NOW - 3600, 3600):
+        lt = time.localtime(t)
+        k, p = shift_profile(lt.tm_hour, lt.tm_wday)
+        noisy = lambda v: max(0, int(round(v * k * rng.uniform(0.8, 1.2)))) if v else 0
+        vi = {key: noisy(p[key]) for key in keys if key.endswith("_in")}
+        vo = {key: noisy(p[key]) for key in keys if key.endswith("_out")}
+        if lt.tm_hour == 22:  # everybody leaves by the end of the second shift
+            vo["staff_out"] = max(vo["staff_out"], 0)
+        ins.append({"ts": t + 1200, "v": {kk: v for kk, v in vi.items() if v}})
+        outs.append({"ts": t + 2400, "v": {kk: v for kk, v in vo.items() if v}})
+        for _ in range(vi["cars_in"] + vi["trucks_in"]):
+            s = max(8, rng.gauss(24, 5.5) + (6 if rng.random() < 0.06 else 0))
+            at = t + rng.randint(0, 3599)
+            speeds.append({"ts": at, "v": {"vehicle_speed": round(s, 1)}})
+            if s > 30:
+                speeds.append({"ts": at, "v": {"over_limit": 1}})
+    # balance each day: what is left in the building or the car park at 22:40 leaves at 22:50
+    occ = {"people": 0, "cars": 0, "trucks": 0}
+    batch = []
+    for i in range(len(ins)):
+        for m, sign in ((ins[i], 1), (outs[i], -1)):
+            v = m["v"]
+            occ["people"] += sign * (v.get("main_in", v.get("main_out", 0)) + v.get("staff_in", v.get("staff_out", 0)) + v.get("dock_in", v.get("dock_out", 0)))
+            occ["cars"] += sign * v.get("cars_in", v.get("cars_out", 0)); occ["trucks"] += sign * v.get("trucks_in", v.get("trucks_out", 0))
+            for g in occ:  # no more departures than people (vehicles) inside
+                if occ[g] < 0:
+                    key = {"people": "staff_out", "cars": "cars_out", "trucks": "trucks_out"}[g]
+                    v[key] = max(0, v.get(key, 0) + occ[g]); occ[g] = 0
+            if m["v"]: batch.append(m)
+        if time.localtime(ins[i]["ts"]).tm_hour == 22:
+            rest = {"staff_out": occ["people"], "cars_out": occ["cars"], "trucks_out": occ["trucks"]}
+            rest = {kk: v for kk, v in rest.items() if v > 0}
+            if rest: batch.append({"ts": ins[i]["ts"] + 1800, "v": rest})
+            occ = {"people": 0, "cars": 0, "trucks": 0}
+    for j in range(0, len(batch), 100):
+        call("POST", "/api/v1/d/telemetry", batch[j:j + 100], token=tok)
+    speeds.sort(key=lambda s: s["ts"])
+    for j in range(0, len(speeds), 500):
+        call("POST", "/api/v1/d/telemetry", speeds[j:j + 500], token=stok)
+    # the capacity alarm of the building (the existing alarm rules on the occupancy datastream)
+    occ_ds = next(d["id"] for d in call("GET", "/api/v1/datastreams") if d["asset_id"] == bld["asset_id"] and d["key"] == "people_occupancy")
+    rules = call("GET", f"/api/v1/alarm-rules?datastream_id={occ_ds}") or []
+    if not rules:
+        call("POST", "/api/v1/alarm-rules", {"datastream_id": occ_ds, "type": "high", "warning": 270, "action": 300, "reason": "fire safety: at most 300 people in the main building"})
+    return {"site": sid, "building": bld["id"], "car_park": park["id"], "entrance_camera": cams["Main entrance camera"], "road_camera": cams["Plant road camera"], "token": tok, "speed": sp}
+
+
+def counting_views():
+    """The dashboard "Visitors and vehicles" and the scheduled e-mail reports of the counting demo (run again: a new
+    version of the dashboard, existing reports kept)."""
+    c = st["counting"]
+    areas = {a["id"]: a for a in call("GET", "/api/v1/counting/areas")["areas"]}
+    bld, park, sp = areas[c["building"]], areas[c["car_park"]], c["speed"]
+    occ_ds = next(d["id"] for d in call("GET", "/api/v1/datastreams") if d["asset_id"] == bld["asset_id"] and d["key"] == "people_occupancy")
+    # a dashboard of visitors and vehicles
+    dsl = {(d["asset_id"], d["key"]): d["id"] for d in call("GET", "/api/v1/datastreams")}
+    pin, pout = dsl[(bld["asset_id"], "people_in")], dsl[(bld["asset_id"], "people_out")]
+    spec = {"version": 1, "kind": "dashboard", "layout": {"type": "grid", "row_height": 96}, "range": "24h", "refresh_s": 60, "widgets": [
+        w("occ", "counting_occupancy", 0, 0, 3, 2, [occ_ds], title="Main building now", group="people"),
+        w("park", "counting_occupancy", 3, 0, 3, 2, [dsl[(park["asset_id"], "vehicles_occupancy")]], title="Car park", group="vehicles"),
+        w("gauge", "radial_gauge", 6, 0, 3, 2, [occ_ds], title="Occupancy", y_min=0, y_max=320, warn=270, action=300, decimals=0),
+        w("share", "counting_share", 9, 0, 3, 2, [occ_ds], title="Arrivals by entrance (yesterday)", group="people", day="yesterday"),
+        w("ent", "counting_entrances", 0, 2, 6, 3, [occ_ds], title="Entrances yesterday", group="people", day="yesterday"),
+        w("trend", "chart", 6, 2, 6, 3, [pin, pout], title="Arrivals and departures per day", agg="sum", agg_interval="1d", chart="bar", range="7d", series=[{"label": "In"}, {"label": "Out"}]),
+        w("speed", "vehicle_speeds", 0, 5, 6, 4, [sp], title="Plant road yesterday (limit 30 km/h)", day="yesterday"),
+        w("days", "period_table", 6, 5, 6, 4, [pin, pout], title="People per day", interval="day", values="sum", period="last_7d", total=True, decimals=0, series=[{"label": "In"}, {"label": "Out"}])]}
+    slug = dash("Visitors and vehicles", spec)
+    st["counting"]["dashboard"] = slug; save()
+    # scheduled e-mail reports
+    reps = {r["name"] for r in call("GET", "/api/v1/scheduled-reports")["reports"]}
+    if "Main building – daily visitors" not in reps:
+        r1 = call("POST", "/api/v1/scheduled-reports", {"name": "Main building – daily visitors", "content": {"type": "counting", "area_id": bld["id"]}, "period": "previous_day", "cron": "0 7 * * *",
+                                                        "recipients": {"addresses": ["facility.manager@nitra-plant.example", "security@nitra-plant.example"]}, "attach_pdf": True, "attach_xlsx": True, "reason": "daily overview for the facility manager"})["id"]
+        call("POST", f"/api/v1/scheduled-reports/{r1}/send")
+    if "Car park – weekly" not in reps:
+        call("POST", "/api/v1/scheduled-reports", {"name": "Car park – weekly", "content": {"type": "counting", "area_id": park["id"]}, "period": "previous_week", "cron": "0 7 * * 1",
+                                                   "recipients": {"addresses": ["logistics@nitra-plant.example"]}, "attach_pdf": True, "attach_xlsx": True, "reason": "weekly overview of the car park and the plant road"})
+    if "People per day – monthly" not in reps:
+        call("POST", "/api/v1/scheduled-reports", {"name": "People per day – monthly", "content": {"type": "period_table", "dashboard": slug, "widget": "days"}, "period": "previous_month", "cron": "0 7 1 * *",
+                                                   "recipients": {"addresses": ["facility.manager@nitra-plant.example"]}, "attach_pdf": False, "attach_xlsx": True, "reason": "monthly table for the management report"})
+    return slug
+
+
 def setup():
     login()
     partitions()
     cold_chain(); energy(); dashboards(); rules(); flows(); mqtt_accounts(); home(); display(); firmware(); people(); settings(); incidents()
+    counting(); counting_views()
     st["vpn"] = vpn(); st["vpn2"] = vpn2(); save()
     print("docs demo ready:", ", ".join(st))
 
@@ -613,4 +777,4 @@ if __name__ == "__main__":
     if cmd == "mqtt-creds":
         m = st["mqtt"]; print(m["auto"]["user"], m["auto"]["pass"], m["inbox"]["user"], m["inbox"]["pass"])
     else:
-        {"setup": setup, "live": live, "vpn": lambda: (login(), st.update(vpn=vpn(), vpn2=vpn2()), save())}[cmd]()
+        {"setup": setup, "live": live, "vpn": lambda: (login(), st.update(vpn=vpn(), vpn2=vpn2()), save()), "counting": lambda: (login(), counting(), counting_views())}[cmd]()

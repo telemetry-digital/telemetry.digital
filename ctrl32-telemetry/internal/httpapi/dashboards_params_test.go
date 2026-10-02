@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"io/fs"
 	"regexp"
 	"strings"
 	"testing"
@@ -165,7 +166,8 @@ func TestShowcaseMoreValid(t *testing.T) {
 	for _, x := range widgets {
 		have[x["type"].(string)] = true
 	}
-	skip := setOf("tank", "pump", "valve", "pipe", "instrument", "setpoint", "switch", "button", "camera", "camera_pin") // camera, camera_pin: need a configured camera
+	skip := setOf("tank", "pump", "valve", "pipe", "instrument", "setpoint", "switch", "button", "camera", "camera_pin", // camera, camera_pin: need a configured camera
+		"counting_occupancy", "counting_entrances", "counting_share", "vehicle_speeds") // need a counting area (spec 029)
 	for _, d := range widgetCatalog {
 		if !have[d.Type] && !skip[d.Type] {
 			t.Errorf("showcase lacks %s", d.Type)
@@ -177,7 +179,8 @@ func TestShowcaseMoreValid(t *testing.T) {
 // ("widgets should be fully configurable", spec 002 FR-001).
 func TestEveryParamIsRendered(t *testing.T) {
 	var js strings.Builder
-	for _, f := range []string{"static/widgets.js", "static/widgets-more.js"} {
+	files, _ := fs.Glob(static, "static/widgets*.js")
+	for _, f := range files {
 		b, err := static.ReadFile(f)
 		if err != nil {
 			t.Fatal(err)
