@@ -1,9 +1,9 @@
-# White labeling (paid: 39 EUR one-time, forever)
+# White labeling (paid: 99,- EUR one-time, forever)
 
 ctrl32 telemetry is free, and everything except white labeling and changes through AI assistants stays free.
 **White labeling** — delivering the system under your own brand — is a paid feature; the same license also unlocks
 **changes through AI assistants over MCP** (reading through assistants is free; `docs/mcp.md`, ADR-0017). It is unlocked by the **ctrl32 licence** sold on
-[ctrl32.com](https://ctrl32.com/pricing/): **39 EUR, paid once, valid forever** (no subscription). One ctrl32 licence
+[ctrl32.com](https://ctrl32.com/pricing/): **99,- EUR, paid once, valid forever** (no subscription). One ctrl32 licence
 unlocks **either** the ctrl32 editor **or** white labeling on one telemetry server (installation) — not both; whichever
 it is activated for first keeps it. Without a license every deployment shows the fixed ctrl32 footer. Specification:
 `specs/007-white-labeling/`; ADR-0016; URS J-16a.
@@ -26,7 +26,7 @@ Logo, colours, font and map tiles are free branding (Settings → Branding and t
 
 ## For the customer: buying and activating (online)
 
-1. **Buy** the ctrl32 licence on ctrl32.com (System → License → *Buy white labeling (39 EUR)* opens the shop; the link
+1. **Buy** the ctrl32 licence on ctrl32.com (System → License → *Buy white labeling (99,- EUR)* opens the shop; the link
    is `license.buy_url`). Payment goes through Paddle (merchant of record: invoice and VAT). Keep the **order number**
    from the confirmation: the Paddle transaction id (`txn_…`) or the ctrl32.com order id — either works.
 2. Check that `http.base_url` holds the name the server is reached at (e.g. `https://scada.acme.sk`): the license is
@@ -93,7 +93,7 @@ means no new licenses with this key).
 
 ```
 go run ./tools/licgen issue -key <offline dir>/telemetry-digital-2026.key -licensee "Acme s.r.o." \
-    -email it@acme.sk -domains scada.acme.sk -notes "order txn_01…, 39 EUR"
+    -email it@acme.sk -domains scada.acme.sk -notes "order txn_01…, 99,- EUR"
 ```
 
 prints the license key (`c32l1.…`) to send to the customer, and on stderr a summary such as

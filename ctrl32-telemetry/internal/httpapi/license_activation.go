@@ -1,6 +1,6 @@
 package httpapi
 
-// Online activation of the white-label license (0.59.0, ADR-0016). The ctrl32 licence bought on ctrl32.com (39 EUR,
+// Online activation of the white-label license (0.59.0, ADR-0016). The ctrl32 licence bought on ctrl32.com (99,- EUR,
 // Paddle) unlocks either the ctrl32 editor or white labeling on one server. The administrator pastes the order number;
 // the server sends it with its host name (http.base_url) to the licence worker (license.activation_url, default
 // https://lic.ctrl32.com/telemetry/activate) and installs the license token it returns, verified like a pasted one:

@@ -4,7 +4,7 @@
 //	                                                           ctrl32-2026.pub (commit it to internal/license/trusted/)
 //	licgen issue -key ~/ctrl32-keys/ctrl32-2026.key -licensee "Acme s.r.o." -email it@acme.sk \
 //	             -domains scada.acme.sk -notes "order 2026-001"
-//	                                                           perpetual white_label license (the default: 39 EUR,
+//	                                                           perpetual white_label license (the default: 99,- EUR,
 //	                                                           one-time); -days N or -expires YYYY-MM-DD set an expiry
 //	licgen show -token c32l1.… [-pub file.pub]                 prints the payload (and verifies it with -pub)
 //	licgen batch [-apply] [-url https://lic.ctrl32.com]         mints the perpetual licenses the licence worker queued

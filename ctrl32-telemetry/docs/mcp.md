@@ -10,7 +10,7 @@ has a reason in the audit trail with the note "via MCP" (spec 022, ADR-0017).
 *Settings → AI assistants* with a reason.
 
 **Reading through an assistant is free. Changes through an assistant are paid**: they need the license of the server —
-the same ctrl32 licence that unlocks white labeling (39 EUR, once, forever; one purchase unlocks both; *System →
+the same ctrl32 licence that unlocks white labeling (99,- EUR, once, forever; one purchase unlocks both; *System →
 License*, `docs/whitelabel.md`). Without it every assistant only reads: the change tools are not offered, a change is
 refused with an explanation, and the consent page offers only *Reading only*. The web UI and the REST API with your own
 API token stay free as before.
