@@ -252,6 +252,12 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await page("admin-new-user-dialog", "/users", { wait: 3000, click: "#newUserBtn" });
   await page("admin-roles", "/users/roles", { wait: 3000, full: true, maxH: 3600 });
   await page("admin-new-role-dialog", "/users/roles", { wait: 3000, click: "#newRoleBtn" });
+  // the server administrator's own account: server_admin and org_admin, both locked for oneself (0.65.0)
+  if (wanted("admin-user-server-admin")) {
+    await go("/users", 3000);
+    await ev(`(() => { const r = [...document.querySelectorAll('#users tbody tr')].find((t) => t.querySelector('b') && t.querySelector('b').textContent === ${JSON.stringify(user)}); if (r) r.click(); return !!r; })()`); await sleep(1800);
+    await shot("admin-user-server-admin", { clip: "#userDlg", pad: -6 });
+  }
   for (const s of ["branding", "templates", "reports", "connectors", "languages", "translations", "apps", "export", "notifications", "approvals", "policy"]) {
     await page(`admin-settings-${s}`, `/settings/${s}`, { wait: 3500, full: s === "branding" || s === "templates", maxH: 3200 });
   }
@@ -269,7 +275,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   const wantVpn = !only || only.split(",").some((s) => s.startsWith("vpn") || "vpn-".startsWith(s));
   const vpnState = wantVpn ? await api("/api/v1/vpn") : null;
   if (vpnState && vpnState.supported) {
-    const noSim = "(() => { const fix = () => { const n = document.querySelector('#note'); if (n && !n.hidden && /Simulation/.test(n.textContent)) n.hidden = true; document.querySelectorAll('#kvServer .badge').forEach((b) => { if (/simulation/i.test(b.textContent)) b.remove(); }); }; fix(); if (!window.__noSim) { window.__noSim = new MutationObserver(fix); window.__noSim.observe(document.body, { subtree: true, childList: true }); } return true; })()";
+    const noSim = "(() => { const fix = () => { const n = document.querySelector('#note'); if (n && !n.hidden && /Simulation/.test(n.textContent)) n.hidden = true; document.querySelectorAll('#kvServer .badge').forEach((b) => { if (/simulation/i.test(b.textContent)) b.remove(); }); document.querySelectorAll('#kvServer dd').forEach((d) => { if (d.textContent.trim() === 'simulation' && d.previousElementSibling) { d.previousElementSibling.remove(); d.remove(); } }); }; fix(); if (!window.__noSim) { window.__noSim = new MutationObserver(fix); window.__noSim.observe(document.body, { subtree: true, childList: true }); } return true; })()";
     const vpnGo = async () => { await go("/server/vpn", 3500); await ev(noSim); await sleep(300); };
     const created = [];
     if (wanted("vpn-page")) { await vpnGo(); await shot("vpn-page", { full: true, maxH: 2400 }); }
@@ -292,11 +298,16 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
       await submitPeer(); created.push("Service tablet - M. Reed");
       await ev("document.querySelector('#peerResult').scrollIntoView({block: 'start'}); true"); await sleep(400);
       await shot("vpn-peer-config", { clip: "#peerDlg", pad: -6 });
+      // the app files of a technician (0.65.0): Windows and phones
+      for (const tpl of ["windows", "mobile"]) {
+        await ev(`(() => { const b = document.querySelector('[data-tpl=${tpl}]'); if (!b) return false; b.click(); document.querySelector('#tplText').style.maxHeight = 'none'; document.querySelector('#tplTabs').scrollIntoView({block: 'start'}); return true; })()`); await sleep(500);
+        await shot(`vpn-client-${tpl}`, { clip: "js:(() => { const a = document.querySelector('#tplTabs').previousElementSibling, b = document.querySelector('#tplText').nextElementSibling; const r1 = a.getBoundingClientRect(), r2 = b.getBoundingClientRect(); return { getBoundingClientRect: () => ({ x: r1.x, y: r1.y, width: Math.max(r1.width, r2.width), height: r2.bottom - r1.top }), scrollIntoView: () => {} }; })()", pad: 8 });
+      }
     }
     if (wanted("vpn-router")) {
       await vpnGo(); await ev(fillPeer("site", "Warehouse Senec - router", "f.subnets.value = '192.168.20.0/24'; f.note.value = 'Teltonika RUT241';")); await sleep(500);
       await submitPeer(); created.push("Warehouse Senec - router");
-      for (const tpl of ["wg_quick", "openwrt", "mikrotik"]) {
+      for (const tpl of ["wg_quick", "openwrt", "mikrotik", "rutos", "edgerouter", "pfsense", "opnsense"]) {
         await ev(`(() => { document.querySelector('[data-tpl=${tpl}]').click(); document.querySelector('#tplText').style.maxHeight = 'none'; document.querySelector('#tplTabs').scrollIntoView({block: 'start'}); return true; })()`); await sleep(500);
         await shot(`vpn-router-${tpl.replace("_", "-")}`, { clip: "js:(() => { const a = document.querySelector('#tplTabs').previousElementSibling, b = document.querySelector('#tplText').nextElementSibling; const r1 = a.getBoundingClientRect(), r2 = b.getBoundingClientRect(); return { getBoundingClientRect: () => ({ x: r1.x, y: r1.y, width: Math.max(r1.width, r2.width), height: r2.bottom - r1.top }), scrollIntoView: () => {} }; })()", pad: 8 });
       }
@@ -322,6 +333,39 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
       await shot("vpn-rule-server", { clip: "#ruleDlg", pad: -6 });
     }
     if (wanted("vpn-firewall")) { await vpnGo(); await click("#rulesetBtn"); await ev("(() => { const t = document.querySelector('#fwText'); t.style.maxHeight = 'none'; return true; })()"); await sleep(300); await shot("vpn-firewall", { clip: "#fwDlg", pad: -6 }); }
+    // access grant for a technician (0.65.0): the dialog with the presets; with four eyes it is a request
+    if (wanted("vpn-grant")) {
+      await vpnGo();
+      await ev("(() => { const r = [...document.querySelectorAll('#peers tbody tr')].find((t) => /J. Cooper/.test(t.textContent)); const b = r && r.querySelector('[data-grant]'); if (b) b.click(); return !!b; })()"); await sleep(600);
+      await ev("(() => { const b = document.querySelector('#grantPresets [data-min=\"480\"]'); if (b) b.click(); document.querySelector('#grantForm').reason.value = 'Night shift 2 Oct, line 1 alarms'; return true; })()"); await sleep(400);
+      await shot("vpn-grant", { clip: "#grantDlg", pad: -6 });
+    }
+    // the organization's administrator (org_admin, no server administration; docs.py vpn2): Settings → VPN
+    const orgAdmin = process.env.ORG_ADMIN || "olivia.grant", orgPass = process.env.ORG_ADMIN_PASS || "Olivia-docs-2026!";
+    if (["vpn-organization", "vpn-organization-rule", "vpn-organization-approval"].some(wanted)) {
+      const as = async (u, pw) => { await ev("fetch('/api/v1/auth/logout', {method: 'POST'}).then(() => true)"); return ev(`fetch('/api/v1/auth/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: ${JSON.stringify(u)}, password: ${JSON.stringify(pw)}})}).then(r => r.status)`); };
+      const st = await as(orgAdmin, orgPass);
+      if (st !== 200) problems.push("vpn-organization: sign-in as " + orgAdmin + " failed (" + st + "; run deploy/dev/demo/docs.py vpn)");
+      else {
+        const orgGo = async () => { await go("/vpn", 3500); await ev(noSim); await sleep(300); };
+        if (wanted("vpn-organization")) { await orgGo(); await shot("vpn-organization", { full: true, maxH: 2400 }); }
+        if (wanted("vpn-organization-rule")) {
+          await orgGo(); await click("#addRuleBtn", 800);
+          await ev("(() => { const f = document.querySelector('#ruleForm'); f.name.value = 'Nitra technicians → PLC line 1 (S7 102)'; [...document.querySelectorAll('#srcList input[data-st=peer]')].forEach((c) => { c.checked = true; }); f.dest_type.value = 'site'; f.dest_type.dispatchEvent(new Event('change')); f.dest_cidr.value = '192.168.10.20'; f.protocol.value = 'tcp'; f.ports.value = '102'; f.reason.value = 'Commissioning of line 1'; return true; })()"); await sleep(400);
+          await shot("vpn-organization-rule", { clip: "#ruleDlg", pad: -6 });
+        }
+        if (wanted("vpn-organization-approval")) {
+          await orgGo();
+          await ev("(() => { document.querySelector('#addPeerBtn').click(); document.querySelector('#kindSeg [data-kind=user]').click(); const f = document.querySelector('#peerForm'); f.name.value = 'Service laptop - R. Novak'; f.note.value = 'Contractor, PLC service'; f.reason.value = 'New peer for the documentation'; f.password.value = " + JSON.stringify(orgPass) + "; return true; })()"); await sleep(500);
+          await ev("document.querySelector('#peerSubmit').click(); true"); await sleep(3000); await ev(noSim);
+          await ev("document.querySelector('#peerResult').scrollIntoView({block: 'start'}); true"); await sleep(400);
+          await shot("vpn-organization-approval", { clip: "#peerDlg", pad: -6 });
+          const st3 = await api("/api/v1/vpn"); const p = ((st3 && st3.peers) || []).find((x) => x.name === "Service laptop - R. Novak");
+          if (p) await ev(`ctrl32.api('POST', '/api/v1/vpn/peers/${p.id}/remove', {reason: 'peer created for the documentation pictures'}).then(() => true)`);
+        }
+      }
+      if ((await as(user, pass)) !== 200) { console.error("sign-in as " + user + " failed again"); proc.kill(); process.exit(1); }
+    }
   } else if (wantVpn) problems.push("vpn: the server agent with the VPN is not available (set [agent] vpn_simulate, start the agent)");
   await page("admin-front-page-editor", "/landing/edit", { wait: 4000 });
 

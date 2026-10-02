@@ -9,5 +9,5 @@
 - [x] T007 Tests: e2e `vpn`, headless `vpn`, run-all with the agent simulation for the VPN suites
 - [x] T008 Docs: ADR-0018, `docs/vpn.md`, threat model, README, JOURNAL, STAV
 - [ ] T009 On a Linux server: real `nft`, `wg syncconf`, routes and forwarding with two peers (technician → site host allowed, other port dropped) before production
-- [ ] T010 Phase 2: Windows server (userspace WireGuard), approval of technician access by a second person, org-scoped management (needs the split of server and organization administration, ADR-0012 addendum)
+- [x] T010 Phase 2: Windows server (userspace WireGuard), approval of technician access by a second person, org-scoped management — done in 0.65.0 (spec 025, ADR-0019, ADR-0020)
 - [ ] T011 Phase 3: cloud hub for servers behind NAT

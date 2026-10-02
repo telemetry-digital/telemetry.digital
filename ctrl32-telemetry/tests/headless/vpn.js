@@ -90,14 +90,31 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
     if (!/\/interface wireguard add/.test(tpl)) problems.push("router templates missing");
     await shot("vpn-site-templates.png");
     await ev(`document.querySelector('#rotDlg').close()`);
+    // 0.65.0: more router texts, app files, the grant dialog
+    const tabs = await ev(`[...document.querySelectorAll('#rotResult [data-tpl]')].map(b => b.dataset.tpl).join(',')`);
+    console.log("template tabs:", tabs);
+    for (const k of ["rutos", "edgerouter", "pfsense", "opnsense", "windows", "mobile"]) if (!tabs.split(",").includes(k)) problems.push("template tab missing: " + k);
+    await send("Page.navigate", { url: base + "/server/vpn" }); await sleep(3000);
+    await ev(`(()=>{const b=document.querySelector('[data-grant]'); if(b) b.click(); const p=document.querySelector('#grantPresets [data-min="480"]'); if(p) p.click(); return !!b})()`); await sleep(500);
+    const g = await ev(`({open: document.querySelector('#grantDlg').open, until: document.querySelector('#grantUntil').textContent})`);
+    console.log("grant dialog:", JSON.stringify(g));
+    if (!g.open || !/Access until/.test(g.until)) problems.push("grant dialog");
+    await shot("vpn-grant.png");
+    await ev(`document.querySelector('#grantDlg').close()`);
   } else console.log("site and templates: skipped (no license)");
+  // 0.65.0: server administration on the roles page
+  await send("Page.navigate", { url: base + "/users/roles" }); await sleep(3000);
+  const roles = await ev(`({col: [...document.querySelectorAll('#matrix thead th')].some(t => /server_admin/.test(t.textContent)), note: /server_admin: \\d+ user/.test(document.querySelector('#serverAdminCount').textContent)})`);
+  console.log("roles page:", JSON.stringify(roles));
+  if (!roles.col || !roles.note) problems.push("server_admin not shown on the roles page");
+  await shot("users-roles.png");
   // Slovak (enabled for the probe, restored afterwards)
   const langs0 = await ev(`(async()=>{const me=await (await fetch("/api/v1/auth/me",{credentials:"same-origin"})).json(); window.__csrf=me.csrf_token; return await (await fetch("/api/v1/i18n/languages",{credentials:"same-origin"})).json()})()`);
   const putLangs = (enabled, dflt) => ev(`fetch("/api/v1/i18n/languages",{method:"PUT",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRF-Token":window.__csrf},body:JSON.stringify({enabled:${JSON.stringify(enabled)},default:${JSON.stringify(dflt)},reason:"headless vpn probe"})}).then(r=>r.status)`);
   if (!langs0.enabled.includes("sk")) console.log("enable sk:", await putLangs([...langs0.enabled, "sk"], langs0.default));
   await ev(`localStorage.setItem("ctrl32.locale", "sk")`); await send("Page.navigate", { url: base + "/server/vpn" }); await sleep(3500);
   const sk = await ev(`document.querySelector('main').textContent.replace(/\\s+/g,' ')`);
-  const skOK = /Pravidlá prístupu/.test(sk) && /Pridať peera|Pridať účastníka/.test(sk);
+  const skOK = /Pravidlá prístupu/.test(sk) && /Pridať peera|Pridať účastníka/.test(sk) && (!licensed || /Udeliť prístup|Požiadať o prístup/.test(sk));
   console.log("sk:", skOK ? "translated" : "NOT translated");
   if (!skOK) problems.push("not translated to Slovak");
   await shot("vpn-sk.png");

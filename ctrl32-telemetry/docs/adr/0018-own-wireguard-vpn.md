@@ -1,7 +1,8 @@
 # ADR-0018: Own WireGuard VPN management — hub and spoke, access rules with default deny, nftables
 
 **Amended by ADR-0020** (2 Oct 2026): Windows servers run a userspace WireGuard hub in the agent that enforces the same
-access rules in-process.
+access rules in-process. **Amended by ADR-0019 and the phase 2 amendment below** (0.65.0): management per organization,
+time-limited access grants and four eyes for technicians' access; decision 9 is superseded.
 
 **Status:** accepted 2 Oct 2026 (owner: "VPN phase 1 … our own WireGuard network management, Netmaker-like but our own
 code"; goals: technician access to PLC/HMI at sites, site-to-site through a router or Raspberry Pi, devices sending data
@@ -91,3 +92,29 @@ limits, audit, immediate revocation — not a flat network.
   server (e.g. the web UI over the tunnel) need a rule.
 - Windows server support (userspace WireGuard with the same rules), approval of technician access by a second person
   and router templates for more brands are phase 2; a cloud hub for servers behind NAT is phase 3.
+
+## Amendment: phase 2 (0.65.0, 2 Oct 2026)
+
+12. **Management per organization (supersedes decision 9).** After the split of server and organization administration
+    (ADR-0019) the permission `vpn.manage` (part of `org_admin`) lets an organization's administrator manage the VPN of
+    the own organization: peers whose `org_id` is the organization (new peers get it, they cannot be moved elsewhere)
+    and the organization's own access rules (`vpn_rule.org_id`, migration 0045). Sources of such a rule are the
+    organization's peers or the organization as a whole (never *all peers* or a kind, which span every organization);
+    destinations are its peers and sites, or this server with TCP to the services offered to the VPN (MQTT, web, MQTT
+    with TLS) or ping — never host administration such as SSH. Peers and rules of other organizations and of the whole
+    server are invisible to it (404). The server's VPN settings, *Apply again*, the generated table and server-wide
+    peers and rules stay with `system.admin`. Every check is in the API.
+13. **Time-limited access grants.** `POST /api/v1/vpn/peers/{id}/grant {minutes, reason}` enables a peer — and with it
+    every rule that names it — for 15 minutes to 30 days; the end disables it again (the existing expiry job, audited
+    `vpn.peer_expire` with the grant). Grants are rows of `core.vpn_grant` (who asked, who approved, the change request,
+    the window, how it ended), never deleted. A grant is time-limited access and needs the licence.
+14. **Four eyes for technicians' access.** With the organization policy `four_eyes_vpn` (Settings → Security policy,
+    off by default) a grant for a technician (`user` peer) is not executed but held as a change request (`kind = vpn`,
+    Settings → Approvals); a different user with `vpn.manage` or `system.admin` approves it and the grant is replayed
+    under the approver's identity, so the window starts at the approval and both names are in the audit trail. New
+    technicians are added disabled, and enabling one or changing its expiry directly is refused (409
+    `approval_required`); disabling stays immediate. Devices and sites are not covered by the policy. Grants are not
+    offered to AI assistants.
+15. **More templates.** Router texts for Teltonika RUT (RutOS 7), Ubiquiti EdgeRouter (EdgeOS with the WireGuard
+    package), pfSense and OPNsense (web interface steps), and for every peer a `.conf` for the official WireGuard app
+    for Windows and steps for Android and iPhone (QR code). Text only; checked by unit tests, not on the devices.
