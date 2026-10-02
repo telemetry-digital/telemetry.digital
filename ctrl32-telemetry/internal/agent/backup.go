@@ -254,7 +254,7 @@ func restoreNotes(ts string) string {
 		"Contents: db.dump (pg_dump custom format), config.toml (contains the password pepper and secret key — the\n" +
 		"database is useless without them), Caddyfile/caddy.json/caddy.env, wireguard/ (server key, peers).\n\n" +
 		"Restore on a fresh install (same version or newer):\n" +
-		"  1. curl -fsSL https://telemetry.digital/install.sh | sudo bash -s -- --domain <domain> --no-start\n" +
+		"  1. curl -fsSL https://portal.telemetry.digital/install.sh | sudo bash -s -- --domain <domain> --no-start\n" +
 		"  2. copy config.toml to /etc/ctrl32-telemetry/config.toml (root:ctrl32 0640); optionally caddy.*, wireguard/ to their places\n" +
 		"  3. docker exec -i ctrl32-telemetry-postgres pg_restore -U ctrl32 -d ctrl32 --clean --if-exists --no-owner < db.dump\n" +
 		"     (native PostgreSQL: runuser -u postgres -- pg_restore -d ctrl32 --clean --if-exists --no-owner db.dump)\n" +

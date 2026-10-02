@@ -23,7 +23,7 @@ monitor and back up, against the single-binary principle.
    the component UI. The reader already parses vector archives, the server refuses them with a clear message.
 5. **Archives come from the operator.** Documented paths: convert an MBTiles raster export with `pmtiles convert`
    (go-pmtiles, BSD-3), or download a ready raster archive of the region; `tools/pmtilesgen` produces a synthetic
-   sample for tests and demonstrations (`https://telemetry.digital/dl/sample.pmtiles`).
+   sample for tests and demonstrations (`https://portal.telemetry.digital/dl/sample.pmtiles`).
 
 ## Consequences
 

@@ -2,7 +2,7 @@
 # server that published this add-on and checked against its SHA256SUMS.
 FROM alpine:3.22
 ARG BUILD_ARCH
-ARG RELEASE_URL=https://telemetry.digital/dl
+ARG RELEASE_URL=https://portal.telemetry.digital/dl
 RUN apk add --no-cache ca-certificates jq curl tzdata \
  && case "$BUILD_ARCH" in aarch64) A=arm64 ;; amd64) A=amd64 ;; armv7) A=arm ;; *) echo "unsupported $BUILD_ARCH"; exit 1 ;; esac \
  && curl -fsSLo /tmp/SHA256SUMS "$RELEASE_URL/SHA256SUMS" \

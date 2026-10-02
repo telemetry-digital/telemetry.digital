@@ -29,7 +29,7 @@ without TLS on an untrusted network, `public_read` outside demos).
 
 ## What each release ships for verification
 
-- `SHA256SUMS` for every binary at `https://telemetry.digital/dl/`, checked by the updater before installing.
+- `SHA256SUMS` for every binary at `https://portal.telemetry.digital/dl/`, checked by the updater before installing.
 - A CycloneDX SBOM (`sbom-<version>.cdx.json`) and the `govulncheck` result (`govulncheck-<version>.txt`) next to
   the binaries; a release with an unresolved reachable vulnerability is not published.
 - The threat model (`docs/threat-model.md`) and the security baseline (ADR-0007) in the repository.

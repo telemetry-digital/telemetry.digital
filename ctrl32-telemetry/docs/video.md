@@ -251,12 +251,12 @@ camera (192.168.1.64) ──RTSP──▶ camera-relay at the site ══RTSPS (
    run the installer next to it:
    ```sh
    # Linux / Raspberry Pi
-   curl -fsSL https://telemetry.digital/install-relay.sh -o install-relay.sh
+   curl -fsSL https://portal.telemetry.digital/install-relay.sh -o install-relay.sh
    sudo bash install-relay.sh --config relay.toml
    ```
    ```powershell
    # Windows, PowerShell as administrator
-   irm https://telemetry.digital/install-relay.ps1 -OutFile install-relay.ps1; .\install-relay.ps1 -Config .\relay.toml
+   irm https://portal.telemetry.digital/install-relay.ps1 -OutFile install-relay.ps1; .\install-relay.ps1 -Config .\relay.toml
    ```
    The installer downloads the program and checks it against `SHA256SUMS`, stores the configuration where only the
    service can read it (Linux `/etc/ctrl32-camera-relay/relay.toml`, root:ctrl32relay 0640; Windows

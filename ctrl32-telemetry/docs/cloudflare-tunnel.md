@@ -23,14 +23,14 @@ Windows (elevated PowerShell):
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass -Force
-irm https://telemetry.digital/install.ps1 -OutFile install.ps1
+irm https://portal.telemetry.digital/install.ps1 -OutFile install.ps1
 .\install.ps1 -Domain kamery.zakaznik.sk -CloudflareToken <token> -OrgName "Zákazník s.r.o."
 ```
 
 Linux (Debian, Ubuntu, Raspberry Pi OS 64-bit):
 
 ```bash
-curl -fsSL https://telemetry.digital/install.sh | sudo bash -s -- --domain kamery.zakaznik.sk --cloudflare-token <token>
+curl -fsSL https://portal.telemetry.digital/install.sh | sudo bash -s -- --domain kamery.zakaznik.sk --cloudflare-token <token>
 ```
 
 The installer sets profile `internet` (MFA for every user), binds the web server to `127.0.0.1:8080`, opens **no**

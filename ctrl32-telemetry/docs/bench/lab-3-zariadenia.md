@@ -66,7 +66,7 @@ Hardvér
    (kľúče, ktoré zariadenie publikuje: `t_c`, `rh` pre A; `t_c` pre B).
 4. **Settings → Connectors → New connector** typu `opcua` (od 0.13.0): endpoint, bezpečnosť, prihlásenie,
    interval, mapovanie uzlov → datastreamy. Jeden konektor na jeden OPC UA server (C a C′ = dva konektory).
-5. Lokálna inštancia: `curl -fsSL https://telemetry.digital/install.sh | sudo bash -s --` (bez `--domain` =
+5. Lokálna inštancia: `curl -fsSL https://portal.telemetry.digital/install.sh | sudo bash -s --` (bez `--domain` =
    profil intranet, HTTP :8080, MQTT :1883). Prvé heslo admina je v `/etc/ctrl32-telemetry/admin-bootstrap.txt`.
 
 ## 5. Firmvér ESP32 (A, B)

@@ -85,12 +85,12 @@ secret_key = "REPLACE-WITH-RANDOM-32-CHARS"
 # socket = "/run/ctrl32-telemetry/agent.sock"       # Windows: C:\ProgramData\ctrl32-telemetry\agent.sock
 # pg_dump = "C:\Program Files\PostgreSQL\18\bin\pg_dump.exe"   # Windows backups (default: bundled PostgreSQL)
 # pg_container = "ctrl32-telemetry-postgres"        # backups through the Docker container (Linux default)
-# update_url = "https://telemetry.digital/dl"       # where updates are downloaded from (SHA256SUMS verified)
+# update_url = "https://portal.telemetry.digital/dl"       # where updates are downloaded from (SHA256SUMS verified)
 
 [map]
 # Self-hosted map tiles for the map widgets (ADR-0014): a raster PMTiles v3 archive (png/jpg/webp) served by this
 # server at /tiles/{z}/{x}/{y}.png, so maps work without the Internet. Used whenever the organization has no tile URL
 # of its own; without it the built-in OpenStreetMap tiles remain (light use only). Convert MBTiles with
-# `pmtiles convert map.mbtiles map.pmtiles` (go-pmtiles) or try the sample from https://telemetry.digital/dl/sample.pmtiles.
+# `pmtiles convert map.mbtiles map.pmtiles` (go-pmtiles) or try the sample from https://portal.telemetry.digital/dl/sample.pmtiles.
 # pmtiles = "/var/lib/ctrl32-telemetry/map.pmtiles"
 # attribution = "© OpenStreetMap contributors"
