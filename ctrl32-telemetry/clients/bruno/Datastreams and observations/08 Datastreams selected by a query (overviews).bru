@@ -1,0 +1,40 @@
+meta {
+  name: Datastreams selected by a query (overviews)
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/datastreams/query
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~site: 
+  ~asset_type: 
+  ~quantity: 
+  ~device: 
+  ~attr: 
+  ~q: 
+  ~name: 
+  ~ids: 
+  ~f_site: 
+  ~f_asset_type: 
+  ~f_quantity: 
+  ~f_device: 
+  ~f_attr: 
+  ~f_q: 
+  ~limit: 
+  ~latest: 
+  ~from: 
+  ~to: 
+}
+
+docs {
+  Datastreams selected by a query (overviews)
+  
+  Datastreams of the organization matching sites, asset types, quantities, devices, attributes, free text and a name pattern — the dynamic data source of dashboard widgets and the filter bar of dashboards (0.68.0). Several values of one parameter match any of them; different parameters must all match; plain and `f_` (dashboard filter) parameters both apply. Ordered by site, asset and key. `latest=1` adds the latest value, the active alarm and the limits of the alarm rules; `from`/`to` add minimum, maximum and change (consumption of a meter) in that window.
+  
+  Requires permission `data.read`.
+}

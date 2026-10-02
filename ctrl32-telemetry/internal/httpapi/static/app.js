@@ -27,6 +27,7 @@
     device: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10"/><path d="M9 16v4"/><path d="M15 16v4"/><path d="M7 8h2"/><path d="M7 12h6"/></svg>',
     assets: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21v-14l8 -4v18"/><path d="M19 21v-10l-6 -4"/><path d="M9 9v0"/><path d="M9 12v0"/><path d="M9 15v0"/><path d="M9 18v0"/></svg>',
     camera: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.553 -2.276a1 1 0 0 1 1.447 .894v6.764a1 1 0 0 1 -1.447 .894l-4.553 -2.276v-4z"/><rect x="3" y="6" width="12" height="12" rx="2"/></svg>',
+    search: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"/><path d="M21 21l-6 -6"/></svg>',
     file: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z"/></svg>',
   };
   const $ = (s) => document.querySelector(s);
@@ -276,13 +277,15 @@
       <a class="brand" href="${esc(home())}"><img id="logo" data-logo alt="telemetry.digital" src="${esc(logoURL())}">${me || app ? `<span id="orgname" class="${app ? 'notranslate' : ''}">${esc(app ? app.name : (brand.org_name || brand.product))}</span>` : ''}</a>
       <span class="grow"></span>
       ${me ? '' : (brand.public_read ? '<span class="badge warn" title="http.public_read is enabled: anyone can read data without signing in. Demo instances only.">Read-only demo · sign in to change anything</span>' : '')}
+      ${me && !locked() ? `<button class="btn ghost icon only-mobile" id="gsBtnM" type="button" title="Search (Ctrl+K)" aria-label="Search">${ICON.search}</button>` : ''}
       ${locked() ? '' : bugButton(me ? 'only-mobile' : '')}
       ${me ? '' : langSwitcher('langTop')}
     </div>`;
     // a locked app shows no in-page links out of it either (sub-navigation of a page, e.g. My account)
     if (locked()) for (const a of document.querySelectorAll('.subnav a[href]')) if (!appAllows(new URL(a.href, location.href).pathname)) a.hidden = true;
     // Desktop: the bug button lives in its own strip at the top of the page (in flow, sticky), never over page buttons.
-    if (me && !locked() && !$('#bugBtnDesk')) { const host = $('main'); const strip = document.createElement('div'); strip.className = 'top-strip only-desktop'; const b = document.createElement('a'); b.id = 'bugBtnDesk'; b.className = 'btn ghost icon bug-btn'; b.href = '#'; b.title = 'Report a bug (opens your mail client, info@telemetry.digital)'; b.setAttribute('aria-label', 'Report a bug'); b.innerHTML = ICON.bug; b.onclick = (e) => { e.preventDefault(); location.href = bugMailto(); }; strip.appendChild(b); if (host) { host.prepend(strip); document.body.classList.add('has-strip'); } else document.body.appendChild(strip); }
+    if (me && !locked() && !$('#bugBtnDesk')) { const host = $('main'); const strip = document.createElement('div'); strip.className = 'top-strip only-desktop'; const b = document.createElement('a'); b.id = 'bugBtnDesk'; b.className = 'btn ghost icon bug-btn'; b.href = '#'; b.title = 'Report a bug (opens your mail client, info@telemetry.digital)'; b.setAttribute('aria-label', 'Report a bug'); b.innerHTML = ICON.bug; b.onclick = (e) => { e.preventDefault(); location.href = bugMailto(); }; const gs = document.createElement('button'); gs.type = 'button'; gs.className = 'gs-field'; gs.id = 'gsBtn'; gs.title = 'Search (Ctrl+K)'; gs.innerHTML = ICON.search + '<span>Search…</span><kbd>Ctrl K</kbd>'; strip.appendChild(gs); const sp = document.createElement('span'); sp.style.flex = '1'; strip.appendChild(sp); strip.appendChild(b); if (host) { host.prepend(strip); document.body.classList.add('has-strip'); } else document.body.appendChild(strip); }
+    if (me && !locked()) { for (const id of ['gsBtn', 'gsBtnM']) { const el = $('#' + id); if (el) el.onclick = () => openSearch(); } }
     wireBug();
     if (me) {
       document.body.classList.add('has-sidebar');
@@ -344,6 +347,50 @@
     }
     applyMode();
   }
+  // ---- global search (0.68.0): the header field and Ctrl+K; GET /api/v1/search answers only what the user may see,
+  // the pages of the menu are matched here. Arrow keys move, Enter opens, Esc closes.
+  const GS_KIND = { page: 'Pages', device: 'Devices', datastream: 'Datastreams', asset: 'Assets', site: 'Sites', dashboard: 'Dashboards', camera: 'Cameras', flow: 'Flows', incident: 'Incidents', user: 'Users' };
+  let gsDlg = null, gsSeq = 0;
+  function openSearch(prefill) {
+    if (!me || locked()) return;
+    if (!gsDlg) {
+      gsDlg = document.createElement('dialog'); gsDlg.className = 'gs-dlg'; gsDlg.setAttribute('aria-label', t('Search'));
+      gsDlg.innerHTML = `<div class="gs-in">${ICON.search}<input type="search" id="gsQ" placeholder="${esc(t('Search devices, datastreams, assets, dashboards…'))}" autocomplete="off" aria-label="${esc(t('Search'))}"><button class="btn small ghost" type="button" data-gsclose>Esc</button></div><div class="gs-list" id="gsList" role="listbox"></div><div class="gs-foot"><span>↑ ↓ ${esc(t('move'))}</span><span>Enter ${esc(t('go to'))}</span><span>Esc ${esc(t('close'))}</span></div>`;
+      document.body.appendChild(gsDlg);
+      const q = gsDlg.querySelector('#gsQ'); let timer = null;
+      q.oninput = () => { clearTimeout(timer); timer = setTimeout(() => runSearch(q.value.trim()), 200); };
+      q.onkeydown = (e) => {
+        const items = [...gsDlg.querySelectorAll('a.gs-item')]; let i = items.findIndex((x) => x.classList.contains('on'));
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (!items.length) return; i = e.key === 'ArrowDown' ? (i + 1) % items.length : (i <= 0 ? items.length - 1 : i - 1); items.forEach((x, k) => x.classList.toggle('on', k === i)); items[i].scrollIntoView({ block: 'nearest' }); }
+        else if (e.key === 'Enter') { e.preventDefault(); const it = items[i >= 0 ? i : 0]; if (it) location.href = it.getAttribute('href'); }
+      };
+      gsDlg.querySelector('[data-gsclose]').onclick = () => gsDlg.close();
+      gsDlg.addEventListener('click', (e) => { if (e.target === gsDlg) gsDlg.close(); });
+    }
+    const q = gsDlg.querySelector('#gsQ'); q.value = prefill || ''; if (!gsDlg.open) gsDlg.showModal(); q.focus(); runSearch(q.value.trim());
+  }
+  function pageHits(q) {
+    const out = []; const l = q.toLowerCase();
+    for (const i of navItems()) for (const x of [i].concat(i.children || [])) if (x.href && t(x.label).toLowerCase().includes(l) && !out.some((o) => o.url === x.href)) out.push({ kind: 'page', title: t(x.label), subtitle: x === i ? '' : t(i.label), url: x.href });
+    return out.slice(0, 5);
+  }
+  async function runSearch(q) {
+    const list = gsDlg.querySelector('#gsList'); const seq = ++gsSeq;
+    if (!q) { list.innerHTML = `<div class="muted" style="padding:10px 8px">${esc(t('Type to search devices, datastreams, assets, sites, dashboards, cameras, flows, incidents and users.'))}</div>`; return; }
+    let res = { results: [], more: [] };
+    try { res = await api('GET', '/api/v1/search?limit=6&q=' + encodeURIComponent(q)); } catch (e) { /* show the pages at least */ }
+    if (seq !== gsSeq) return;
+    const hits = pageHits(q).concat(res.results || []);
+    if (!hits.length) { list.innerHTML = `<div class="muted" style="padding:10px 8px">${esc(t('Nothing found.'))}</div>`; return; }
+    let h = '', last = '';
+    for (const r of hits) {
+      if (r.kind !== last) { last = r.kind; h += `<div class="gs-head">${esc(t(GS_KIND[r.kind] || r.kind))}${(res.more || []).includes(r.kind) ? ' · ' + esc(t('more')) + '…' : ''}</div>`; }
+      h += `<a class="gs-item" role="option" href="${esc(r.url)}"><span class="notranslate">${esc(r.title)}</span>${r.subtitle ? `<span class="muted notranslate">${esc(r.subtitle)}</span>` : ''}</a>`;
+    }
+    list.innerHTML = h; const first = list.querySelector('a.gs-item'); if (first) first.classList.add('on');
+  }
+  document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) { if (!me || locked()) return; e.preventDefault(); openSearch(); } });
+
   function footer() {
     if ($('.footer')) return;
     const f = document.createElement('footer');
@@ -465,7 +512,7 @@
   if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyMode);
   applyMode();
   window.ctrl32 = { ready, loadBranding, loadMe, api, logout, toggleMode, can, esc, section, t, ask, confirm: confirmAsk, setLocale, get locale() { return locale; }, get langs() { return langs; }, get brand() { return brand; }, get me() { return me; }, get csrf() { return csrf; }, get app() { return app; }, home, enterApp, ICON,
-    fmt: (t) => (t ? new Date(t).toLocaleString(document.documentElement.lang || undefined) : '—'), toast };
+    fmt: (t) => (t ? new Date(t).toLocaleString(document.documentElement.lang || undefined) : '—'), toast, openSearch };
   function toast(msg, kind) {
     let t = $('#toast');
     if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }

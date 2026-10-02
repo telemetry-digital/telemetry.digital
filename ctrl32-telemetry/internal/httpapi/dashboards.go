@@ -101,6 +101,15 @@ var widgetCatalog = []WidgetDef{
 	{Type: "button", Label: "Button", Group: "control", Help: "Sends a fixed value or method as a command, e.g. a reset pulse.", Binds: []string{"devices"}, Default: [2]int{3, 2}, Params: []ScreenParam{{Name: "title", Label: "Title", Kind: "text"}, {Name: "key", Label: "Key (datastream key / register)", Kind: "text"}, {Name: "method", Label: "Command method", Kind: "text", Default: "write"}, {Name: "value", Label: "Value to send", Kind: "text", Default: "1"}, {Name: "label", Label: "Button label", Kind: "text", Default: "Send"}, {Name: "confirm", Label: "Ask for confirmation", Kind: "bool", Default: true}}},
 }
 
+func hasBind(def *WidgetDef, b string) bool {
+	for _, x := range def.Binds {
+		if x == b {
+			return true
+		}
+	}
+	return false
+}
+
 func widgetDefOf(t string) *WidgetDef {
 	for i := range widgetCatalog {
 		if widgetCatalog[i].Type == t {
@@ -133,8 +142,11 @@ type screenSpec struct {
 		Geometry struct{ X, Y, W, H int } `json:"geometry"`
 		Bindings map[string][]string      `json:"bindings"`
 		Params   map[string]any           `json:"params"`
+		Source   map[string]any           `json:"source"` // dynamic data source (dashboard_filters.go)
+		Follow   bool                     `json:"follow"` // follows the dashboard filters
 	} `json:"widgets"`
-	Elements []any `json:"elements"` // drawing layer of process pictures (screen_elements.go)
+	Elements []any            `json:"elements"` // drawing layer of process pictures (screen_elements.go)
+	Filters  []map[string]any `json:"filters"`  // dashboard filter bar (dashboard_filters.go)
 }
 
 // validateScreenSpec normalizes a screen (dashboard) spec and returns the canonical document.
@@ -277,10 +289,31 @@ func validateScreenSpecW(raw json.RawMessage) (map[string]any, []string, error) 
 		if err != nil {
 			return nil, nil, err
 		}
-		widgets = append(widgets, map[string]any{"id": id, "type": w.Type, "geometry": map[string]int{"x": g.X, "y": g.Y, "w": g.W, "h": g.H}, "bindings": binds, "params": params})
+		wm := map[string]any{"id": id, "type": w.Type, "geometry": map[string]int{"x": g.X, "y": g.Y, "w": g.W, "h": g.H}, "bindings": binds, "params": params}
+		if w.Source != nil {
+			if !hasBind(def, "datastreams") {
+				return nil, nil, fmt.Errorf("widget %d: %s has no datastreams to select by a query", i+1, w.Type)
+			}
+			src, err := validateSource(i, w.Type, w.Source)
+			if err != nil {
+				return nil, nil, err
+			}
+			wm["source"] = src
+		}
+		if w.Follow {
+			wm["follow"] = true
+		}
+		widgets = append(widgets, wm)
 	}
 	layout := map[string]any{"type": "grid", "columns": 12, "row_height": sp.Layout.RowHeight}
 	out := map[string]any{"version": 1, "kind": sp.Kind, "layout": layout, "range": sp.Range, "refresh_s": sp.RefreshS, "widgets": widgets}
+	if len(sp.Filters) > 0 {
+		fs, err := validateFilters(sp.Filters)
+		if err != nil {
+			return nil, nil, err
+		}
+		out["filters"] = fs
+	}
 	if canvas {
 		lay := map[string]any{"type": "canvas", "width": sp.Layout.Width, "height": sp.Layout.Height}
 		if sp.Layout.Bg != "" {
@@ -471,7 +504,8 @@ func (s *Server) listDashboards(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) dashboardCatalog(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, map[string]any{"widgets": widgetCatalog, "ranges": []string{"1h", "6h", "8h", "12h", "today", "24h", "7d", "30d", "90d"}, "format": "screen/v1", "layouts": []string{"grid"}})
+	writeJSON(w, 200, map[string]any{"widgets": widgetCatalog, "ranges": []string{"1h", "6h", "8h", "12h", "today", "24h", "7d", "30d", "90d"}, "format": "screen/v1", "format_minor": 1, "layouts": []string{"grid"},
+		"filter_kinds": filterKinds, "source_limits": map[string]int{"tables": maxSourceRows, "other": maxSourceSeries}})
 }
 
 func (s *Server) getDashboard(w http.ResponseWriter, r *http.Request) {

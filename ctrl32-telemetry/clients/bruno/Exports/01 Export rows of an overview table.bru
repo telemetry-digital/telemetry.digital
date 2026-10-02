@@ -1,0 +1,35 @@
+meta {
+  name: Export rows of an overview table
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/datastreams/export
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "columns": [
+      "string"
+    ],
+    "decimals": 1,
+    "format": "xlsx",
+    "from": "2026-09-24T12:00:00Z",
+    "ids": [
+      "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00"
+    ],
+    "title": "string",
+    "to": "2026-09-24T12:00:00Z"
+  }
+}
+
+docs {
+  Export rows of an overview table
+  
+  The datastreams `ids` in this order (the filtered and sorted view of an overview table, at most 2000) with the chosen `columns` (site, asset, asset_type, device, datastream, quantity, value, measured, age, quality, alarm, limits, min, max, change; value adds a unit column) as `format` xlsx (default) or csv. min, max and change need `from`/`to`. Audited.
+  
+  Requires permission `data.export`.
+}

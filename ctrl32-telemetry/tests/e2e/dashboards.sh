@@ -100,6 +100,13 @@ for BADP in '"bg_color":"red"' '"bg_color":"expression(x)"' '"series":[{"axis":"
   req POST /api/v1/dashboards "{\"name\":\"Bad $SUF\",\"spec\":{\"version\":1,\"widgets\":[{\"id\":\"t\",\"type\":\"chart\",\"geometry\":{\"x\":0,\"y\":0,\"w\":8,\"h\":3},\"bindings\":{\"datastreams\":[\"$DS\"]},\"params\":{$BADP}}]},\"reason\":\"e2e\"}" >/dev/null; check "refused: $BADP" "$(st)" 400
 done
 req POST /api/v1/dashboards "{\"name\":\"Bad $SUF\",\"spec\":{\"version\":1,\"widgets\":[{\"id\":\"v\",\"type\":\"value_card\",\"geometry\":{\"x\":0,\"y\":0,\"w\":4,\"h\":2},\"bindings\":{\"datastreams\":[\"$DS\"]},\"params\":{\"ranges\":[{\"op\":\"~\",\"v\":1,\"color\":\"#fff\"}]}}]},\"reason\":\"e2e\"}" >/dev/null; check "refused: range operator" "$(st)" 400
+echo "== screen format 1.1: filters and query sources (0.68.0)"
+req GET "/api/v1/dashboards/$SLUG" >/dev/null
+check "an older dashboard keeps its form (no filters, source or follow)" "$(jx "$TMP/b" '["filters" in j.spec, j.spec.widgets.some(w=>"source" in w || "follow" in w)].join()')" "false,false"
+SPEC3=$(echo "$SPEC2" | sed "s/\"range\":\"24h\"/\"range\":\"24h\",\"filters\":[{\"kind\":\"site\",\"public\":true},{\"kind\":\"search\"}]/; s/\"id\":\"a\",\"type\":\"chart\"/\"id\":\"a\",\"follow\":true,\"source\":{\"quantity\":[\"temperature\"],\"limit\":6},\"type\":\"chart\"/")
+req PUT "/api/v1/dashboards/$SLUG" "{\"spec\":$SPEC3,\"reason\":\"filters added\"}" >/dev/null; check "filters and a query source added" "$(st)" 200
+check "version 3 with the filter bar" "$(jx "$TMP/b" '[j.version, j.spec.filters.map(f=>f.kind).join("+"), j.spec.widgets[0].source.limit, j.spec.widgets[0].follow, "follow" in j.spec.widgets[1]].join()')" "3,site+search,6,true,false"
+req PUT "/api/v1/dashboards/$SLUG" "{\"spec\":$SPEC2,\"reason\":\"filters removed again\"}" >/dev/null; check "filters removed again" "$(jx "$TMP/b" '[j.version, "filters" in j.spec, "source" in j.spec.widgets[0]].join()')" "4,false,false"
 echo "== public link"
 anon(){ curl -s -o "$TMP/b" -w '%{http_code}' "$BASE$1" > "$TMP/s"; cat "$TMP/b"; }
 TOKEN=$(req POST "/api/v1/dashboards/$SLUG/share" '{"reason":"publish"}' | jget token); check "public link created" "$(st)" 201; [[ ${#TOKEN} -ge 32 ]] && ok "token" || bad "token: $TOKEN"

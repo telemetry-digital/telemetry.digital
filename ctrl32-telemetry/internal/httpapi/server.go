@@ -172,6 +172,11 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("GET /api/v1/period-table", s.require("data.read", s.periodTable))
 	mux.Handle("GET /api/v1/period-table/export", s.require("data.export", s.periodTableExport))
 	mux.Handle("GET /api/v1/datastreams/latest", s.require("data.read", s.latestValues))
+	// overviews: datastreams by query, filter choices, export of overview tables (overview.go); global search (search.go)
+	mux.Handle("GET /api/v1/datastreams/query", s.require("data.read", s.datastreamQuery))
+	mux.Handle("GET /api/v1/datastreams/facets", s.require("data.read", s.datastreamFacets))
+	mux.Handle("POST /api/v1/datastreams/export", s.require("data.export", s.datastreamExport))
+	mux.Handle("GET /api/v1/search", s.require("", s.search))
 	mux.Handle("GET /api/v1/dashboards", s.require("data.read", s.listDashboards))
 	mux.Handle("GET /api/v1/dashboards/catalog", s.require("data.read", s.dashboardCatalog))
 	mux.Handle("GET /api/v1/dashboards/starter", s.require("data.read", s.dashboardStarter))
@@ -187,6 +192,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.HandleFunc("GET /api/v1/public/{token}", s.publicDashboard)
 	mux.HandleFunc("GET /api/v1/public/{token}/datastreams", s.publicDatastreams)
 	mux.HandleFunc("GET /api/v1/public/{token}/datastreams/latest", s.publicLatest)
+	mux.HandleFunc("GET /api/v1/public/{token}/datastreams/query", s.publicDatastreamQuery)
+	mux.HandleFunc("GET /api/v1/public/{token}/datastreams/facets", s.publicFacets)
 	mux.HandleFunc("GET /api/v1/public/{token}/observations", s.publicObservations)
 	mux.HandleFunc("GET /api/v1/public/{token}/period-table", s.publicPeriodTable)
 	mux.HandleFunc("GET /api/v1/public/{token}/devices", s.publicDevices)
@@ -803,7 +810,7 @@ func (s *Server) alarms(w http.ResponseWriter, r *http.Request) {
 	dsID := r.URL.Query().Get("datastream_id")
 	p := PrincipalFrom(r.Context())
 	rows, err := s.pool.Query(r.Context(), `
-		SELECT a.id::text, a.raised_at, a.cleared_at, a.state, a.severity, a.retrospective, a.value::float8, a.detail->>'key'
+		SELECT a.id::text, a.raised_at, a.cleared_at, a.state, a.severity, a.retrospective, a.value::float8, a.detail->>'key', a.datastream_id::text
 		FROM core.alarm a WHERE ($1 = '' OR a.datastream_id = NULLIF($1,'')::uuid) AND ($2 = '' OR a.org_id = $2::uuid) ORDER BY a.raised_at DESC LIMIT 200`, dsID, orgOf(p))
 	if err != nil {
 		writeErr(w, 500, "query failed")
@@ -813,16 +820,16 @@ func (s *Server) alarms(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for rows.Next() {
 		var id, state, sev string
-		var key *string
+		var key, ds *string
 		var raised time.Time
 		var cleared *time.Time
 		var retro bool
 		var val *float64
-		if err := rows.Scan(&id, &raised, &cleared, &state, &sev, &retro, &val, &key); err != nil {
+		if err := rows.Scan(&id, &raised, &cleared, &state, &sev, &retro, &val, &key, &ds); err != nil {
 			writeErr(w, 500, "scan failed")
 			return
 		}
-		out = append(out, map[string]any{"id": id, "raised_at": raised, "cleared_at": cleared, "state": state, "severity": sev, "retrospective": retro, "value": val, "key": key})
+		out = append(out, map[string]any{"id": id, "raised_at": raised, "cleared_at": cleared, "state": state, "severity": sev, "retrospective": retro, "value": val, "key": key, "datastream_id": ds})
 	}
 	writeJSON(w, 200, out)
 }

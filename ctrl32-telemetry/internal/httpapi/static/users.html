@@ -185,7 +185,7 @@ async function cameraGroups(u, reason){
 }
 ctrl32.ready({requireAuth: true, requirePerm: 'user.admin'}).then(() => {
   const sec = ctrl32.section('accounts', ['accounts', 'roles']); document.title = (sec === 'roles' ? 'Roles and permissions' : 'Users') + ' — ctrl32 telemetry';
-  loadAll().catch(x => ctrl32.toast(x.message, 'bad'));
+  loadAll().then(() => { const id = new URLSearchParams(location.search).get('id'); if(id && sec === 'accounts') openUser(id); }).catch(x => ctrl32.toast(x.message, 'bad'));
   if(sec === 'accounts') loadRequests();
 });
 </script>

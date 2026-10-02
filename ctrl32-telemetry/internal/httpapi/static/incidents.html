@@ -101,7 +101,7 @@ $('#filter').onchange = load;
 $('#newBtn').onclick = () => { if (!canAck()) { ctrl32.toast('permission alarm.ack is required', 'bad'); return; } $('#newForm').reset(); $('#nErr').textContent = ''; $('#newDlg').showModal(); };
 $('#newForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#nErr').textContent = '';
   try { const inc = await api('POST', '/api/v1/incidents', { title: f.title.value, severity: f.severity.value, impact: f.impact.value, cause: f.cause.value, capa: f.capa.value, reason: f.reason.value }); $('#newDlg').close(); ctrl32.toast('incident opened', 'ok'); await load(); open(inc.id); } catch (x) { $('#nErr').textContent = x.message; } };
-ctrl32.ready({ requireAuth: true, requirePerm: 'data.read' }).then(() => { document.title = 'Incidents'; load(); });
+ctrl32.ready({ requireAuth: true, requirePerm: 'data.read' }).then(async () => { document.title = 'Incidents'; await load(); const id = new URLSearchParams(location.search).get('id'); if (id) open(id); });
 </script>
 </body>
 </html>

@@ -1,0 +1,25 @@
+meta {
+  name: Search everything by name
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/search
+  body: none
+  auth: inherit
+}
+
+params:query {
+  q: 
+  ~limit: 
+  ~kinds: 
+}
+
+docs {
+  Search everything by name
+  
+  Devices, datastreams, assets, sites, dashboards, cameras, flows, incidents and users of the organization whose name (or external id, key, address, title, e-mail) contains `q`. Each kind only with the permission that shows it (data.read; cameras video.view and the caller's camera groups; users user.admin). At most `limit` hits per kind; `more` lists kinds with further hits.
+  
+  Requires a signed-in user or an API token (any permission).
+}

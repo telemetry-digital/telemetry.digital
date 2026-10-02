@@ -4,7 +4,8 @@
   docs.py setup        cold chain (medicine fridges, 30 days), energy meters (13 months), alarm rules with alarms and
                        incidents, notification channels and escalation, automation rules, flows, smart-home accounts,
                        a display, firmware and a campaign, users and a custom role, an API token, a report template and
-                       stored reports, a PWA app, the "overview" and "showcase" starter dashboards, and the VPN (a site,
+                       stored reports, a PWA app, the "overview" and "showcase" starter dashboards, the overviews with
+                       filters (all sensors, energy, cold chain; 0.68.0), and the VPN (a site,
                        a technician, a gateway and access rules; needs the agent's VPN simulation and a licence)
                        ; 0.67.0: keys without a datastream and status of a logger, a sensor fault, annotations, a
                        signed report and a signed audit review (records)
@@ -281,6 +282,24 @@ def dashboards():
     for kind, name in (("overview", "Overview"), ("showcase", "Showcase – all widgets")):
         s = call("GET", f"/api/v1/dashboards/starter?kind={kind}")
         out[kind] = dash(name, s["spec"])
+    return out
+
+
+@once("overviews")
+def overviews():
+    """The ready-made overviews (0.68.0): widgets select datastreams by query and follow the dashboard filters. The cold
+    chain overview starts filtered to the pharmacy (a default of its site filter), so the pictures show a filter in use;
+    the overview of all sensors gets a public link."""
+    out = {}
+    for kind in ("sensors", "energy", "coldchain"):
+        s = call("GET", f"/api/v1/dashboards/starter?kind={kind}")
+        spec = s["spec"]
+        if kind == "coldchain":
+            for f in spec.get("filters", []):
+                if f["kind"] == "site":
+                    f["default"] = [st["cold"]["site"]]
+        out[kind] = dash(s["name"], spec)
+    call("POST", f"/api/v1/dashboards/{out['sensors']}/share", {"reason": R})
     return out
 
 
@@ -633,7 +652,7 @@ def records():
 def setup():
     login()
     partitions()
-    cold_chain(); energy(); dashboards(); rules(); flows(); mqtt_accounts(); home(); display(); firmware(); people(); settings(); incidents(); records()
+    cold_chain(); energy(); dashboards(); overviews(); rules(); flows(); mqtt_accounts(); home(); display(); firmware(); people(); settings(); incidents(); records()
     st["vpn"] = vpn(); st["vpn2"] = vpn2(); save()
     print("docs demo ready:", ", ".join(st))
 
