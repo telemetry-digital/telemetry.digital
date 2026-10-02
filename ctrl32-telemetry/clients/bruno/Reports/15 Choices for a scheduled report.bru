@@ -1,0 +1,17 @@
+meta {
+  name: Choices for a scheduled report
+  type: http
+  seq: 15
+}
+
+get {
+  url: {{baseUrl}}/api/v1/scheduled-reports/options
+  body: none
+  auth: inherit
+}
+
+docs {
+  Choices for a scheduled report
+  
+  Requires permission `config.write`.
+}

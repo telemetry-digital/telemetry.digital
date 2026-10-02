@@ -1,0 +1,26 @@
+meta {
+  name: Next runs of a cron expression
+  type: http
+  seq: 16
+}
+
+post {
+  url: {{baseUrl}}/api/v1/scheduled-reports/preview-cron
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "count": 1,
+    "cron": "string"
+  }
+}
+
+docs {
+  Next runs of a cron expression
+  
+  In the organization's time zone, across daylight-saving changes.
+  
+  Requires permission `config.write`.
+}

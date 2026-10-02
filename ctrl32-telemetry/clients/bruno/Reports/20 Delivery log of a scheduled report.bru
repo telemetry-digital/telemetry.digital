@@ -1,0 +1,21 @@
+meta {
+  name: Delivery log of a scheduled report
+  type: http
+  seq: 20
+}
+
+get {
+  url: {{baseUrl}}/api/v1/scheduled-reports/:id/runs
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  Delivery log of a scheduled report
+  
+  Requires permission `config.write`.
+}

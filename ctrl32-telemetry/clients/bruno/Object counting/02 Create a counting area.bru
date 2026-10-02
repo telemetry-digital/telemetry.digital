@@ -1,0 +1,36 @@
+meta {
+  name: Create a counting area
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/counting/areas
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "entrances": [
+      "string"
+    ],
+    "groups": [
+      "string"
+    ],
+    "kind": "building",
+    "limits": {},
+    "name": "string",
+    "reason": "string",
+    "reset_time": "string",
+    "site_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00"
+  }
+}
+
+docs {
+  Create a counting area
+  
+  Creates the area's asset (type counting_area) on the site, an asset per entrance (type entrance) and the datastreams of the groups.
+  
+  Requires permission `config.write`.
+}

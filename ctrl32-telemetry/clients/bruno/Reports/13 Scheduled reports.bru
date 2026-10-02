@@ -1,0 +1,19 @@
+meta {
+  name: Scheduled reports
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/api/v1/scheduled-reports
+  body: none
+  auth: inherit
+}
+
+docs {
+  Scheduled reports
+  
+  Reports mailed on a cron schedule in the organization's time zone.
+  
+  Requires permission `config.write`.
+}

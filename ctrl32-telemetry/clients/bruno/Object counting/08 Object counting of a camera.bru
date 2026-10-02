@@ -1,0 +1,23 @@
+meta {
+  name: Object counting of a camera
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/counting/cameras/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  Object counting of a camera
+  
+  Configuration and the state of the worker: analysed frames per second, inference time, CPU use of the worker and the decoder, objects followed, the boxes of the last analysed frame (for the line editor), counts since the start.
+  
+  Requires permission `data.read`.
+}

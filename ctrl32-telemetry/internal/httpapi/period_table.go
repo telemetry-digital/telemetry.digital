@@ -9,7 +9,7 @@ package httpapi
 //	GET /api/v1/period-table/export   data.export  ?format=xlsx|csv|pdf, audited (PDF as a report record)
 //	GET /api/v1/public/{token}/period-table        datastreams of the shared dashboard only
 //
-// Values per cell: min, max, avg, first, last, delta (consumption of a counter: the sum of increases between readings,
+// Values per cell: min, max, avg, first, last, sum (of the values: passages of object counting), delta (consumption of a counter: the sum of increases between readings,
 // a meter reset counts the new reading, the reading before the period is the baseline), count (samples) and out
 // (samples outside low/high). Periods start at local midnight (and local month starts), so days and months match the
 // calendar of the organization, also across daylight-saving changes.
@@ -35,10 +35,10 @@ import (
 
 var (
 	ptIntervals = []string{"hour", "day", "week", "month", "year"}
-	ptValues    = []string{"min", "max", "avg", "first", "last", "delta", "count", "out"}
+	ptValues    = []string{"min", "max", "avg", "first", "last", "delta", "sum", "count", "out"}
 	ptPeriods   = []string{"today", "yesterday", "this_week", "last_week", "this_month", "last_month", "this_year", "last_year", "last_7d", "last_30d", "last_12m", "custom"}
 	// ptValueLabels name the values in column headers of exports
-	ptValueLabels = map[string]string{"min": "min", "max": "max", "avg": "average", "first": "start", "last": "end", "delta": "consumption", "count": "samples", "out": "out of limits"}
+	ptValueLabels = map[string]string{"min": "min", "max": "max", "avg": "average", "first": "start", "last": "end", "delta": "consumption", "sum": "sum", "count": "samples", "out": "out of limits"}
 )
 
 const (
@@ -71,6 +71,7 @@ type ptCell struct {
 	First   *float64 `json:"first,omitempty"`
 	Last    *float64 `json:"last,omitempty"`
 	Delta   *float64 `json:"delta,omitempty"`
+	Sum     *float64 `json:"sum,omitempty"` // sum of the values: passages counted per reading (object counting, spec 029)
 	Count   int64    `json:"count"`
 	Out     int64    `json:"out"`
 	Flagged bool     `json:"flagged,omitempty"` // a sample of the period has a doubtful quality (not ok, not backfilled)
@@ -92,6 +93,8 @@ func (c *ptCell) value(v string) *float64 {
 		return c.Last
 	case "delta":
 		return c.Delta
+	case "sum":
+		return c.Sum
 	case "count":
 		return f(float64(c.Count))
 	case "out":
@@ -403,7 +406,8 @@ func (s *Server) computePeriodTable(ctx context.Context, p *iam.Principal, q *pt
 			continue
 		}
 		avg := sum / float64(n)
-		t.Cells[id][i] = ptCell{Min: &mn, Max: &mx, Avg: &avg, First: &first, Last: &last, Delta: &delta, Count: n, Out: out, Flagged: flagged, sum: sum}
+		total := sum
+		t.Cells[id][i] = ptCell{Min: &mn, Max: &mx, Avg: &avg, First: &first, Last: &last, Delta: &delta, Sum: &total, Count: n, Out: out, Flagged: flagged, sum: sum}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -441,6 +445,13 @@ func ptTotal(cells []ptCell) ptCell {
 		t.Delta = &d
 		t.Count += c.Count
 		t.Out += c.Out
+		if c.Sum != nil {
+			v := *c.Sum
+			if t.Sum != nil {
+				v += *t.Sum
+			}
+			t.Sum = &v
+		}
 		t.Flagged = t.Flagged || c.Flagged
 		sum += c.sum
 	}

@@ -1,0 +1,19 @@
+meta {
+  name: Cameras and their object counting
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/counting/cameras
+  body: none
+  auth: inherit
+}
+
+docs {
+  Cameras and their object counting
+  
+  Every camera the user may see, with its counting configuration and state.
+  
+  Requires permission `data.read`.
+}

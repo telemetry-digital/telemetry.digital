@@ -1,0 +1,34 @@
+meta {
+  name: Change a sensor input
+  type: http
+  seq: 14
+}
+
+put {
+  url: {{baseUrl}}/api/v1/counting/inputs/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "enabled": true,
+    "entrance_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "group": "string",
+    "in_datastream_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "mode": "increment",
+    "name": "string",
+    "out_datastream_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "reason": "string"
+  }
+}
+
+docs {
+  Change a sensor input
+  
+  Requires permission `config.write`.
+}

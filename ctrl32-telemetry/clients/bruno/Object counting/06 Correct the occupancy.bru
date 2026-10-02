@@ -1,0 +1,31 @@
+meta {
+  name: Correct the occupancy
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/counting/areas/:id/occupancy
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "group": "string",
+    "reason": "string",
+    "value": 1
+  }
+}
+
+docs {
+  Correct the occupancy
+  
+  Sets the occupancy of a group (e.g. after a count by hand); recorded in the counting log and the audit trail with the reason, stored as an observation of `<group>_occupancy`.
+  
+  Requires permission `config.write`.
+}

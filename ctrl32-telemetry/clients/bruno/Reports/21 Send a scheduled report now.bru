@@ -1,0 +1,23 @@
+meta {
+  name: Send a scheduled report now
+  type: http
+  seq: 21
+}
+
+post {
+  url: {{baseUrl}}/api/v1/scheduled-reports/:id/send
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  Send a scheduled report now
+  
+  A test: the files for the period before now are mailed to the recipients and the delivery is recorded like a scheduled one.
+  
+  Requires permission `config.write`.
+}

@@ -1,0 +1,22 @@
+meta {
+  name: Resets corrections and clamps
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{baseUrl}}/api/v1/counting/log
+  body: none
+  auth: inherit
+}
+
+params:query {
+  area: 
+  ~limit: 
+}
+
+docs {
+  Resets, corrections and clamps
+  
+  Requires permission `data.read`.
+}

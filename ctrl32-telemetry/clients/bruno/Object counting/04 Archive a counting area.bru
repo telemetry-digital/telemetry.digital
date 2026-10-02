@@ -1,0 +1,27 @@
+meta {
+  name: Archive a counting area
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/counting/areas/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Archive a counting area
+  
+  The area and its entrances stop counting; their datastreams and observations stay.
+  
+  Requires permission `config.write`.
+}

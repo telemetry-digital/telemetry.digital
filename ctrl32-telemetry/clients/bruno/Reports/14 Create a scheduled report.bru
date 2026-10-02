@@ -1,0 +1,47 @@
+meta {
+  name: Create a scheduled report
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{baseUrl}}/api/v1/scheduled-reports
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "attach_pdf": true,
+    "attach_xlsx": true,
+    "content": {
+      "area_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+      "dashboard": "string",
+      "datastream_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+      "kind": "observations",
+      "type": "counting",
+      "widget": "string"
+    },
+    "cron": "string",
+    "enabled": true,
+    "name": "string",
+    "period": "previous_day",
+    "reason": "string",
+    "recipients": {
+      "addresses": [
+        "string"
+      ],
+      "channels": [
+        "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00"
+      ]
+    }
+  }
+}
+
+docs {
+  Create a scheduled report
+  
+  Content: a summary of an object counting area, a period table widget of a dashboard, or a report template (observations of a datastream, alarms); period: the previous day, week (Monday to Sunday) or month; attachments PDF and/or XLSX (CSV for templates). The files are made like the exports of the user interface, as the report's author.
+  
+  Requires permission `config.write`.
+}

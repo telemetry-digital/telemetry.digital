@@ -1,0 +1,71 @@
+meta {
+  name: Configure object counting on a camera
+  type: http
+  seq: 9
+}
+
+put {
+  url: {{baseUrl}}/api/v1/counting/cameras/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "config": {
+      "anchor": "bottom",
+      "lines": [
+        {
+          "a": {
+            "x": 21.5,
+            "y": 21.5
+          },
+          "b": {
+            "x": 21.5,
+            "y": 21.5
+          },
+          "classes": [
+            "string"
+          ],
+          "entrance_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "id": "string",
+          "in": "left",
+          "name": "string"
+        }
+      ],
+      "margin": 21.5,
+      "sections": [
+        {
+          "area_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "asset_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+          "classes": [
+            "string"
+          ],
+          "distance_m": 21.5,
+          "id": "string",
+          "limit_kmh": 21.5,
+          "line_a": "string",
+          "line_b": "string",
+          "name": "string"
+        }
+      ]
+    },
+    "enabled": true,
+    "fps": 21.5,
+    "min_score": 21.5,
+    "model": "nano",
+    "reason": "string"
+  }
+}
+
+docs {
+  Configure object counting on a camera
+  
+  Lines (each counts for an entrance; the side where the area lies decides in and out), speed sections (two lines and the distance between them on the ground; a speed is an indicative measurement, not certified enforcement), analysed frames per second (1–15), model nano (fast) or tiny (more accurate), detection threshold. Off by default; the camera's picture is analysed on this server and never stored.
+  
+  Requires permission `config.write`.
+}

@@ -1,0 +1,25 @@
+meta {
+  name: Archive an entrance
+  type: http
+  seq: 11
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/counting/entrances/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Archive an entrance
+  
+  Requires permission `config.write`.
+}

@@ -191,7 +191,7 @@
   // Period table (spec 023): a row per local day/week/month… (or per datastream), values min/max/avg/first/last/
   // consumption/count/out computed by the server in the organization's time zone; ◀ ▶ move the period; the export
   // buttons download the same table as Excel, CSV or a PDF report (data.export, not on public links).
-  const PT_VALUE = { min: 'min', max: 'max', avg: 'average', first: 'start', last: 'end', delta: 'consumption', count: 'samples', out: 'out of limits' };
+  const PT_VALUE = { min: 'min', max: 'max', avg: 'average', first: 'start', last: 'end', delta: 'consumption', sum: 'sum', count: 'samples', out: 'out of limits' };
   const tr = (s) => (window.ctrl32 && ctrl32.t ? ctrl32.t(s) : s);
   function ptQuery(ctx, p, all, shift) {
     const q = new URLSearchParams(); const list = ids(ctx);

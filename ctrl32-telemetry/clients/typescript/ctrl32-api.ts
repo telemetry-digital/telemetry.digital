@@ -842,6 +842,8 @@ export type PeriodCell = {
   min?: number;
   /** samples outside low/high */
   out?: number;
+  /** sum of the values */
+  sum?: number;
 };
 
 export type PeriodTable = {
@@ -1982,6 +1984,403 @@ export class Ctrl32Client {
     /** true on success */
     ok?: boolean;
   }>('DELETE', `/api/v1/connectors/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Counting areas
+   *
+   * Areas with their entrances, the occupancy now and today's passages per group, and whether the detector for cameras is installed on this server.
+   * 
+   * Requires permission `data.read`. */
+  getCountingAreas(): Promise<{
+    areas?: ({
+      /** the area's asset (its datastreams) */
+      asset_id?: string;
+      /** group → departures counted while empty, since the reset */
+      clamped?: Record<string, unknown>;
+      entrances?: ({
+        asset_id?: string;
+        id?: string;
+        name?: string;
+        sort?: number;
+        /** group → {in, out} */
+        today?: Record<string, unknown>;
+      })[];
+      groups?: string[];
+      id?: string;
+      kind?: "building" | "car_park" | "zone";
+      last_reset?: Record<string, unknown>;
+      /** group → capacity */
+      limits?: Record<string, unknown>;
+      name?: string;
+      /** group → occupancy now */
+      occupancy?: Record<string, unknown>;
+      /** HH:MM local, empty = no daily reset */
+      reset_time?: string;
+      site?: string;
+      site_id?: string;
+      /** group → {in, out} */
+      today?: Record<string, unknown>;
+    })[];
+    cameras_installed?: boolean;
+    cameras_note?: string;
+    classes?: string[];
+    groups?: string[];
+  }> {
+    return this.request<{
+    areas?: ({
+      /** the area's asset (its datastreams) */
+      asset_id?: string;
+      /** group → departures counted while empty, since the reset */
+      clamped?: Record<string, unknown>;
+      entrances?: ({
+        asset_id?: string;
+        id?: string;
+        name?: string;
+        sort?: number;
+        /** group → {in, out} */
+        today?: Record<string, unknown>;
+      })[];
+      groups?: string[];
+      id?: string;
+      kind?: "building" | "car_park" | "zone";
+      last_reset?: Record<string, unknown>;
+      /** group → capacity */
+      limits?: Record<string, unknown>;
+      name?: string;
+      /** group → occupancy now */
+      occupancy?: Record<string, unknown>;
+      /** HH:MM local, empty = no daily reset */
+      reset_time?: string;
+      site?: string;
+      site_id?: string;
+      /** group → {in, out} */
+      today?: Record<string, unknown>;
+    })[];
+    cameras_installed?: boolean;
+    cameras_note?: string;
+    classes?: string[];
+    groups?: string[];
+  }>('GET', `/api/v1/counting/areas`, undefined, undefined, false);
+  }
+
+  /** Create a counting area
+   *
+   * Creates the area's asset (type counting_area) on the site, an asset per entrance (type entrance) and the datastreams of the groups.
+   * 
+   * Requires permission `config.write`. */
+  postCountingAreas(body: {
+    entrances?: string[];
+    groups?: string[];
+    /** default building */
+    kind?: "building" | "car_park" | "zone";
+    /** group → capacity */
+    limits?: Record<string, unknown>;
+    /** 1–80 */
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** HH:MM, empty = none */
+    reset_time?: string;
+    /** new areas */
+    site_id?: string;
+  }): Promise<{
+    asset_id?: string;
+    id?: string;
+  }> {
+    return this.request<{
+    asset_id?: string;
+    id?: string;
+  }>('POST', `/api/v1/counting/areas`, undefined, body, false);
+  }
+
+  /** Change a counting area
+   *
+   * Name, kind, groups (new groups get their datastreams), daily reset time and capacities.
+   * 
+   * Requires permission `config.write`. */
+  putCountingAreasId(id: string, body: {
+    entrances?: string[];
+    groups?: string[];
+    /** default building */
+    kind?: "building" | "car_park" | "zone";
+    /** group → capacity */
+    limits?: Record<string, unknown>;
+    /** 1–80 */
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** HH:MM, empty = none */
+    reset_time?: string;
+    /** new areas */
+    site_id?: string;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('PUT', `/api/v1/counting/areas/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Archive a counting area
+   *
+   * The area and its entrances stop counting; their datastreams and observations stay.
+   * 
+   * Requires permission `config.write`. */
+  deleteCountingAreasId(id: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/counting/areas/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Add an entrance
+   *
+   * Requires permission `config.write`. */
+  postCountingAreasIdEntrances(id: string, body: {
+    /** 1–80 */
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    sort?: number;
+  }): Promise<{
+    id?: string;
+  }> {
+    return this.request<{
+    id?: string;
+  }>('POST', `/api/v1/counting/areas/${encodeURIComponent(id)}/entrances`, undefined, body, false);
+  }
+
+  /** Correct the occupancy
+   *
+   * Sets the occupancy of a group (e.g. after a count by hand); recorded in the counting log and the audit trail with the reason, stored as an observation of `<group>_occupancy`.
+   * 
+   * Requires permission `config.write`. */
+  postCountingAreasIdOccupancy(id: string, body: {
+    group: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** 0–10 000 000 */
+    value: number;
+  }): Promise<{
+    before?: number;
+    occupancy?: number;
+    ok?: boolean;
+  }> {
+    return this.request<{
+    before?: number;
+    occupancy?: number;
+    ok?: boolean;
+  }>('POST', `/api/v1/counting/areas/${encodeURIComponent(id)}/occupancy`, undefined, body, false);
+  }
+
+  /** Cameras and their object counting
+   *
+   * Every camera the user may see, with its counting configuration and state.
+   * 
+   * Requires permission `data.read`. */
+  getCountingCameras(): Promise<(Record<string, unknown>)[]> {
+    return this.request<(Record<string, unknown>)[]>('GET', `/api/v1/counting/cameras`, undefined, undefined, false);
+  }
+
+  /** Object counting of a camera
+   *
+   * Configuration and the state of the worker: analysed frames per second, inference time, CPU use of the worker and the decoder, objects followed, the boxes of the last analysed frame (for the line editor), counts since the start.
+   * 
+   * Requires permission `data.read`. */
+  getCountingCamerasId(id: string): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('GET', `/api/v1/counting/cameras/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Configure object counting on a camera
+   *
+   * Lines (each counts for an entrance; the side where the area lies decides in and out), speed sections (two lines and the distance between them on the ground; a speed is an indicative measurement, not certified enforcement), analysed frames per second (1–15), model nano (fast) or tiny (more accurate), detection threshold. Off by default; the camera's picture is analysed on this server and never stored.
+   * 
+   * Requires permission `config.write`. */
+  putCountingCamerasId(id: string, body: {
+    config: {
+      anchor?: "bottom" | "centre";
+      lines?: ({
+        a?: {
+          /** 0–1 */
+          x?: number;
+          /** 0–1 */
+          y?: number;
+        };
+        b?: {
+          x?: number;
+          y?: number;
+        };
+        classes?: string[];
+        /** empty = a speed line only */
+        entrance_id?: string;
+        id?: string;
+        /** side of A→B on the picture where the area lies */
+        in?: "left" | "right";
+        name?: string;
+      })[];
+      /** 0–0.1 */
+      margin?: number;
+      sections?: ({
+        area_id?: string;
+        /** set by the server */
+        asset_id?: string;
+        classes?: string[];
+        /** 1–500, on the ground */
+        distance_m?: number;
+        id?: string;
+        /** 0 = none */
+        limit_kmh?: number;
+        line_a?: string;
+        line_b?: string;
+        name?: string;
+      })[];
+    };
+    enabled?: boolean;
+    /** 1–15, default 5 */
+    fps?: number;
+    /** 0.1–0.95, default 0.35 */
+    min_score?: number;
+    model?: "nano" | "tiny";
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('PUT', `/api/v1/counting/cameras/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Rename an entrance
+   *
+   * Requires permission `config.write`. */
+  putCountingEntrancesId(id: string, body: {
+    /** 1–80 */
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    sort?: number;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('PUT', `/api/v1/counting/entrances/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Archive an entrance
+   *
+   * Requires permission `config.write`. */
+  deleteCountingEntrancesId(id: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/counting/entrances/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Sensor inputs
+   *
+   * Requires permission `data.read`. */
+  getCountingInputs(): Promise<(Record<string, unknown>)[]> {
+    return this.request<(Record<string, unknown>)[]>('GET', `/api/v1/counting/inputs`, undefined, undefined, false);
+  }
+
+  /** Add a sensor input
+   *
+   * A datastream of a device (light barrier, turnstile, door counter …) whose values are passages in or out of an entrance: `increment` — each value is a number of passages, `total` — a running total (the difference counts; a restart from zero counts the new value).
+   * 
+   * Requires permission `config.write`. */
+  postCountingInputs(body: {
+    enabled?: boolean;
+    entrance_id: string;
+    /** people (default), vehicles, cars … */
+    group?: string;
+    in_datastream_id?: string;
+    mode?: "increment" | "total";
+    name: string;
+    out_datastream_id?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    id?: string;
+  }> {
+    return this.request<{
+    id?: string;
+  }>('POST', `/api/v1/counting/inputs`, undefined, body, false);
+  }
+
+  /** Change a sensor input
+   *
+   * Requires permission `config.write`. */
+  putCountingInputsId(id: string, body: {
+    enabled?: boolean;
+    entrance_id: string;
+    group?: string;
+    in_datastream_id?: string;
+    mode?: "increment" | "total";
+    name: string;
+    out_datastream_id?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('PUT', `/api/v1/counting/inputs/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Remove a sensor input
+   *
+   * Requires permission `config.write`. */
+  deleteCountingInputsId(id: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/counting/inputs/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Resets, corrections and clamps
+   *
+   * Requires permission `data.read`. */
+  getCountingLog(query: { area: string; limit?: number; /** 1–500, default 50 */ }): Promise<({
+    actor?: string;
+    after?: number;
+    at?: string;
+    before?: number;
+    group?: string;
+    kind?: "reset" | "correction" | "clamp";
+    reason?: string;
+  })[]> {
+    return this.request<({
+    actor?: string;
+    after?: number;
+    at?: string;
+    before?: number;
+    group?: string;
+    kind?: "reset" | "correction" | "clamp";
+    reason?: string;
+  })[]>('GET', `/api/v1/counting/log`, query, undefined, false);
+  }
+
+  /** Summary of an area
+   *
+   * One local day of an area: occupancy now, passages per group, per entrance with shares, per hour (with the occupancy at the end of each hour), the days before for comparison, the peak occupancy and the speed sections (count, average, maximum, over the limit, last vehicles, histogram per 10 km/h). The area is given directly or by one of its datastreams (widgets).
+   * 
+   * Requires permission `data.read`. */
+  getCountingSummary(query?: { area?: string; /** area id */ datastream?: string; /** or a datastream of the area, an entrance or a speed section */ date?: string; /** YYYY-MM-DD, default today */ days?: number; /** days for comparison, 1–62, default 7 */ }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('GET', `/api/v1/counting/summary`, query, undefined, false);
   }
 
   /** Report client attributes (device)
@@ -4608,7 +5007,7 @@ export class Ctrl32Client {
    * Aggregates of datastreams per local hour, day, week, month or year in the organization's time zone: minimum, maximum, average, first and last reading, consumption of a counter (sum of increases, a meter reset counts the new reading, the last reading before the period is the baseline), sample count and samples outside the limits. Every period of the range has a row, empty when there is no data. Used by the dashboard widget *Period table* (spec 023).
    * 
    * Requires permission `data.read`. */
-  getPeriodTable(query: { datastreams: string; /** comma-separated datastream ids (1–50) */ interval?: string; /** hour | day (default) | week | month | year — local periods of the organization's time zone */ values?: string; /** comma-separated: min, max, avg, first, last, delta (consumption of a counter), count, out (samples outside low/high); default min,max */ period?: string; /** today | yesterday | this_week | last_week | this_month (default) | last_month | this_year | last_year | last_7d | last_30d | last_12m | custom */ from?: string; /** custom: first day YYYY-MM-DD */ to?: string; /** custom: last day YYYY-MM-DD (included) */ shift?: number; /** move the period by whole periods, e.g. -1 = the one before */ low?: string; /** lower limit (out, flagging) */ high?: string; /** upper limit */ orientation?: string; /** periods (a row per period, default) | datastreams */ total?: string; /** 1: a total row */ decimals?: number; /** 0–6 (exports) */ label?: string; /** display name of a datastream, repeated in the order of datastreams */ title?: string; /** title of an export */ }): Promise<PeriodTable> {
+  getPeriodTable(query: { datastreams: string; /** comma-separated datastream ids (1–50) */ interval?: string; /** hour | day (default) | week | month | year — local periods of the organization's time zone */ values?: string; /** comma-separated: min, max, avg, first, last, delta (consumption of a counter), sum (total of the values, e.g. people counted), count, out (samples outside low/high); default min,max */ period?: string; /** today | yesterday | this_week | last_week | this_month (default) | last_month | this_year | last_year | last_7d | last_30d | last_12m | custom */ from?: string; /** custom: first day YYYY-MM-DD */ to?: string; /** custom: last day YYYY-MM-DD (included) */ shift?: number; /** move the period by whole periods, e.g. -1 = the one before */ low?: string; /** lower limit (out, flagging) */ high?: string; /** upper limit */ orientation?: string; /** periods (a row per period, default) | datastreams */ total?: string; /** 1: a total row */ decimals?: number; /** 0–6 (exports) */ label?: string; /** display name of a datastream, repeated in the order of datastreams */ title?: string; /** title of an export */ }): Promise<PeriodTable> {
     return this.request<PeriodTable>('GET', `/api/v1/period-table`, query, undefined, false);
   }
 
@@ -4617,7 +5016,7 @@ export class Ctrl32Client {
    * The same table as `GET /api/v1/period-table` as `format` xlsx (default; title, period, organization and author above the table), csv (UTF-8 with BOM) or pdf (stored under Reports with hashes, like other PDF exports). Audited.
    * 
    * Requires permission `data.export`. */
-  getPeriodTableExport(query: { datastreams: string; /** comma-separated datastream ids (1–50) */ interval?: string; /** hour | day (default) | week | month | year — local periods of the organization's time zone */ values?: string; /** comma-separated: min, max, avg, first, last, delta (consumption of a counter), count, out (samples outside low/high); default min,max */ period?: string; /** today | yesterday | this_week | last_week | this_month (default) | last_month | this_year | last_year | last_7d | last_30d | last_12m | custom */ from?: string; /** custom: first day YYYY-MM-DD */ to?: string; /** custom: last day YYYY-MM-DD (included) */ shift?: number; /** move the period by whole periods, e.g. -1 = the one before */ low?: string; /** lower limit (out, flagging) */ high?: string; /** upper limit */ orientation?: string; /** periods (a row per period, default) | datastreams */ total?: string; /** 1: a total row */ decimals?: number; /** 0–6 (exports) */ label?: string; /** display name of a datastream, repeated in the order of datastreams */ title?: string; /** title of an export */ format?: string; /** xlsx | csv | pdf */ }): Promise<Response> {
+  getPeriodTableExport(query: { datastreams: string; /** comma-separated datastream ids (1–50) */ interval?: string; /** hour | day (default) | week | month | year — local periods of the organization's time zone */ values?: string; /** comma-separated: min, max, avg, first, last, delta (consumption of a counter), sum (total of the values, e.g. people counted), count, out (samples outside low/high); default min,max */ period?: string; /** today | yesterday | this_week | last_week | this_month (default) | last_month | this_year | last_year | last_7d | last_30d | last_12m | custom */ from?: string; /** custom: first day YYYY-MM-DD */ to?: string; /** custom: last day YYYY-MM-DD (included) */ shift?: number; /** move the period by whole periods, e.g. -1 = the one before */ low?: string; /** lower limit (out, flagging) */ high?: string; /** upper limit */ orientation?: string; /** periods (a row per period, default) | datastreams */ total?: string; /** 1: a total row */ decimals?: number; /** 0–6 (exports) */ label?: string; /** display name of a datastream, repeated in the order of datastreams */ title?: string; /** title of an export */ format?: string; /** xlsx | csv | pdf */ }): Promise<Response> {
     return this.request<Response>('GET', `/api/v1/period-table/export`, query, undefined, true);
   }
 
@@ -5860,6 +6259,279 @@ export class Ctrl32Client {
     })[];
     scene?: string;
   }>('POST', `/api/v1/scenes/${encodeURIComponent(id)}/activate`, undefined, body, false);
+  }
+
+  /** Scheduled reports
+   *
+   * Reports mailed on a cron schedule in the organization's time zone.
+   * 
+   * Requires permission `config.write`. */
+  getScheduledReports(): Promise<{
+    reports?: ({
+      attach_pdf?: boolean;
+      attach_xlsx?: boolean;
+      content?: Record<string, unknown>;
+      created_by?: string;
+      cron?: string;
+      enabled?: boolean;
+      id?: string;
+      last_run_at?: string | null;
+      /** sent, partial, failed */
+      last_status?: string;
+      name?: string;
+      next_run_at?: string | null;
+      period?: string;
+      recipients?: Record<string, unknown>;
+      /** time zone of the organization */
+      tz?: string;
+      updated_at?: string;
+    })[];
+    /** e-mail is configured on this server */
+    smtp?: boolean;
+  }> {
+    return this.request<{
+    reports?: ({
+      attach_pdf?: boolean;
+      attach_xlsx?: boolean;
+      content?: Record<string, unknown>;
+      created_by?: string;
+      cron?: string;
+      enabled?: boolean;
+      id?: string;
+      last_run_at?: string | null;
+      /** sent, partial, failed */
+      last_status?: string;
+      name?: string;
+      next_run_at?: string | null;
+      period?: string;
+      recipients?: Record<string, unknown>;
+      /** time zone of the organization */
+      tz?: string;
+      updated_at?: string;
+    })[];
+    /** e-mail is configured on this server */
+    smtp?: boolean;
+  }>('GET', `/api/v1/scheduled-reports`, undefined, undefined, false);
+  }
+
+  /** Create a scheduled report
+   *
+   * Content: a summary of an object counting area, a period table widget of a dashboard, or a report template (observations of a datastream, alarms); period: the previous day, week (Monday to Sunday) or month; attachments PDF and/or XLSX (CSV for templates). The files are made like the exports of the user interface, as the report's author.
+   * 
+   * Requires permission `config.write`. */
+  postScheduledReports(body: {
+    /** default true */
+    attach_pdf?: boolean;
+    /** default true (CSV for templates) */
+    attach_xlsx?: boolean;
+    content: {
+      /** counting */
+      area_id?: string;
+      /** period_table: dashboard slug */
+      dashboard?: string;
+      /** template observations */
+      datastream_id?: string;
+      /** template */
+      kind?: "observations" | "alarms";
+      type?: "counting" | "period_table" | "template";
+      /** period_table: widget id */
+      widget?: string;
+    };
+    /** five fields, e.g. 0 7 * * 1, or a preset daily_0700, monday_0700, monthly_0700 */
+    cron: string;
+    /** default true */
+    enabled?: boolean;
+    /** 1–80 */
+    name: string;
+    period: "previous_day" | "previous_week" | "previous_month";
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    recipients: {
+      addresses?: string[];
+      channels?: string[];
+    };
+  }): Promise<{
+    id?: string;
+    next_run_at?: string | null;
+    tz?: string;
+  }> {
+    return this.request<{
+    id?: string;
+    next_run_at?: string | null;
+    tz?: string;
+  }>('POST', `/api/v1/scheduled-reports`, undefined, body, false);
+  }
+
+  /** Choices for a scheduled report
+   *
+   * Requires permission `config.write`. */
+  getScheduledReportsOptions(): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('GET', `/api/v1/scheduled-reports/options`, undefined, undefined, false);
+  }
+
+  /** Next runs of a cron expression
+   *
+   * In the organization's time zone, across daylight-saving changes.
+   * 
+   * Requires permission `config.write`. */
+  postScheduledReportsPreviewCron(body: {
+    /** 1–20, default 5 */
+    count?: number;
+    cron: string;
+  }): Promise<{
+    /** normalised */
+    cron?: string;
+    next?: string[];
+    tz?: string;
+  }> {
+    return this.request<{
+    /** normalised */
+    cron?: string;
+    next?: string[];
+    tz?: string;
+  }>('POST', `/api/v1/scheduled-reports/preview-cron`, undefined, body, false);
+  }
+
+  /** A scheduled report
+   *
+   * Requires permission `config.write`. */
+  getScheduledReportsId(id: string): Promise<{
+    attach_pdf?: boolean;
+    attach_xlsx?: boolean;
+    content?: Record<string, unknown>;
+    created_by?: string;
+    cron?: string;
+    enabled?: boolean;
+    id?: string;
+    last_run_at?: string | null;
+    /** sent, partial, failed */
+    last_status?: string;
+    name?: string;
+    next_run_at?: string | null;
+    period?: string;
+    recipients?: Record<string, unknown>;
+    /** time zone of the organization */
+    tz?: string;
+    updated_at?: string;
+  }> {
+    return this.request<{
+    attach_pdf?: boolean;
+    attach_xlsx?: boolean;
+    content?: Record<string, unknown>;
+    created_by?: string;
+    cron?: string;
+    enabled?: boolean;
+    id?: string;
+    last_run_at?: string | null;
+    /** sent, partial, failed */
+    last_status?: string;
+    name?: string;
+    next_run_at?: string | null;
+    period?: string;
+    recipients?: Record<string, unknown>;
+    /** time zone of the organization */
+    tz?: string;
+    updated_at?: string;
+  }>('GET', `/api/v1/scheduled-reports/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Change a scheduled report
+   *
+   * Requires permission `config.write`. */
+  putScheduledReportsId(id: string, body: {
+    /** default true */
+    attach_pdf?: boolean;
+    /** default true (CSV for templates) */
+    attach_xlsx?: boolean;
+    content: {
+      /** counting */
+      area_id?: string;
+      /** period_table: dashboard slug */
+      dashboard?: string;
+      /** template observations */
+      datastream_id?: string;
+      /** template */
+      kind?: "observations" | "alarms";
+      type?: "counting" | "period_table" | "template";
+      /** period_table: widget id */
+      widget?: string;
+    };
+    /** five fields, e.g. 0 7 * * 1, or a preset daily_0700, monday_0700, monthly_0700 */
+    cron: string;
+    /** default true */
+    enabled?: boolean;
+    /** 1–80 */
+    name: string;
+    period: "previous_day" | "previous_week" | "previous_month";
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    recipients: {
+      addresses?: string[];
+      channels?: string[];
+    };
+  }): Promise<{
+    next_run_at?: string | null;
+    ok?: boolean;
+  }> {
+    return this.request<{
+    next_run_at?: string | null;
+    ok?: boolean;
+  }>('PUT', `/api/v1/scheduled-reports/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Remove a scheduled report
+   *
+   * The delivery log stays.
+   * 
+   * Requires permission `config.write`. */
+  deleteScheduledReportsId(id: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/scheduled-reports/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Delivery log of a scheduled report
+   *
+   * Requires permission `config.write`. */
+  getScheduledReportsIdRuns(id: string): Promise<(Record<string, unknown>)[]> {
+    return this.request<(Record<string, unknown>)[]>('GET', `/api/v1/scheduled-reports/${encodeURIComponent(id)}/runs`, undefined, undefined, false);
+  }
+
+  /** Send a scheduled report now
+   *
+   * A test: the files for the period before now are mailed to the recipients and the delivery is recorded like a scheduled one.
+   * 
+   * Requires permission `config.write`. */
+  postScheduledReportsIdSend(id: string): Promise<{
+    attachments?: ({
+      bytes?: number;
+      name?: string;
+      sha256?: string;
+    })[];
+    error?: string;
+    period_from?: string;
+    period_to?: string;
+    /** delivered */
+    recipients?: number;
+    status?: "sent" | "partial" | "failed";
+  }> {
+    return this.request<{
+    attachments?: ({
+      bytes?: number;
+      name?: string;
+      sha256?: string;
+    })[];
+    error?: string;
+    period_from?: string;
+    period_to?: string;
+    /** delivered */
+    recipients?: number;
+    status?: "sent" | "partial" | "failed";
+  }>('POST', `/api/v1/scheduled-reports/${encodeURIComponent(id)}/send`, undefined, undefined, false);
   }
 
   /** Server status and configuration summary

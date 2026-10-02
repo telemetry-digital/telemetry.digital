@@ -1,0 +1,29 @@
+meta {
+  name: Rename an entrance
+  type: http
+  seq: 10
+}
+
+put {
+  url: {{baseUrl}}/api/v1/counting/entrances/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "name": "string",
+    "reason": "string",
+    "sort": 1
+  }
+}
+
+docs {
+  Rename an entrance
+  
+  Requires permission `config.write`.
+}
