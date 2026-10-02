@@ -2,7 +2,7 @@
 
 **Stav:** rozhodnuté 23. 9. 2026 (používateľ: „stále zdarma, zdrojáky potom, keď to bude 100 % funkčné"); **doplnené 23. 9. 2026 popoludní** (používateľ: „odkaz na licenciu Apache so zákazom ďalšieho predaja, iba zadarmo"; „footer bude nemenný a nebude sa dať nijako zmeniť")
 
-> **Zmenené 27. 9. 2026 (ADR-0016):** white labeling je platený — **99,- EUR jednorazovo, navždy** (trvalá licencia na server, overovaná offline). Všetko ostatné ostáva zadarmo; bez licencie platí pevná pätička ctrl32 (ADR-0011) a podmienka 2 v `LICENSE` má výnimku len pre nasadenie s platnou white-label licenciou (návrh na právnu kontrolu). História: 26. 9. 2026 bol platený white labeling pripravený, v ten istý deň na žiadosť vrátený („zostaneme pri free verzii, nič platené“) a 27. 9. 2026 obnovený s cenou.
+> **Zmenené 2. 10. 2026 (doplnok ADR-0016, 0.66.0):** systém je zadarmo vrátane najviac 4 kamier; licencia servera (jedna na server, overovaná offline) pokrýva viac kamier, white labeling, zmeny cez AI asistentov a rozšírenia VPN a zahŕňa aktualizácie na obdobie (`updates_until`); po ňom systém beží ďalej so všetkým, čo má, len novšie verzie sa neinštalujú do obnovenia licencie. **Zmenené 27. 9. 2026 (ADR-0016):** white labeling je platený (licencia na server, overovaná offline). Všetko ostatné ostáva zadarmo; bez licencie platí pevná pätička ctrl32 (ADR-0011) a podmienka 2 v `LICENSE` má výnimku len pre nasadenie s platnou white-label licenciou (návrh na právnu kontrolu). História: 26. 9. 2026 bol platený white labeling pripravený, v ten istý deň na žiadosť vrátený („zostaneme pri free verzii, nič platené“) a 27. 9. 2026 obnovený s cenou.
 
 ## Doplnenie: konkrétna licencia (23. 9. 2026)
 
@@ -12,7 +12,7 @@
 
 ## Rozhodnutie
 
-1. Systém je **bezplatný a navždy bezplatný** — server, inštalátory, knižnice zariadení, dokumentácia. Jedinou platenou voliteľnou funkciou je white labeling (99,- EUR jednorazovo, navždy; ADR-0016, doplnené 27. 9. 2026).
+1. Systém je **bezplatný** (vrátane najviac 4 kamier) — server, inštalátory, knižnice zariadení, dokumentácia. Licenciu servera potrebuje viac ako 4 kamery, white labeling, zmeny cez AI asistentov a rozšírenia VPN (ADR-0016, doplnené 27. 9. a 2. 10. 2026).
 2. **Do verzie 1.0** sa distribuujú podpísané binárky pod bezplatnou licenciou (EULA) s týmito vlastnosťami: bez poplatku, bez záruky („AS IS"), bez obmedzenia počtu zariadení/používateľov, zákaz odstraňovania podpisov a bezpečnostných mechanizmov, **zodpovednosť za nasadenie a prevádzku nesie nasadzovateľ**, ochranná známka „ctrl32" a „ctrl32 telemetry" ostáva vývojárovi. Text EULA je návrh na právnu kontrolu (`LICENSE-NOTICE.md`, doplní sa).
 3. **Po 1.0 („100 % funkčné")** sa zverejní zdrojový kód. Odporúčaná licencia **Apache-2.0** (patentová ochrana, vylúčenie záruky, bez copyleftu — knižnice zariadení sa dajú vložiť aj do uzavretého firmvéru). Alternatíva AGPL-3.0 pre server, ak bude treba brániť uzavretým SaaS forkom.
 4. Knižnice zariadení (`ctrl32-telemetry-c`) môžu byť zverejnené skôr ako server (sú malé, potrebujú ich implementátori a ctrl32 editor) — rozhodne sa pri vydaní 1.0 knižníc.
