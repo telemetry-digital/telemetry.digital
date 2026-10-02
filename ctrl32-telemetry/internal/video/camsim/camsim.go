@@ -36,6 +36,9 @@ type Server struct {
 	Loop     int    // > 0: encode this many frames once and repeat them (load tests measure the server, not the simulator)
 	Log      *slog.Logger
 	ONVIF    *ONVIF // PTZ positions shape the picture
+	// Clip: pictures of a recorded scene (people walking, cars passing) played in a loop by cameras labelled clip…,
+	// for object counting (spec 029); empty = drawn test pictures only
+	Clip [][]byte // JPEG pictures
 
 	srv      *gortsplib.Server
 	mu       sync.Mutex
@@ -293,6 +296,11 @@ func (s *Server) produce(out *stream, sp spec) {
 }
 
 func (s *Server) picture(sp spec, now time.Time, n int) *image.RGBA {
+	if len(s.Clip) > 0 && strings.HasPrefix(strings.ToLower(sp.label), "clip") {
+		if img, err := jpeg.Decode(bytes.NewReader(s.Clip[n%len(s.Clip)])); err == nil {
+			return ClipFrame(img, sp.w, sp.h)
+		}
+	}
 	pan, tilt, zoom := s.ONVIF.View(sp.label)
 	return PictureView(sp.label, sp.w, sp.h, now, StillFrame(sp.label, n, s.ONVIF), pan, tilt, zoom)
 }
@@ -398,4 +406,17 @@ func MJPEGHandler(fps int) http.Handler {
 			}
 		}
 	})
+}
+
+// ClipFrame scales a picture of a clip to w × h (nearest neighbour; the simulator needs speed, not beauty).
+func ClipFrame(src image.Image, w, h int) *image.RGBA {
+	dst := image.NewRGBA(image.Rect(0, 0, w, h))
+	b := src.Bounds()
+	for y := 0; y < h; y++ {
+		sy := b.Min.Y + y*b.Dy()/h
+		for x := 0; x < w; x++ {
+			dst.Set(x, y, src.At(b.Min.X+x*b.Dx()/w, sy))
+		}
+	}
+	return dst
 }

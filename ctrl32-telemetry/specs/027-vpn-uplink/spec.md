@@ -50,7 +50,7 @@ site. SAFETY FIRST: off by default, `system.admin` on the customer server, reaso
 
 ## Requirements
 
-- FR-001 Migration 0047 (applied migrations untouched): `vpn_peer.uplink` (only for sites), `vpn_peer.tunnel_key_hash`
+- FR-001 Migration 0048 (applied migrations untouched): `vpn_peer.uplink` (only for sites), `vpn_peer.tunnel_key_hash`
   (SHA-256, unique among active peers), `core.vpn_uplink_rule`.
 - FR-002 Hub: `POST /api/v1/vpn/peers` with `uplink: true` (kind `site`, subnets optional, the hub's endpoint must be
   set) and rotation return `uplink_token` instead of `config`/QR/router texts; the token holds the HTTPS transport when

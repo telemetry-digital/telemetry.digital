@@ -1,6 +1,6 @@
 # Tasks: VPN phase 3 — uplink to a hub
 
-- [x] T001 Migration 0047: `vpn_peer.uplink`, `tunnel_key_hash`, `core.vpn_uplink_rule`
+- [x] T001 Migration 0048: `vpn_peer.uplink`, `tunnel_key_hash`, `core.vpn_uplink_rule`
 - [x] T002 Model: token, validation, overlap checks, uplink rules, compilation, nftables table, `wg1.conf`; unit tests
 - [x] T003 HTTPS transport (`internal/uptunnel`): hub handler and customer client; in-process test with real WireGuard
 - [x] T004 Windows: uplink mode of the userspace device (filter, relay to the host and the LAN); in-process test with a hub and technicians

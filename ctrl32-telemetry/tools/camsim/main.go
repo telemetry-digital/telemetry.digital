@@ -11,14 +11,20 @@
 //	GET  http://127.0.0.1:8555/snapshot/<label>/<W>x<H>           one JPEG picture (snapshot address)
 //
 // Cameras labelled STILL… show a standing scene until motion is switched on (for motion detection on the server).
+// With -clip <dir> cameras labelled clip… play the JPEG pictures of the directory in a loop (object counting, spec 029).
 package main
 
 import (
+	"bytes"
 	"flag"
+	"image/jpeg"
 	"log"
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/video/camsim"
@@ -36,12 +42,25 @@ func main() {
 	motion := flag.Duration("motion-every", 0, "toggle motion on the announced cameras with this period (0 = only /sim/motion)")
 	disco := flag.String("discovery", ":3702", "UDP address answering WS-Discovery probes (empty = off)")
 	host := flag.String("host", "127.0.0.1", "host name put into ONVIF addresses")
+	clip := flag.String("clip", "", "directory of JPEG pictures played in a loop by cameras labelled clip… (object counting)")
 	flag.Parse()
 
 	_, rport, _ := net.SplitHostPort(*rtsp)
 	_, hport, _ := net.SplitHostPort(*httpAddr)
 	ov := &camsim.ONVIF{RTSPHost: net.JoinHostPort(*host, rport), HTTPHost: net.JoinHostPort(*host, hport), User: *user, Pass: *pass, Codec: *codec, MotionEvery: *motion}
 	s := &camsim.Server{RTSPAddr: *rtsp, FPS: *fps, Loop: *loop, Log: slog.Default(), ONVIF: ov}
+	if *clip != "" {
+		files, _ := filepath.Glob(filepath.Join(*clip, "*.jpg"))
+		sort.Strings(files)
+		for _, f := range files {
+			if b, err := os.ReadFile(f); err == nil {
+				if _, err := jpeg.DecodeConfig(bytes.NewReader(b)); err == nil {
+					s.Clip = append(s.Clip, b)
+				}
+			}
+		}
+		log.Printf("camsim: clip of %d pictures from %s (cameras labelled clip…)", len(s.Clip), *clip)
+	}
 	if err := s.Start(); err != nil {
 		log.Fatal(err)
 	}

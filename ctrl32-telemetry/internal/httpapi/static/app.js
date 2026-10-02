@@ -198,6 +198,7 @@
       { href: '/dashboards', label: 'Dashboards', icon: ICON.dashboard, show: can('data.read'), sec: 'dashboards' },
       { href: '/home', label: 'Home', icon: ICON.home, show: can('data.read'), sec: 'home' },
       { href: '/energy', label: 'Energy', icon: ICON.bolt, show: can('data.read'), sec: 'energy' },
+      { href: '/counting', label: 'Object counting', icon: ICON.users, show: can('data.read'), sec: 'counting' },
       { href: '/video', label: 'Cameras', icon: ICON.camera, show: can('video.view'), sec: 'cameras', children: [
         { href: '/video', label: 'Live view' }, { href: '/video/walls', label: 'Video walls' }, { href: '/video/manage', label: 'Camera management', show: can('video.manage') }] },
       { href: '/displays', label: 'Displays', icon: ICON.display, show: can('display.control'), sec: 'displays' },
@@ -216,7 +217,7 @@
         { href: '/audit/reports', label: 'Report signatures' }] },
       { href: '/settings', label: 'Settings', icon: ICON.settings, show: can('content.write'), sec: 'settings', children: [
         { href: '/settings/branding', label: 'Branding and theme' }, { href: '/settings/templates', label: 'Report templates' },
-        { href: '/settings/reports', label: 'Stored reports' }, { href: '/settings/connectors', label: 'Connectors' },
+        { href: '/settings/reports', label: 'Stored reports' }, { href: '/settings/scheduled-reports', label: 'Scheduled reports', show: can('config.write') }, { href: '/settings/connectors', label: 'Connectors' },
         { href: '/settings/languages', label: 'Languages' }, { href: '/settings/translations', label: 'Translations' },
         { href: '/settings/apps', label: 'Apps' }, { href: '/vpn', label: 'VPN', show: can('vpn.manage') && !can('system.admin') }, { href: '/settings/export', label: 'Organization export', show: can('user.admin') }, { href: '/settings/notifications', label: 'Notifications' }, { href: '/settings/approvals', label: 'Approvals' }, { href: '/settings/policy', label: 'Security policy' }, { href: '/settings/ai', label: 'AI assistants' }] },
       { href: '/organizations', label: 'System', icon: ICON.system, show: can('system.admin'), sec: 'system', children: [

@@ -15,7 +15,7 @@ what the hub may reach.
 ## Decision
 
 1. **The customer server is a site of the hub, marked as an uplink.** On the hub, *Add peer → Server (uplink)* creates
-   a `site` peer with `uplink = true` (migration 0047): an address in the hub's VPN and, optionally, the LAN subnets
+   a `site` peer with `uplink = true` (migration 0048): an address in the hub's VPN and, optionally, the LAN subnets
    behind the customer server (routed through the hub like any site's; an uplink without subnets offers only the
    server itself). Everything of ADR-0018 applies unchanged on the hub: the licence (a site needs it), the access rules
    (*technicians → uplink peer : 443*, *technicians → uplink subnet host : 502*), organizations, grants, rotation,

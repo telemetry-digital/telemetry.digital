@@ -1,0 +1,32 @@
+meta {
+  name: Add a sensor input
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/api/v1/counting/inputs
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "enabled": true,
+    "entrance_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "group": "string",
+    "in_datastream_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "mode": "increment",
+    "name": "string",
+    "out_datastream_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "reason": "string"
+  }
+}
+
+docs {
+  Add a sensor input
+  
+  A datastream of a device (light barrier, turnstile, door counter …) whose values are passages in or out of an entrance: `increment` — each value is a number of passages, `total` — a running total (the difference counts; a restart from zero counts the new value).
+  
+  Requires permission `config.write`.
+}

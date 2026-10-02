@@ -33,6 +33,8 @@ type Config struct {
 	Time     TimeConfig     `toml:"time"`
 	Video    VideoConfig    `toml:"video"`
 	License  LicenseConfig  `toml:"license"`
+	// Object counting on camera pictures (spec 029): the detector runs in worker processes; empty = not installed.
+	Analytics AnalyticsConfig `toml:"analytics"`
 }
 
 // LicenseConfig is the online activation of the white-label license (spec 007): the server sends the order number and
@@ -47,6 +49,20 @@ const (
 	DefaultActivationURL = "https://lic.ctrl32.com/telemetry/activate"
 	DefaultBuyURL        = "https://ctrl32.com/pricing/"
 )
+
+// AnalyticsConfig locates what object counting on camera pictures needs (spec 029): an unmodified ffmpeg (LGPL build)
+// that decodes the sub-stream, the ONNX Runtime library (MIT) and the YOLOX models (Apache-2.0). Without them the
+// counting from sensors works, cameras show "not installed".
+type AnalyticsConfig struct {
+	FFmpeg      string `toml:"ffmpeg"`      // ffmpeg executable; empty = next to the binary or on PATH
+	ONNXRuntime string `toml:"onnxruntime"` // onnxruntime.dll / libonnxruntime.so; empty = not installed
+	ModelNano   string `toml:"model_nano"`  // yolox_nano.onnx (fast, default)
+	ModelTiny   string `toml:"model_tiny"`  // yolox_tiny.onnx (more accurate, about 3× the CPU)
+	NanoSHA256  string `toml:"nano_sha256"` // optional pins of the model files
+	TinySHA256  string `toml:"tiny_sha256"` //
+	Threads     int    `toml:"threads"`     // inference threads per camera (default 1)
+	MaxCameras  int    `toml:"max_cameras"` // cameras analysed at the same time (default 4)
+}
 
 // VideoConfig locates camera recordings (spec 010).
 type VideoConfig struct {

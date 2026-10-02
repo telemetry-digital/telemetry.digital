@@ -1,0 +1,19 @@
+meta {
+  name: Counting areas
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/counting/areas
+  body: none
+  auth: inherit
+}
+
+docs {
+  Counting areas
+  
+  Areas with their entrances, the occupancy now and today's passages per group, and whether the detector for cameras is installed on this server.
+  
+  Requires permission `data.read`.
+}

@@ -1,0 +1,21 @@
+meta {
+  name: A scheduled report
+  type: http
+  seq: 19
+}
+
+get {
+  url: {{baseUrl}}/api/v1/scheduled-reports/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  A scheduled report
+  
+  Requires permission `config.write`.
+}

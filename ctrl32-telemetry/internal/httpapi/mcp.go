@@ -49,7 +49,7 @@ var mcpAreas = map[string]string{
 	tagNotify: "notifications", tagRules: "rules", tagDash: "dashboards", tagHMI: "hmi_library", tagRepl: "replication",
 	tagFlows: "flows", tagPublic: "public_dashboards", tagConn: "connectors", tagReports: "reports", tagExports: "exports",
 	tagBrand: "branding", tagApps: "apps", tagServer: "server", tagProv: "provisioning", tagSmart: "smart_home",
-	tagVideo: "cameras", tagLanding: "front_page", tagDisplays: "displays", tagVPN: "vpn", tagAudit: "audit", tagSearch: "search",
+	tagVideo: "cameras", tagLanding: "front_page", tagDisplays: "displays", tagVPN: "vpn", tagAudit: "audit", tagSearch: "search", tagCount: "object_counting",
 }
 
 // mcpExclusions are single operations that are not offered to assistants, with the reason.

@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Object counting</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  .oc-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
+  .oc-bar select { max-width: 420px; }
+  .oc-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .oc-tile b { font-size: 28px; display: block; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .oc-cap { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; margin-top: 8px; }
+  .oc-cap span { display: block; height: 100%; background: var(--ok); }
+  .oc-cap.warn span { background: var(--warn); } .oc-cap.bad span { background: var(--bad); }
+  .oc-chart svg { width: 100%; height: 240px; display: block; }
+  .oc-grid { stroke: var(--line); stroke-width: 1; }
+  .oc-ax { fill: var(--muted); font-size: 11px; }
+  .oc-in { fill: var(--primary); } .oc-out { fill: #64748b; } .oc-occ { fill: none; stroke: #16a34a; stroke-width: 2; }
+  .oc-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+  .oc-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .oc-share { display: inline-block; width: 90px; height: 8px; border-radius: 4px; background: var(--line); vertical-align: middle; overflow: hidden; }
+  .oc-share span { display: block; height: 100%; background: var(--primary); }
+  .oc-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .oc-sites { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .oc-sites .badge { font-size: 13px; padding: 3px 10px; }
+  .oc-over { color: var(--bad); font-weight: 600; }
+  .oc-editor { position: relative; background: #111; border-radius: var(--radius); overflow: hidden; aspect-ratio: 16 / 9; user-select: none; touch-action: none; }
+  .oc-editor img, .oc-editor .oc-live { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
+  .oc-editor svg { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
+  .oc-editor .oc-hint { position: absolute; left: 8px; bottom: 8px; background: rgba(0,0,0,.6); color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 12px; pointer-events: none; }
+  .oc-line { stroke: #facc15; stroke-width: 3; } .oc-line.sel { stroke: #22d3ee; stroke-width: 4; }
+  .oc-end { fill: #fff; stroke: #111; stroke-width: 1.5; cursor: grab; }
+  .oc-arrow { fill: #facc15; } .oc-arrow.sel { fill: #22d3ee; }
+  .oc-lbl { fill: #fff; font-size: 13px; paint-order: stroke; stroke: #000; stroke-width: 3px; }
+  .oc-box { fill: none; stroke: #22c55e; stroke-width: 1.5; } .oc-box.veh { stroke: #f97316; }
+  .oc-lines td input[type=text] { width: 9em; }
+  .oc-ed-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(220px, 1fr); gap: 16px; align-items: start; }
+  .oc-check, label.check { display: inline-flex; align-items: center; gap: 6px; flex-direction: row; }
+  .oc-check input[type=checkbox], label.check input[type=checkbox], .oc-cls input[type=checkbox] { width: auto; margin: 0; }
+  .oc-hist { fill: #2563eb; } .oc-hist.over { fill: #dc2626; }
+  @media (max-width: 900px) { .oc-ed-grid { grid-template-columns: 1fr; } }
+  .oc-cls label { display: inline-flex; gap: 3px; margin-right: 8px; font-size: 13px; align-items: center; }
+  @media (max-width: 760px) { .oc-two { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<nav class="subnav">
+  <a href="/counting" data-section="overview">Overview</a>
+  <a href="/counting/areas" data-section="areas">Areas and entrances</a>
+  <a href="/counting/cameras" data-section="cameras">Cameras</a>
+  <a href="/counting/sensors" data-section="sensors">Sensors</a>
+</nav>
+
+<section data-section="overview">
+  <div class="page-head"><h1>Object counting</h1><span class="grow"></span>
+    <button class="btn" type="button" id="exportBtn">Export</button>
+    <button class="btn" type="button" id="alarmBtn" hidden>Capacity alarm</button>
+    <button class="btn" type="button" id="correctBtn" hidden>Correct occupancy</button></div>
+  <div class="oc-sites" id="sites"></div>
+  <div class="oc-bar">
+    <select id="area" aria-label="Area" class="notranslate"></select>
+    <div class="seg" id="groups"></div>
+    <button class="btn small" type="button" id="prev" aria-label="previous day">‹</button>
+    <b id="dayLabel" class="en-label"></b>
+    <button class="btn small" type="button" id="next" aria-label="next day">›</button>
+    <button class="btn small" type="button" id="today">Today</button>
+  </div>
+  <div class="card muted" id="empty" hidden><p>No counting area yet. Create a building, a car park or a zone with its entrances under <a href="/counting/areas">Areas and entrances</a>, then count with a camera (lines drawn on its picture) or with sensors such as light barriers and turnstiles.</p></div>
+  <div id="view" hidden>
+    <div class="oc-tiles">
+      <div class="card oc-tile"><div class="muted">Occupancy now</div><b id="tOcc">—</b><div class="oc-cap" id="tCap" hidden><span></span></div><div class="muted small" id="tCapText"></div></div>
+      <div class="card oc-tile"><div class="muted">In</div><b id="tIn">—</b></div>
+      <div class="card oc-tile"><div class="muted">Out</div><b id="tOut">—</b></div>
+      <div class="card oc-tile"><div class="muted">Peak occupancy</div><b id="tPeak">—</b></div>
+    </div>
+    <div class="card muted" id="clampNote" hidden><span class="badge warn">clamped</span> <span>More departures than arrivals were counted since the last reset; the occupancy stayed at zero. Check the lines and sensors, or correct the occupancy.</span></div>
+    <div class="card">
+      <h2 style="margin-top:0">By hour</h2>
+      <div class="oc-legend"><span><i style="background:var(--primary)"></i>In</span><span><i style="background:#64748b"></i>Out</span><span><i style="background:#16a34a"></i>Occupancy</span></div>
+      <div id="hourChart" class="oc-chart"></div>
+    </div>
+    <div class="oc-two">
+      <div class="card">
+        <h2 style="margin-top:0">Entrances</h2>
+        <div class="table-wrap"><table id="entTable"><thead><tr><th>Entrance</th><th class="num">In</th><th class="num">Out</th><th>Share of arrivals</th><th>Share of departures</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0">Comparison of days</h2>
+        <div id="dayChart" class="oc-chart"></div>
+      </div>
+    </div>
+    <div id="speeds"></div>
+    <div class="card">
+      <h2 style="margin-top:0">Resets and corrections</h2>
+      <div class="table-wrap"><table id="logTable"><thead><tr><th>Time</th><th>Group</th><th>Event</th><th class="num">Before</th><th class="num">After</th><th>Reason</th><th>By</th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+</section>
+
+<section data-section="areas">
+  <div class="page-head"><h1>Areas and entrances</h1><span class="grow"></span><button class="btn primary" type="button" id="newArea" hidden>New area</button></div>
+  <p class="muted">An area is a building, a car park or a zone. People and vehicles are counted at its entrances; the occupancy is arrivals minus departures, never below zero, reset every day at the chosen time. Every count is stored as a datastream of the area's and the entrance's asset, so dashboards, period tables, alarm rules, flows and exports work with it.</p>
+  <div class="table-wrap card"><table id="areaTable"><thead><tr><th>Area</th><th>Site</th><th>Kind</th><th>Counts</th><th>Entrances</th><th>Daily reset</th><th></th></tr></thead><tbody></tbody></table></div>
+</section>
+
+<section data-section="cameras">
+  <div class="page-head"><h1>Counting with cameras</h1></div>
+  <div class="card muted" id="camNote" hidden></div>
+  <p class="muted">The server finds people and vehicles in the camera's picture and counts them when they cross a line you draw. The picture is analysed on this server and never stored; only the numbers are. Off until you switch it on for a camera.</p>
+  <div class="table-wrap card"><table id="camTable"><thead><tr><th>Camera</th><th>Counting</th><th>Lines</th><th>Speed sections</th><th>State</th><th class="num">Pictures/s</th><th class="num">CPU</th><th></th></tr></thead><tbody></tbody></table></div>
+  <div id="editorCard" class="card" hidden></div>
+</section>
+
+<section data-section="sensors">
+  <div class="page-head"><h1>Counting with sensors</h1><span class="grow"></span><button class="btn primary" type="button" id="newInput" hidden>New sensor</button></div>
+  <p class="muted">Light barriers, turnstiles, door counters and any device that reports passages over MQTT or HTTP (the device protocol) count for an entrance: choose the datastream of passages in and of passages out. A value is either the number of passages since the last message, or a running total.</p>
+  <div class="table-wrap card"><table id="inputTable"><thead><tr><th>Sensor</th><th>Area</th><th>Entrance</th><th>Counts</th><th>Values</th><th>Enabled</th><th></th></tr></thead><tbody></tbody></table></div>
+</section>
+
+<dialog id="areaDlg"><form class="form" id="areaForm">
+  <h2 style="margin-top:0" id="areaDlgTitle">Area</h2>
+  <label>Name <input name="name" required maxlength="80"></label>
+  <div class="row2"><label>Site <select name="site_id" class="notranslate"></select></label>
+    <label>Kind <select name="kind"><option value="building">Building</option><option value="car_park">Car park</option><option value="zone">Zone</option></select></label></div>
+  <div><div class="muted">Counts</div><div class="oc-cls" id="groupChecks"></div></div>
+  <div class="row2"><label>Daily reset of the occupancy (local time, empty = never) <input name="reset_time" placeholder="03:00" pattern="([01][0-9]|2[0-3]):[0-5][0-9]"></label>
+    <label>Capacity (people or vehicles, empty = none) <input name="capacity" type="number" min="0" max="10000000"></label></div>
+  <label id="entNewLbl">Entrances (one per line) <textarea name="entrances" rows="3" placeholder="Main entrance"></textarea></label>
+  <div id="entEdit" hidden><div class="muted">Entrances</div><div id="entList"></div>
+    <div class="actions"><input id="entNewName" placeholder="New entrance" maxlength="80"><button class="btn small" type="button" id="entAdd">Add</button></div></div>
+  <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+  <div class="err" id="areaErr"></div>
+  <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn danger" type="button" id="areaArchive" hidden>Archive</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+</form></dialog>
+
+<dialog id="corrDlg"><form class="form" id="corrForm">
+  <h2 style="margin-top:0">Correct occupancy</h2>
+  <p class="muted">For example after counting the people in the building by hand. The value and the reason are written to the counting log and the audit trail.</p>
+  <div class="row2"><label>Group <select name="group"></select></label><label>Occupancy now <input name="value" type="number" min="0" max="10000000" required></label></div>
+  <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+  <div class="err" id="corrErr"></div>
+  <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+</form></dialog>
+
+<dialog id="alarmDlg"><form class="form" id="alarmForm">
+  <h2 style="margin-top:0">Capacity alarm</h2>
+  <p class="muted">An alarm rule on the occupancy datastream of the area: a warning and an action limit. Alarms are notified like any other alarm (escalation policies, e-mail, SMS, Web Push) and can start flows.</p>
+  <div class="row2"><label>Warning above <input name="warning" type="number" min="0" step="1"></label><label>Action above <input name="action" type="number" min="0" step="1" required></label></div>
+  <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+  <div class="err" id="alarmErr"></div>
+  <div class="actions"><button class="btn primary" type="submit">Create the alarm rule</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+</form></dialog>
+
+<dialog id="exportDlg"><form class="form" id="exportForm">
+  <h2 style="margin-top:0">Export</h2>
+  <p class="muted">A period table of the area's datastreams: arrivals and departures as sums, the occupancy as its maximum. The same table is available as a dashboard widget and as a scheduled report by e-mail.</p>
+  <div class="row2"><label>Rows <select name="interval"><option value="hour">hour</option><option value="day" selected>day</option><option value="week">week</option><option value="month">month</option></select></label>
+    <label>Period <select name="period"><option value="today">today</option><option value="yesterday">yesterday</option><option value="last_7d">last_7d</option><option value="this_month" selected>this_month</option><option value="last_month">last_month</option><option value="last_12m">last_12m</option></select></label></div>
+  <div class="actions"><button class="btn" type="button" data-f="xlsx">Excel</button><button class="btn" type="button" data-f="csv">CSV</button><button class="btn" type="button" data-f="pdf">PDF</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+</form></dialog>
+
+<dialog id="inputDlg"><form class="form" id="inputForm">
+  <h2 style="margin-top:0">Sensor</h2>
+  <label>Name <input name="name" required maxlength="80" placeholder="Light barrier"></label>
+  <div class="row2"><label>Entrance <select name="entrance_id" class="notranslate"></select></label>
+    <label>Counts <select name="group"></select></label></div>
+  <label>Datastream of passages in <select name="in_datastream_id" class="notranslate"></select></label>
+  <label>Datastream of passages out <select name="out_datastream_id" class="notranslate"></select></label>
+  <label>Values <select name="mode"><option value="increment">number of passages since the last message</option><option value="total">running total</option></select></label>
+  <label class="check"><input type="checkbox" name="enabled" checked> Enabled</label>
+  <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+  <div class="err" id="inputErr"></div>
+  <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn danger" type="button" id="inputDelete" hidden>Remove</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+</form></dialog>
+</main>
+<script src="/app.js"></script>
+<script src="/videoplayer.js"></script>
+<script src="/counting-editor.js"></script>
+<script src="/counting.js"></script>
+</body>
+</html>

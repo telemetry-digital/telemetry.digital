@@ -1,0 +1,26 @@
+meta {
+  name: Summary of an area
+  type: http
+  seq: 17
+}
+
+get {
+  url: {{baseUrl}}/api/v1/counting/summary
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~area: 
+  ~datastream: 
+  ~date: 
+  ~days: 
+}
+
+docs {
+  Summary of an area
+  
+  One local day of an area: occupancy now, passages per group, per entrance with shares, per hour (with the occupancy at the end of each hour), the days before for comparison, the peak occupancy and the speed sections (count, average, maximum, over the limit, last vehicles, histogram per 10 km/h). The area is given directly or by one of its datastreams (widgets).
+  
+  Requires permission `data.read`.
+}

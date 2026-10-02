@@ -29,6 +29,7 @@ require (
 require (
 	github.com/abema/go-mp4 v1.7.3 // indirect
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
+	github.com/ebitengine/purego v0.11.1 // indirect
 	github.com/goburrow/serial v0.1.0 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/btree v1.1.2 // indirect

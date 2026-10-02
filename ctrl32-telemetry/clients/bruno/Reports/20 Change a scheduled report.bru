@@ -1,0 +1,49 @@
+meta {
+  name: Change a scheduled report
+  type: http
+  seq: 20
+}
+
+put {
+  url: {{baseUrl}}/api/v1/scheduled-reports/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "attach_pdf": true,
+    "attach_xlsx": true,
+    "content": {
+      "area_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+      "dashboard": "string",
+      "datastream_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+      "kind": "observations",
+      "type": "counting",
+      "widget": "string"
+    },
+    "cron": "string",
+    "enabled": true,
+    "name": "string",
+    "period": "previous_day",
+    "reason": "string",
+    "recipients": {
+      "addresses": [
+        "string"
+      ],
+      "channels": [
+        "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00"
+      ]
+    }
+  }
+}
+
+docs {
+  Change a scheduled report
+  
+  Requires permission `config.write`.
+}

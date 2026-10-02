@@ -27,6 +27,7 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/broker"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/config"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/console"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/counting"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/escalate"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/flows"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/iam"
@@ -87,6 +88,7 @@ type Server struct {
 	stepUpLimiter     *limiter
 	credExportLimiter *limiter          // exports with camera passwords per user (camera_inventory.go)
 	uplinkTunnel      *uptunnel.Handler // VPN phase 3: the hub's end of the uplinks' HTTPS transport (vpn_uplink.go)
+	counting          *counting.Engine  // object counting (spec 029, counting.go)
 }
 
 // New builds the handler tree.
@@ -111,6 +113,13 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	if pool != nil {
 		go s.licenseRenewLoop() // daily renewal of an activated license (license_activation.go)
 		go s.vpnLoop()          // VPN: expiry of time-limited access, synchronisation with the agent (vpn.go)
+		// object counting (spec 029): passages and speeds as observations, occupancy, camera workers (counting.go)
+		s.counting = counting.New(pool, ing, vm, cfg.Analytics, s.log)
+		if ing != nil {
+			ing.AddSink(s.counting)
+		}
+		go s.counting.Run(context.Background())
+		go s.scheduledReportsLoop() // reports mailed on a cron schedule (scheduled_reports.go)
 	}
 	sub, _ := fs.Sub(static, "static")
 	files := http.FileServer(http.FS(sub))
@@ -353,6 +362,33 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("GET /api/v1/video/walls/{id}", s.require("video.view", s.getWall))
 	mux.Handle("PUT /api/v1/video/walls/{id}", s.require("video.manage", s.saveWall))
 	mux.Handle("DELETE /api/v1/video/walls/{id}", s.require("video.manage", s.deleteWall))
+	// object counting (spec 029, counting.go) and scheduled reports by e-mail (scheduled_reports.go)
+	mux.Handle("GET /api/v1/counting/areas", s.require("data.read", s.listCountingAreas))
+	mux.Handle("POST /api/v1/counting/areas", s.require("config.write", s.createCountingArea))
+	mux.Handle("PUT /api/v1/counting/areas/{id}", s.require("config.write", s.updateCountingArea))
+	mux.Handle("DELETE /api/v1/counting/areas/{id}", s.require("config.write", s.deleteCountingArea))
+	mux.Handle("POST /api/v1/counting/areas/{id}/entrances", s.require("config.write", s.createCountingEntrance))
+	mux.Handle("POST /api/v1/counting/areas/{id}/occupancy", s.require("config.write", s.correctOccupancy))
+	mux.Handle("PUT /api/v1/counting/entrances/{id}", s.require("config.write", s.updateCountingEntrance))
+	mux.Handle("DELETE /api/v1/counting/entrances/{id}", s.require("config.write", s.deleteCountingEntrance))
+	mux.Handle("GET /api/v1/counting/summary", s.require("data.read", s.countingSummary))
+	mux.Handle("GET /api/v1/counting/log", s.require("data.read", s.countingLog))
+	mux.Handle("GET /api/v1/counting/cameras", s.require("data.read", s.listCountingCameras))
+	mux.Handle("GET /api/v1/counting/cameras/{id}", s.require("data.read", s.getCountingCamera))
+	mux.Handle("PUT /api/v1/counting/cameras/{id}", s.require("config.write", s.putCountingCamera))
+	mux.Handle("GET /api/v1/counting/inputs", s.require("data.read", s.listCountingInputs))
+	mux.Handle("POST /api/v1/counting/inputs", s.require("config.write", s.createCountingInput))
+	mux.Handle("PUT /api/v1/counting/inputs/{id}", s.require("config.write", s.updateCountingInput))
+	mux.Handle("DELETE /api/v1/counting/inputs/{id}", s.require("config.write", s.deleteCountingInput))
+	mux.Handle("GET /api/v1/scheduled-reports", s.require("config.write", s.listScheduledReports))
+	mux.Handle("POST /api/v1/scheduled-reports", s.require("config.write", s.createScheduledReport))
+	mux.Handle("GET /api/v1/scheduled-reports/options", s.require("config.write", s.scheduledReportOptions))
+	mux.Handle("GET /api/v1/scheduled-reports/{id}", s.require("config.write", s.getScheduledReport))
+	mux.Handle("PUT /api/v1/scheduled-reports/{id}", s.require("config.write", s.updateScheduledReport))
+	mux.Handle("DELETE /api/v1/scheduled-reports/{id}", s.require("config.write", s.deleteScheduledReport))
+	mux.Handle("POST /api/v1/scheduled-reports/{id}/send", s.require("config.write", s.sendScheduledReport))
+	mux.Handle("GET /api/v1/scheduled-reports/{id}/runs", s.require("config.write", s.scheduledReportRuns))
+	mux.Handle("POST /api/v1/scheduled-reports/preview-cron", s.require("config.write", s.previewCron))
 	mux.Handle("GET /api/v1/energy", s.require("data.read", s.energy))
 	mux.Handle("GET /api/v1/energy/settings", s.require("data.read", s.getEnergySettings))
 	mux.Handle("PUT /api/v1/energy/settings", s.require("content.write", s.putEnergySettings))
@@ -577,6 +613,9 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.HandleFunc("GET /oauth/authorize", page("oauth.html")) // consent of an AI assistant (oauth.go)
 	mux.HandleFunc("GET /home", page("home.html"))
 	mux.HandleFunc("GET /energy", page("energy.html"))
+	mux.HandleFunc("GET /counting", page("counting.html"))
+	mux.HandleFunc("GET /counting/{section}", page("counting.html"))
+	mux.HandleFunc("GET /settings/scheduled-reports", page("scheduled-reports.html"))
 	mux.HandleFunc("GET /landing/edit", page("landing-edit.html"))
 	mux.HandleFunc("GET /video", page("video.html"))
 	mux.HandleFunc("GET /video/{section}", page("video.html"))

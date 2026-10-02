@@ -1,0 +1,40 @@
+meta {
+  name: Change a counting area
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{baseUrl}}/api/v1/counting/areas/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "entrances": [
+      "string"
+    ],
+    "groups": [
+      "string"
+    ],
+    "kind": "building",
+    "limits": {},
+    "name": "string",
+    "reason": "string",
+    "reset_time": "string",
+    "site_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00"
+  }
+}
+
+docs {
+  Change a counting area
+  
+  Name, kind, groups (new groups get their datastreams), daily reset time and capacities.
+  
+  Requires permission `config.write`.
+}

@@ -1,0 +1,27 @@
+meta {
+  name: Remove a scheduled report
+  type: http
+  seq: 21
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/scheduled-reports/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Remove a scheduled report
+  
+  The delivery log stays.
+  
+  Requires permission `config.write`.
+}
