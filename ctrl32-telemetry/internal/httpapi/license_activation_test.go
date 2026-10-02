@@ -52,15 +52,15 @@ func TestFetchActivation(t *testing.T) {
 		t.Fatalf("starter: %v %q %+v %v", err, kind, l, got)
 	}
 	status, reply = 200, map[string]any{"license": sign(maPriv, license.License{Issued: now, Domains: []string{"scada.acme.sk"}}), "kind": "permanent"}
-	if l, kind, err = fetch(); err != nil || !l.Perpetual() || kind != "permanent" {
+	if l, kind, err = fetch(); err != nil || !l.NoExpiry() || kind != "permanent" {
 		t.Fatalf("permanent: %v %q", err, kind)
 	}
 
 	var ae *activationError
-	// a perpetual token from the ONLINE key: refused, flagged as untrusted
+	// a no-expiry token from the ONLINE key: refused, flagged as untrusted
 	status, reply = 200, map[string]any{"license": sign(onPriv, license.License{Issued: now, Domains: []string{"scada.acme.sk"}}), "kind": "permanent"}
 	if _, _, err = fetch(); !errors.As(err, &ae) || !ae.Untrusted || !strings.Contains(err.Error(), "online activation key") {
-		t.Fatalf("perpetual online token accepted: %v", err)
+		t.Fatalf("no-expiry online token accepted: %v", err)
 	}
 	// another server's license, a foreign key, no white_label
 	for name, tok := range map[string]string{
@@ -125,7 +125,7 @@ func TestRenewDueAndBetter(t *testing.T) {
 		{"expires in 19 days, never tried", a, lic(19), true},
 		{"expired", a, lic(-3), true},
 		{"no license", a, nil, true},
-		{"perpetual", a, lic(0), false},
+		{"no-expiry", a, lic(0), false},
 		{"tried 2 hours ago", &activation{Order: "o", LastAttempt: ago(2)}, lic(10), false},
 		{"tried a day ago", &activation{Order: "o", LastAttempt: ago(24)}, lic(10), true},
 		{"refused", &activation{Order: "o", Refused: true}, lic(3), false},
@@ -136,10 +136,10 @@ func TestRenewDueAndBetter(t *testing.T) {
 		}
 	}
 	if !betterLicense(nil, lic(30), host, now) || !betterLicense(lic(10), lic(30), host, now) || !betterLicense(lic(10), lic(0), host, now) {
-		t.Fatal("a longer or perpetual license must replace")
+		t.Fatal("a longer or no-expiry license must replace")
 	}
 	if betterLicense(lic(0), lic(30), host, now) || betterLicense(lic(30), lic(20), host, now) {
-		t.Fatal("never shorten, never replace a perpetual one")
+		t.Fatal("never shorten, never replace a no-expiry one")
 	}
 	if !betterLicense(lic(-1), lic(20), host, now) {
 		t.Fatal("an expired license is replaced")

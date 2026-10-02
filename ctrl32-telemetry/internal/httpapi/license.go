@@ -18,7 +18,7 @@ func (s *Server) licensePage(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>License — ctrl32 telemetry</title>
 <meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/app.css"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/favicon.svg" type="image/svg+xml"></head>
 <body><header class="topbar"></header>
-<main class="container no-rebrand"><h1>License</h1><p class="muted">ctrl32 telemetry is free of charge, forever. It is licensed under the Apache License 2.0 with the Commons Clause: you may use, copy, modify and redistribute it, but you may not sell it. Optional paid features (white labeling) are licensed separately by the licensor. <a href="/license?format=txt">Plain text</a></p>
+<main class="container no-rebrand"><h1>License</h1><p class="muted">ctrl32 telemetry is free of charge, including up to four cameras. It is licensed under the Apache License 2.0 with the Commons Clause: you may use, copy, modify and redistribute it, but you may not sell it. A licence for one server from the licensor covers more cameras, white labeling, changes through AI assistants and the VPN extras, and includes updates for its period. <a href="/license?format=txt">Plain text</a></p>
 <pre class="license">` + html.EscapeString(ctrl32telemetry.License) + `</pre></main>
 <script src="/app.js"></script><script>ctrl32.ready();</script></body></html>`))
 }

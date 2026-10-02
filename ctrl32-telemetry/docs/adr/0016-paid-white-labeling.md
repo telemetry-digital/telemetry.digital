@@ -1,4 +1,4 @@
-# ADR-0016: Paid white labeling — 99,- EUR one-time, perpetual license key verified offline
+# ADR-0016: The licence of a server (white labeling and more) — license key verified offline
 
 **Status:** accepted 27 Sep 2026 (user: white labeling is paid, **99,- EUR, one-time, forever**). History: first accepted
 26 Sep 2026 (user: "Predpríprava white labeling, bude platený" — prepare white labeling, it will be paid), withdrawn the
@@ -6,7 +6,9 @@ same day ("zostaneme pri free verzii, nič platené" — the implementation was 
 the price and a perpetual license. Amends ADR-0002 (everything free) and ADR-0011 decision 5 (fixed product footer).
 The change of the `LICENSE` text (condition 2) is a draft for legal review. **Amended 28 Sep 2026 by ADR-0017**: the
 same license also unlocks changes through AI assistants (MCP); reading through assistants stays free. **Amended 2 Oct 2026 by ADR-0018**: the same license also unlocks VPN sites (routed subnets), time-limited
-access and more than five VPN peers.
+access and more than five VPN peers. **Amended 2 Oct 2026 (licence model, 0.66.0)**: the system is free including up
+to 4 cameras; the licence of a server covers more cameras, white labeling, AI changes and the VPN extras and includes
+updates for a period; the earlier "one-time, perpetual" wording below is superseded — see the last amendment.
 **Context:** Integrators want to deliver the system under their own brand. ADR-0011 made the product footer fixed and
 ADR-0002 made everything free; the `LICENSE` required the footer to stay unchanged.
 
@@ -66,9 +68,52 @@ labeling on one telemetry server — the product it is first activated for claim
 
 ## Consequences
 
-- Ordering and invoicing (99,- EUR) happen outside the software; the licensor issues the key with `licgen` and sends it
+- Ordering and invoicing happen outside the software; the licensor issues the key with `licgen` and sends it
   to the customer (`docs/whitelabel.md`).
 - Losing the private key means no new licenses can be issued with it (existing ones keep working); leaking it lets
   anyone issue licenses. It is kept offline and backed up; a compromised key is rotated by adding a new `.pub` and
   removing the old one in the next release (licenses signed with the old key must then be reissued free of charge).
 - ADR-0002 and ADR-0011 carry a note pointing here.
+
+## Amendment 2 Oct 2026: the licence model (0.66.0, spec 026)
+
+Owner's plan of 2 Oct 2026: "The system is free including up to 4 cameras. A licence (one per server) covers more than
+4 cameras, white labeling, changes through AI assistants (MCP writes) and the VPN extras (more than 5 peers, sites,
+time-limited and approved technician access). The licence includes one year of updates; after the year the system keeps
+running with everything it had — only updates stop until the licence is renewed." This replaces "bought once, valid
+forever" in decision 2, the Status line and the 27 Sep amendment; prices are kept out of the product and its
+documentation except the existing buy button.
+
+13. **Free tier.** Without a valid licence a server runs up to **4 enabled cameras** (all organizations together),
+    5 VPN peers without sites, expiries or grants, no white labeling and read-only AI assistants. Every licensed
+    capability is unlocked by the same licence feature (`white_label`), one licence per server.
+14. **Never switch anything off.** Limits apply only to adding or enabling: a fifth enabled camera (create, or enabling a
+    disabled one) is refused with HTTP 402 `license_required` and a clear message; cameras beyond 4 on a server without
+    a licence (e.g. after the licence was removed) keep running and can be changed. The check runs in the same
+    transaction as the insert/update under a PostgreSQL advisory lock, so two parallel requests cannot both take the
+    fourth slot. The License page and Camera management show "Cameras: N of 4 without a licence".
+15. **Updates included for a period.** The licence key carries an optional claim `updates_until` (YYYY-MM-DD, the last
+    release date the licence includes updates for). `licgen issue` sets it to one year after the issue date by default
+    (`-updates-until DATE|none`); `licgen batch` to one year after the payment (`paid_at` of the worker's queue) unless
+    the worker sends `updates_until`. Keys without the claim (all keys issued before 0.66.0) include updates without a
+    limit. Tokens of an online key may carry `updates_until` at most 400 days after their issue date. The claim is read
+    only from the signed token: an unsigned field in the activation reply is ignored.
+16. **Release date.** Every release binary carries its release date (`internal/release`, set by `deploy/publish.sh`
+    with `-X …/internal/release.date=`; development builds fall back to the commit time Go stamps into the binary).
+    `ctrl32-telemetry version` prints it ("released YYYY-MM-DD"). The update channel publishes no separately signed
+    release metadata, so this date is as trustworthy as the downloaded binary (HTTPS plus the published SHA-256) —
+    an accepted limitation; a signed release manifest would be a later improvement.
+17. **Installing updates.** System → Updates passes the licence's `updates_until` to the server agent; the agent
+    downloads and verifies the binary, reads its release date and refuses it with 402 `updates_ended` when it was
+    released after that date — before anything is replaced. A binary without a release date (before 0.66.0) is
+    accepted only while the updates have not ended. Servers without a licence (or with a licence that is not valid on
+    them) always update. **Updates ending never stops or degrades a running system**: the licence stays valid, every
+    licensed feature keeps working; the License page shows "Updates ended on <date> — the system keeps running; renew
+    the licence to install newer versions".
+18. **No licence on a newer version than it covers.** Installing a licence key (pasted or by activation) whose
+    `updates_until` lies before the release date of the running version is refused with 409 `updates_ended`;
+    otherwise removing the licence, updating as a free server and installing it again would bypass decision 17. A
+    licence keeps working on every version it covers, also after it was removed and installed again.
+19. **Wording.** The product and its documentation no longer say "bought once", "forever", "perpetual" or "one-time"
+    about the licence; a licence without an expiry date is described as "no expiry date". The API keeps the field
+    `perpetual` as an older name of `no_expiry`.

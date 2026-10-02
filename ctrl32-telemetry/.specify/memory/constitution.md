@@ -1,6 +1,8 @@
 <!--
 Sync Impact Report
-- Version change: template → 1.0.0 (first ratification; principles derived from ADR-0001…0014, URS v0.1, README)
+- Version change: 1.0.0 → 1.0.1 (2 Oct 2026, PATCH: Principle VI wording follows the licence model of the ADR-0016
+  amendment — the product is free including up to 4 cameras; the licence of the server covers the extras)
+- Earlier: template → 1.0.0 (first ratification; principles derived from ADR-0001…0014, URS v0.1, README)
 - Principles added: I Record Integrity, II One Binary + PostgreSQL, III Secure by Default, IV API-First Content,
   V Tested End to End, VI Permissive Dependencies Only, VII Plain Web UI, Translated
 - Sections added: Technical Constraints, Development Workflow, Governance
@@ -57,8 +59,9 @@ IQ/OQ and regression safety.
 
 Third-party code is MIT-class (MIT, BSD, ISC, zlib, Apache-2.0, PostgreSQL License); copyleft,
 source-available and proprietary components are excluded unless an ADR records an exception. Dependencies are
-few, pinned and listed in the SBOM. The product is free forever; nothing that requires a paid licence may be
-bundled. Rationale: ADR-0002, ADR-0009.
+few, pinned and listed in the SBOM. The product is free (including up to 4 cameras; the licence of a server
+covers the extras of ADR-0016); no third-party component that requires a paid licence may be bundled. Rationale:
+ADR-0002, ADR-0009, ADR-0016.
 
 ### VII. Plain Web UI, Translated
 
@@ -91,4 +94,4 @@ amended in the same change. Amendments bump the version (MAJOR: a principle remo
 principle or section added; PATCH: wording). Every plan produced by `/speckit-plan` includes a Constitution
 Check against principles I–VII and justifies any deviation in its Complexity Tracking table.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-25 | **Last Amended**: 2026-09-25
+**Version**: 1.0.1 | **Ratified**: 2026-09-25 | **Last Amended**: 2026-10-02

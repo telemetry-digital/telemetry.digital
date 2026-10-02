@@ -449,6 +449,31 @@ type flow struct {
 	stopOnce            sync.Once
 	unsubs              []func() // MQTT in subscriptions
 	lastDropNote        time.Time
+	resMu               sync.Mutex
+	results             []func()      // results of action nodes, run in the flow goroutine (post)
+	resReady            chan struct{} // signals results (capacity 1)
+}
+
+// post hands the result of an action node to the flow goroutine. It never blocks and never drops: the number of
+// results is bounded by the action backlog of each node, which the flow goroutine fills only as fast as it drains.
+func (f *flow) post(fn func()) {
+	f.resMu.Lock()
+	f.results = append(f.results, fn)
+	f.resMu.Unlock()
+	select {
+	case f.resReady <- struct{}{}:
+	default:
+	}
+}
+
+func (f *flow) runResults() {
+	f.resMu.Lock()
+	list := f.results
+	f.results = nil
+	f.resMu.Unlock()
+	for _, fn := range list {
+		fn()
+	}
 }
 
 func (e *Engine) newFlow(org, slug, id, name string, version int, owner string, sp *Spec, temp bool) (*flow, error) {
@@ -458,7 +483,7 @@ func (e *Engine) newFlow(org, slug, id, name string, version int, owner string, 
 	}
 	f := &flow{e: e, org: org, slug: slug, id: id, name: name, version: version, owner: owner, spec: sp, nodes: map[string]*rnode{},
 		outs: map[string][][]string{}, q: make(chan qitem, QueueSize), quit: make(chan struct{}), done: make(chan struct{}), mem: map[string]Value{},
-		temp: temp, ring: e.ringOf(org, slug)}
+		resReady: make(chan struct{}, 1), temp: temp, ring: e.ringOf(org, slug)}
 	f.loc = time.UTC
 	if e.host != nil {
 		if l := e.host.Location(context.Background(), org); l != nil {
@@ -561,6 +586,8 @@ func (f *flow) run(ctx context.Context) {
 			return
 		case it := <-f.q:
 			f.handle(it)
+		case <-f.resReady:
+			f.runResults()
 		case <-t.C:
 			now := time.Now()
 			for len(f.timers) > 0 && !f.timers[0].at.After(now) {

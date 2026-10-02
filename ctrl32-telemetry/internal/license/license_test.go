@@ -51,20 +51,20 @@ func TestSignParseCheck(t *testing.T) {
 			t.Fatalf("accepted %q", bad)
 		}
 	}
-	// perpetual, any domain
+	// no-expiry, any domain
 	tok2, _ := Sign(License{ID: "L-2", Licensee: "B", Features: []string{WhiteLabel}}, priv)
 	l2, _ := Parse(tok2, keys)
 	if !l2.Has(WhiteLabel, "localhost", now.AddDate(50, 0, 0)) {
-		t.Fatal("perpetual unrestricted")
+		t.Fatal("no-expiry unrestricted")
 	}
-	if !l2.Perpetual() || l.Perpetual() {
-		t.Fatal("perpetual flag")
+	if !l2.NoExpiry() || l.NoExpiry() {
+		t.Fatal("no-expiry flag")
 	}
 	if raw, _ := base64.RawURLEncoding.DecodeString(strings.Split(tok2, ".")[1]); strings.Contains(string(raw), "expires") {
-		t.Fatalf("perpetual token carries an expiry: %s", raw)
+		t.Fatalf("no-expiry token carries an expiry: %s", raw)
 	}
 	if st := l2.Check("localhost", now.AddDate(100, 0, 0)); !st.Valid {
-		t.Fatalf("perpetual after 100 years: %+v", st)
+		t.Fatalf("no-expiry after 100 years: %+v", st)
 	}
 	var nilL *License
 	if nilL.Has(WhiteLabel, "x", now) {
@@ -113,7 +113,7 @@ func TestOnlineKeyLimit(t *testing.T) {
 		t.Fatalf("31-day online license refused: %v", err)
 	}
 	for name, l := range map[string]License{
-		"perpetual":  {Issued: now},
+		"no-expiry":  {Issued: now},
 		"32 days":    {Issued: now, Expires: now.AddDate(0, 0, 32)},
 		"a year":     {Issued: now, Expires: now.AddDate(1, 0, 0)},
 		"no issue":   {Expires: now.AddDate(0, 0, 10)},
@@ -123,9 +123,9 @@ func TestOnlineKeyLimit(t *testing.T) {
 			t.Fatalf("%s: online key accepted it (%v)", name, err)
 		}
 	}
-	// the same perpetual token is fine from a key without a limit (the master key)
+	// the same no-expiry token is fine from a key without a limit (the master key)
 	if _, err := ParseLimited(sign(License{Issued: now}), keys, nil); err != nil {
-		t.Fatalf("perpetual from the master key: %v", err)
+		t.Fatalf("no-expiry from the master key: %v", err)
 	}
 }
 
@@ -153,5 +153,48 @@ func TestTrustedOnlineKeyDeclared(t *testing.T) {
 	kf, err := ParseKeyFile([]byte("# x\n#  max-days: 7\nKj2BjPNu72LggB4XsC7ZKL9vxzGDpD0YOmdPRSirCjI=\n"))
 	if err != nil || kf.MaxDays != 7 {
 		t.Fatalf("key file %+v %v", kf, err)
+	}
+}
+
+func TestUpdatesUntil(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	keys := map[string]ed25519.PublicKey{"k": pub}
+	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
+	tok, err := Sign(License{ID: "U-1", Licensee: "Acme", Issued: now, Features: []string{WhiteLabel}, UpdatesUntil: "2027-10-02"}, priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := Parse(tok, keys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d, ok := l.UpdatesEnd(); !ok || d.Format(DateLayout) != "2027-10-02" {
+		t.Fatalf("updates end %v %v", d, ok)
+	}
+	if l.UpdatesEnded(time.Date(2027, 10, 2, 23, 59, 0, 0, time.UTC)) || !l.UpdatesEnded(time.Date(2027, 10, 3, 0, 0, 1, 0, time.UTC)) {
+		t.Fatal("the last day is included, the next one is not")
+	}
+	// updates ending never makes the license invalid: the system keeps running with everything it has
+	if !l.Has(WhiteLabel, "x", now.AddDate(30, 0, 0)) {
+		t.Fatal("the license must stay valid after its updates ended")
+	}
+	// licenses issued before 0.66.0 have no updates_until: unlimited updates
+	old, _ := Sign(License{ID: "U-2", Licensee: "Acme", Issued: now, Features: []string{WhiteLabel}}, priv)
+	lo, _ := Parse(old, keys)
+	if _, ok := lo.UpdatesEnd(); ok || lo.UpdatesEnded(now.AddDate(50, 0, 0)) {
+		t.Fatal("no updates_until = unlimited")
+	}
+	if _, err := Sign(License{ID: "U-3", Licensee: "Acme", Features: []string{WhiteLabel}, UpdatesUntil: "next year"}, priv); err == nil {
+		t.Fatal("bad date signed")
+	}
+	// an online key may include updates for at most OnlineMaxUpdateDays
+	limits := map[string]int{"k": 31}
+	year, _ := Sign(License{ID: "U-4", Licensee: "Acme", Issued: now, Expires: now.AddDate(0, 0, 30), Features: []string{WhiteLabel}, UpdatesUntil: now.AddDate(1, 0, 0).Format(DateLayout)}, priv)
+	if _, err := ParseLimited(year, keys, limits); err != nil {
+		t.Fatalf("a year of updates from the online key: %v", err)
+	}
+	long, _ := Sign(License{ID: "U-5", Licensee: "Acme", Issued: now, Expires: now.AddDate(0, 0, 30), Features: []string{WhiteLabel}, UpdatesUntil: now.AddDate(5, 0, 0).Format(DateLayout)}, priv)
+	if _, err := ParseLimited(long, keys, limits); !errors.Is(err, ErrOnlineTerm) {
+		t.Fatalf("five years of updates from the online key accepted: %v", err)
 	}
 }

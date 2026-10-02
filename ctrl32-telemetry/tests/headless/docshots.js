@@ -71,7 +71,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
       const r = await ev(`(() => { const e = ${pick}; if (!e) return null; e.scrollIntoView({block: 'center'}); const b = e.getBoundingClientRect(); return {x: b.x + scrollX, y: b.y + scrollY, width: b.width, height: b.height}; })()`);
       await sleep(400);
       if (r) { const p = opt.pad || 8; params = { format: "png", captureBeyondViewport: true, clip: { x: Math.max(0, r.x - p), y: Math.max(0, r.y - p), width: r.width + 2 * p, height: r.height + 2 * p, scale: 1 } }; }
-      else problems.push(name + ": no element " + opt.clip);
+      else { problems.push(name + ": no element " + opt.clip.slice(0, 80)); return; } // keep an earlier picture
     }
     const full = opt.full && info && info.h > H + 40;
     if (full) { await ev("scrollTo(0, 0); true"); await send("Emulation.setDeviceMetricsOverride", { width: W, height: Math.min(info.h, opt.maxH || 4200), deviceScaleFactor: mobile ? 2 : 1, mobile }); await sleep(opt.fullWait || 1500); }
@@ -267,6 +267,15 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await page("admin-organizations", "/organizations", { wait: 3000 });
   await page("admin-server", "/server", { wait: 4000 });
   for (const s of ["domain", "backups", "redundancy", "updates", "license"]) await page(`admin-server-${s}`, `/server/${s}`, { wait: 3500 });
+  // the licence (0.66.0): the status card (updates included until, cameras), the activation card, the Updates card
+  await page("licence-status", "/server/license", { wait: 3500, clip: "js:document.querySelector('#kvLic').closest('.card')", pad: -1 });
+  // the activation form only (the documentation shows no prices, so not the buy button above it)
+  await page("licence-activate", "/server/license", { wait: 3500, clip: "#licActForm", pad: 10 });
+  // the rows Installed (with the release date) and Updates (included until) of System → Updates
+  await page("admin-updates", "/server/updates", { wait: 3500, pad: 10, clip: "js:(() => { const k = document.querySelector('#kvUpd'); if (!k || k.children.length < 4) return null; const a = k.children[0], b = k.children[3]; return { scrollIntoView() { k.scrollIntoView({block: 'center'}); }, getBoundingClientRect() { const r = k.getBoundingClientRect(), r1 = a.getBoundingClientRect(), r2 = b.getBoundingClientRect(); return { x: r.x, y: r1.y, width: r.width, height: r2.bottom - r1.y }; } }; })()" });
+  // Camera management on a server without a licence: the page head, the camera count of 4 and the first rows
+  // (run with ONLY=video-manage-limit while no licence is installed; with a licence the count is not shown)
+  await page("video-manage-limit", "/video/manage", { wait: 3500, clip: "js:(() => { const a = document.querySelector('.page-head'), b = document.querySelector('#cams'); if (!a || !b || document.querySelector('#camLimit').hidden) return null; return { scrollIntoView() {}, getBoundingClientRect() { const r1 = a.getBoundingClientRect(), r2 = b.getBoundingClientRect(); return { x: r1.x, y: r1.y, width: r2.right - r1.x, height: r2.bottom - r1.y }; } }; })()", pad: 8 });
 
   // ---- VPN (System → VPN). Needs the server agent; on a PC its VPN simulation ([agent] vpn_simulate) and, for the
   // site, a licence; the demo content comes from deploy/dev/demo/docs.py. The simulation's note and badge are hidden

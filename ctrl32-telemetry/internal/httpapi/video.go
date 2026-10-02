@@ -380,11 +380,26 @@ func (s *Server) createCamera(w http.ResponseWriter, r *http.Request) {
 		c.sealed = sealed
 	}
 	by := PrincipalFrom(r.Context()).Username
-	err := s.pool.QueryRow(r.Context(), `INSERT INTO core.camera (org_id, name, location, url, sub_url, username, password_sealed, transport, record, retention_days, enabled, sort, created_by, source, push_secret_sealed,
+	tx, err := s.pool.Begin(r.Context())
+	if err != nil {
+		writeErr(w, 500, "camera not stored")
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	if c.enabled {
+		if err := s.cameraSlot(r.Context(), tx, ""); err != nil {
+			s.cameraSlotFailed(w, err)
+			return
+		}
+	}
+	err = tx.QueryRow(r.Context(), `INSERT INTO core.camera (org_id, name, location, url, sub_url, username, password_sealed, transport, record, retention_days, enabled, sort, created_by, source, push_secret_sealed,
 		onvif_url, ptz_profile, event_pre_s, event_post_s, event_kinds, camera_group)
 		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) RETURNING id::text`,
 		org, c.name, c.location, c.url, c.subURL, c.username, c.sealed, c.transport, c.record, c.retention, c.enabled, c.sort, by, c.source, c.pushSealed,
 		c.onvifURL, c.ptzProfile, c.eventPre, c.eventPost, c.eventKinds, c.group).Scan(&c.id)
+	if err == nil {
+		err = tx.Commit(r.Context())
+	}
 	if err != nil {
 		writeErr(w, 500, "camera not stored")
 		return
@@ -498,7 +513,7 @@ func (s *Server) updateCamera(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err.Error())
 		return
 	}
-	wasPush := c.source == "push"
+	wasPush, wasEnabled := c.source == "push", c.enabled
 	var pw *string
 	if msg := s.applyCamera(&in, &c, &pw); msg != "" {
 		writeErr(w, 400, msg)
@@ -524,11 +539,26 @@ func (s *Server) updateCamera(w http.ResponseWriter, r *http.Request) {
 	if c.source == "pull" {
 		c.pushSealed = ""
 	}
-	_, err := s.pool.Exec(r.Context(), `UPDATE core.camera SET name = $3, location = $4, url = $5, sub_url = $6, username = $7, password_sealed = $8,
+	tx, err := s.pool.Begin(r.Context())
+	if err != nil {
+		writeErr(w, 500, "update failed")
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+	if c.enabled && !wasEnabled {
+		if err := s.cameraSlot(r.Context(), tx, c.id); err != nil {
+			s.cameraSlotFailed(w, err)
+			return
+		}
+	}
+	_, err = tx.Exec(r.Context(), `UPDATE core.camera SET name = $3, location = $4, url = $5, sub_url = $6, username = $7, password_sealed = $8,
 		transport = $9, record = $10, retention_days = $11, enabled = $12, sort = $13, source = $14, push_secret_sealed = $15,
 		onvif_url = $16, ptz_profile = $17, event_pre_s = $18, event_post_s = $19, event_kinds = $20, camera_group = $21, updated_at = now() WHERE id = $1::uuid AND org_id = $2::uuid`,
 		c.id, org, c.name, c.location, c.url, c.subURL, c.username, c.sealed, c.transport, c.record, c.retention, c.enabled, c.sort, c.source, c.pushSealed,
 		c.onvifURL, c.ptzProfile, c.eventPre, c.eventPost, c.eventKinds, c.group)
+	if err == nil {
+		err = tx.Commit(r.Context())
+	}
 	if err != nil {
 		writeErr(w, 500, "update failed")
 		return
@@ -1153,7 +1183,7 @@ func (s *Server) videoStorage(w http.ResponseWriter, r *http.Request) {
 			cams = append(cams, map[string]any{"id": id, "name": name, "removed": removed, "bytes": bytes, "files": files, "oldest": oldest})
 		}
 	}
-	out := map[string]any{"cameras": cams, "used_bytes": all, "max_bytes": int64(0)}
+	out := map[string]any{"cameras": cams, "used_bytes": all, "max_bytes": int64(0), "camera_limit": s.cameraLimitJSON(r.Context())}
 	if s.video != nil {
 		out["max_bytes"] = s.video.MaxBytes()
 	}

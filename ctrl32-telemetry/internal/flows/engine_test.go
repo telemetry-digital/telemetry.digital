@@ -28,6 +28,7 @@ type fakeHost struct {
 	mqttSubs map[string]func(string, []byte)
 	scenes   []string
 	marks    []string
+	slow     time.Duration // StoreDerived takes this long (a database write)
 }
 
 func (h *fakeHost) CameraMark(_ context.Context, _, cam, label string, seconds int) (int64, error) {
@@ -44,6 +45,10 @@ func (h *fakeHost) DatastreamName(_ context.Context, _, id string) (string, stri
 }
 func (h *fakeHost) DeviceName(_ context.Context, _, id string) string { return "PLC-1" }
 func (h *fakeHost) StoreDerived(_ context.Context, _, _, _ string, v float64, _ time.Time) error {
+	h.mu.Lock()
+	d := h.slow
+	h.mu.Unlock()
+	time.Sleep(d)
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.stored = append(h.stored, v)
@@ -369,6 +374,39 @@ func TestFlowThroughput(t *testing.T) {
 	t.Logf("%d messages through 10 nodes in %v (%.0f msg/s)", n, el, rate)
 	if rate < 1000 {
 		t.Errorf("throughput %.0f msg/s, want ≥ 1 000", rate)
+	}
+}
+
+// An action node slower than the flow (a database write) must not lose messages the flow accepted: the flow waits
+// for the action instead of dropping at the node's backlog (64); only the flow's own queue drops under overload.
+func TestFlowSlowActionKeepsMessages(t *testing.T) {
+	e, f, h, cancel := testEngine(t, `{"nodes":[{"id":"t","type":"ds_value","x":0,"y":0,"settings":{"datastream":"`+dsA+`"}},
+		{"id":"d","type":"derive","x":0,"y":0,"settings":{"datastream":"`+dsA+`","expr":"value"}}],
+		"wires":[{"from":"t","port":0,"to":"d"}]}`)
+	defer cancel()
+	h.mu.Lock()
+	h.slow = 200 * time.Microsecond
+	h.mu.Unlock()
+	const n = 300 // fits the flow's queue, five times the node's backlog
+	for i := 0; i < n; i++ {
+		publish(e, float64(i))
+	}
+	stored := func() int { h.mu.Lock(); defer h.mu.Unlock(); return len(h.stored) }
+	for deadline := time.Now().Add(30 * time.Second); stored() < n && time.Now().Before(deadline); {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := stored(); got != n {
+		t.Fatalf("stored %d of %d (dropped %d)", got, n, f.dropped.Load())
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for i, v := range h.stored {
+		if v != float64(i) {
+			t.Fatalf("order: stored[%d] = %v", i, v)
+		}
+	}
+	if d := f.dropped.Load(); d != 0 {
+		t.Fatalf("dropped %d", d)
 	}
 }
 

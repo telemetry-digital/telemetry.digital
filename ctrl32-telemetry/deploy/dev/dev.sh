@@ -34,7 +34,13 @@ start_bg() { # name, command...
 stop_one() { local f; f=$(pidfile "$1"); if [[ -f $f ]]; then kill "$(cat "$f")" 2>/dev/null || true; rm -f "$f"; fi; }
 wait_http() { for _ in $(seq 60); do curl -s -o /dev/null "$1" && return 0; sleep 0.5; done; echo "no answer from $1 (see $D/server.log)"; return 1; }
 
-build() { log "building"; go build -o "$BIN" ./cmd/ctrl32-telemetry; }
+# Development builds trust the test licence key of tests/keys (like tests/run-all.sh), so the demo can install a
+# development licence (more than 4 cameras, the VPN extras). Release builds never trust it.
+testkey() { grep -v '^#' "tests/keys/$1" | tr -d '[:space:]'; }
+build() {
+  log "building (trusts the test licence keys: development only)"
+  go build -ldflags "-X github.com/telemetry-digital/ctrl32-telemetry/internal/license.extraKey=$(testkey license-test.pub) -X github.com/telemetry-digital/ctrl32-telemetry/internal/license.extraOnlineKey=$(testkey license-online-test.pub)" -o "$BIN" ./cmd/ctrl32-telemetry
+}
 serve() { start_bg server "$BIN" serve -config "$D/config.toml"; wait_http http://127.0.0.1:8080/healthz; log "server on http://127.0.0.1:8080 (log: $D/server.log)"; }
 
 case "${1:-}" in
@@ -83,6 +89,9 @@ case "${1:-}" in
     log "camera simulator: rtsp://127.0.0.1:8554/<label>/<h264|mjpeg>/<W>x<H>[/opus|/g711] (log: $D/camsim.log)"
     ;;
   demo)
+    # a development licence signed with the test key (cameras.py installs it unless a licence is installed)
+    CTRL32_DEV_LICENSE=$(go run ./tools/licgen issue -key tests/keys/license-test.key -licensee "ctrl32 development" -notes "dev.sh demo" 2>/dev/null) || true
+    export CTRL32_DEV_LICENSE
     cd deploy/dev/demo
     python3 cameras.py
     python3 production.py setup

@@ -3,8 +3,10 @@ package main
 // licgen batch — the licensor's half of the online activation (like `visu_lic batch` of the ctrl32 editor). The licence
 // worker (lic.ctrl32.com) hands out 30-day licenses signed with its ONLINE key; once an order is past the 14-day refund
 // period it queues {order, host, licensee, email, features} at GET /telemetry/queue. This command pulls that queue,
-// signs a PERPETUAL license for each entry with the MASTER key (it never leaves this PC), verifies every token, archives
-// it and POSTs them to /telemetry/minted; the server receives its perpetual license on its next (automatic) activation.
+// signs a license WITHOUT EXPIRY for each entry with the MASTER key (it never leaves this PC), verifies every token,
+// archives it and POSTs them to /telemetry/minted; the server receives it on its next (automatic) activation. The license
+// includes updates for one year from the payment (queue field paid_at; without it from today), or until the queue's
+// updates_until when the worker sends one.
 //
 //	licgen batch                                   dry run: lists what would be minted
 //	licgen batch -apply                            sign, archive, push
@@ -41,6 +43,24 @@ type queueItem struct {
 	Email    string   `json:"email"`
 	Features []string `json:"features"`
 	ServerID string   `json:"server_id,omitempty"`
+	// PaidAt (RFC 3339 or YYYY-MM-DD) starts the year of included updates; UpdatesUntil (YYYY-MM-DD) sets its end
+	// directly. Both optional (older workers send neither).
+	PaidAt       string `json:"paid_at,omitempty"`
+	UpdatesUntil string `json:"updates_until,omitempty"`
+}
+
+// queueUpdatesUntil is the last release date a minted license includes updates for.
+func queueUpdatesUntil(q queueItem, now time.Time) string {
+	if _, err := time.Parse(license.DateLayout, q.UpdatesUntil); err == nil {
+		return q.UpdatesUntil
+	}
+	from := now
+	if t, err := time.Parse(time.RFC3339, q.PaidAt); err == nil {
+		from = t.UTC()
+	} else if t, err := time.Parse(license.DateLayout, q.PaidAt); err == nil {
+		from = t
+	}
+	return from.AddDate(UpdateYears, 0, 0).Format(license.DateLayout)
 }
 
 // mintedItem is one entry of POST /telemetry/minted.
@@ -147,7 +167,7 @@ func runBatch(o batchOpts) error {
 		fmt.Fprintln(o.out, "queue empty — nothing to mint")
 		return nil
 	}
-	fmt.Fprintf(o.out, "queue: %d perpetual license(s) to mint\n", len(queue))
+	fmt.Fprintf(o.out, "queue: %d license(s) to mint\n", len(queue))
 	for _, q := range queue {
 		fmt.Fprintf(o.out, "  %s  %s  %s <%s>\n", q.Order, q.Host, q.Licensee, q.Email)
 	}
@@ -163,7 +183,7 @@ func runBatch(o batchOpts) error {
 	pub := priv.Public().(ed25519.PublicKey)
 	for id, k := range license.TrustedKeys() {
 		if k.Equal(pub) && license.KeyLimits()[id] > 0 {
-			return fmt.Errorf("%s is the ONLINE key %s; perpetual licenses are signed with the master key", o.keyFile, id)
+			return fmt.Errorf("%s is the ONLINE key %s; licenses without expiry are signed with the master key", o.keyFile, id)
 		}
 	}
 	keys := map[string]ed25519.PublicKey{"master": pub}
@@ -187,19 +207,19 @@ func runBatch(o batchOpts) error {
 		r := make([]byte, 3)
 		_, _ = rand.Read(r)
 		l := license.License{ID: fmt.Sprintf("L-%s-%x", now.Format("20060102"), r), Licensee: licensee, Email: strings.TrimSpace(q.Email), Issued: now,
-			Features: features, Domains: []string{q.Host}, Notes: "order " + q.Order + "; perpetual (ctrl32 licence)"}
+			Features: features, Domains: []string{q.Host}, UpdatesUntil: queueUpdatesUntil(q, now), Notes: "order " + q.Order + "; ctrl32 licence"}
 		tok, err := license.Sign(l, priv)
 		if err != nil {
 			return fmt.Errorf("%s: %w", q.Order, err)
 		}
 		// verify every token as the server will before anything leaves this PC
 		v, err := license.ParseLimited(tok, keys, nil)
-		if err != nil || !v.Perpetual() || !v.Check(q.Host, now.AddDate(50, 0, 0)).Valid {
+		if err != nil || !v.NoExpiry() || !v.Check(q.Host, now.AddDate(50, 0, 0)).Valid {
 			return fmt.Errorf("%s: the minted token does not verify (%v)", q.Order, err)
 		}
 		minted = append(minted, mintedItem{Order: q.Order, Host: q.Host, License: tok})
 		rows = append(rows, []string{now.Format(time.RFC3339), l.ID, q.Order, q.Host, licensee, l.Email, strings.Join(features, " ")})
-		fmt.Fprintf(o.out, "  minted %s for %s (%s)\n", l.ID, q.Host, q.Order)
+		fmt.Fprintf(o.out, "  minted %s for %s (%s), updates until %s\n", l.ID, q.Host, q.Order, l.UpdatesUntil)
 	}
 	if len(minted) == 0 {
 		return errors.New("nothing valid to mint")

@@ -55,6 +55,7 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/notify"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/opcua"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/push"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/release"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/replication"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/report"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/rules"
@@ -97,7 +98,12 @@ func main() {
 	case "verify-evidence":
 		err = cmdVerifyEvidence(args)
 	case "version":
-		fmt.Println("ctrl32-telemetry", version)
+		// the server agent reads "released YYYY-MM-DD" before installing an update (licence updates_until)
+		if d := release.String(); d != "" {
+			fmt.Println("ctrl32-telemetry", version, "released", d)
+		} else {
+			fmt.Println("ctrl32-telemetry", version)
+		}
 	default:
 		usage()
 		os.Exit(2)

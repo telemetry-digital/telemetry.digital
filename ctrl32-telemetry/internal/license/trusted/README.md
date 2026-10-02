@@ -6,12 +6,12 @@ directory.
 
 | File | Key | Created |
 |---|---|---|
-| `telemetry-digital-2026.pub` | production licensor (MASTER) key of telemetry.digital: perpetual licenses (white labeling, ADR-0016) | 27 Sep 2026 |
+| `telemetry-digital-2026.pub` | production licensor (MASTER) key of telemetry.digital: licenses without expiry (ADR-0016) | 27 Sep 2026 |
 | `telemetry-online-2026.pub` | ONLINE key of the licence worker lic.ctrl32.com: 30-day licenses of the online activation, `# max-days: 31` | 27 Sep 2026 |
 
 A line `# max-days: N` marks an **online** key: tokens it verifies are accepted only with an issue date and an expiry at
-most N days later (a perpetual token of such a key is rejected), so a key held by an online service can never issue a
-perpetual license. The master key has no such line.
+most N days later (a token without expiry from such a key is rejected, and its updates_until may be at most 400 days after its issue
+date), so a key held by an online service can never issue a license without expiry. The master key has no such line.
 
 The private keys never enter this repository (`*.key` is ignored here); the online key's seed lives only in the
 worker secret `TELEMETRY_KEY_SEED` and offline with the licensor. It is kept offline by the licensor and backed

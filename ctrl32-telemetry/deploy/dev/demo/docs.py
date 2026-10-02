@@ -77,10 +77,14 @@ def named(path, name, body):
 
 
 def partitions():
-    """Month partitions of core.observation for the history (the server keeps only the current and next months)."""
+    """Month partitions of core.observation for the history. From 0.66.0 the server creates the month of every reading
+    itself (migration 0046), so this runs only for an older server: with CTRL32_DB_ADMIN_URL, or CTRL32_DB_NAME on the
+    development container."""
     q = "SELECT core.ensure_month_partitions('core.observation', (current_date - interval '14 months')::date, 14)"
-    url = os.environ.get("CTRL32_DB_ADMIN_URL")
-    cmd = ["psql", "-q", url, "-c", q] if url else ["docker", "exec", "ctrl32-pg-dev", "psql", "-q", "-U", "ctrl32", "-d", "ctrl32_dev", "-c", q]
+    url, name = os.environ.get("CTRL32_DB_ADMIN_URL"), os.environ.get("CTRL32_DB_NAME")
+    if not url and not name:
+        print("partitions: created by the server (0.66.0+)"); return
+    cmd = ["psql", "-q", url, "-c", q] if url else ["docker", "exec", "ctrl32-pg-dev", "psql", "-q", "-U", "ctrl32", "-d", name, "-c", q]
     try: subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
     except Exception as x: raise SystemExit(f"cannot create month partitions for the history ({x}); set CTRL32_DB_ADMIN_URL")
 
@@ -378,7 +382,7 @@ def simulators(wait=True):
                  ["tasmota", "-user", m["auto"]["user"], "-pass", m["auto"]["pass"], "-id", "GARAGE"],
                  ["shelly", "-user", m["inbox"]["user"], "-pass", m["inbox"]["pass"], "-id", "OFFICE1"]):
         log = open(os.path.join(root, ".dev", "homesim-" + args[0] + ".log"), "w")
-        procs.append(subprocess.Popen([exe] + args + ["-wait", "86400"], stdout=log, stderr=subprocess.STDOUT))
+        procs.append(subprocess.Popen([exe] + args + ["-addr", os.environ.get("CTRL32_MQTT", "127.0.0.1:1883"), "-wait", "86400"], stdout=log, stderr=subprocess.STDOUT))
     return procs
 
 

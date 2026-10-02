@@ -32,15 +32,27 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   console.log("activation form:", st.form, "| offline key form:", st.key, "| buy link:", st.buy, "|", st.host);
   console.log("status:", st.kv.slice(0, 300));
   if (!st.form || !st.key || !/^https?:\/\//.test(st.buy || "")) problems.push("license page incomplete");
+  // 0.66.0: the camera count (of 4 without a licence, or no limit) and the included updates
+  if (!/Cameras\s*(\d+ of 4 without a licence|\d+ · no limit with the licence)/.test(st.kv)) problems.push("no camera count on the license page");
+  if (/Status\s*valid/.test(st.kv) && !/Updates\s*(Updates included until|Updates ended on|all versions)/.test(st.kv)) problems.push("no updates row for a valid license");
+  const intro = await ev(`document.querySelector('section[data-section=license]').textContent.replace(/\\s+/g,' ')`);
+  if (!/including up to 4 cameras/.test(intro) || !/keeps running/.test(intro)) problems.push("licence model text missing");
+  if (/perpetual|forever|bought once/i.test(intro)) problems.push("old licence wording on the page");
   const s = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true }); fs.writeFileSync(out + "/license-en.png", Buffer.from(s.result.data, "base64"));
+  await send("Page.navigate", { url: base + "/video/manage" }); await sleep(3500);
+  const cl = await ev(`({hidden: document.querySelector('#camLimit').hidden, text: document.querySelector('#camLimit').textContent})`);
+  console.log("camera management:", cl.hidden ? "no limit shown (licensed)" : cl.text);
+  if (!cl.hidden && !/Cameras: \d+ of 4 without a licence/.test(cl.text)) problems.push("camera limit text: " + cl.text);
+  const s3 = await send("Page.captureScreenshot", { format: "png" }); fs.writeFileSync(out + "/license-cameras-en.png", Buffer.from(s3.result.data, "base64"));
   // Slovak must be enabled for the organization; enable it for the probe and restore the setting afterwards
   const langs0 = await ev(`(async()=>{const me=await (await fetch("/api/v1/auth/me",{credentials:"same-origin"})).json(); window.__csrf=me.csrf_token; return await (await fetch("/api/v1/i18n/languages",{credentials:"same-origin"})).json()})()`);
   const putLangs = (enabled, dflt) => ev(`fetch("/api/v1/i18n/languages",{method:"PUT",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRF-Token":window.__csrf},body:JSON.stringify({enabled:${JSON.stringify(enabled)},default:${JSON.stringify(dflt)},reason:"headless license probe"})}).then(r=>r.status)`);
   if (!langs0.enabled.includes("sk")) console.log("enable sk:", await putLangs([...langs0.enabled, "sk"], langs0.default));
   await ev(`localStorage.setItem("ctrl32.locale", "sk")`); await send("Page.navigate", { url: base + "/server/license" }); await sleep(3500);
   const sk = await ev(`document.querySelector('section[data-section=license]').textContent.replace(/\\s+/g,' ')`);
-  console.log("sk:", /Aktivácia číslom objednávky/.test(sk) && /Kúpiť white labeling/.test(sk) ? "translated" : "NOT translated");
+  console.log("sk:", /Aktivácia číslom objednávky/.test(sk) && /Kúpiť licenciu/.test(sk) ? "translated" : "NOT translated");
   if (!/Aktivácia číslom objednávky/.test(sk)) problems.push("not translated to Slovak");
+  if (!/vrátane najviac 4 kamier/.test(sk) || !/Licencia zahŕňa aktualizácie/.test(sk) || !/(zo 4 bez licencie|bez obmedzenia s licenciou)/.test(sk)) problems.push("licence model not translated to Slovak");
   const s2 = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true }); fs.writeFileSync(out + "/license-sk.png", Buffer.from(s2.result.data, "base64"));
   await ev(`localStorage.removeItem("ctrl32.locale")`);
   if (!langs0.enabled.includes("sk")) { await ev(`(async()=>{window.__csrf=(await (await fetch("/api/v1/auth/me",{credentials:"same-origin"})).json()).csrf_token})()`); console.log("restore languages:", await putLangs(langs0.enabled, langs0.default)); }

@@ -1,10 +1,11 @@
 // A stand-in for the licence worker's POST /telemetry/activate (lic.ctrl32.com) for the e2e suites: it signs 30-day
 // licenses with the test ONLINE key (tests/keys/license-online-test.key, trusted by test builds as "build-online",
-// max-days 31) and perpetual ones with the test master key (tests/keys/license-test.key, "build"). Answers are set per
+// max-days 31) and ones without expiry with the test master key (tests/keys/license-test.key, "build"). Answers are set per
 // order through POST /control {order, mode, days}:
 //   starter (default)  200, a license of `days` days (default 30) from the online key
-//   permanent          200, a perpetual license from the master key
-//   rogue              200, a PERPETUAL license from the ONLINE key (the server must refuse it)
+//   permanent          200, a license without expiry from the master key
+//   rogue              200, a license WITHOUT EXPIRY from the ONLINE key (the server must refuse it)
+// An optional updates_until (YYYY-MM-DD) in the control body is written into the signed license.
 //   refunded | claimed-by-editor | host-cap | unknown-order | unpaid   the worker's refusals (410/409/409/404/402)
 //   pending            503 pending (temporary)
 // GET /requests lists the activation requests received.
@@ -50,6 +51,7 @@ createServer((req, res) => {
     const now = Date.now();
     const p = { id: 'E2E-' + m.mode + '-' + now, licensee: 'E2E Online', email: 'e2e@example.com', issued: rfc(now),
                 features: ['white_label'], domains: [j.host], notes: 'order ' + j.order };
+    if (m.updates_until) p.updates_until = m.updates_until;
     if (m.mode === 'permanent') return send(res, 200, { license: token(master, p), kind: 'permanent', expires: null });
     if (m.mode === 'rogue') return send(res, 200, { license: token(online, p), kind: 'permanent', expires: null });
     p.expires = rfc(now + (m.days || 30) * 86400_000);

@@ -5864,7 +5864,7 @@ export class Ctrl32Client {
 
   /** Server status and configuration summary
    *
-   * Version, listeners, database, SMTP, storage paths, connected MQTT clients, update availability.
+   * Version, listeners, database, SMTP, storage paths, connected MQTT clients, update availability (`update`: current, available, release_date of this version, updates_until and updates_ended of the license).
    * 
    * Requires permission `system.admin`. */
   getServer(): Promise<Record<string, unknown>> {
@@ -5993,7 +5993,7 @@ export class Ctrl32Client {
 
   /** Installed product license
    *
-   * Paid features (white labeling) need a license issued by the licensor and verified offline against the public keys built into the binary.
+   * The system is free including up to 4 cameras. A license (one per server) issued by the licensor and verified offline against the public keys built into the binary covers more than 4 cameras, white labeling, changes through AI assistants and the VPN extras, and includes the updates released until `updates_until`; afterwards the system keeps running with everything it has and only newer versions are not installed.
    * 
    * Requires permission `system.admin`. */
   getServerLicense(): Promise<{
@@ -6017,9 +6017,16 @@ export class Ctrl32Client {
     auto_renew?: boolean;
     /** where the ctrl32 licence is sold (license.buy_url) */
     buy_url?: string;
+    cameras?: {
+      /** enabled cameras of all organizations */
+      enabled?: number;
+      /** 4: enabled cameras without a license */
+      free_limit?: number;
+      licensed?: boolean;
+    };
     domains?: string[];
     email?: string;
-    /** absent = perpetual */
+    /** absent = no expiry date */
     expires?: string;
     features?: string[];
     id?: string;
@@ -6028,16 +6035,24 @@ export class Ctrl32Client {
     installed_by?: string;
     issued?: string;
     licensee?: string;
+    /** the license has no expiry date */
+    no_expiry?: boolean;
     /** a 30-day license of the online activation (signed with the online key) */
     online?: boolean;
-    /** the license never expires */
+    /** older name of no_expiry */
     perpetual?: boolean;
     /** why not */
     problem?: string;
+    /** release date of this version (YYYY-MM-DD; empty = unknown) */
+    release_date?: string;
     /** host of http.base_url */
     server_host?: string;
     /** licensor keys in this build */
     trusted_keys?: number;
+    /** the included updates ended; the system keeps running */
+    updates_ended?: boolean;
+    /** YYYY-MM-DD: last release date the license includes updates for; absent = no limit */
+    updates_until?: string;
     /** usable on this server now */
     valid?: boolean;
     white_label?: boolean;
@@ -6063,9 +6078,16 @@ export class Ctrl32Client {
     auto_renew?: boolean;
     /** where the ctrl32 licence is sold (license.buy_url) */
     buy_url?: string;
+    cameras?: {
+      /** enabled cameras of all organizations */
+      enabled?: number;
+      /** 4: enabled cameras without a license */
+      free_limit?: number;
+      licensed?: boolean;
+    };
     domains?: string[];
     email?: string;
-    /** absent = perpetual */
+    /** absent = no expiry date */
     expires?: string;
     features?: string[];
     id?: string;
@@ -6074,16 +6096,24 @@ export class Ctrl32Client {
     installed_by?: string;
     issued?: string;
     licensee?: string;
+    /** the license has no expiry date */
+    no_expiry?: boolean;
     /** a 30-day license of the online activation (signed with the online key) */
     online?: boolean;
-    /** the license never expires */
+    /** older name of no_expiry */
     perpetual?: boolean;
     /** why not */
     problem?: string;
+    /** release date of this version (YYYY-MM-DD; empty = unknown) */
+    release_date?: string;
     /** host of http.base_url */
     server_host?: string;
     /** licensor keys in this build */
     trusted_keys?: number;
+    /** the included updates ended; the system keeps running */
+    updates_ended?: boolean;
+    /** YYYY-MM-DD: last release date the license includes updates for; absent = no limit */
+    updates_until?: string;
     /** usable on this server now */
     valid?: boolean;
     white_label?: boolean;
@@ -6092,6 +6122,8 @@ export class Ctrl32Client {
 
   /** Install a product license
    *
+   * 409 `updates_ended` when the updates the license includes ended before this version was released (renew it, or use it with a version it covers).
+   * 
    * Requires permission `system.admin`. */
   putServerLicense(body: {
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
@@ -6113,7 +6145,7 @@ export class Ctrl32Client {
 
   /** Activate the license with an order number
    *
-   * Sends the order number of the ctrl32 licence (bought on ctrl32.com; it unlocks either the ctrl32 editor or white labeling on one server) and the host name of http.base_url to the licence service (license.activation_url), verifies the license it returns and installs it. Inside the 14-day refund period the license runs 30 days and is renewed daily while it expires within 20 days; afterwards the perpetual license is returned. 409 = refused by the service (refunded, used for the editor, server limit) or a perpetual license is already installed; 502 = the service is not reachable or its answer was not accepted.
+   * Sends the order number of the ctrl32 licence (bought on ctrl32.com; it unlocks either the ctrl32 editor or the licensed features of one server) and the host name of http.base_url to the licence service (license.activation_url), verifies the license it returns and installs it. Inside the 14-day refund period the license runs 30 days and is renewed daily while it expires within 20 days; afterwards the license without expiry date is returned. 409 = refused by the service (refunded, used for the editor, server limit), a license without expiry date is already installed, or the updates of the returned license ended before this version was released (`updates_ended`); 502 = the service is not reachable or its answer was not accepted.
    * 
    * Requires permission `system.admin`. */
   postServerLicenseActivate(body: {
@@ -6159,7 +6191,7 @@ export class Ctrl32Client {
 
   /** Download, verify and install a release
    *
-   * The agent fetches the binary and SHA256SUMS from the update URL, verifies, installs and restarts.
+   * The agent fetches the binary and SHA256SUMS from the update URL, verifies, installs and restarts. With a license whose included updates end (`updates_until`), a binary released later (release date reported by the binary) is refused with 402 `updates_ended` and the running system stays as it is; servers without a license always update.
    * 
    * Requires permission `system.admin`. */
   postServerUpdate(body: {
@@ -6532,6 +6564,8 @@ export class Ctrl32Client {
 
   /** Add a camera
    *
+   * Without a license a server runs up to 4 enabled cameras (all organizations together): a fifth enabled camera is refused with 402 `license_required`; a disabled camera can be added.
+   * 
    * Requires permission `video.manage`. */
   postVideoCameras(body: {
     /** take the camera's sound (AAC, Opus or G.711); spec 020 */
@@ -6608,6 +6642,8 @@ export class Ctrl32Client {
 
   /** Change a camera
    *
+   * Enabling a camera without a license when 4 cameras are enabled is refused with 402 `license_required`; cameras already enabled keep working and can be changed.
+   * 
    * Requires permission `video.manage`. */
   putVideoCamerasId(id: string, body: {
     /** take the camera's sound (AAC, Opus or G.711); spec 020 */
@@ -7119,6 +7155,13 @@ export class Ctrl32Client {
    *
    * Requires permission `video.manage`. */
   getVideoStorage(): Promise<{
+    camera_limit?: {
+      /** enabled cameras of all organizations */
+      enabled?: number;
+      /** 4 */
+      free_limit?: number;
+      licensed?: boolean;
+    };
     cameras?: ({
       bytes?: number;
       files?: number;
@@ -7133,6 +7176,13 @@ export class Ctrl32Client {
     used_bytes?: number;
   }> {
     return this.request<{
+    camera_limit?: {
+      /** enabled cameras of all organizations */
+      enabled?: number;
+      /** 4 */
+      free_limit?: number;
+      licensed?: boolean;
+    };
     cameras?: ({
       bytes?: number;
       files?: number;

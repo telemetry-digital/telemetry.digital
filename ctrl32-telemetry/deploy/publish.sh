@@ -13,10 +13,13 @@ shift 2
 SSH_OPTS=("$@")
 OUT=dist/$VERSION
 mkdir -p "$OUT"
+# release date in the binary: the licence includes updates released until its updates_until date (internal/release)
+RELEASED=${RELEASED:-$(date -u +%Y-%m-%d)}
+LDF="-s -w -X main.version=$VERSION -X github.com/telemetry-digital/ctrl32-telemetry/internal/release.date=$RELEASED"
 for arch in amd64 arm64 arm; do   # arm = ARMv7 (32-bit Raspberry Pi OS / Home Assistant armv7), for the camera relay
-  GOOS=linux GOARCH=$arch GOARM=7 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$OUT/ctrl32-telemetry-linux-$arch" ./cmd/ctrl32-telemetry
+  GOOS=linux GOARCH=$arch GOARM=7 CGO_ENABLED=0 go build -trimpath -ldflags "$LDF" -o "$OUT/ctrl32-telemetry-linux-$arch" ./cmd/ctrl32-telemetry
 done
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$OUT/ctrl32-telemetry-windows-amd64.exe" ./cmd/ctrl32-telemetry
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDF" -o "$OUT/ctrl32-telemetry-windows-amd64.exe" ./cmd/ctrl32-telemetry
 # Authenticode signature when a code-signing certificate is available (CTRL32_SIGN_PFX + CTRL32_SIGN_PASS, Windows SDK signtool).
 if [[ -n "${CTRL32_SIGN_PFX:-}" ]]; then
   SIGNTOOL=${SIGNTOOL:-$(ls "/c/Program Files (x86)/Windows Kits/10/bin/"*/x64/signtool.exe 2>/dev/null | sort -V | tail -1)}

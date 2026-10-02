@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# End-to-end checks for paid white labeling (spec 007): license keys verified offline (signature, server name,
-# perpetual by default), install/remove with audit, white-label settings refused without a license, product name, footer, icon and PWA
+# End-to-end checks for white labeling and the license (spec 007, spec 026): license keys verified offline (signature,
+# server name, no expiry and one year of updates by default, updates_until), install/remove with audit, white-label settings refused without a license, product name, footer, icon and PWA
 # manifest applied with it, and the fixed ctrl32 footer back when the license is removed. The server must trust the
 # test key (tests/run-all.sh builds it with -X …/internal/license.extraKey=<tests/keys/license-test.pub>).
 #   BASE=http://127.0.0.1:8080 USER=admin PASS=admin1234 bash tests/e2e/whitelabel.sh
@@ -48,8 +48,30 @@ req PUT /api/v1/server/license "{\"token\":\"$TOK\"}"; check "reason required" "
 req PUT /api/v1/server/license "{\"token\":\"${TOK:0:30}\\n${TOK:30}\",\"reason\":\"e2e install\"}"; check "license installed (wrapped key)" "$(st)" 200
 check "license valid with white label" "$(jx 'j.valid + " " + j.white_label + " " + j.licensee')" "true true E2E $SUF"
 check "limited license has an expiry" "$(jx 'j.perpetual + " " + (j.expires ? "expires" : "none")')" "false expires"
-req PUT /api/v1/server/license "{\"token\":\"$(issue tests/keys/license-test.key -email e2e@example.com)\",\"reason\":\"e2e perpetual\"}"; check "perpetual license installed (licgen default)" "$(st)" 200
-check "perpetual: valid, no expiry" "$(jx 'j.valid + " " + j.perpetual + " " + (j.expires ? "expires" : "none")')" "true true none"
+req PUT /api/v1/server/license "{\"token\":\"$(issue tests/keys/license-test.key -email e2e@example.com)\",\"reason\":\"e2e perpetual\"}"; check "license without expiry installed (licgen default)" "$(st)" 200
+check "no expiry: valid, no expiry date" "$(jx 'j.valid + " " + j.no_expiry + " " + j.perpetual + " " + (j.expires ? "expires" : "none")')" "true true true none"
+
+echo "== updates included in the license (spec 026)"
+YEAR=$(date -u -d '+1 year' +%F 2>/dev/null || date -u -v+1y +%F)
+check "licgen default: updates for one year, not ended" "$(jx 'j.updates_until + " " + j.updates_ended')" "$YEAR false"
+REL=$(jx 'j.release_date || ""')
+check "cameras on the license page" "$(jx 'j.cameras.free_limit + " " + j.cameras.licensed + " " + (j.cameras.enabled >= 0)')" "4 true true"
+req GET /api/v1/server; check "updates page: until and not ended" "$(jx 'j.update.updates_until + " " + j.update.updates_ended + " " + (j.update.release_date || "")')" "$YEAR false $REL"
+req PUT /api/v1/server/license "{\"token\":\"$(issue tests/keys/license-test.key -updates-until none)\",\"reason\":\"e2e unlimited updates\"}"; check "license without an updates limit (keys issued before 0.66.0)" "$(st) $(jx 'j.updates_until === undefined')" "200 true"
+req GET /api/v1/server; check "no limit: nothing to show" "$(jx 'j.update.updates_until === undefined')" true
+OLDTOK=$(issue tests/keys/license-test.key -updates-until 2020-01-01)
+req PUT /api/v1/server/license "{\"token\":\"$OLDTOK\",\"reason\":\"e2e updates ended\"}"
+if [[ -n "$REL" ]]; then
+  check "a license whose updates ended before this version is refused" "$(st) $(jx j.code)" "409 updates_ended"
+  [[ "$(jx j.error)" == *"renew"* ]] && ok "refusal says to renew" || bad "error $(jx j.error)"
+  req GET /api/v1/server/license; check "the installed license stays" "$(jx 'j.valid + " " + (j.updates_until === undefined)')" "true true"
+else
+  check "unknown release date: installed, updates shown as ended" "$(st) $(jx 'j.updates_ended + " " + j.valid')" "200 true true"
+fi
+req PUT /api/v1/server/license "{\"token\":\"$(issue tests/keys/license-test.key -updates-until 2020-01-01 -days 1)\",\"reason\":\"e2e\"}"
+[[ -z "$REL" || "$(st)" == 409 ]] && ok "also with an expiry date" || bad "status $(st)"
+req POST /api/v1/server/update '{"version":"9.9.9","reason":"e2e"}'; [[ "$(st)" == 503 || "$(st)" == 502 ]] && ok "update without the server agent: a clear error ($(st))" || bad "update status $(st)"
+req PUT /api/v1/server/license "{\"token\":\"$(issue tests/keys/license-test.key -email e2e@example.com)\",\"reason\":\"e2e back\"}"; check "license with updates installed again" "$(st) $(jx j.updates_until)" "200 $YEAR"
 
 echo "== white label active"
 req PUT /api/v1/branding '{"white_label":{"enabled":true,"product_name":"x","footer_links":[{"label":"x","url":"javascript:alert(1)"}]},"reason":"e2e"}'; check "script link refused" "$(st)" 400
@@ -112,17 +134,18 @@ else
   mode "$ORDER" starter 20
   req POST /api/v1/server/license/renew '{"reason":"e2e renew shorter"}'; check "a shorter license is not installed" "$(st) $(jx j.renewed)" "200 false"
   mode "$ORDER" rogue
-  req POST /api/v1/server/license/renew '{"reason":"e2e rogue"}'; check "perpetual license from the ONLINE key refused" "$(st)" 502
+  req POST /api/v1/server/license/renew '{"reason":"e2e rogue"}'; check "license without expiry from the ONLINE key refused" "$(st)" 502
   [[ "$(jx j.error)" == *"online activation key"* ]] && ok "reason: online key limit" || bad "error $(jx j.error)"
   req GET /api/v1/server/license; check "still the 30-day license" "$(jx 'j.online + " " + j.perpetual + " " + j.activation.refused')" "true false false"
   mode "$ORDER" pending
   req POST /api/v1/server/license/renew '{"reason":"e2e pending"}'; check "service busy: temporary error" "$(st)" 502
   req GET /api/v1/server/license; check "temporary error keeps renewing" "$(jx 'j.auto_renew + " " + j.activation.refused + " " + (j.activation.last_error ? "error" : "none")')" "true false error"
   mode "$ORDER" permanent
-  req POST /api/v1/server/license/renew '{"reason":"e2e permanent"}'; check "perpetual license from the master key installed" "$(st) $(jx j.renewed) $(jx j.perpetual)" "200 true true"
+  req POST /api/v1/server/license/renew '{"reason":"e2e permanent"}'; check "license without expiry from the master key installed" "$(st) $(jx j.renewed) $(jx j.perpetual)" "200 true true"
   check "no renewal needed any more" "$(jx 'j.auto_renew + " " + j.activation.kind + " " + (j.activation.last_error ? "error" : "none")')" "false permanent none"
+  check "activation without updates_until: no limit (older licence service)" "$(jx 'j.updates_until === undefined')" true
   mode "$ORDER" starter 30
-  req POST /api/v1/server/license/activate "{\"order\":\"$ORDER\",\"reason\":\"e2e downgrade\"}"; check "a starter does not replace a perpetual license" "$(st)" 409
+  req POST /api/v1/server/license/activate "{\"order\":\"$ORDER\",\"reason\":\"e2e downgrade\"}"; check "a starter does not replace a license without expiry" "$(st)" 409
 
   echo "== refusals"
   req DELETE "/api/v1/server/license?reason=e2e%20refusals"
@@ -136,8 +159,19 @@ else
   [[ "$(jx j.error)" == *"editor"* ]] && ok "used for the editor explained" || bad "error $(jx j.error)"
   req GET /api/v1/server/license; check "nothing installed after refusals" "$(jx 'j.installed + " " + (j.activation ? "stored" : "none")')" "false none"
   mode "$ORDER-2" rogue
-  req POST /api/v1/server/license/activate "{\"order\":\"$ORDER-2\",\"reason\":\"e2e rogue\"}"; check "rogue perpetual online license not installed" "$(st)" 502
+  req POST /api/v1/server/license/activate "{\"order\":\"$ORDER-2\",\"reason\":\"e2e rogue\"}"; check "rogue online license without expiry not installed" "$(st)" 502
   req GET /api/v1/server/license; check "still nothing installed" "$(jx j.installed)" "false"
+
+  echo "== updates_until from the licence service"
+  req DELETE "/api/v1/server/license?reason=e2e%20updates"
+  curl -s -o /dev/null -X POST -H 'Content-Type: application/json' --data "{\"order\":\"$ORDER-4\",\"mode\":\"permanent\",\"updates_until\":\"$YEAR\"}" "$FAKE/control"
+  req POST /api/v1/server/license/activate "{\"order\":\"$ORDER-4\",\"reason\":\"e2e\"}"; check "activated with included updates" "$(st) $(jx 'j.updates_until + " " + j.updates_ended')" "200 $YEAR false"
+  req DELETE "/api/v1/server/license?reason=e2e%20updates"
+  curl -s -o /dev/null -X POST -H 'Content-Type: application/json' --data "{\"order\":\"$ORDER-5\",\"mode\":\"permanent\",\"updates_until\":\"2020-01-01\"}" "$FAKE/control"
+  req POST /api/v1/server/license/activate "{\"order\":\"$ORDER-5\",\"reason\":\"e2e\"}"
+  if [[ -n "$REL" ]]; then check "activation whose updates ended before this version refused" "$(st) $(jx j.code)" "409 updates_ended"
+  else check "activation (release date unknown)" "$(st)" 200; fi
+  req DELETE "/api/v1/server/license?reason=e2e%20updates"
 
   echo "== refusal stops the automatic renewal"
   mode "$ORDER-3" starter 15

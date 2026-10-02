@@ -27,6 +27,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/license"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/release"
 )
 
 const (
@@ -196,9 +197,14 @@ func (s *Server) licenseJSON(ctx context.Context) map[string]any {
 		c := st.lic.Check(s.licenseHost(), time.Now())
 		out["valid"], out["id"], out["licensee"], out["email"] = c.Valid, st.lic.ID, st.lic.Licensee, st.lic.Email
 		out["features"], out["domains"], out["issued"] = st.lic.Features, st.lic.Domains, st.lic.Issued
-		out["perpetual"] = st.lic.Perpetual()
-		if !st.lic.Perpetual() {
+		out["perpetual"] = st.lic.NoExpiry() // older name of no_expiry, kept for API clients
+		out["no_expiry"] = st.lic.NoExpiry()
+		if !st.lic.NoExpiry() {
 			out["expires"] = st.lic.Expires
+		}
+		if st.lic.UpdatesUntil != "" {
+			out["updates_until"] = st.lic.UpdatesUntil
+			out["updates_ended"] = st.lic.UpdatesEnded(time.Now())
 		}
 		if c.Problem != "" {
 			out["problem"] = c.Problem
@@ -207,10 +213,12 @@ func (s *Server) licenseJSON(ctx context.Context) map[string]any {
 		out["online"] = st.lic.Online() // a 30-day license of the online activation, renewed automatically
 	}
 	out["white_label"] = st.lic.Has(license.WhiteLabel, s.licenseHost(), time.Now())
+	out["cameras"] = s.cameraLimitJSON(ctx)
+	out["release_date"] = release.String()
 	out["buy_url"], out["activation_host"] = s.cfg.License.BuyURL, s.activationHost()
 	if a, err := s.loadActivation(ctx); err == nil && a != nil {
 		out["activation"] = a
-		out["auto_renew"] = !a.Refused && st.lic != nil && !st.lic.Perpetual()
+		out["auto_renew"] = !a.Refused && st.lic != nil && !st.lic.NoExpiry()
 	}
 	return out
 }
@@ -241,6 +249,10 @@ func (s *Server) putLicense(w http.ResponseWriter, r *http.Request) {
 	}
 	if c := l.Check(s.licenseHost(), time.Now()); !c.Valid {
 		writeErr(w, 400, "license not usable on this server: "+c.Problem)
+		return
+	}
+	if ok, msg := licenseCoversRelease(l.UpdatesUntil); !ok {
+		writeJSON(w, 409, map[string]string{"error": msg, "code": "updates_ended"})
 		return
 	}
 	p := PrincipalFrom(r.Context())
@@ -281,7 +293,7 @@ func (s *Server) deleteLicense(w http.ResponseWriter, r *http.Request) {
 
 func auditLicense(m map[string]any) map[string]any {
 	out := map[string]any{}
-	for _, k := range []string{"id", "licensee", "features", "domains", "expires", "valid"} {
+	for _, k := range []string{"id", "licensee", "features", "domains", "expires", "updates_until", "valid"} {
 		if v, ok := m[k]; ok {
 			out[k] = v
 		}
