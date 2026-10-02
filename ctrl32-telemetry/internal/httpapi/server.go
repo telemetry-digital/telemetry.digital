@@ -49,47 +49,48 @@ var static embed.FS
 
 // Server holds dependencies for the handlers.
 type Server struct {
-	cfg              *config.Config
-	pool             *pgxpool.Pool
-	br               *broker.Broker
-	iam              *iam.Service
-	rep              *report.Engine
-	ing              *ingest.Ingest
-	con              *console.Manager
-	log              *slog.Logger
-	version          string
-	agent            *agent.Client
-	opc              *opcua.Manager
-	started          time.Time
-	loginLimiter     *limiter
-	provisionLimiter *limiter
-	pairLimiter      *limiter
-	mcpLimiter       *limiter
-	oauthLimiter     *limiter
-	repl             *replication.Primary
-	live             *live.Hub
-	mb               *modbus.Manager
-	esc              *escalate.Engine
-	rules            *rules.Engine
-	push             *push.Manager
-	mux              *http.ServeMux
-	tiles            *tileSource
-	tc               *timecheck.Checker
-	incidents        *incident.Manager
-	flows            *flows.Engine
-	prov             *provision.Service
-	smart            *smarthome.Manager
-	notifier         *notify.Notifier
-	video            *video.Manager
-	lic              licenseCache
-	vpnMu            sync.Mutex // one VPN change at a time (vpn.go)
-	stepUpLimiter    *limiter
+	cfg               *config.Config
+	pool              *pgxpool.Pool
+	br                *broker.Broker
+	iam               *iam.Service
+	rep               *report.Engine
+	ing               *ingest.Ingest
+	con               *console.Manager
+	log               *slog.Logger
+	version           string
+	agent             *agent.Client
+	opc               *opcua.Manager
+	started           time.Time
+	loginLimiter      *limiter
+	provisionLimiter  *limiter
+	pairLimiter       *limiter
+	mcpLimiter        *limiter
+	oauthLimiter      *limiter
+	repl              *replication.Primary
+	live              *live.Hub
+	mb                *modbus.Manager
+	esc               *escalate.Engine
+	rules             *rules.Engine
+	push              *push.Manager
+	mux               *http.ServeMux
+	tiles             *tileSource
+	tc                *timecheck.Checker
+	incidents         *incident.Manager
+	flows             *flows.Engine
+	prov              *provision.Service
+	smart             *smarthome.Manager
+	notifier          *notify.Notifier
+	video             *video.Manager
+	lic               licenseCache
+	vpnMu             sync.Mutex // one VPN change at a time (vpn.go)
+	stepUpLimiter     *limiter
+	credExportLimiter *limiter // exports with camera passwords per user (camera_inventory.go)
 }
 
 // New builds the handler tree.
 func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.Service, rep *report.Engine, ing *ingest.Ingest, con *console.Manager, ag *agent.Client, opc *opcua.Manager, log *slog.Logger, version string, hub *live.Hub, mbm *modbus.Manager, esc *escalate.Engine, eng *rules.Engine, pm *push.Manager, tc *timecheck.Checker, inc *incident.Manager, rp *replication.Primary, fl *flows.Engine, nt *notify.Notifier, sh *smarthome.Manager, vm *video.Manager) http.Handler {
 	s := &Server{cfg: cfg, pool: pool, br: br, iam: iamSvc, rep: rep, ing: ing, con: con, agent: ag, opc: opc, started: time.Now(), log: log.With("component", "http"), version: version, live: hub, mb: mbm, esc: esc, rules: eng, push: pm, tc: tc, incidents: inc, repl: rp, flows: fl, notifier: nt, smart: sh, video: vm,
-		loginLimiter: newLimiter(10, 10), provisionLimiter: newLimiter(20, 10), pairLimiter: newLimiter(5, 5), mcpLimiter: newLimiter(300, 60), oauthLimiter: newLimiter(30, 20), stepUpLimiter: newLimiter(5, 5)}
+		loginLimiter: newLimiter(10, 10), provisionLimiter: newLimiter(20, 10), pairLimiter: newLimiter(5, 5), mcpLimiter: newLimiter(300, 60), oauthLimiter: newLimiter(30, 20), stepUpLimiter: newLimiter(5, 5), credExportLimiter: newLimiter(1, 3)}
 	if eng != nil {
 		eng.Commander = s
 		eng.HostAllowed = func(ctx context.Context, org, host string) bool { return flowRefs{s, ctx, org}.HostAllowed(host) }
@@ -297,6 +298,11 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("GET /api/v1/video/cameras/{id}/playback", s.require("video.playback", s.cameraPlayback))
 	mux.Handle("GET /api/v1/video/cameras/{id}/export", s.require("video.playback", s.cameraExport))
 	mux.Handle("GET /api/v1/video/storage", s.require("video.manage", s.videoStorage))
+	// camera inventory: export and import of all camera settings (camera_inventory.go, spec 028)
+	mux.Handle("GET /api/v1/video/inventory", s.require("video.manage", s.cameraInventory))
+	mux.Handle("POST /api/v1/video/inventory/credentials", s.require("video.credentials_export", s.cameraInventoryCredentials))
+	mux.Handle("GET /api/v1/video/inventory/template", s.require("video.manage", s.cameraInventoryTemplate))
+	mux.Handle("POST /api/v1/video/inventory/import", s.require("video.manage", s.cameraInventoryImport))
 	mux.Handle("POST /api/v1/video/discover", s.require("video.manage", s.videoDiscover))
 	mux.Handle("POST /api/v1/video/onvif/profiles", s.require("video.manage", s.onvifProfiles))
 	mux.Handle("GET /api/v1/video/events", s.require("video.playback", s.cameraEvents))

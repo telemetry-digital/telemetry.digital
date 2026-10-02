@@ -66,6 +66,7 @@ type cameraIn struct {
 	SnapshotURL       *string          `json:"snapshot_url"`
 	Audio             *bool            `json:"audio"`        // take the camera's sound (spec 020)
 	AudioRecord       *bool            `json:"audio_record"` // and record it (false: live only, saves disk space)
+	Note              *string          `json:"note"`         // free note (spec 028)
 	Reason            string           `json:"reason"`
 }
 
@@ -82,6 +83,7 @@ type cameraRow struct {
 	zones                                                                []byte
 	snapshotURL                                                          string
 	audio, audioRecord                                                   bool // sound, spec 020
+	note                                                                 string
 	retention, sort                                                      int
 	enabled                                                              bool
 }
@@ -89,10 +91,10 @@ type cameraRow struct {
 func (s *Server) cameraRow(ctx context.Context, org, id string) (cameraRow, bool) {
 	var c cameraRow
 	err := s.pool.QueryRow(ctx, `SELECT id::text, name, location, url, sub_url, username, password_sealed, transport, record, retention_days, sort, enabled, source, push_secret_sealed,
-		onvif_url, ptz_profile, event_pre_s, event_post_s, event_kinds, camera_group, privacy_masks, motion_detect, motion_sensitivity, motion_zones, snapshot_url, audio, audio_record
+		onvif_url, ptz_profile, event_pre_s, event_post_s, event_kinds, camera_group, privacy_masks, motion_detect, motion_sensitivity, motion_zones, snapshot_url, audio, audio_record, note
 		FROM core.camera WHERE id = $1::uuid AND org_id = $2::uuid AND removed_at IS NULL`, id, org).
 		Scan(&c.id, &c.name, &c.location, &c.url, &c.subURL, &c.username, &c.sealed, &c.transport, &c.record, &c.retention, &c.sort, &c.enabled, &c.source, &c.pushSealed,
-			&c.onvifURL, &c.ptzProfile, &c.eventPre, &c.eventPost, &c.eventKinds, &c.group, &c.masks, &c.motion, &c.motionSens, &c.zones, &c.snapshotURL, &c.audio, &c.audioRecord)
+			&c.onvifURL, &c.ptzProfile, &c.eventPre, &c.eventPost, &c.eventKinds, &c.group, &c.masks, &c.motion, &c.motionSens, &c.zones, &c.snapshotURL, &c.audio, &c.audioRecord, &c.note)
 	if err != nil {
 		return c, false
 	}
@@ -112,7 +114,7 @@ func (s *Server) cameraJSON(r *http.Request, c cameraRow) map[string]any {
 	if p := PrincipalFrom(r.Context()); p.Has("video.manage") {
 		out["snapshot_url"] = c.snapshotURL
 		out["url"], out["sub_url"], out["username"], out["transport"], out["has_password"] = c.url, c.subURL, c.username, c.transport, c.sealed != ""
-		out["onvif_url"], out["ptz_profile"] = c.onvifURL, c.ptzProfile
+		out["onvif_url"], out["ptz_profile"], out["note"] = c.onvifURL, c.ptzProfile, c.note
 		if c.source == "push" {
 			base := ""
 			if s.video != nil {
@@ -215,6 +217,12 @@ func (s *Server) applyCamera(in *cameraIn, c *cameraRow, pw **string) string {
 			return msg
 		}
 		c.masks, _ = json.Marshal(m)
+	}
+	if in.Note != nil {
+		c.note = strings.TrimSpace(*in.Note)
+		if len([]rune(c.note)) > 500 {
+			return "note: at most 500 characters"
+		}
 	}
 	if in.Group != nil {
 		c.group = strings.TrimSpace(*in.Group)
@@ -487,7 +495,7 @@ func cameraAudit(c cameraRow) map[string]any {
 	return map[string]any{"name": c.name, "location": c.location, "source": c.source, "url": c.url, "sub_url": c.subURL, "username": c.username,
 		"password_set": c.sealed != "", "transport": c.transport, "record": c.record, "retention_days": c.retention, "enabled": c.enabled,
 		"onvif_url": c.onvifURL, "ptz_profile": c.ptzProfile, "event_pre_s": c.eventPre, "event_post_s": c.eventPost, "event_kinds": c.eventKinds, "group": c.group, "privacy_masks": json.RawMessage(orEmpty(c.masks)),
-		"motion_detect": c.motion, "motion_sensitivity": c.motionSens, "motion_zones": json.RawMessage(orEmpty(c.zones)), "snapshot_url": c.snapshotURL, "audio": c.audio, "audio_record": c.audioRecord}
+		"motion_detect": c.motion, "motion_sensitivity": c.motionSens, "motion_zones": json.RawMessage(orEmpty(c.zones)), "snapshot_url": c.snapshotURL, "audio": c.audio, "audio_record": c.audioRecord, "note": c.note}
 }
 
 func orEmpty(b []byte) []byte {

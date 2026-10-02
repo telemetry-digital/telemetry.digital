@@ -34,6 +34,15 @@
 
   <section data-section="manage">
     <div class="row cam-limit" id="camLimit" hidden style="margin-bottom:10px"></div>
+    <div class="row inv-bar" id="invBar" style="margin-bottom:10px;gap:6px;flex-wrap:wrap">
+      <span class="muted" title="Every setting of the cameras in one file, to keep with the documentation of the building">Camera list:</span>
+      <a class="btn small" id="invXlsx" href="/api/v1/video/inventory?format=xlsx" download>Excel</a>
+      <a class="btn small" id="invCsv" href="/api/v1/video/inventory?format=csv" download>CSV</a>
+      <a class="btn small" id="invPdf" href="/api/v1/video/inventory?format=pdf" download>PDF</a>
+      <button class="btn small" type="button" id="invCred" hidden>With passwords…</button>
+      <span class="grow"></span>
+      <button class="btn small" type="button" id="invImport">Import…</button>
+    </div>
     <div class="table-wrap"><table id="cams"><thead><tr><th>Name</th><th>Location</th><th>Stream</th><th>State</th><th>Recording</th><th class="num">Stored</th><th></th></tr></thead><tbody></tbody></table></div>
     <div class="card" style="margin-top:12px"><h2 style="margin-top:0">Storage</h2><div id="storage" class="muted"></div></div>
   </section>
@@ -137,6 +146,7 @@
       <div class="muted" style="font-size:13px">Drag over the picture to cover an area (a neighbour's window, a cash desk, a public street). The areas are covered wherever the picture is shown; the recording stays complete and only people with the permission to see unmasked pictures can see or export it. Masks set in the camera itself keep the areas out of the recording.</div>
       <div class="mask-edit" id="maskBox"><div class="mask-draw" id="maskDraw"></div></div>
     </div>
+    <label>Note (optional: mounting, cabling, recorder channel) <input name="note" maxlength="500"></label>
     <label class="check"><input type="checkbox" name="enabled" checked> Enabled</label>
     <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
     <div class="err" id="camErr"></div>
@@ -156,6 +166,37 @@ sudo bash install-relay.sh --config relay.toml</pre>
     <p class="muted" style="margin:6px 0">The installer tests the connection to the server, the camera and the secret, then runs the relay as a service that starts with the computer. Delete the copied file afterwards.</p>
     <div class="actions"><button class="btn primary" type="button" id="dlCfg">Download relay.toml</button><button class="btn" type="button" id="copyCfg">Copy</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
   </div></dialog>
+
+  <dialog id="credDlg" style="max-width:min(560px,96vw)"><form class="form" id="credForm">
+    <h2 style="margin-top:0">Camera list with passwords</h2>
+    <p class="bad" style="margin:0"><b>CONFIDENTIAL.</b> The file contains the passwords of the cameras and the secrets of the relays: anyone who has it can watch and control the cameras. Keep it like the keys to the building and delete copies you no longer need.</p>
+    <p class="muted" style="margin:6px 0;font-size:13px">The export is recorded in the audit trail with your reason. A PDF with passwords is not kept on the server.</p>
+    <label>Format <select name="format"><option value="xlsx">Excel</option><option value="csv">CSV</option><option value="pdf">PDF</option></select></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200" placeholder="e.g. handover to the customer"></label>
+    <div class="row2">
+      <label>Your password <input name="password" type="password" required autocomplete="current-password"></label>
+      <label class="mfa-row">Authenticator code <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10"></label>
+    </div>
+    <div class="err" id="credErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Export</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form></dialog>
+
+  <dialog id="impDlg" style="max-width:min(1100px,96vw);width:min(1100px,96vw)"><form class="form" id="impForm" style="max-width:none">
+    <h2 style="margin-top:0">Import cameras</h2>
+    <p class="muted" style="margin:0;font-size:13px">An Excel or CSV file with the columns of the camera list — an export of this or another server, or the template filled in. Nothing changes until you check the preview and confirm it. Cameras are never deleted.</p>
+    <div class="row" style="gap:6px;align-items:center"><span class="muted" style="font-size:13px">Template:</span><a class="btn small" href="/api/v1/video/inventory/template?format=xlsx" download>Excel</a><a class="btn small" href="/api/v1/video/inventory/template?format=csv" download>CSV</a></div>
+    <label>File <input type="file" name="file" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></label>
+    <label class="inline"><input type="checkbox" name="update" checked><span>Update existing cameras (by id, else by name)</span></label>
+    <label class="inline"><input type="checkbox" name="create" checked><span>Add missing cameras</span></label>
+    <div class="row"><button class="btn" type="button" id="impCheck">Check the file</button><span class="muted" id="impInfo" style="font-size:13px"></span></div>
+    <div id="impPreview" hidden>
+      <div class="row" id="impCounts" style="gap:6px;flex-wrap:wrap"></div>
+      <div class="table-wrap" style="max-height:46vh;overflow:auto"><table id="impRows"><thead><tr><th class="num">Row in file</th><th>Result</th><th>Camera</th><th>IP address</th><th>Changes and messages</th></tr></thead><tbody></tbody></table></div>
+      <label>Reason (audit trail) <input name="reason" maxlength="200" placeholder="e.g. cameras restored after the server was replaced"></label>
+    </div>
+    <div class="err" id="impErr"></div>
+    <div class="actions"><button class="btn primary" type="submit" id="impApply" disabled>Import</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form></dialog>
 
   <dialog id="wallDlg" style="max-width:min(1100px,96vw)"><form class="form" id="wallForm">
     <h2 style="margin-top:0">Video wall</h2>
@@ -358,7 +399,7 @@ function camDialog(c) {
   $('#camTitle').textContent = t(c ? 'Edit camera' : 'Add camera');
   $('#found').innerHTML = ''; $('#onvifOut').textContent = ''; $('#preset').value = ''; $('#presetIP').value = ''; $('#presetTip').hidden = true;
   for (const b of document.querySelectorAll('#kinds [data-kind]')) b.checked = (c ? c.event_kinds || [] : ['motion', 'tamper', 'line', 'intrusion', 'input', 'mark']).includes(b.dataset.kind);
-  if (c) { for (const k of ['source', 'name', 'location', 'group', 'url', 'onvif_url', 'event_pre_s', 'event_post_s', 'sub_url', 'username', 'transport', 'record', 'retention_days', 'sort']) f[k].value = c[k] ?? ''; f.enabled.checked = c.enabled; f.audio.checked = !!c.audio; f.audio_record.value = c.audio_record === false ? '0' : '1'; f.motion_detect.checked = !!c.motion_detect; f.motion_sensitivity.value = c.motion_sensitivity || 50; f.snapshot_url.value = c.snapshot_url || ''; f.password.placeholder = t(c.has_password ? 'unchanged' : 'none'); }
+  if (c) { for (const k of ['source', 'name', 'location', 'group', 'url', 'onvif_url', 'event_pre_s', 'event_post_s', 'sub_url', 'username', 'transport', 'record', 'retention_days', 'sort', 'note']) f[k].value = c[k] ?? ''; f.enabled.checked = c.enabled; f.audio.checked = !!c.audio; f.audio_record.value = c.audio_record === false ? '0' : '1'; f.motion_detect.checked = !!c.motion_detect; f.motion_sensitivity.value = c.motion_sensitivity || 50; f.snapshot_url.value = c.snapshot_url || ''; f.password.placeholder = t(c.has_password ? 'unchanged' : 'none'); }
   else f.password.placeholder = '';
   sourceMode(); recordMode(); motionMode(); audioMode();
   $('#groupList').innerHTML = [...new Set(CAMS.map(x => x.group).filter(Boolean))].sort().map(g => `<option value="${esc(g)}">`).join('');
@@ -378,13 +419,72 @@ $('#camForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $(
   const body = {source: f.source.value, name: f.name.value, location: f.location.value, group: f.group.value, url: f.url.value, sub_url: f.sub_url.value, username: f.username.value, transport: f.transport.value,
     record: f.record.value, retention_days: +f.retention_days.value, sort: +f.sort.value, enabled: f.enabled.checked, reason: f.reason.value,
     onvif_url: f.onvif_url.value, event_pre_s: +f.event_pre_s.value, event_post_s: +f.event_post_s.value, event_kinds: [...document.querySelectorAll('#kinds [data-kind]:checked')].map(b => b.dataset.kind),
-    audio: f.audio.checked, audio_record: f.audio_record.value === '1', motion_detect: f.motion_detect.checked, motion_sensitivity: +f.motion_sensitivity.value, snapshot_url: f.snapshot_url.value.trim()};
+    audio: f.audio.checked, audio_record: f.audio_record.value === '1', motion_detect: f.motion_detect.checked, motion_sensitivity: +f.motion_sensitivity.value, snapshot_url: f.snapshot_url.value.trim(), note: f.note.value.trim()};
   if (EDIT) { body.privacy_masks = MASKS; body.motion_zones = ZONES; }
   if (f.password.value) body.password = f.password.value;
   // a camera behind a relay keeps only its ONVIF address (reached through the relay) and account
   if (body.source === 'push') { delete body.url; delete body.sub_url; delete body.transport; body.snapshot_url = ''; }
   try { const r = EDIT ? await api('PUT', '/api/v1/video/cameras/' + EDIT.id, body) : await api('POST', '/api/v1/video/cameras', body);
     $('#camDlg').close(); ctrl32.toast(t('camera saved'), 'ok'); load(); if (r.push_secret) showSecret(r); } catch (x) { $('#camErr').textContent = x.message; } };
+
+// ---- camera list: export (with passwords after confirming the password) and import with a preview (spec 028)
+function saveBlob(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
+function fileName(r, def) { const m = /filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') || ''); return m ? m[1] : def; }
+$('#invCred').onclick = () => { const f = $('#credForm'); f.reset(); $('#credErr').textContent = ''; for (const el of document.querySelectorAll('#credDlg .mfa-row')) el.hidden = !(ME && ME.mfa_enabled); $('#credDlg').showModal(); };
+$('#credForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#credErr').textContent = '';
+  try {
+    const r = await fetch('/api/v1/video/inventory/credentials', {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': ctrl32.csrf || ''},
+      body: JSON.stringify({format: f.format.value, reason: f.reason.value, password: f.password.value, code: f.code.value.trim()})});
+    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || ('HTTP ' + r.status)); }
+    saveBlob(await r.blob(), fileName(r, 'CONFIDENTIAL_cameras.' + f.format.value));
+    f.password.value = ''; $('#credDlg').close(); ctrl32.toast(t('Exported; the export is recorded in the audit trail.'), 'ok');
+  } catch (x) { $('#credErr').textContent = x.message; f.password.value = ''; }
+};
+const ACTIONS = {create: ['new', 'ok'], update: ['update', 'warn'], restore: ['restore', 'ok'], unchanged: ['unchanged', ''], skip: ['skipped', ''], error: ['error', 'bad']};
+let IMP = null;
+function impBody(apply) {
+  const f = $('#impForm'), fd = new FormData();
+  fd.append('file', f.file.files[0]); fd.append('update', f.update.checked ? '1' : '0'); fd.append('create', f.create.checked ? '1' : '0');
+  if (apply) { fd.append('apply', '1'); fd.append('reason', f.reason.value); }
+  return fd;
+}
+async function impSend(apply) {
+  const r = await fetch('/api/v1/video/inventory/import', {method: 'POST', credentials: 'same-origin', headers: {'X-CSRF-Token': ctrl32.csrf || ''}, body: impBody(apply)});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(j.error || ('HTTP ' + r.status)); e.plan = j.plan; throw e; }
+  return j;
+}
+function impRender(p) {
+  IMP = p; $('#impPreview').hidden = false;
+  const c = p.counts || {};
+  const badge = (k, n) => n ? `<span class="badge ${ACTIONS[k][1]}">${esc(t(ACTIONS[k][0]))}: ${n}</span>` : '';
+  $('#impCounts').innerHTML = ['create', 'update', 'restore', 'unchanged', 'skip', 'error'].map(k => badge(k, c[k])).join(' ')
+    + (c.disabled_by_licence ? ` <span class="badge warn">${esc(t('imported disabled (licence)'))}: ${c.disabled_by_licence}</span>` : '')
+    + ` <span class="muted" style="font-size:13px">${esc(t('Enabled cameras of the server after the import'))}: ${p.enabled_after}${p.licensed ? '' : ' ' + esc(t('of 4 without a licence'))}${p.passwords ? ' · ' + esc(t('passwords set')) + ': ' + p.passwords : ''}${p.ignored && p.ignored.length ? ' · ' + esc(t('ignored columns')) + ': ' + esc(p.ignored.join(', ')) : ''}</span>`;
+  $('#impRows tbody').innerHTML = p.rows.map(x => `<tr><td class="num">${x.line}</td><td><span class="badge ${ACTIONS[x.action][1]}">${esc(t(ACTIONS[x.action][0]))}</span>${x.action !== 'error' && x.action !== 'skip' && !x.enabled ? ` <span class="badge">${esc(t('disabled'))}</span>` : ''}</td>
+    <td class="notranslate">${esc(x.name || '')}</td><td class="notranslate">${esc(x.ip || '')}</td>
+    <td style="font-size:13px">${(x.changes || []).length ? `<span class="muted">${esc(t('changes'))}:</span> <span class="notranslate">${esc(x.changes.join(', '))}</span>` : ''}${(x.errors || []).map(m => `<div class="bad">${esc(m)}</div>`).join('')}${(x.warnings || []).map(m => `<div class="muted">${esc(m)}</div>`).join('')}</td></tr>`).join('');
+  const todo = (c.create || 0) + (c.update || 0) + (c.restore || 0);
+  $('#impApply').disabled = !!c.error || !todo || p.applied;
+  $('#impApply').textContent = c.error ? t('Correct the rows with errors first') : `${t('Import')} (${todo})`;
+  $('#impForm').reason.required = !!todo;
+}
+$('#invImport').onclick = () => { const f = $('#impForm'); f.reset(); IMP = null; $('#impPreview').hidden = true; $('#impErr').textContent = ''; $('#impInfo').textContent = ''; $('#impApply').disabled = true; $('#impApply').textContent = t('Import'); $('#impDlg').showModal(); };
+$('#impForm').file.onchange = () => { $('#impPreview').hidden = true; $('#impApply').disabled = true; if ($('#impForm').file.files.length) $('#impCheck').click(); };
+$('#impForm').update.onchange = $('#impForm').create.onchange = () => { if (IMP) $('#impCheck').click(); };
+$('#impCheck').onclick = async () => {
+  const f = $('#impForm'); $('#impErr').textContent = '';
+  if (!f.file.files.length) { $('#impErr').textContent = t('Choose the file first.'); return; }
+  $('#impInfo').textContent = t('Checking…');
+  try { const p = await impSend(false); $('#impInfo').textContent = `${p.format.toUpperCase()}${p.sheet ? ' · ' + p.sheet : ''} · ${p.rows.length} ${t('rows')}`; impRender(p); }
+  catch (x) { $('#impInfo').textContent = ''; $('#impErr').textContent = x.message; }
+};
+$('#impForm').onsubmit = async e => { e.preventDefault(); $('#impErr').textContent = '';
+  if (!IMP) { $('#impCheck').click(); return; }
+  try { const p = await impSend(true); impRender(p); $('#impApply').disabled = true;
+    const c = p.counts; ctrl32.toast(`${t('Imported')}: ${t('new')} ${c.create || 0}, ${t('update')} ${c.update || 0}, ${t('restore')} ${c.restore || 0}`, 'ok'); load(); }
+  catch (x) { if (x.plan) impRender(x.plan); $('#impErr').textContent = x.message; }
+};
 
 // ---- wall editor
 let WEDIT = null, WSCREENS = [];
@@ -510,6 +610,7 @@ ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(({me}) => {
   $('#settingsTab').hidden = !can('video.manage');
   $('#evidenceTab').hidden = !can('video.playback');
   $('#addCam').hidden = !(can('video.manage') && SECTION === 'manage');
+  $('#invCred').hidden = !can('video.credentials_export');
   $('#addWall').hidden = !(can('video.manage') && SECTION === 'walls');
   $('#addCam').onclick = () => camDialog(null);
   $('#addWall').onclick = () => wallDialog(null);

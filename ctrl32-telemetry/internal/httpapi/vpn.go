@@ -380,8 +380,8 @@ func (s *Server) vpnChange(w http.ResponseWriter, r *http.Request, fn func(ctx c
 
 // ---- step-up --------------------------------------------------------------------------------------------------------
 
-// stepUp re-checks the caller's password (and the authenticator code with two-factor sign-in) before a private key is
-// shown. Failed attempts are limited per user.
+// stepUp re-checks the caller's password (and the authenticator code with two-factor sign-in) before a private key or
+// camera passwords (camera_inventory.go) are shown. Failed attempts are limited per user.
 func (s *Server) stepUp(w http.ResponseWriter, r *http.Request, password, code string) bool {
 	p := PrincipalFrom(r.Context())
 	if p == nil {
@@ -393,11 +393,11 @@ func (s *Server) stepUp(w http.ResponseWriter, r *http.Request, password, code s
 		return false
 	}
 	if password == "" {
-		writeJSON(w, 403, map[string]string{"error": "confirm with your password (and the code from your authenticator app) to show a configuration", "code": "step_up_required"})
+		writeJSON(w, 403, map[string]string{"error": "confirm with your password (and the code from your authenticator app)", "code": "step_up_required"})
 		return false
 	}
 	if !s.iam.ReauthPassword(r.Context(), p.UserID, password) || (p.MFAEnabled && !s.iam.ReauthTOTP(r.Context(), p.UserID, strings.TrimSpace(code))) {
-		s.log.Warn("vpn step-up failed", "security", true, "user", p.Username, "remote", clientIP(r))
+		s.log.Warn("step-up failed", "security", true, "user", p.Username, "path", r.URL.Path, "remote", clientIP(r))
 		s.stepUpLimiter.allow(p.UserID) // failures are limited (5 a minute per user)
 		msg := "wrong password"
 		if p.MFAEnabled {

@@ -95,6 +95,8 @@ export type Camera = {
   motion_sensitivity?: number;
   motion_zones?: number[][][];
   name?: string;
+  /** video.manage only */
+  note?: string;
   privacy_masks?: number[][][];
   push?: {
     /** video.push_listen configured */
@@ -6589,6 +6591,8 @@ export class Ctrl32Client {
     motion_zones?: number[][][];
     /** ≤ 80 */
     name: string;
+    /** free note ≤ 500 (mounting, cabling, recorder channel); spec 028 */
+    note?: string;
     /** http://camera/onvif/device_service: events and PTZ (spec 013); for source push the camera's address in its own network, reached through the relay (onvif = … in relay.toml) */
     onvif_url?: string;
     /** stored encrypted; omit to keep, "" to clear */
@@ -6667,6 +6671,8 @@ export class Ctrl32Client {
     motion_zones?: number[][][];
     /** ≤ 80 */
     name?: string;
+    /** free note ≤ 500 (mounting, cabling, recorder channel); spec 028 */
+    note?: string;
     /** http://camera/onvif/device_service: events and PTZ (spec 013); for source push the camera's address in its own network, reached through the relay (onvif = … in relay.toml) */
     onvif_url?: string;
     /** stored encrypted; omit to keep, "" to clear */
@@ -7022,6 +7028,106 @@ export class Ctrl32Client {
     /** true on success */
     ok?: boolean;
   }>('DELETE', `/api/v1/video/holds/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Camera inventory (export)
+   *
+   * Every setting of the cameras of the organization the caller may see, without passwords (spec 028): Excel (sheets Cameras and Read me), CSV (UTF-8 with BOM, semicolons) or PDF (a card per camera, stored as a report). The file imports back unchanged. Audited as export.read.
+   * 
+   * Requires permission `video.manage`. */
+  getVideoInventory(query?: { format?: string; /** xlsx (default), csv or pdf */ }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/video/inventory`, query, undefined, true);
+  }
+
+  /** Camera inventory with passwords
+   *
+   * As the export, with the camera passwords and relay secrets; the file is marked CONFIDENTIAL and a PDF is not stored. Needs video.manage too, the user's password (and authenticator code with two-factor sign-in) again (403 `step_up_required` / `step_up_failed`), a reason; at most 3 at once, then one a minute (429). Refused for API tokens and AI assistants. Audited as video.credentials_export.
+   * 
+   * Requires permission `video.credentials_export`. */
+  postVideoInventoryCredentials(body: {
+    /** authenticator code (two-factor sign-in) */
+    code?: string;
+    format?: "xlsx" | "csv" | "pdf";
+    /** the user's password */
+    password: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<Response> {
+    return this.request<Response>('POST', `/api/v1/video/inventory/credentials`, undefined, body, true);
+  }
+
+  /** Import cameras
+   *
+   * multipart/form-data. An inventory (Excel or CSV, at most 2 MB and 1000 rows) is checked row by row: matched by id, else by name (and ip); create, update, restore (a removed camera by its id), unchanged, skip or error with the messages. Without apply the plan is returned and nothing changes; with apply=1 and a reason it is stored in one transaction, all rows or none (422 `rows_invalid` with the plan when a row has an error). Never deletes. An empty cell keeps the value, an empty password keeps the stored one; make and ip fill in the addresses; a different ip moves the addresses. Without a license the cameras beyond 4 enabled are imported disabled. Audited: video.import and camera.create/update/restore per camera.
+   * 
+   * Requires permission `video.manage`. */
+  postVideoInventoryImport(body: FormData): Promise<{
+    applied?: boolean;
+    columns?: string[];
+    /** rows per action; disabled_by_licence */
+    counts?: Record<string, unknown>;
+    /** enabled cameras of the server after the import */
+    enabled_after?: number;
+    /** xlsx or csv */
+    format?: string;
+    /** 4 */
+    free_limit?: number;
+    ignored?: string[];
+    licensed?: boolean;
+    /** rows that set a password or relay secret */
+    passwords?: number;
+    rows?: ({
+      action?: "create" | "update" | "restore" | "unchanged" | "skip" | "error";
+      changes?: string[];
+      /** after the import */
+      enabled?: boolean;
+      errors?: string[];
+      id?: string;
+      ip?: string;
+      line?: number;
+      name?: string;
+      warnings?: string[];
+    })[];
+    sheet?: string;
+  }> {
+    return this.request<{
+    applied?: boolean;
+    columns?: string[];
+    /** rows per action; disabled_by_licence */
+    counts?: Record<string, unknown>;
+    /** enabled cameras of the server after the import */
+    enabled_after?: number;
+    /** xlsx or csv */
+    format?: string;
+    /** 4 */
+    free_limit?: number;
+    ignored?: string[];
+    licensed?: boolean;
+    /** rows that set a password or relay secret */
+    passwords?: number;
+    rows?: ({
+      action?: "create" | "update" | "restore" | "unchanged" | "skip" | "error";
+      changes?: string[];
+      /** after the import */
+      enabled?: boolean;
+      errors?: string[];
+      id?: string;
+      ip?: string;
+      line?: number;
+      name?: string;
+      warnings?: string[];
+    })[];
+    sheet?: string;
+  }>('POST', `/api/v1/video/inventory/import`, undefined, body, false);
+  }
+
+  /** Camera inventory template
+   *
+   * The columns of the inventory with two example rows (their id starts with #, so they are not imported).
+   * 
+   * Requires permission `video.manage`. */
+  getVideoInventoryTemplate(query?: { format?: string; /** xlsx (default) or csv */ }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/video/inventory/template`, query, undefined, true);
   }
 
   /** Media profiles of an ONVIF camera
