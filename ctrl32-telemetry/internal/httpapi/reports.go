@@ -253,7 +253,27 @@ func (s *Server) listReports(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "query failed")
 		return
 	}
-	writeJSON(w, 200, out)
+	// the signatures of each report (0.67.0): meaning, signer and whether the report still has the signed hash
+	ids := make([]string, len(out))
+	hashes := map[string]string{}
+	for i, rec := range out {
+		ids[i] = rec.ID
+		hashes[rec.ID] = rec.FileHash
+	}
+	sigs := s.signatureSummary(r.Context(), orgOf(p), ids, hashes)
+	list := make([]map[string]any, 0, len(out))
+	for _, rec := range out {
+		b, _ := json.Marshal(rec)
+		var m map[string]any
+		_ = json.Unmarshal(b, &m)
+		ss := sigs[rec.ID]
+		if ss == nil {
+			ss = []map[string]any{}
+		}
+		m["signatures"] = ss
+		list = append(list, m)
+	}
+	writeJSON(w, 200, list)
 }
 
 func (s *Server) getReport(w http.ResponseWriter, r *http.Request) {

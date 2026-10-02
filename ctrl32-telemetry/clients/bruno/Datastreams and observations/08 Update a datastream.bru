@@ -1,7 +1,7 @@
 meta {
   name: Update a datastream
   type: http
-  seq: 5
+  seq: 8
 }
 
 patch {
@@ -19,6 +19,10 @@ body:json {
     "accuracy": 21.5,
     "expected_interval": "string",
     "quantity": "string",
+    "range": {
+      "max": 21.5,
+      "min": 21.5
+    },
     "reason": "string",
     "unit": "string"
   }
@@ -26,6 +30,8 @@ body:json {
 
 docs {
   Update a datastream
+  
+  `range` replaces the physical range (a null bound removes it); without `range` the range stays.
   
   Requires permission `config.write`.
 }

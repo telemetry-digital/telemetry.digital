@@ -2,6 +2,8 @@ package protocol
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 )
@@ -13,6 +15,11 @@ import (
 //   - arrays of any of these,
 //   - a numeric "ts" larger than 10 000 000 000 is treated as milliseconds (a seconds value that big would be year 2286).
 // Keys are normalised: letters lower-cased, "-", "." and spaces become "_", so "Temp-1" reaches datastream "temp_1".
+//
+// Sensor faults (0.67.0): a sample may carry "fault" — a list of keys (["temp"]), an object of keys with true or a
+// reason ({"temp": "open circuit"}; false, 0 or null = no fault) or, next to "v"/"values", true for every value of
+// the sample. In a flat object "fault" counts as flags only when it is a list or an object; a number, boolean or text
+// stays an ordinary value named "fault" (devices that already publish such a key keep working).
 
 var reservedKeys = map[string]bool{"p": true, "ts": true, "tsm": true, "dt": true, "bf": true, "seq": true, "v": true, "values": true}
 
@@ -73,6 +80,17 @@ func normalizeRaw(obj map[string]json.RawMessage) (rawSample, error) {
 		i := int(*v)
 		r.P = &i
 	}
+	if raw, ok := obj["fault"]; ok {
+		structured := obj["v"] != nil || obj["values"] != nil
+		all, keys, isFlags, err := parseFaults(raw, structured)
+		if err != nil {
+			return r, err
+		}
+		if isFlags {
+			r.faultAll, r.faults = all, keys
+			delete(obj, "fault") // flags, never a value
+		}
+	}
 	if r.TS != nil && r.TSM == nil && *r.TS > msThreshold {
 		r.TSM, r.TS = r.TS, nil
 	}
@@ -104,4 +122,64 @@ func normalizeRaw(obj map[string]json.RawMessage) (rawSample, error) {
 		r.V[n] = raw
 	}
 	return r, nil
+}
+
+// parseFaults reads the "fault" field of a sample. isFlags is false when, in a flat object, the field is an ordinary
+// value (a number, boolean or text named "fault").
+func parseFaults(raw json.RawMessage, structured bool) (all bool, keys map[string]bool, isFlags bool, err error) {
+	t := bytesTrimLeft(raw)
+	if len(t) == 0 {
+		return false, nil, false, nil
+	}
+	add := func(k string) error {
+		n, ok := NormalizeKey(k)
+		if !ok {
+			return fmt.Errorf("fault: invalid key %q", k)
+		}
+		if keys == nil {
+			keys = map[string]bool{}
+		}
+		keys[n] = true
+		return nil
+	}
+	switch t[0] {
+	case '[':
+		var list []string
+		if err := json.Unmarshal(t, &list); err != nil {
+			return false, nil, true, fmt.Errorf("fault: expected a list of keys: %w", err)
+		}
+		for _, k := range list {
+			if err := add(k); err != nil {
+				return false, nil, true, err
+			}
+		}
+		return false, keys, true, nil
+	case '{':
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(t, &m); err != nil {
+			return false, nil, true, fmt.Errorf("fault: expected an object of keys: %w", err)
+		}
+		for k, v := range m {
+			switch string(bytesTrimLeft(v)) {
+			case "", "false", "null", "0":
+				continue // no fault
+			}
+			if err := add(k); err != nil {
+				return false, nil, true, err
+			}
+		}
+		return false, keys, true, nil
+	}
+	if !structured {
+		return false, nil, false, nil // a flat value named "fault"
+	}
+	var b bool
+	if err := json.Unmarshal(t, &b); err != nil {
+		var f float64
+		if json.Unmarshal(t, &f) != nil {
+			return false, nil, true, errors.New("fault: expected true, a list of keys or an object of keys")
+		}
+		b = f != 0
+	}
+	return b, nil, true, nil
 }

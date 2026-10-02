@@ -1,0 +1,29 @@
+meta {
+  name: Retract an annotation
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/annotations/:id/retract
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Retract an annotation
+  
+  Annotations are records: a retraction is a new record with the reason; the retracted annotation is no longer shown or exported. Audited.
+  
+  Requires permission `data.annotate`.
+}

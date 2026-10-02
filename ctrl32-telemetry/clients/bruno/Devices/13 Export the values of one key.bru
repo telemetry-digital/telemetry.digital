@@ -1,0 +1,31 @@
+meta {
+  name: Export the values of one key
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/api/v1/devices/:id/telemetry/export
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  key: 
+  ~source: 
+  ~from: 
+  ~to: 
+  ~format: 
+}
+
+docs {
+  Export the values of one key
+  
+  CSV or Excel, oldest first, at most 100 000 rows; columns measured_at, received_at, value, value_json, unit, quality, time_source, annotation. Audited.
+  
+  Requires permission `data.export`.
+}

@@ -1,0 +1,38 @@
+meta {
+  name: Create a datastream for a key and assign it
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/v1/devices/:id/telemetry/assign
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "asset_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "key": "string",
+    "kind": "gauge",
+    "quantity": "string",
+    "range": {
+      "max": 21.5,
+      "min": 21.5
+    },
+    "reason": "string",
+    "unit": "string"
+  }
+}
+
+docs {
+  Create a datastream for a key and assign it
+  
+  For a key the device publishes without a datastream: a new datastream on the chosen asset, assigned to the device at once. Values stored from the next message; earlier ones stay in the raw messages. With the policy `four_eyes_assignments` the call answers 202 with a pending change request instead.
+  
+  Requires permission `device.manage`.
+}

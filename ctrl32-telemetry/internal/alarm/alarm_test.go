@@ -3,6 +3,8 @@ package alarm
 import (
 	"testing"
 	"time"
+
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/ingest"
 )
 
 func fp(v float64) *float64 { return &v }
@@ -41,9 +43,32 @@ func TestSeverityOfEveryType(t *testing.T) {
 	if !backInBand(rule{Type: "door_open"}, 0) || backInBand(rule{Type: "door_open"}, 1) || !backInBand(rule{Type: "power_loss"}, 1) {
 		t.Error("state types clear when the state is back")
 	}
+	found := false
 	for _, typ := range Evaluated {
-		if typ == "sensor_fault" {
-			t.Error("sensor_fault is not evaluated (refused when saved)")
+		found = found || typ == "sensor_fault"
+	}
+	if !found {
+		t.Error("sensor_fault must be evaluated (0.67.0)")
+	}
+}
+
+// A value with quality sensor_fault is not a reading: value rules skip it, sensor_fault and comm_loss see it.
+func TestFaultyValueSkipsValueRules(t *testing.T) {
+	v := -127.0
+	faulty := ingest.Observation{Value: &v, Quality: FaultQuality}
+	good := ingest.Observation{Value: &v, Quality: "ok"}
+	noValue := ingest.Observation{Quality: FaultQuality}
+	for _, typ := range []string{"high", "low", "low_battery", "power_loss", "door_open"} {
+		if applies(rule{Type: typ}, faulty) {
+			t.Errorf("%s evaluated on a faulty value", typ)
+		}
+		if !applies(rule{Type: typ}, good) {
+			t.Errorf("%s not evaluated on a good value", typ)
+		}
+	}
+	for _, typ := range []string{"sensor_fault", "comm_loss"} {
+		if !applies(rule{Type: typ}, faulty) || !applies(rule{Type: typ}, noValue) || !applies(rule{Type: typ}, good) {
+			t.Errorf("%s must see every value", typ)
 		}
 	}
 }

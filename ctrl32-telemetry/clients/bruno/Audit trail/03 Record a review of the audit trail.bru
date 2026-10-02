@@ -1,0 +1,31 @@
+meta {
+  name: Record a review of the audit trail
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/audit/reviews
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "code": "string",
+    "comment": "string",
+    "from": "2026-09-24T12:00:00Z",
+    "outcome": "no_findings",
+    "password": "string",
+    "seq": 1,
+    "to": "2026-09-24T12:00:00Z"
+  }
+}
+
+docs {
+  Record a review of the audit trail
+  
+  A period (`from`, `to`; ended, at most 366 days) or one entry (`seq`) of the organization's audit trail: the review records the first and last entry, their number and the hash of the last one, the outcome and a comment (required with findings), and is signed with the meaning reviewed. The reviewer confirms with the password and, with two-factor sign-in, the authenticator code; only in a browser session. Audited.
+  
+  Requires permission `audit.review`.
+}

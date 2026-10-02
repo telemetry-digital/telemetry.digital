@@ -45,6 +45,7 @@ type Filter struct {
 	AlarmDatastreams map[string]bool // nil = alarms of any datastream of the organization
 	Commands         bool            // command status changes of the filtered devices (never for public streams)
 	Entities         bool            // smart-home entity states (never for public streams)
+	DeviceData       bool            // telemetry keys without a datastream and status messages of the filtered devices (never for public streams)
 }
 
 // Sub is one subscription; read events from C.
@@ -72,8 +73,19 @@ func (s *Sub) wants(e Event) bool {
 		return s.F.Commands && (s.F.AllDevices || s.F.Devices[e.DeviceID])
 	case "entity":
 		return s.F.Entities
+	case "device_data":
+		return s.F.DeviceData && (s.F.AllDevices || s.F.Devices[e.DeviceID])
 	}
 	return false
+}
+
+// DeviceData reports a stored telemetry or status message of a device (kind "telemetry" or "status"): the values that
+// are not observations (keys without a datastream; every key of a status message) and the keys flagged as faulty.
+func (h *Hub) DeviceData(org, deviceID, kind string, at time.Time, values map[string]any, faults []string) {
+	if h.Subscribers() == 0 {
+		return
+	}
+	h.Publish(Event{Type: "device_data", Org: org, DeviceID: deviceID, State: kind, At: at, Detail: map[string]any{"values": values, "faults": faults}})
 }
 
 // Hub fans events out to subscribers.

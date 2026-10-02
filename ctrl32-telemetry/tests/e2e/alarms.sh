@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # End-to-end checks of alarm rule types and delays (URS C-01, C-03): every type that can be saved is evaluated
-# (low_battery, power_loss, door_open, comm_loss; sensor_fault and ignored limits are refused), the delay holds an alarm
+# (low_battery, power_loss, door_open, comm_loss; ignored limits are refused; sensor_fault: device_telemetry.sh), the delay holds an alarm
 # back until the condition has lasted, acknowledging needs a reason and fires the flows' Alarm trigger "acknowledged",
 # Incident nodes pair open and resolve by an incident key, and an escalation policy used by an automation rule cannot
 # be revoked. Needs Go (tools/devfill) and Node.
@@ -41,7 +41,7 @@ req POST "/api/v1/devices/$DEV/token" '{"reason":"e2e"}'; TOK=$(jx j.token)
 for d in $DOOR $BAT $PWR $LINK; do req POST "/api/v1/devices/$DEV/datastreams" "{\"datastream_id\":\"$d\",\"reason\":\"e2e\"}"; done; check "assigned" "$(st)" 201
 
 echo "== rules that cannot be evaluated are refused"
-req POST /api/v1/alarm-rules "{\"datastream_id\":\"$LINK\",\"type\":\"sensor_fault\",\"reason\":\"e2e\"}"; check "sensor_fault refused" "$(st) $(jx 'j.error.includes("cannot be evaluated")')" "400 true"
+req POST /api/v1/alarm-rules "{\"datastream_id\":\"$LINK\",\"type\":\"sensor_fault\",\"action\":5,\"reason\":\"e2e\"}"; check "sensor_fault with a limit refused" "$(st) $(jx 'j.error.includes("no limits")')" "400 true"
 req POST /api/v1/alarm-rules "{\"datastream_id\":\"$PWR\",\"type\":\"power_loss\",\"action\":5,\"reason\":\"e2e\"}"; check "power_loss with a limit refused" "$(st)" 400
 req POST /api/v1/alarm-rules "{\"datastream_id\":\"$LINK\",\"type\":\"comm_loss\",\"reason\":\"e2e\"}"; check "comm_loss without a limit or an expected interval refused" "$(st)" 400
 req POST /api/v1/alarm-rules "{\"datastream_id\":\"$BAT\",\"type\":\"low_battery\",\"reason\":\"e2e\"}"; check "low_battery without limits refused" "$(st)" 400

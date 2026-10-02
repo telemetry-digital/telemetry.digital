@@ -243,6 +243,7 @@ func runServer(ctx context.Context, cfg *config.Config, cfgPath string, logger *
 	ing.OnCommand = func(e ingest.CommandEvent) {
 		hub.Command(e.OrgID, e.DeviceID, e.CommandID, "", e.Status, map[string]any{"result": e.Result, "error": e.Error})
 	}
+	ing.OnDeviceData = func(d ingest.DeviceData) { hub.DeviceData(d.OrgID, d.DeviceID, d.Kind, d.At, d.Values, d.Faults) }
 	if err := ing.Start(); err != nil {
 		return err
 	}

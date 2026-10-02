@@ -6,6 +6,8 @@
                        a display, firmware and a campaign, users and a custom role, an API token, a report template and
                        stored reports, a PWA app, the "overview" and "showcase" starter dashboards, and the VPN (a site,
                        a technician, a gateway and access rules; needs the agent's VPN simulation and a licence)
+                       ; 0.67.0: keys without a datastream and status of a logger, a sensor fault, annotations, a
+                       signed report and a signed audit review (records)
   docs.py vpn          only the VPN part (phase 1 and 2: an organization administrator olivia.grant, four eyes for
                        technicians' access, an approved and a pending access grant)
   docs.py live         keeps the cold chain and the energy meters current (a sample every 60 s)
@@ -578,10 +580,60 @@ def vpn2():
     return {"org_admin": ORG_ADMIN}
 
 
+# ---------------------------------------------------------------------------------------------- records (0.67.0)
+def sign_in(user, password):
+    call("POST", "/api/v1/auth/login", {"username": user, "password": password})
+    common._csrf = call("GET", "/api/v1/auth/me")["csrf_token"]
+
+
+@once("records")
+def records():
+    """The Telemetry tab, sensor faults, annotations, signed reports and a signed audit review:
+    - logger T2 also sends keys without a datastream (door contact, probe resistance) and status messages;
+    - fridge 2 gets a physical range and a sensor_fault rule, and one faulty reading (flagged by the logger) an hour ago;
+    - two annotations on fridge 2 (the excursion of day 11 explained, a probe check);
+    - the quality reviewer emma.walsh signs the stored observation report and reviews the audit trail of the last day."""
+    c = st["cold"]
+    call("PATCH", f"/api/v1/datastreams/{c['f2']}", {"range": {"min": -40, "max": 85}, "reason": "PT1000 probe: measuring range -40…85 °C"})
+    have = {(r["datastream_id"], r["type"]) for r in call("GET", "/api/v1/alarm-rules")}
+    if (c["f2"], "sensor_fault") not in have:
+        call("POST", "/api/v1/alarm-rules", {"datastream_id": c["f2"], "type": "sensor_fault", "delay_seconds": 0, "reason": "SOP-12: probe faults are reported"})
+    time.sleep(31)  # the alarm engine reads the rules of a datastream again after 30 s
+    rng = random.Random(11)
+    samples = []
+    for t in range((NOW - 86400) // 900 * 900, NOW, 900):
+        door = 1 if 7 <= (t / 3600) % 24 < 17 and rng.random() < 0.12 else 0
+        samples.append({"ts": t, "v": {"door": door, "probe_ohm": round(1000 + 3.85 * fridge_temp("f2", t, rng) + rng.uniform(-0.4, 0.4), 1)}})
+    send(c["t2"], samples)
+    t = NOW - 3600
+    send(c["t2"], [{"ts": t, "v": {"temp": -73.6}, "fault": ["temp"]}, {"ts": t + 300, "v": {"temp": fridge_temp("f2", t + 300, rng)}}])
+    for i, (bat, rssi) in enumerate([(3.66, -68), (3.64, -71), (3.63, -70)]):
+        call("POST", "/api/v1/d/status", {"bat": bat, "bat_pct": 81 - i, "rssi": rssi, "up_s": 86400 * 12 + i * 900, "fw": "2.3.1", "buf": 0}, token=c["t2"])
+        time.sleep(1)
+    day = (NOW // 86400 - ((NOW // 86400) % 30) + 11) * 86400  # day 11 of the 30-day cycle (the excursion)
+    if day > NOW: day -= 30 * 86400
+    iso = lambda x: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(x))
+    call("POST", "/api/v1/annotations", {"datastream_id": c["f2"], "from": iso(day + 13 * 3600), "to": iso(day + 14 * 3600), "category": "expected_event", "text": "Delivery: door kept open while unloading vaccines"})
+    call("POST", "/api/v1/annotations", {"datastream_id": c["f2"], "from": iso(NOW - 3600), "category": "maintenance", "text": "Probe connector reseated after the fault alarm"})
+    # the quality reviewer signs a stored report and reviews the audit trail
+    emma = next(u for u in call("GET", "/api/v1/users") if u["username"] == "emma.walsh")
+    one = call("POST", f"/api/v1/users/{emma['id']}/reset-password", {"reason": R})["initial_password"]
+    pw = "Emma-Review-2026!"
+    sign_in("emma.walsh", one)
+    call("POST", "/api/v1/auth/password", {"current": one, "new": pw})
+    sign_in("emma.walsh", pw)
+    rep = next((r for r in call("GET", "/api/v1/reports?limit=50") if r["kind"] == "observations"), None)
+    if rep:
+        call("POST", f"/api/v1/reports/{rep['id']}/signatures", {"meaning": "reviewed", "comment": "Temperatures within 2–8 °C except the documented delivery", "password": pw})
+    call("POST", "/api/v1/audit/reviews", {"from": iso(NOW - 86400), "to": iso(int(time.time()) - 5), "outcome": "no_findings", "comment": "Daily review of changes", "password": pw})
+    login()
+    return {"emma_password": pw, "report": rep and rep["id"]}
+
+
 def setup():
     login()
     partitions()
-    cold_chain(); energy(); dashboards(); rules(); flows(); mqtt_accounts(); home(); display(); firmware(); people(); settings(); incidents()
+    cold_chain(); energy(); dashboards(); rules(); flows(); mqtt_accounts(); home(); display(); firmware(); people(); settings(); incidents(); records()
     st["vpn"] = vpn(); st["vpn2"] = vpn2(); save()
     print("docs demo ready:", ", ".join(st))
 

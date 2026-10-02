@@ -1,0 +1,23 @@
+meta {
+  name: Reviews of the audit trail
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/audit/reviews
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~limit: 
+}
+
+docs {
+  Reviews of the audit trail
+  
+  Newest first, each with its signature and whether it is valid.
+  
+  Requires permission `audit.read`.
+}

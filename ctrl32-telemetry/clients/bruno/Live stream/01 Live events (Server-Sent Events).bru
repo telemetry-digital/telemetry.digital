@@ -14,12 +14,13 @@ params:query {
   ~datastreams: 
   ~devices: 
   ~alarms: 
+  ~device_data: 
 }
 
 docs {
   Live events (Server-Sent Events)
   
-  Long-lived `text/event-stream`. Events: `hello`, `observation` {datastream_id, key, value, measured_at}, `device` {device_id, connected}, `alarm` {alarm_id, datastream_id, state, severity, value}, `command` {device_id, command_id, method, status, detail}; `ping` every 25 s with the count of dropped events. Filters: `datastreams` (comma-separated ids), `devices` (`all` or ids), `alarms=1`.
+  Long-lived `text/event-stream`. Events: `hello`, `observation` {datastream_id, key, value, measured_at}, `device` {device_id, connected}, `alarm` {alarm_id, datastream_id, state, severity, value}, `command` {device_id, command_id, method, status, detail}, `device_data` {device_id, state: telemetry|status, detail: {values, faults}} (with `device_data=1`: the keys of a telemetry message that have no datastream, every key of a status message, and the keys the device flagged as faulty); `ping` every 25 s with the count of dropped events. Filters: `datastreams` (comma-separated ids), `devices` (`all` or ids), `alarms=1`, `device_data=1`.
   
   Requires permission `data.read`.
 }

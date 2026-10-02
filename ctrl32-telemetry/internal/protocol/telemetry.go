@@ -28,6 +28,28 @@ type Sample struct {
 	Values     map[string]Value // key -> value
 	Backfilled bool             // "bf": 1
 	Seq        *int64           // "seq": device message sequence, for deduplication
+	// Faults are the keys the device reports as coming from a faulty sensor ("fault": ["temp"] or
+	// {"temp": true}); FaultAll is "fault": true (every value of the sample). The server stores such values with
+	// quality sensor_fault.
+	Faults   map[string]bool
+	FaultAll bool
+}
+
+// Faulty reports whether the device flagged the value of key as coming from a faulty sensor.
+func (s Sample) Faulty(key string) bool { return s.FaultAll || s.Faults[key] }
+
+// Any returns the value as a plain Go value (float64, bool, string or json.RawMessage).
+func (v Value) Any() any {
+	switch {
+	case v.Num != nil:
+		return *v.Num
+	case v.Bool != nil:
+		return *v.Bool
+	case v.Str != nil:
+		return *v.Str
+	default:
+		return v.JSON
+	}
 }
 
 // Value holds a numeric, boolean, string or structured value.
@@ -60,6 +82,9 @@ type rawSample struct {
 	V   map[string]json.RawMessage `json:"v"`
 	BF  *int                       `json:"bf"`
 	Seq *int64                     `json:"seq"`
+
+	faults   map[string]bool // "fault" flags, normalised keys
+	faultAll bool
 }
 
 // ErrTooLarge is returned when a message exceeds the size limits.
@@ -123,6 +148,7 @@ func ParseTelemetry(payload []byte) ([]Sample, error) {
 		if r.BF != nil && *r.BF == 1 {
 			s.Backfilled = true
 		}
+		s.Faults, s.FaultAll = r.faults, r.faultAll
 		for k, raw := range r.V {
 			if !keyRe.MatchString(k) {
 				return nil, fmt.Errorf("protocol: sample %d: invalid key %q", i, k)
