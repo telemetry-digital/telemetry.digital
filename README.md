@@ -11,5 +11,3 @@ Each folder is a snapshot of its own development repository; start with `ctrl32-
 The source code stays private until version 1.0 (ADR-0002). Secrets, local configuration, runtime data and build
 outputs are never committed.
 
-The previous content of this repository (legacy HMI installation and the previous deployment deployment files) was removed on
-25 Sep 2026; it remains in the history of this repository.

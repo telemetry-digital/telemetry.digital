@@ -46,7 +46,7 @@ Prvá implementácia, ktorá potrebuje aspoň jedno z: OPC UA server; > ~20 000 
 | Všetko v C++ | najvyššie bezpečnostné riziko na internetovej hrane, najpomalší vývoj pre jedného; C++ je správny nástroj pre runtime, nie pre webovú platformu |
 | .NET 10 LTS | dobrý na Windows; LTS každé 2 roky, natívne knižnice sa rozbaľujú na disk, QuestPDF licencia; 8/10 |
 | Rust ako runtime namiesto C++ | bezpečnostne lepší, ale open62541 je C a tvoja expertíza je C++; možno prehodnotiť pri štarte fázy 3 |
-| Node/TypeScript backend | dependency churn nezlučiteľný s validovaným stavom (legacy HMI skúsenosť) |
+| Node/TypeScript backend | dependency churn nezlučiteľný s validovaným stavom (skúsenosť z predchádzajúcich projektov) |
 
 ## Dôsledky
 

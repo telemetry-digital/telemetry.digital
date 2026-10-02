@@ -4,7 +4,7 @@
 
 ## Kontext
 
-Platforma je od začiatku historian + alarmy + príkazy do zariadení. SCADA k tomu pridáva: procesné obrazovky (mimiky) v reálnom čase, zápis/riadenie s oprávneniami a auditom, vysoké počty tagov a rýchle cykly, prípadne redundanciu. Skoršie rozhodnutia používateľa pre webový HMI editor (25. 8. 2026) platia: **JSON formát obrazoviek ako trvalé aktívum**, rendering SVG, widgety ako Web Components (Lit), dáta cez MQTT-over-WebSocket, knižnica podľa ISA-101 (šedé podklady, farba pre abnormálne stavy). legacy HMI ostáva pre súčasných zákazníkov, kým ctrl32 HMI nedozreje.
+Platforma je od začiatku historian + alarmy + príkazy do zariadení. SCADA k tomu pridáva: procesné obrazovky (mimiky) v reálnom čase, zápis/riadenie s oprávneniami a auditom, vysoké počty tagov a rýchle cykly, prípadne redundanciu. Skoršie rozhodnutia používateľa pre webový HMI editor (25. 8. 2026) platia: **JSON formát obrazoviek ako trvalé aktívum**, rendering SVG, widgety ako Web Components (Lit), dáta cez MQTT-over-WebSocket, knižnica podľa ISA-101 (šedé podklady, farba pre abnormálne stavy).
 
 ## Rozhodnutie
 

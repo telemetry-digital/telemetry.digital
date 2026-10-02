@@ -251,7 +251,7 @@ Jeden rámec pre všetko, čo nesie dáta dnu alebo von: **konektor** = typ + ko
 |---|---|---|
 | Webhooky von (udalosti: nové meranie/alarm/zmena stavu/príkaz) | 2 | HMAC podpis, opakovanie s exponenciálnym odstupom, `webhook_delivery` log |
 | MQTT publish von (na cudzí broker) | 2 | zrkadlenie datastreamov pre SCADA, Node-RED, Home Assistant |
-| OPC UA server (vystaviť datastreamy ako uzly) | 3 | most na tvoje C++ SCADA jadro alebo legacy HMI |
+| OPC UA server (vystaviť datastreamy ako uzly) | 3 | most na C++ SCADA jadro alebo iné SCADA systémy |
 | E-mail, SMS, push, hlas | 1 | kanály notifikácií (kap. 6) |
 | Export do súboru/S3/SFTP podľa plánu | 2 | CSV/JSON dávky pre BI a archiváciu |
 
@@ -295,7 +295,7 @@ Pre zariadenia s našimi knižnicami; cudzie zariadenia (LoRaWAN) majú vlastnú
 - **Stupeň 2 (fáza 2):** **JSON formát HMI obrazoviek v1** (navrhne sa už vo fáze 1), runtime viewer v Lit/SVG so živými hodnotami cez MQTT-over-WS, základná ISA-101 knižnica widgetov; zápis hodnôt z obrazovky = príkaz cez platformu s oprávnením a auditom.
 - **Stupeň 3 (fáza 3):** webový HMI editor (engine s čistou licenciou; tldraw vylúčený), riadiaci zápis do OPC UA/Modbus cez konektory, setpointy so štyrmi očami a dôvodom, receptúry/limity ako verziovaná konfigurácia.
 - **Stupeň 4 (fáza 3+):** `ctrl32-runtime` v C++ — OPC UA server aj klient (open62541), S7, Modbus s milisekundovými cyklami, deterministické skenovanie, lokálna logika, redundancia hot standby, edge nasadenie; komunikuje s platformou cez MQTT (Sparkplug-B-like) alebo gRPC, platforma bez neho funguje naplno.
-- Zásady: obrazovky sú dáta v DB s verziami a auditom; každý riadiaci zápis má identitu, čas, ack a dôvod; bezpečnostné blokády ostávajú v PLC/runtime. legacy HMI ostáva pre súčasných zákazníkov, kým ctrl32 HMI nedozreje.
+- Zásady: obrazovky sú dáta v DB s verziami a auditom; každý riadiaci zápis má identitu, čas, ack a dôvod; bezpečnostné blokády ostávajú v PLC/runtime.
 
 ### 9.7 REST API
 
