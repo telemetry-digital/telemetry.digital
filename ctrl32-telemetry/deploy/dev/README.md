@@ -63,6 +63,22 @@ BASE=http://127.0.0.1:8080 bash tests/e2e/video.sh   # one suite against the run
 Stop the dev server first for `run-all.sh` (it starts its own on port 8080). The `ops` suite needs NTP (UDP 123) to
 the Internet; skip it where that is blocked: `SKIP="ops" bash tests/run-all.sh`.
 
+## Object counting and scheduled reports (0.71.0)
+
+- The demo of object counting: `python deploy/dev/demo/docs.py counting` (part of `docs.py setup`) — the main building
+  of the Nitra plant with three entrances and 30 days of counts, a car park with a speed section, a dashboard and three
+  scheduled reports. `CTRL32_CAMSIM=rtsp://127.0.0.1:8554` names the camera simulator, `CTRL32_DEMO_DETECTOR=1`
+  switches the detector on for the entrance camera.
+- The detector needs `[analytics]` in `.dev/config.toml` (ffmpeg LGPL build, ONNX Runtime, the YOLOX models; see
+  `docs/object-counting.md`). To see it count, play a recording of people walking in the camera simulator:
+  extract pictures (`ffmpeg -i clip.webm -vf fps=10,scale=640:360 frames/f%04d.jpg`) and start
+  `go run ./tools/camsim -clip frames`; cameras labelled `clip…` (e.g. `rtsp://127.0.0.1:8554/clip/h264/640x360`) play it.
+- Evaluate a recording without the server: `ctrl32-telemetry analytics-worker -config @cfg.json -input clip.webm`
+  (crossings and statistics as JSON lines; `CTRL32_ANALYTICS_TRACE=1` prints the tracks).
+- E-mails of scheduled reports: `go run ./tools/smtpsink -listen 127.0.0.1:2525 -dir .dev/mail` and `[smtp] host =
+  "127.0.0.1", port = 2525, from = "reports@example.com"`; `tests/e2e/scheduled_reports.sh` checks them with
+  `MAIL_DIR=.dev/mail`.
+
 ## Before a commit
 
 `gofmt -l .` empty, `go vet ./...`, the unit tests of the changed packages, `go run ./tools/apigen` after any change of

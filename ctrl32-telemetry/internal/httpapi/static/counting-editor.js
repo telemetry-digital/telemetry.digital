@@ -139,7 +139,7 @@
       const sel = i === SEL ? ' sel' : '';
       g += `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" class="oc-line${sel}" data-line="${i}" style="cursor:pointer"/>`;
       g += `<polygon points="${tip.join(',')} ${b1.join(',')} ${b2.join(',')}" class="oc-arrow${sel}"/>`;
-      g += `<text x="${ax + 6}" y="${ay - 8}" class="oc-lbl">${esc(l.name)} A</text><text x="${bx + 6}" y="${by - 8}" class="oc-lbl">B</text><text x="${tip[0] + 4}" y="${tip[1] + 4}" class="oc-lbl">${esc(t('in'))}</text>`;
+      g += `<text x="${ax + 6}" y="${ay - 8}" class="oc-lbl">A · ${esc(l.name)}</text><text x="${bx + 6}" y="${by - 8}" class="oc-lbl">B</text><text x="${tip[0] + 4}" y="${tip[1] + 4}" class="oc-lbl">${esc(t('in'))}</text>`;
       g += `<circle cx="${ax}" cy="${ay}" r="8" class="oc-end" data-end="${i}:a"/><circle cx="${bx}" cy="${by}" r="8" class="oc-end" data-end="${i}:b"/>`;
     });
     if (ADDING && ADDING.pts.length === 1) g += `<circle cx="${ADDING.pts[0].x * W}" cy="${ADDING.pts[0].y * h}" r="7" fill="#22d3ee"/>`;
