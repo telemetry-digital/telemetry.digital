@@ -1,0 +1,41 @@
+meta {
+  name: Change a VPN access rule
+  type: http
+  seq: 8
+}
+
+put {
+  url: {{baseUrl}}/api/v1/vpn/rules/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "dest_cidr": "string",
+    "dest_peer_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "dest_type": "server",
+    "enabled": true,
+    "name": "string",
+    "ports": "string",
+    "protocol": "tcp",
+    "reason": "string",
+    "sources": [
+      {
+        "id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+        "kind": "device",
+        "type": "all"
+      }
+    ]
+  }
+}
+
+docs {
+  Change a VPN access rule
+  
+  Requires permission `system.admin`.
+}

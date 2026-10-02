@@ -1,0 +1,29 @@
+meta {
+  name: Remove a VPN peer
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/vpn/peers/:id/remove
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Remove a VPN peer
+  
+  Access ends at once. Rules with the peer as destination are removed; the peer is dropped from the sources of other rules (a rule left without sources is removed).
+  
+  Requires permission `system.admin`.
+}

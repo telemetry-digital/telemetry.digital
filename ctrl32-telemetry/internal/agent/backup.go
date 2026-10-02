@@ -176,7 +176,7 @@ func (a *Server) createBackup(ctx context.Context, passphrase string) (BackupInf
 	bundle := filepath.Join(work, name)
 	if err := writeBundle(bundle, map[string]string{
 		"db.dump": dump, "config.toml": a.cfgPath, "caddy.json": caddyStateFile, "caddy.env": caddyEnvFile, "Caddyfile": caddyFile,
-		"wireguard/state.json": wgStateFile, "wireguard/peers.json": wgPeersFile, "wireguard/server.key": wgKeyFile, "backup.json": backupStateFile,
+		"wireguard/state.json": wgStateFile, "wireguard/peers.json": wgPeersFile, "wireguard/server.key": wgKeyFile, "wireguard/vpn.json": wgVPNFile, "backup.json": backupStateFile,
 	}, "RESTORE.txt", restoreNotes(ts)); err != nil {
 		return BackupInfo{}, err
 	}

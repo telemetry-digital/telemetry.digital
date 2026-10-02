@@ -693,6 +693,10 @@ func cmdAgent(args []string) error {
 	}
 	srv := agent.NewServer(sock, path, version, cfg.Agent.UpdateURL, logger.With("component", "agent"))
 	srv.SetDBTools(cfg.Agent.PgDump, cfg.Agent.PgContainer)
+	if cfg.Agent.VPNSimulate != "" {
+		logger.Warn("VPN simulation: nothing is applied to this host (agent.vpn_simulate)", "dir", cfg.Agent.VPNSimulate)
+		srv.SetSimulation(cfg.Agent.VPNSimulate)
+	}
 	if svc.Interactive() {
 		return srv.Serve(ctx)
 	}

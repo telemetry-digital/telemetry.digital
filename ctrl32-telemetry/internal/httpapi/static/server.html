@@ -23,7 +23,7 @@
 <nav class="subnav">
   <a href="/server" data-section="overview">Overview</a>
   <a href="/server/domain" data-section="domain">Domain and TLS</a>
-  <a href="/server/wireguard" data-section="wireguard">WireGuard</a>
+  <a href="/server/vpn" data-section="vpn">VPN</a>
   <a href="/server/backups" data-section="backups">Backups</a>
   <a href="/server/updates" data-section="updates">Updates</a>
   <a href="/server/license" data-section="license">License</a>
@@ -72,50 +72,6 @@
   </div>
 </section>
 
-<section data-section="wireguard">
-  <div class="page-head"><h1>WireGuard</h1><span class="grow"></span><button class="btn primary" id="addPeerBtn" type="button">Add device</button></div>
-  <div class="card agent-off" id="agentNoteWg" hidden></div>
-  <div class="grid">
-    <div class="card">
-      <h2>Server</h2>
-      <p class="muted">Devices and gateways that cannot use TLS connect through a WireGuard tunnel and reach the broker on the VPN address without exposing MQTT publicly. Each device gets its own key pair and address.</p>
-      <dl class="kv" id="kvWg"></dl>
-    </div>
-    <div class="card">
-      <h2>Configuration</h2>
-      <form id="wgForm" class="form">
-        <label class="inline"><input type="checkbox" name="enabled"><span>Enabled</span></label>
-        <div class="two">
-          <label>Listen port (UDP) <input name="listen_port" type="number" min="1" max="65535" value="51820"></label>
-          <label>Server address <input name="address" value="10.66.0.1/24" placeholder="10.66.0.1/24"></label>
-        </div>
-        <label>Endpoint for devices (host:port) <input name="endpoint" placeholder="telemetry.example.com:51820"></label>
-        <label>DNS for devices (optional) <input name="dns" placeholder="10.66.0.1"></label>
-        <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
-        <div class="err" id="wgErr"></div>
-        <div><button class="btn primary" type="submit" id="wgSubmit">Apply</button></div>
-      </form>
-    </div>
-  </div>
-  <div class="card" style="margin-top:16px"><h2>Devices (peers)</h2>
-    <div class="table-wrap"><table id="peers"><thead><tr><th>Name</th><th>VPN address</th><th>Status</th><th>Last handshake</th><th>Endpoint</th><th>Traffic</th><th>Created</th><th></th></tr></thead><tbody></tbody></table></div>
-  </div>
-  <dialog id="peerDlg">
-    <form id="peerForm" class="form" method="dialog">
-      <h2 style="margin-top:0">Add device to the VPN</h2>
-      <label>Name <input name="name" required maxlength="63" placeholder="gateway-hall-2"></label>
-      <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
-      <div class="err" id="peerErr"></div>
-      <div id="peerResult" hidden>
-        <div class="muted">Configuration for the device (shown once — the private key is not stored on the server). Scan the QR code with the WireGuard app or copy the text.</div>
-        <img id="peerQr" class="qr" alt="WireGuard configuration QR code">
-        <pre class="conf secret" id="peerConf"></pre>
-        <div class="muted" id="peerHint"></div>
-      </div>
-      <div class="actions"><button class="btn primary" type="submit" id="peerSubmit">Create</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
-    </form>
-  </dialog>
-</section>
 
 <section data-section="backups">
   <div class="page-head"><h1>Backups</h1><span class="grow"></span><button class="btn primary" id="backupNowBtn" type="button">Back up now</button></div>
@@ -278,7 +234,7 @@
 <script src="/app.js"></script>
 <script>
 const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
-const TITLES = {overview: 'Server', domain: 'Domain and TLS', wireguard: 'WireGuard', backups: 'Backups', redundancy: 'Redundant database', updates: 'Updates', license: 'License'};
+const TITLES = {overview: 'Server', domain: 'Domain and TLS', backups: 'Backups', redundancy: 'Redundant database', updates: 'Updates', license: 'License'};
 let INFO = null;
 function kv(el, rows){ el.innerHTML = rows.filter(r => r).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v == null || v === '' ? '<span class="muted">—</span>' : v}</dd>`).join(''); }
 function dur(s){ if(!s && s !== 0) return ''; const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60); return (d ? d + ' d ' : '') + (h ? h + ' h ' : '') + m + ' min'; }
@@ -288,13 +244,13 @@ function agentNote(){
   const a = INFO.agent; let msg = '';
   if(!a.configured) msg = '<b>Server agent not configured.</b> Host operations (restart, backups, updates; on Linux also domain and WireGuard) are available where the server agent <code>ctrl32-telemetry-agent</code> runs (systemd unit or Windows service); this instance shows read-only information.';
   else if(!a.connected) msg = '<b>Server agent not reachable:</b> ' + esc(a.error || 'unknown error') + '. Check <code>systemctl status ctrl32-telemetry-agent</code>.';
-  for(const id of ['agentNote','agentNoteDomain','agentNoteWg','agentNoteBk','agentNoteUpd']){ const el = $('#' + id); el.hidden = !msg; el.innerHTML = msg; }
+  for(const id of ['agentNote','agentNoteDomain','agentNoteBk','agentNoteUpd']){ const el = $('#' + id); el.hidden = !msg; el.innerHTML = msg; }
   return !!msg;
 }
 function timeRow(t){ if(!t || !t.enabled) return '<span class="muted">not configured (no NTP server)</span>'; const os = t.os_sync === 'no' ? ' · <span class="badge warn">the operating system reports the clock as not synchronized</span>' : ''; if(t.ok) return `<span class="badge ok">ok</span> ${Math.round(t.offset_ms)} ms · ${esc(t.server)} · ${fmt(t.checked_at)}${os}`; if(!t.checked_at || t.checked_at.startsWith('0001')) return `<span class="muted">…</span> ${esc(t.server)}`; return `<span class="badge warn">unreachable</span> ${esc(t.error || '')} · ${esc(t.server)} · ${fmt(t.checked_at)}${os}`; }
 function renderOverview(){
   const c = INFO.config, st = INFO.agent.status, h = st && st.host;
-  if(st && st.agent && st.agent.os === 'windows'){ for(const sec of ['domain', 'wireguard']){ const a = document.querySelector(`.subnav a[data-section="${sec}"]`); if(a) a.hidden = true; } }
+  if(st && st.agent && st.agent.os === 'windows'){ for(const sec of ['domain', 'vpn']){ const a = document.querySelector(`.subnav a[data-section="${sec}"]`); if(a) a.hidden = true; } }
   kv($('#kvService'), [['Version', esc(INFO.version)], ['Profile', esc(c.profile)], ['Process started', fmt(INFO.started_at)], ['PID', INFO.pid], ['Go', esc(INFO.go)], ['Goroutines', INFO.goroutines], ['Connected devices (MQTT)', INFO.broker.connected_clients], ['Time sync', timeRow(INFO.time)]]);
   kv($('#kvHost'), h ? [['Hostname', esc(h.hostname)], ['System', esc(h.os) + ' · ' + esc(h.kernel) + ' · ' + esc(h.arch)], ['Uptime', dur(h.uptime_seconds)], ['Load', (h.load||[]).map(x => x.toFixed(2)).join(' / ')], ['CPUs', h.cpus], ['Memory', `${h.mem_avail_mb} MB free of ${h.mem_total_mb} MB`], ...(h.disks||[]).map(d => ['Disk ' + d.path, `${d.free_gb.toFixed(1)} GB free of ${d.total_gb.toFixed(1)} GB`]), ['Time zone', esc(h.timezone || '')], ['Server time', fmt(h.time)]] : [['Host', '<span class="muted">needs the server agent</span>'], ['OS / arch', esc(INFO.os + ' / ' + INFO.arch)]]);
   kv($('#kvNet'), [['Public URL', `<a href="${esc(c.base_url)}" target="_blank" rel="noopener">${esc(c.base_url)}</a>`], ['HTTP listen', esc(c.http_listen) + (c.http_tls ? ' (TLS)' : '')], ['Public read-only access', c.public_read ? '<span class="badge warn">enabled (demo)</span>' : 'off'], ['MQTT', esc(c.mqtt_listen)], ['MQTT over TLS', esc(c.mqtt_tls_listen)], ['MQTT over WebSocket', esc(c.mqtt_ws_listen)], ['MQTT inside VPN', esc(c.mqtt_vpn_listen)], ['SMTP', c.smtp_host ? esc(c.smtp_host + ':' + c.smtp_port) : '<span class="muted">not configured (no e-mail)</span>'], ['Agent socket', esc(c.agent_socket)]]);
@@ -316,14 +272,6 @@ function renderDomain(){
   $('#caddyfile').textContent = c.caddyfile || '';
   const f = $('#caddyForm'); if(!f.dataset.filled){ f.domain.value = c.domain || ''; f.extra_domains.value = (c.extra_domains||[]).join(', '); f.email.value = c.email || ''; f.dns_provider.value = c.dns_provider || ''; f.dataset.filled = '1'; $('#cfTokenRow').hidden = f.dns_provider.value !== 'cloudflare'; }
 }
-function renderWg(){
-  const st = INFO.agent.status, wg = st && st.wireguard;
-  if(!wg){ kv($('#kvWg'), [['WireGuard', '<span class="muted">needs the server agent</span>']]); $('#peers tbody').innerHTML = '<tr><td colspan="8" class="muted">needs the server agent</td></tr>'; return; }
-  kv($('#kvWg'), [['Installed', wg.installed ? 'yes' : '<span class="badge warn">wireguard-tools missing (installed on enable)</span>'], ['State', wg.enabled ? (wg.running ? '<span class="badge ok">running</span>' : '<span class="badge bad">enabled but not running</span>') : '<span class="badge">disabled</span>'], ['Listen port', wg.listen_port ? wg.listen_port + '/udp' : ''], ['Server address', esc(wg.address)], ['Endpoint for devices', esc(wg.endpoint)], ['Server public key', wg.public_key ? `<code>${esc(wg.public_key)}</code>` : ''], ['MQTT inside VPN', wg.mqtt ? `<code>mqtt://${esc(wg.mqtt)}</code> (plain, no TLS needed)` : ''], ['Devices', (wg.peers||[]).length]]);
-  const f = $('#wgForm'); if(!f.dataset.filled && wg.updated_at){ f.enabled.checked = wg.enabled; f.listen_port.value = wg.listen_port || 51820; f.address.value = wg.address || '10.66.0.1/24'; f.endpoint.value = wg.endpoint || ''; f.dns.value = wg.dns || ''; f.dataset.filled = '1'; }
-  $('#peers tbody').innerHTML = (wg.peers||[]).map(p => `<tr><td><b>${esc(p.name)}</b><div class="muted" style="font-size:12px">${esc(p.public_key)}</div></td><td>${esc(p.address)}</td><td>${p.online ? '<span class="badge ok">online</span>' : '<span class="badge">offline</span>'}</td><td>${p.latest_handshake ? fmt(p.latest_handshake) : '<span class="muted">never</span>'}</td><td>${esc(p.endpoint || '')}</td><td>${bytes(p.rx_bytes)} ↓ ${bytes(p.tx_bytes)} ↑</td><td>${fmt(p.created_at)}<div class="muted" style="font-size:12px">${esc(p.created_by || '')}</div></td><td><button class="btn small danger" data-remove="${p.id}" type="button">Remove</button></td></tr>`).join('') || '<tr><td colspan="8" class="muted">no devices yet</td></tr>';
-  for(const b of document.querySelectorAll('[data-remove]')) b.onclick = () => askReason('Remove device from the VPN', 'The peer loses access immediately; its configuration becomes invalid.', async reason => { await api('POST',`/api/v1/server/wireguard/peers/${b.dataset.remove}/remove`,{reason}); ctrl32.toast('peer removed','ok'); load(); });
-}
 function renderUpdates(){
   const u = INFO.update, newer = u.available && u.available !== u.current;
   kv($('#kvUpd'), [['Installed', esc(u.current)], ['Available', u.available ? esc(u.available) + (newer ? ' <span class="badge primary">update available</span>' : ' <span class="badge ok">up to date</span>') : '<span class="muted">' + esc(u.error || 'unknown') + '</span>'], ['Distribution point', esc(u.url)], ['Checked', fmt(u.checked_at)]]);
@@ -338,13 +286,6 @@ $('#caddyForm').dns_provider.onchange = e => { $('#cfTokenRow').hidden = e.targe
 $('#caddyForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#caddyErr').textContent=''; $('#caddyMsg').textContent = 'Applying… building the Caddy image with the DNS module can take a few minutes.'; $('#caddySubmit').disabled = true;
   try{ const r = await api('PUT','/api/v1/server/caddy',{domain: f.domain.value.trim().toLowerCase(), extra_domains: f.extra_domains.value.split(',').map(s => s.trim()).filter(Boolean), email: f.email.value.trim(), dns_provider: f.dns_provider.value, cloudflare_token: f.cloudflare_token.value, reason: f.reason.value}); $('#caddyMsg').textContent = r.message || 'applied'; f.cloudflare_token.value=''; f.reason.value=''; ctrl32.toast('domain configured','ok'); setTimeout(load, 3000); }
   catch(x){ $('#caddyErr').textContent = x.message; $('#caddyMsg').textContent=''; } finally { $('#caddySubmit').disabled = false; } };
-$('#wgForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#wgErr').textContent=''; $('#wgSubmit').disabled = true;
-  try{ await api('PUT','/api/v1/server/wireguard',{enabled: f.enabled.checked, listen_port: parseInt(f.listen_port.value, 10) || 51820, address: f.address.value.trim(), endpoint: f.endpoint.value.trim(), dns: f.dns.value.trim(), reason: f.reason.value}); f.reason.value=''; f.dataset.filled=''; ctrl32.toast('WireGuard configured','ok'); setTimeout(load, 2500); }
-  catch(x){ $('#wgErr').textContent = x.message; } finally { $('#wgSubmit').disabled = false; } };
-$('#addPeerBtn').onclick = () => { const f = $('#peerForm'); f.reset(); $('#peerErr').textContent=''; $('#peerResult').hidden = true; $('#peerSubmit').hidden = false; $('#peerDlg').showModal(); };
-$('#peerForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#peerErr').textContent='';
-  try{ const r = await api('POST','/api/v1/server/wireguard/peers',{name: f.name.value, reason: f.reason.value}); $('#peerQr').src = r.qr || ''; $('#peerQr').hidden = !r.qr; $('#peerConf').textContent = r.config; const wg = INFO.agent.status && INFO.agent.status.wireguard; $('#peerHint').textContent = 'Inside the tunnel the device reaches the broker at ' + (wg && wg.mqtt ? 'mqtt://' + wg.mqtt : 'the server VPN address, port 1883') + ' and this UI at the public URL.'; $('#peerResult').hidden = false; $('#peerSubmit').hidden = true; ctrl32.toast('device added','ok'); load(); }
-  catch(x){ $('#peerErr').textContent = x.message; } };
 $('#updForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#updErr').textContent=''; $('#updMsg').textContent = 'Downloading and verifying…'; $('#updSubmit').disabled = true;
   try{ const r = await api('POST','/api/v1/server/update',{version: f.version.value.trim(), reason: f.reason.value}); $('#updMsg').textContent = r.message + ' (SHA-256 ' + r.sha256.slice(0, 16) + '…). Reloading in 10 s.'; setTimeout(() => location.reload(), 10000); }
   catch(x){ $('#updErr').textContent = x.message; $('#updMsg').textContent=''; } finally { $('#updSubmit').disabled = false; } };
@@ -446,7 +387,7 @@ $('#licRenew').onclick = async () => { const reason = ctrl32.ask('Reason for ren
 $('#licRemove').onclick = async () => { const reason = prompt(ctrl32.t('Reason for removing the license (audit trail)')); if(!reason) return;
   try{ await api('DELETE','/api/v1/server/license?reason=' + encodeURIComponent(reason)); ctrl32.toast(ctrl32.t('license removed'),'ok'); renderLicense(); }catch(x){ $('#licErr').textContent = x.message; } };
 let SEC = 'overview';
-async function load(){ if(SEC === 'license') return renderLicense(); INFO = await api('GET','/api/v1/server'); agentNote(); ({overview: renderOverview, domain: renderDomain, wireguard: renderWg, backups: renderBackups, redundancy: renderRedundancy, updates: renderUpdates})[SEC](); }
+async function load(){ if(SEC === 'license') return renderLicense(); INFO = await api('GET','/api/v1/server'); agentNote(); ({overview: renderOverview, domain: renderDomain, backups: renderBackups, redundancy: renderRedundancy, updates: renderUpdates})[SEC](); }
 ctrl32.ready({requireAuth: true, requirePerm: 'system.admin'}).then(() => { SEC = ctrl32.section('overview', Object.keys(TITLES)); document.title = TITLES[SEC] + ' — Server'; load().catch(x => ctrl32.toast(x.message,'bad')); });
 </script>
 </body>

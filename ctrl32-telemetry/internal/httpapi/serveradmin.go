@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"io"
 	"net/http"
@@ -14,8 +13,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	qrcode "github.com/skip2/go-qrcode"
 
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/agent"
 )
@@ -29,8 +26,7 @@ import (
 //	PUT  /api/v1/server/caddy                   {domain, extra_domains, email, dns_provider, cloudflare_token, reason}
 //	GET  /api/v1/server/wireguard
 //	PUT  /api/v1/server/wireguard               {enabled, listen_port, address, endpoint, dns, reason}
-//	POST /api/v1/server/wireguard/peers         {name, reason} -> client config (once) + QR
-//	POST /api/v1/server/wireguard/peers/{id}/remove {reason}
+//	(peers and access rules of the VPN: vpn.go, /api/v1/vpn)
 //	POST /api/v1/server/update                  {version, reason}
 
 var updateCheck struct {
@@ -216,51 +212,6 @@ func (s *Server) serverSetWireGuard(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "server.wireguard", "server", "wireguard", nil, map[string]any{"enabled": in.Enabled, "listen_port": in.ListenPort, "address": in.Address, "endpoint": in.Endpoint}, in.Reason)
 	writeJSON(w, 200, st)
-}
-
-func (s *Server) serverAddPeer(w http.ResponseWriter, r *http.Request) {
-	p := PrincipalFrom(r.Context())
-	var in struct{ Name, Reason string }
-	if err := decodeJSON(r, &in, 2048); err != nil {
-		writeErr(w, 400, err.Error())
-		return
-	}
-	if strings.TrimSpace(in.Reason) == "" || strings.TrimSpace(in.Name) == "" {
-		writeErr(w, 400, "name and reason are required")
-		return
-	}
-	res, err := s.agent.AddPeer(r.Context(), agent.PeerRequest{Name: in.Name, CreatedBy: p.Username})
-	if err != nil {
-		s.agentErr(w, err)
-		return
-	}
-	s.audit(r, "server.wireguard_peer_add", "wireguard_peer", res.Peer.ID, nil, map[string]any{"name": res.Peer.Name, "address": res.Peer.Address, "public_key": res.Peer.PublicKey}, in.Reason)
-	out := map[string]any{"peer": res.Peer, "config": res.Config}
-	if png, err := qrcode.Encode(res.Config, qrcode.Medium, 360); err == nil {
-		out["qr"] = "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)
-	}
-	writeJSON(w, 200, out)
-}
-
-func (s *Server) serverRemovePeer(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	var in struct{ Reason string }
-	_ = decodeJSON(r, &in, 1024)
-	if strings.TrimSpace(in.Reason) == "" {
-		writeErr(w, 400, "reason required")
-		return
-	}
-	if strings.ContainsAny(id, "/\\ ") || id == "" {
-		writeErr(w, 400, "invalid peer id")
-		return
-	}
-	res, err := s.agent.RemovePeer(r.Context(), id)
-	if err != nil {
-		s.agentErr(w, err)
-		return
-	}
-	s.audit(r, "server.wireguard_peer_remove", "wireguard_peer", id, nil, nil, in.Reason)
-	writeJSON(w, 200, res)
 }
 
 func (s *Server) serverUpdate(w http.ResponseWriter, r *http.Request) {

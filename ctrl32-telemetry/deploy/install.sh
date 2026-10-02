@@ -303,7 +303,7 @@ RuntimeDirectoryPreserve=yes
 WantedBy=multi-user.target
 EOF
 if command -v apt-get >/dev/null 2>&1 && ! command -v wg >/dev/null 2>&1; then
-  apt-get install -y -qq wireguard-tools >/dev/null 2>&1 && log "installed wireguard-tools (VPN for devices, configured in the UI)" || log "WARNING: wireguard-tools not installed; the UI installs it when WireGuard is enabled"
+  apt-get install -y -qq wireguard-tools nftables >/dev/null 2>&1 && log "installed wireguard-tools and nftables (VPN with access rules, configured in the UI; off until enabled)" || log "WARNING: wireguard-tools/nftables not installed; the UI installs them when the VPN is enabled"
 fi
 systemctl daemon-reload
 systemctl enable "$APP" >/dev/null

@@ -29,6 +29,7 @@ WORK=$(mktemp -d)
 LOGS=$ROOT/test-results
 mkdir -p "$LOGS"
 SERVER_PID=""
+AGENT_PID=""
 declare -a RESULTS=()
 failed=0
 
@@ -38,6 +39,7 @@ has()  { [[ " $PHASES " == *" $1 "* ]]; }
 skip() { [[ "$SKIP" == *" $1 "* ]]; }
 cleanup() {
   if [[ -n "$SERVER_PID" && "${KEEP:-}" != 1 ]]; then kill "$SERVER_PID" 2>/dev/null; wait "$SERVER_PID" 2>/dev/null; fi
+  [[ -n "$AGENT_PID" ]] && kill "$AGENT_PID" 2>/dev/null
   rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -127,10 +129,22 @@ set_mfa_optional true
 "$BIN" admin seed-dashboard -org-slug "$ORG" -kind showcase -default -config "$CONFIG" > /dev/null || exit 2
 SHOWCASE=$(psql -Atq "$DB_ADMIN" -c "SELECT slug FROM core.dashboard WHERE slug LIKE 'showcase%' ORDER BY slug LIMIT 1")
 
+# The VPN suites run against the server agent's VPN simulation: it renders wg0.conf and the nftables table into a
+# directory and applies nothing to the host (internal/agent/vpn.go).
+CONFIG_VPN=$WORK/config-vpn.toml
+sed -e "s|^\[agent\]$|[agent]\nsocket = \"$WORK/agent.sock\"\nvpn_simulate = \"$WORK/vpnsim\"|" "$CONFIG" > "$CONFIG_VPN"
+
 # The login limiter allows 10 attempts a minute per address, so the server restarts before each suite.
-start_server() {
+start_server() { # [config]
   [[ -n "$SERVER_PID" ]] && { kill "$SERVER_PID" 2>/dev/null; wait "$SERVER_PID" 2>/dev/null; }
-  "$BIN" serve -config "$CONFIG" >> "$LOGS/server.log" 2>&1 &
+  [[ -n "$AGENT_PID" ]] && { kill "$AGENT_PID" 2>/dev/null; wait "$AGENT_PID" 2>/dev/null; AGENT_PID=""; }
+  local cfg=${1:-$CONFIG}
+  if [[ "$cfg" == "$CONFIG_VPN" ]]; then
+    rm -rf "$WORK/vpnsim"; mkdir -p "$WORK/vpnsim"
+    "$BIN" agent -config "$cfg" >> "$LOGS/agent.log" 2>&1 &
+    AGENT_PID=$!; sleep 0.5
+  fi
+  "$BIN" serve -config "$cfg" >> "$LOGS/server.log" 2>&1 &
   SERVER_PID=$!
   for _ in $(seq 60); do curl -s -o /dev/null --max-time 1 "$BASE/healthz" && return 0; sleep 0.25; done
   echo "server did not start, see test-results/server.log" >&2; exit 2
@@ -145,7 +159,7 @@ if has e2e; then
     n=$(basename "$f" .sh)
     [[ $n == iam ]] && continue
     if skip "$n"; then res "e2e $n" skipped; continue; fi
-    start_server
+    if [[ $n == vpn ]]; then start_server "$CONFIG_VPN"; else start_server; fi
     timeout 600 bash "$f" > "$LOGS/e2e-$n.log" 2>&1; rc=$?
     okc=$(grep -c '^  ok' "$LOGS/e2e-$n.log"); bad=$(grep -c 'FAIL' "$LOGS/e2e-$n.log")
     if [[ $rc == 0 && $bad == 0 ]]; then res "e2e $n" "ok ($okc)"; else res "e2e $n" "FAIL ($bad of $((okc + bad)), test-results/e2e-$n.log)"; fi
@@ -170,7 +184,7 @@ if has headless; then
     for f in tests/headless/*.js; do
       n=$(basename "$f" .js)
       if skip "$n"; then res "headless $n" skipped; continue; fi
-      start_server
+      if [[ $n == vpn ]]; then start_server "$CONFIG_VPN"; else start_server; fi
       CHROME=$WORK/chrome TEMP=$WORK OUT=$LOGS/screenshots LOGIN=1 SLUG=$SHOWCASE SLUGS=$SHOWCASE \
         timeout 180 node "$f" > "$LOGS/headless-$n.log" 2>&1; rc=$?
       probs=$(grep '^problems:' "$LOGS/headless-$n.log" | grep -v 'problems: none' | head -1)

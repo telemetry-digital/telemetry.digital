@@ -1,0 +1,31 @@
+meta {
+  name: New key pair for a VPN peer (configuration shown once)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/vpn/peers/:id/rotate
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "code": "string",
+    "password": "string",
+    "reason": "string"
+  }
+}
+
+docs {
+  New key pair for a VPN peer (configuration shown once)
+  
+  The old key stops working at once. Needs the password (and authenticator code) again.
+  
+  Requires permission `system.admin`.
+}

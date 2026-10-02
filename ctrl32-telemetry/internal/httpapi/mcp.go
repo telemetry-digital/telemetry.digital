@@ -49,7 +49,7 @@ var mcpAreas = map[string]string{
 	tagNotify: "notifications", tagRules: "rules", tagDash: "dashboards", tagHMI: "hmi_library", tagRepl: "replication",
 	tagFlows: "flows", tagPublic: "public_dashboards", tagConn: "connectors", tagReports: "reports", tagExports: "exports",
 	tagBrand: "branding", tagApps: "apps", tagServer: "server", tagProv: "provisioning", tagSmart: "smart_home",
-	tagVideo: "cameras", tagLanding: "front_page", tagDisplays: "displays",
+	tagVideo: "cameras", tagLanding: "front_page", tagDisplays: "displays", tagVPN: "vpn",
 }
 
 // mcpExclusions are single operations that are not offered to assistants, with the reason.
@@ -68,6 +68,8 @@ var mcpExclusions = map[string]string{
 	"GET /api/v1/i18n/{locale}":                         "the translation catalog of the web UI (large; the texts are in the pages)",
 	"GET /api/v1/branding/icon":                         "browser icon of the web UI",
 	"GET /api/v1/public/{token}/hmi/objects/{slug}/svg": "graphic of a shared picture, fetched by the public page",
+	"POST /api/v1/vpn/peers":                            "issues a private key; needs the user's password (and authenticator code) again in the browser",
+	"POST /api/v1/vpn/peers/{id}/rotate":                "issues a private key; needs the user's password (and authenticator code) again in the browser",
 }
 
 // mcpExcluded gives the reason an operation is not offered to assistants ("" = offered).

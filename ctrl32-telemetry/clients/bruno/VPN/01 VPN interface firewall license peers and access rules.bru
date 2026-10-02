@@ -1,0 +1,19 @@
+meta {
+  name: VPN interface firewall license peers and access rules
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/vpn
+  body: none
+  auth: inherit
+}
+
+docs {
+  VPN: interface, firewall, license, peers and access rules
+  
+  The interface and the nftables table from the agent (`interface.firewall.ruleset` is the generated table), whether the server is licensed for site peers, time-limited access and more than `free_limit` peers, every peer with its live state (handshake, traffic) and every access rule. `services` are the server's ports a rule can open to the VPN.
+  
+  Requires permission `system.admin`.
+}

@@ -20,7 +20,7 @@ req()  { local m=$1 p=$2 d=${3:-}
   STATUS=$(cat "$TMP/s"); cat "$TMP/b"; }
 
 echo "== pages and access"
-for p in /server /server/domain /server/wireguard /server/updates; do req GET $p >/dev/null; check "page $p served" "$(st)" 200; done
+for p in /server /server/domain /server/vpn /server/updates; do req GET $p >/dev/null; check "page $p served" "$(st)" 200; done
 req GET /api/v1/server >/dev/null; check "server info needs auth" "$(st)" 401
 req POST /api/v1/auth/login "{\"username\":\"$USER\",\"password\":\"$PASS\"}" >/dev/null; check "login" "$(st)" 200
 ME=$(req GET /api/v1/auth/me); CSRF=$(echo "$ME" | jget csrf_token); [[ -n "$CSRF" ]] && ok "csrf" || bad "csrf"
@@ -42,7 +42,7 @@ req POST /api/v1/server/restart '{"unit":"app"}' >/dev/null; check "restart need
 req POST /api/v1/server/restart '{"unit":"shell","reason":"x"}' >/dev/null; check "restart unit allow-list" "$(st)" 400
 req PUT /api/v1/server/caddy '{"domain":"a.example.com"}' >/dev/null; check "caddy needs reason" "$(st)" 400
 req PUT /api/v1/server/wireguard '{"enabled":true}' >/dev/null; check "wireguard needs reason" "$(st)" 400
-req POST /api/v1/server/wireguard/peers '{"name":"x"}' >/dev/null; check "peer needs reason" "$(st)" 400
+req POST /api/v1/vpn/peers '{"name":"x","kind":"user"}' >/dev/null; check "peer needs reason" "$(st)" 400
 req POST /api/v1/server/update '{"version":"../x","reason":"x"}' >/dev/null; check "update version validated" "$(st)" 400
 req POST /api/v1/server/update '{"reason":"x"}' >/dev/null; check "update needs version" "$(st)" 400
 
@@ -58,7 +58,7 @@ if [[ "$AGENT" == "true" ]]; then
   req POST /api/v1/server/update '{"version":"99.99.99","reason":"e2e"}' >/dev/null; check "unknown release refused" "$(st)" 502
 else
   echo "== without agent"
-  for c in "POST /api/v1/server/restart {\"unit\":\"app\",\"reason\":\"e2e\"}" "GET /api/v1/server/wireguard" "PUT /api/v1/server/caddy {\"domain\":\"a.example.com\",\"reason\":\"e2e\"}" "PUT /api/v1/server/wireguard {\"enabled\":false,\"reason\":\"e2e\"}" "POST /api/v1/server/wireguard/peers {\"name\":\"x\",\"reason\":\"e2e\"}" "POST /api/v1/server/wireguard/peers/abc/remove {\"reason\":\"e2e\"}" "POST /api/v1/server/update {\"version\":\"0.1.0\",\"reason\":\"e2e\"}"; do
+  for c in "POST /api/v1/server/restart {\"unit\":\"app\",\"reason\":\"e2e\"}" "GET /api/v1/server/wireguard" "PUT /api/v1/server/caddy {\"domain\":\"a.example.com\",\"reason\":\"e2e\"}" "PUT /api/v1/server/wireguard {\"enabled\":false,\"reason\":\"e2e\"}" "POST /api/v1/vpn/apply {\"reason\":\"e2e\"}" "POST /api/v1/vpn/rules/0192a000-0000-7000-8000-000000000001/remove {\"reason\":\"e2e\"}" "POST /api/v1/server/update {\"version\":\"0.1.0\",\"reason\":\"e2e\"}"; do
     set -- $c; req "$1" "$2" "${3:-}" >/dev/null; check "$1 $2 refused without agent" "$(st)" 503
   done
   grep -q "agent is not configured" "$TMP/b" && ok "clear message" || bad "message"

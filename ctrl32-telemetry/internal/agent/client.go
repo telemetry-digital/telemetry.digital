@@ -10,6 +10,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/vpn"
 )
 
 // Client talks to the agent over its Unix socket. A zero socket path means "no agent" (Windows, development).
@@ -109,16 +111,12 @@ func (c *Client) SetWireGuard(ctx context.Context, in WireGuardRequest) (*WireGu
 	return &st, err
 }
 
-func (c *Client) AddPeer(ctx context.Context, in PeerRequest) (*PeerResult, error) {
-	var r PeerResult
-	err := c.do(ctx, "POST", "/wireguard/peers", in, &r, 30*time.Second)
-	return &r, err
-}
-
-func (c *Client) RemovePeer(ctx context.Context, id string) (*Result, error) {
-	var r Result
-	err := c.do(ctx, "DELETE", "/wireguard/peers/"+id, nil, &r, 30*time.Second)
-	return &r, err
+// ApplyVPN sends the complete VPN state (peers and compiled access rules); the agent applies the interface and the
+// nftables table together and rolls both back when either fails.
+func (c *Client) ApplyVPN(ctx context.Context, d vpn.Desired) (*WireGuardState, error) {
+	var st WireGuardState
+	err := c.do(ctx, "PUT", "/vpn", d, &st, 2*time.Minute)
+	return &st, err
 }
 
 func (c *Client) Update(ctx context.Context, version string) (*UpdateResult, error) {
