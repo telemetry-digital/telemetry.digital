@@ -4,7 +4,8 @@
   docs.py setup        cold chain (medicine fridges, 30 days), energy meters (13 months), alarm rules with alarms and
                        incidents, notification channels and escalation, automation rules, flows, smart-home accounts,
                        a display, firmware and a campaign, users and a custom role, an API token, a report template and
-                       stored reports, a PWA app, the "overview" and "showcase" starter dashboards
+                       stored reports, a PWA app, the "overview" and "showcase" starter dashboards, and the VPN (a site,
+                       a technician, a gateway and access rules; needs the agent's VPN simulation and a licence)
   docs.py live         keeps the cold chain and the energy meters current (a sample every 60 s)
   docs.py mqtt-creds   prints "user pass" of the smart-home MQTT accounts (used by dev.sh to start the simulators)
 
@@ -334,7 +335,7 @@ def flows():
         {"id": "hot", "type": "stable_for", "x": 200, "y": 60, "settings": {"condition": "value > 8", "seconds": 600}},
         {"id": "rl", "type": "rate_limit", "x": 380, "y": 60, "settings": {"count": 1, "period_s": 3600}},
         {"id": "mail", "type": "notify", "x": 560, "y": 10, "settings": {"channel": c["ch1"], "subject": "Fridge 2: {{ fixed(value, 1) }} °C for more than 10 min"}},
-        {"id": "inc", "type": "incident", "x": 560, "y": 110, "settings": {"action": "open", "severity": "major", "title": "Fridge 2 outside 2–8 °C"}},
+        {"id": "inc", "type": "incident", "x": 560, "y": 110, "settings": {"action": "open", "severity": "major", "title": "Fridge 2 outside 2–8 °C", "key": "fridge-2"}},
         {"id": "dbg", "type": "debug", "x": 740, "y": 10, "settings": {"expr": "'sent ' + str(value)"}},
         {"id": "note", "type": "comment", "x": 20, "y": 180, "settings": {"text": "Temperature above 8 °C for more than 10 minutes → an e-mail to the pharmacist and an incident (at most once an hour)."}}],
         "wires": [{"from": "t", "port": 0, "to": "hot"}, {"from": "hot", "port": 0, "to": "rl"}, {"from": "rl", "port": 0, "to": "mail"},
@@ -472,10 +473,43 @@ def settings():
     return out
 
 
+# ---------------------------------------------------------------------------------------------- VPN
+def vpn():
+    """System → VPN: a site router, a technician with an expiry, a gateway and two access rules (found by name, so it
+    can run again). Needs the server agent (on a PC its VPN simulation: [agent] socket and vpn_simulate in
+    .dev/config.toml, the agent started with `c32 agent`) and, for the site and the expiry, a licence; otherwise it
+    says so and skips. The private keys of the configurations are not kept."""
+    v = call("GET", "/api/v1/vpn")
+    if not v.get("supported"):
+        print("skip vpn: no server agent with the VPN (set [agent] socket and vpn_simulate, start the agent)"); return None
+    if not v.get("licensed"):
+        print("skip vpn: the site and the time-limited technician need a licence"); return None
+    i = v.get("interface") or {}
+    if not i.get("enabled") or not i.get("public_key"):
+        call("PUT", "/api/v1/server/wireguard", {"enabled": True, "listen_port": 51820, "address": "10.66.0.1/24", "endpoint": "vpn.nitra-plant.example:51820", "dns": "", "reason": R})
+    pw = os.environ.get("CTRL32_PASS", "admin1234")
+    org = (call("GET", "/api/v1/organizations") or [{}])[0].get("id", "")
+    peers = {p["name"]: p["id"] for p in call("GET", "/api/v1/vpn")["peers"]}
+    week = time.strftime("%Y-%m-%dT17:00:00Z", time.gmtime(NOW + 7 * 86400))
+    for name, kind, extra in (("Nitra plant - line router", "site", {"subnets": ["192.168.10.0/24"], "org_id": org, "note": "MikroTik hEX in the line 1 control cabinet"}),
+                              ("Service laptop - J. Cooper", "user", {"expires_at": week, "note": "Commissioning of line 1"}),
+                              ("Gateway hall 2", "device", {"org_id": org, "note": "MQTT without TLS through the tunnel"})):
+        if name not in peers:
+            peers[name] = call("POST", "/api/v1/vpn/peers", dict(extra, name=name, kind=kind, reason=R, password=pw))["peer"]["id"]
+    rules = {r["name"] for r in call("GET", "/api/v1/vpn")["rules"]}
+    for body in ({"name": "Technicians → PLC line 1 (S7 102, Modbus 502)", "sources": [{"type": "kind", "kind": "user"}], "dest_type": "site",
+                  "dest_peer_id": peers["Nitra plant - line router"], "dest_cidr": "192.168.10.20", "protocol": "tcp", "ports": "102, 502"},
+                 {"name": "Devices → MQTT", "sources": [{"type": "kind", "kind": "device"}], "dest_type": "server", "protocol": "tcp", "ports": "1883"}):
+        if body["name"] not in rules:
+            call("POST", "/api/v1/vpn/rules", dict(body, enabled=True, reason=R))
+    return {"peers": peers}
+
+
 def setup():
     login()
     partitions()
     cold_chain(); energy(); dashboards(); rules(); flows(); mqtt_accounts(); home(); display(); firmware(); people(); settings(); incidents()
+    st["vpn"] = vpn(); save()
     print("docs demo ready:", ", ".join(st))
 
 

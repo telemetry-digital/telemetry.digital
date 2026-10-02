@@ -1,6 +1,7 @@
 // Headless Chrome: screenshots of every screen for the product documentation. Not a test: it signs in, walks every
 // page, opens the important dialogs and writes <section>-<what>.png to OUT. Run against a server with the full demo
-// (bash deploy/dev/dev.sh up && camsim && demo; the demo includes deploy/dev/demo/docs.py).
+// (bash deploy/dev/dev.sh up && camsim && demo; the demo includes deploy/dev/demo/docs.py). The VPN pictures need the
+// server agent with [agent] vpn_simulate and a licence (see docs.py); without them they are reported and skipped.
 //
 //   BASE=http://127.0.0.1:8080 OUT=/path/to/shots [USER=admin PASS=admin1234] [UI_LANG=en] [ONLY=video] node tests/headless/docshots.js
 //
@@ -152,7 +153,28 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
 
   // ---- automation, alarms, incidents
   await page("automation-alarm-rules", "/assets/rules");
-  await page("automation-alarm-rule-editor", "/assets/rules", { click: "#newRuleBtn" });
+  // the dialog alone, for a datastream of the cold chain (test runs against the server may leave other assets behind)
+  await page("automation-alarm-rule-editor", "/assets/rules", { click: "#newRuleBtn", clip: "#ruleDlg", pad: -4,
+    before: "setTimeout(() => { const f = document.querySelector('#ruleNew'); const o = f && [...f.datastream_id.options].find((x) => x.textContent.startsWith('Medicine fridge 2 / temp')); if (o) f.datastream_id.value = o.value; f.warning.value = '7.5'; f.action.value = '8'; f.hysteresis.value = '0.2'; f.reason.value = 'Limits per SOP-12'; }, 1000); true" });
+  // the datastream's "New rule version" form, filled from the current version (medicine fridge 2)
+  if (wanted("automation-rule-version")) {
+    const dss = (await api("/api/v1/datastreams")) || [];
+    const f2 = dss.find((d) => /fridge 2/i.test(d.asset || "") && d.key === "temp") || dss.find((d) => d.unit) || dss[0];
+    await go("/assets/rules", 3000);
+    if (f2) { await ev(`openDS(${JSON.stringify(f2.id)})`); await sleep(3000); await ev("(() => { const f = document.querySelector('#ruleForm'); if (!f) return false; f.type.value = 'high'; f.type.dispatchEvent(new Event('change')); return true; })()"); await sleep(500); }
+    await shot("automation-rule-version", { clip: "#ruleForm", pad: 12 });
+  }
+  // the Alarms widget with the Acknowledge button (the cold chain dashboard; needs an active alarm)
+  if (wanted("automation-alarms-acknowledge")) {
+    const cd = dashes.find((d) => d.slug === "cold-chain-medicine-store");
+    if (cd) {
+      await go(`/dashboards/${cd.slug}`, 6000);
+      // the widget opened in its full view (the dashboard column is narrow): head, table header and the active rows
+      // (with the button); older rows are left out
+      await ev("(() => { const a = document.querySelector('[data-ack]'); const w = a && a.closest('.dash-widget'); const b = w && w.querySelector('.dw-fs'); if (b) b.click(); return !!b; })()"); await sleep(2500);
+      await shot("automation-alarms-acknowledge", { clip: "js:(() => { const d = document.querySelector('dialog.dw-full'); const b = d ? [...d.querySelectorAll('[data-ack]')] : []; if (!b.length) return null; const last = b[b.length - 1].closest('tr').getBoundingClientRect(); return { getBoundingClientRect: () => { const r = d.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: last.bottom - r.top + 8 }; }, scrollIntoView: () => {} }; })()", pad: 0 });
+    }
+  }
   await page("automation-rules", "/assets/automation", { wait: 3000 });
   await page("automation-rule-editor", "/assets/automation", { wait: 3000, click: "#newAutoBtn" });
   await page("automation-incidents", "/incidents", { wait: 3000 });
@@ -176,6 +198,15 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
       if (r) { await send("Input.dispatchMouseEvent", { type: "mousePressed", x: r.x, y: r.y, button: "left", clickCount: 1 }); await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: r.x, y: r.y, button: "left", clickCount: 1 }); await sleep(1200); }
       await ev(quietDebug);
       await shot("automation-flow-node-settings");
+    }
+    // the Incident node with its incident key
+    if (wanted("automation-flow-incident-node")) {
+      await go(`/flows/${flow.slug}`, 4000);
+      const r = await ev(`(() => { const n = document.querySelector('.fe-node[data-id="inc"]'); if (!n) return null; const b = n.getBoundingClientRect(); return {x: b.x + b.width / 2, y: b.y + b.height / 2}; })()`);
+      if (r) { await send("Input.dispatchMouseEvent", { type: "mousePressed", x: r.x, y: r.y, button: "left", clickCount: 1 }); await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: r.x, y: r.y, button: "left", clickCount: 1 }); await sleep(1200); }
+      else problems.push("automation-flow-incident-node: no Incident node in " + flow.slug);
+      await ev(quietDebug);
+      await shot("automation-flow-incident-node");
     }
   }
 
@@ -229,7 +260,69 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await page("admin-settings-new-connector-dialog", "/settings/connectors", { wait: 3000, click: "#newConnBtn" });
   await page("admin-organizations", "/organizations", { wait: 3000 });
   await page("admin-server", "/server", { wait: 4000 });
-  for (const s of ["domain", "wireguard", "backups", "redundancy", "updates", "license"]) await page(`admin-server-${s}`, `/server/${s}`, { wait: 3500 });
+  for (const s of ["domain", "backups", "redundancy", "updates", "license"]) await page(`admin-server-${s}`, `/server/${s}`, { wait: 3500 });
+
+  // ---- VPN (System → VPN). Needs the server agent; on a PC its VPN simulation ([agent] vpn_simulate) and, for the
+  // site, a licence; the demo content comes from deploy/dev/demo/docs.py. The simulation's note and badge are hidden
+  // on the pictures (they describe the development PC, not the product). Two peers are created through the dialog to
+  // show their configuration once, and removed again afterwards.
+  const wantVpn = !only || only.split(",").some((s) => s.startsWith("vpn") || "vpn-".startsWith(s));
+  const vpnState = wantVpn ? await api("/api/v1/vpn") : null;
+  if (vpnState && vpnState.supported) {
+    const noSim = "(() => { const fix = () => { const n = document.querySelector('#note'); if (n && !n.hidden && /Simulation/.test(n.textContent)) n.hidden = true; document.querySelectorAll('#kvServer .badge').forEach((b) => { if (/simulation/i.test(b.textContent)) b.remove(); }); }; fix(); if (!window.__noSim) { window.__noSim = new MutationObserver(fix); window.__noSim.observe(document.body, { subtree: true, childList: true }); } return true; })()";
+    const vpnGo = async () => { await go("/server/vpn", 3500); await ev(noSim); await sleep(300); };
+    const created = [];
+    if (wanted("vpn-page")) { await vpnGo(); await shot("vpn-page", { full: true, maxH: 2400 }); }
+    if (wanted("vpn-server-settings")) { await vpnGo(); await click("#settingsBtn"); await shot("vpn-server-settings"); }
+    // the add-peer dialog per kind, filled as an administrator would
+    const fillPeer = (kind, name, extra) => `(() => { document.querySelector('#addPeerBtn').click(); document.querySelector('#kindSeg [data-kind=${kind}]').click(); const f = document.querySelector('#peerForm');
+      f.name.value = ${JSON.stringify(name)}; ${extra || ""} f.reason.value = 'New peer for the documentation'; f.password.value = 'admin1234'; return true; })()`;
+    const peerKinds = [["user", "Service tablet - M. Reed", "f.note.value = 'Refrigeration service';"],
+      ["device", "Energy meter gateway", "f.note.value = 'Modbus gateway in the switch room';"],
+      ["site", "Warehouse Senec - router", "f.subnets.value = '192.168.20.0/24'; f.note.value = 'Teltonika RUT241';"]];
+    for (const [kind, name, extra] of peerKinds) {
+      if (!wanted(`vpn-add-${kind}`)) continue;
+      await vpnGo(); await ev(fillPeer(kind, name, extra)); await sleep(800);
+      await shot(`vpn-add-${kind}`);
+    }
+    // the configuration shown once: a technician (QR code and .conf), a site (router configuration in three tabs)
+    const submitPeer = async () => { await ev("document.querySelector('#peerSubmit').click(); true"); await sleep(3000); await ev(noSim); const n = await ev("(() => { const t = document.querySelector('#confText'); return t ? t.textContent.match(/^# (.*)/m) : null; })()"); return n; };
+    if (wanted("vpn-peer-config")) {
+      await vpnGo(); await ev(fillPeer("user", "Service tablet - M. Reed", "f.note.value = 'Refrigeration service';")); await sleep(500);
+      await submitPeer(); created.push("Service tablet - M. Reed");
+      await ev("document.querySelector('#peerResult').scrollIntoView({block: 'start'}); true"); await sleep(400);
+      await shot("vpn-peer-config", { clip: "#peerDlg", pad: -6 });
+    }
+    if (wanted("vpn-router")) {
+      await vpnGo(); await ev(fillPeer("site", "Warehouse Senec - router", "f.subnets.value = '192.168.20.0/24'; f.note.value = 'Teltonika RUT241';")); await sleep(500);
+      await submitPeer(); created.push("Warehouse Senec - router");
+      for (const tpl of ["wg_quick", "openwrt", "mikrotik"]) {
+        await ev(`(() => { document.querySelector('[data-tpl=${tpl}]').click(); document.querySelector('#tplText').style.maxHeight = 'none'; document.querySelector('#tplTabs').scrollIntoView({block: 'start'}); return true; })()`); await sleep(500);
+        await shot(`vpn-router-${tpl.replace("_", "-")}`, { clip: "js:(() => { const a = document.querySelector('#tplTabs').previousElementSibling, b = document.querySelector('#tplText').nextElementSibling; const r1 = a.getBoundingClientRect(), r2 = b.getBoundingClientRect(); return { getBoundingClientRect: () => ({ x: r1.x, y: r1.y, width: Math.max(r1.width, r2.width), height: r2.bottom - r1.top }), scrollIntoView: () => {} }; })()", pad: 8 });
+      }
+    }
+    // remove the peers created for the pictures (with a reason, audited like any removal)
+    if (created.length) {
+      const st2 = await api("/api/v1/vpn");
+      for (const n of created) {
+        const p = ((st2 && st2.peers) || []).find((x) => x.name === n);
+        if (p) await ev(`ctrl32.api('POST', '/api/v1/vpn/peers/${p.id}/remove', {reason: 'peer created for the documentation pictures'}).then(() => true)`);
+      }
+    }
+    // access rules: the PLC rule of the demo, and a new rule towards this server with the service presets
+    if (wanted("vpn-rule-plc")) {
+      await vpnGo();
+      await ev("(() => { const r = [...document.querySelectorAll('#rules tbody tr')].find((t) => /PLC/.test(t.textContent)); if (r) r.querySelector('[data-redit]').click(); return !!r; })()"); await sleep(800);
+      await ev("(() => { const f = document.querySelector('#ruleForm'); f.reason.value = 'Commissioning of line 1'; return true; })()");
+      await shot("vpn-rule-plc", { clip: "#ruleDlg", pad: -6 });
+    }
+    if (wanted("vpn-rule-server")) {
+      await vpnGo(); await click("#addRuleBtn", 800);
+      await ev("(() => { const f = document.querySelector('#ruleForm'); const c = document.querySelector('#srcList input[data-st=kind][data-sv=user]'); if (c) c.checked = true; const p = document.querySelector('[data-preset]'); if (p) p.click(); return true; })()"); await sleep(400);
+      await shot("vpn-rule-server", { clip: "#ruleDlg", pad: -6 });
+    }
+    if (wanted("vpn-firewall")) { await vpnGo(); await click("#rulesetBtn"); await ev("(() => { const t = document.querySelector('#fwText'); t.style.maxHeight = 'none'; return true; })()"); await sleep(300); await shot("vpn-firewall", { clip: "#fwDlg", pad: -6 }); }
+  } else if (wantVpn) problems.push("vpn: the server agent with the VPN is not available (set [agent] vpn_simulate, start the agent)");
   await page("admin-front-page-editor", "/landing/edit", { wait: 4000 });
 
   // ---- AI assistants
