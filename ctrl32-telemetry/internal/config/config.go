@@ -118,8 +118,8 @@ type MQTTConfig struct {
 	// UplinkListen: plain listener on this server's address in a hub's VPN (uplink, set by the agent on Linux), e.g.
 	// "10.99.0.7:1883"; bound with retries. The uplink's firewall decides who may connect.
 	UplinkListen string `toml:"uplink_listen"`
-	TLSCert   string `toml:"tls_cert"`   // optional separate certificate for MQTT
-	TLSKey    string `toml:"tls_key"`
+	TLSCert      string `toml:"tls_cert"` // optional separate certificate for MQTT
+	TLSKey       string `toml:"tls_key"`
 }
 
 type DBConfig struct {

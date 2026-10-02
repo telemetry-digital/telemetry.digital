@@ -63,6 +63,24 @@
   </div>
 </div>
 
+<!-- this server's uplink to a hub (VPN phase 3; server administrators only) -->
+<div class="card" style="margin-top:16px" id="uplinkCard" hidden>
+  <div class="page-head" style="margin:0 0 8px"><h2 style="margin:0">Uplink to a hub</h2><span class="grow"></span>
+    <span class="actions" id="uplinkActions">
+      <button class="btn small" id="uplinkFwBtn" type="button">Firewall rules</button>
+      <button class="btn small" id="uplinkTransportBtn" type="button">Transport</button>
+      <button class="btn small" id="uplinkReplaceBtn" type="button">Replace configuration</button>
+      <button class="btn small danger" id="uplinkDisconnectBtn" type="button">Disconnect</button>
+    </span>
+    <button class="btn primary" id="uplinkConnectBtn" type="button">Connect to a hub</button>
+  </div>
+  <p class="muted small" id="uplinkIntro">No public address here? Connect this server out to a hub — another telemetry server with a public address, for example in the cloud. Technicians connect to the hub and reach this server and its LAN only as the rules on both sides allow: the hub's access rules and the uplink rules below.</p>
+  <dl class="kv" id="kvUplink"></dl>
+  <div class="page-head" style="margin:16px 0 8px"><h3 style="margin:0">Uplink access rules</h3><span class="grow"></span><button class="btn" id="addUplinkRuleBtn" type="button">Add uplink rule</button></div>
+  <p class="muted small">What the hub may reach on this server. Default deny: everything that arrives from the hub is dropped unless an uplink rule allows it. Hosts in the LAN see this server as the client (masquerade).</p>
+  <div class="table-wrap"><table id="uplinkRules"><thead><tr><th>Name</th><th>From</th><th>To</th><th>Protocol and ports</th><th>State</th><th></th></tr></thead><tbody></tbody></table></div>
+</div>
+
 <div class="card" style="margin-top:16px">
   <div class="page-head" style="margin:0 0 8px"><h2 style="margin:0">Peers</h2></div>
   <div class="table-wrap"><table id="peers"><thead><tr><th>Name</th><th>Kind</th><th>Organization</th><th>VPN address</th><th>Expires</th><th>State</th><th>Last handshake</th><th>Traffic</th><th></th></tr></thead><tbody></tbody></table></div>
@@ -101,6 +119,7 @@
         <button type="button" data-kind="user" class="on">Technician</button>
         <button type="button" data-kind="device">Device</button>
         <button type="button" data-kind="site">Site (router)</button>
+        <button type="button" data-kind="uplink">Server (uplink)</button>
       </div>
       <p class="muted small" id="kindHint"></p>
       <label>Name <input name="name" required maxlength="63" placeholder="technician-laptop"></label>
@@ -108,7 +127,7 @@
         <label>Organization <select name="org_id"><option value="">(whole server)</option></select></label>
         <label>Device (optional) <select name="device_id"><option value="">(none)</option></select></label>
       </div>
-      <label id="subnetsRow" hidden>Routed subnets (the LAN behind the router, one per line) <textarea name="subnets" rows="3" placeholder="192.168.10.0/24"></textarea></label>
+      <label id="subnetsRow" hidden><span id="subnetsLabel">Routed subnets (the LAN behind the router, one per line)</span> <textarea name="subnets" rows="3" placeholder="192.168.10.0/24"></textarea></label>
       <label>Access expires (optional) <input name="expires_at" type="datetime-local"></label>
       <div class="muted small" id="expiryHint">Time-limited access: the peer is disabled automatically. Requires the license.</div>
       <label>Note (optional) <input name="note" maxlength="200"></label>
@@ -217,6 +236,70 @@
   </form>
 </dialog>
 
+<!-- connect to a hub (uplink) -->
+<dialog id="uplinkDlg" class="wide">
+  <form id="uplinkForm" class="form" method="dialog">
+    <h2 style="margin-top:0" id="uplinkTitle">Connect to a hub</h2>
+    <p class="muted" id="uplinkHint">On the hub: System → VPN → Add peer → Server (uplink). Paste the uplink configuration it shows here. The connection goes out from this server only; nothing from the hub is accepted until an uplink rule allows it.</p>
+    <label>Uplink configuration from the hub <textarea name="token" rows="5" required spellcheck="false" autocomplete="off" placeholder="ctrl32-uplink-v1.…" class="secret"></textarea></label>
+    <label>Transport <select name="transport">
+      <option value="udp">UDP (WireGuard, recommended)</option>
+      <option value="https">HTTPS (TCP 443, when UDP is blocked)</option>
+    </select></label>
+    <p class="muted small">HTTPS carries the WireGuard packets inside a WebSocket through the hub's web address. Use it only when the network blocks outgoing UDP: it is slower when packets are lost.</p>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <p class="muted small">Connecting this server to an outside network needs your password again.</p>
+    <div class="two">
+      <label>Your password <input name="password" type="password" required autocomplete="current-password"></label>
+      <label class="mfa-row">Authenticator code <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10"></label>
+    </div>
+    <div class="err" id="uplinkErr"></div>
+    <div class="actions"><button class="btn primary" type="submit" id="uplinkSubmit">Connect</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form>
+</dialog>
+
+<!-- uplink transport -->
+<dialog id="uplinkTrDlg">
+  <form id="uplinkTrForm" class="form" method="dialog">
+    <h2 style="margin-top:0">Uplink transport</h2>
+    <label>Transport <select name="transport">
+      <option value="udp">UDP (WireGuard, recommended)</option>
+      <option value="https">HTTPS (TCP 443, when UDP is blocked)</option>
+    </select></label>
+    <p class="muted small" id="uplinkTrHint"></p>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="uplinkTrErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Apply</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form>
+</dialog>
+
+<!-- uplink access rule -->
+<dialog id="uplinkRuleDlg" class="wide">
+  <form id="uplinkRuleForm" class="form" method="dialog">
+    <h2 style="margin-top:0" id="uplinkRuleTitle">Uplink access rule</h2>
+    <label>Name <input name="name" required maxlength="80" placeholder="Hub technicians to the web interface"></label>
+    <label>From (inside the hub's VPN range; empty = the whole hub) <input name="src_cidr" placeholder="10.99.0.5"></label>
+    <div class="muted small" id="uplinkSrcHint"></div>
+    <div class="two">
+      <label>To <select name="dest_type">
+        <option value="server">This server</option>
+        <option value="lan">A host or network in the LAN</option>
+      </select></label>
+      <label id="uplinkDestRow" hidden>Host or subnet (empty = all offered networks) <input name="dest_cidr" placeholder="192.168.1.20"></label>
+    </div>
+    <div id="uplinkPresetRow"><div class="muted small">Services of this server</div><div class="presets" id="uplinkPresets"></div></div>
+    <div class="two">
+      <label>Protocol <select name="protocol"><option value="tcp">TCP</option><option value="udp">UDP</option><option value="icmp">ICMP (ping)</option><option value="any">Any</option></select></label>
+      <label>Ports <input name="ports" placeholder="443, 502"></label>
+    </div>
+    <div class="muted small" id="uplinkWinHint" hidden>Windows: hosts in the LAN are reached over TCP only.</div>
+    <label class="inline"><input type="checkbox" name="enabled" checked><span>Enabled</span></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="uplinkRuleErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form>
+</dialog>
+
 <dialog id="reasonDlg">
   <form id="reasonForm" class="form" method="dialog">
     <h2 style="margin-top:0" id="reasonTitle"></h2>
@@ -231,8 +314,9 @@
 <script>
 const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api, t = ctrl32.t;
 let V = null, ORGS = [], DEVICES = [], KIND = 'user', RULE_ID = '', EDIT_ID = '', GRANT_MIN = 120;
-const KINDS = {user: 'Technician', device: 'Device', site: 'Site'};
-const KIND_HINT = {user: 'A laptop or phone of a technician (WireGuard app). Reaches what the access rules allow, e.g. a PLC at a site.', device: 'A gateway or device that sends data through the tunnel, e.g. MQTT to this server without TLS.', site: 'A router or Raspberry Pi at a site that connects its whole LAN (site-to-site). Requires the license.'};
+const KINDS = {user: 'Technician', device: 'Device', site: 'Site', uplink: 'Server (uplink)'};
+const KIND_HINT = {user: 'A laptop or phone of a technician (WireGuard app). Reaches what the access rules allow, e.g. a PLC at a site.', device: 'A gateway or device that sends data through the tunnel, e.g. MQTT to this server without TLS.', site: 'A router or Raspberry Pi at a site that connects its whole LAN (site-to-site). Requires the license.',
+  uplink: 'Another telemetry server without a public address (in a customer LAN) that connects out to this server as its hub. You get an uplink configuration to paste on that server; its own uplink rules decide what it lets in. Requires the license.'};
 
 function kv(el, rows){ el.innerHTML = rows.filter(r => r).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v == null || v === '' ? '<span class="muted">—</span>' : v}</dd>`).join(''); }
 function bytes(n){ if(!n) return '0 B'; const u = ['B','KB','MB','GB','TB']; let i = 0; while(n >= 1024 && i < u.length-1){ n /= 1024; i++; } return n.toFixed(i ? 1 : 0) + ' ' + u[i]; }
@@ -294,7 +378,7 @@ function needsGrant(p){ return V.four_eyes && p.kind === 'user'; }
 function renderPeers(){
   const rows = (V.peers || []).map(p => `<tr>
     <td><b>${esc(p.name)}</b>${p.note ? `<div class="muted small">${esc(p.note)}</div>` : ''}${p.device_name ? `<div class="muted small">⌁ ${esc(p.device_name)}</div>` : ''}</td>
-    <td><span class="chip">${esc(t(KINDS[p.kind] || p.kind))}</span></td>
+    <td><span class="chip">${esc(t(KINDS[p.uplink ? 'uplink' : p.kind] || p.kind))}</span>${p.via_https ? `<div class="muted small">${esc(t('via HTTPS'))}</div>` : ''}</td>
     <td>${p.org_name ? esc(p.org_name) : `<span class="muted">${esc(t('(whole server)'))}</span>`}</td>
     <td><code>${esc(p.address)}</code>${(p.subnets || []).map(s => `<div class="small"><code>${esc(s)}</code></div>`).join('')}</td>
     <td>${p.expires_at ? esc(fmt(p.expires_at)) : '<span class="muted">—</span>'}</td>
@@ -361,12 +445,19 @@ $('#reasonForm').onsubmit = async e => { e.preventDefault(); $('#reasonErr').tex
 function fillOrgs(sel, value){ sel.innerHTML = (orgScope() ? '' : `<option value="">${esc(t('(whole server)'))}</option>`) + ORGS.map(o => `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join(''); sel.value = value || (orgScope() && ORGS[0] ? ORGS[0].id : ''); }
 function mfaRows(){ const on = !!(ctrl32.me && ctrl32.me.mfa_enabled); for(const el of document.querySelectorAll('.mfa-row')) el.hidden = !on; }
 
-function setKind(k){ KIND = k; for(const b of document.querySelectorAll('#kindSeg button')) b.classList.toggle('on', b.dataset.kind === k); $('#kindHint').textContent = t(KIND_HINT[k]); $('#subnetsRow').hidden = k !== 'site'; }
+function setKind(k){ KIND = k; for(const b of document.querySelectorAll('#kindSeg button')) b.classList.toggle('on', b.dataset.kind === k); $('#kindHint').textContent = t(KIND_HINT[k]); $('#subnetsRow').hidden = k !== 'site' && k !== 'uplink';
+  $('#subnetsLabel').textContent = t(k === 'uplink' ? 'Networks behind that server the hub may route to it (optional, one per line)' : 'Routed subnets (the LAN behind the router, one per line)'); }
 for(const b of document.querySelectorAll('#kindSeg button')) b.onclick = () => setKind(b.dataset.kind);
 
 function tplKeys(r){ return [...(r.templates ? (r.template_keys || Object.keys(r.templates)) : []), ...(r.client_templates ? (r.client_template_keys || Object.keys(r.client_templates)) : [])]; }
 function tplText(r, k){ return (r.templates && r.templates[k]) || (r.client_templates && r.client_templates[k]) || ''; }
 function resultHTML(r, kind){
+  if(r.uplink_token) return `<p class="muted">${esc(t('Uplink configuration (shown once — it holds the private key of that server, which is not stored here). Paste it on the remote server: System → VPN → Connect to a hub.'))}</p>
+    <pre class="conf secret" id="confText"></pre>
+    <div class="actions"><button class="btn small" type="button" id="dlConf">Download</button><button class="btn small" type="button" id="cpConf">Copy</button></div>
+    <dl class="kv small"><dt>${esc(t('Its address in this VPN'))}</dt><dd><code>${esc(r.address)}</code></dd><dt>${esc(t('Networks routed to it'))}</dt><dd>${(r.subnets || []).length ? r.subnets.map(s => `<code>${esc(s)}</code>`).join(' ') : `<span class="muted">${esc(t('none (only that server)'))}</span>`}</dd>
+    <dt>${esc(t('HTTPS transport'))}</dt><dd>${r.https_transport ? esc(t('included (for networks that block UDP)')) : `<span class="muted">${esc(t('not available: this server has no HTTPS address'))}</span>`}</dd></dl>
+    <p class="muted small">${esc(t('Technicians reach that server and its networks only when an access rule here allows it and an uplink rule on that server allows it too.'))}</p>`;
   const keys = tplKeys(r);
   const tpl = keys.length ? `<h3>${esc(t(r.templates ? 'Router and app configuration' : 'App configuration'))}</h3><div class="tabs" id="tplTabs">${keys.map((k, i) => `<button type="button" data-tpl="${k}" class="${i ? '' : 'active'}">${esc(t(TPL_LABELS[k] || k))}</button>`).join('')}</div><pre class="conf secret" id="tplText"></pre><p class="muted small">${esc(t('Text only: check it before use on the router.'))}</p>` : '';
   const held = r.approval_required ? `<div class="card note-bar"><b>${esc(t('Added disabled.'))}</b> <span>${esc(t('Four eyes for VPN access: request access for this technician; it starts when a different person approves it.'))}</span></div>` : '';
@@ -377,9 +468,10 @@ function resultHTML(r, kind){
     <p class="muted small">${esc(t('The peer reaches nothing until an access rule allows it.'))}</p>${tpl}`;
 }
 function wireResult(box, r, name){
-  box.querySelector('#confText').textContent = r.config;
-  box.querySelector('#dlConf').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([r.config], {type: 'text/plain'})); a.download = (name || 'ctrl32-vpn').replace(/[^A-Za-z0-9._-]+/g, '-') + '.conf'; a.click(); };
-  box.querySelector('#cpConf').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(r.config); ctrl32.toast(t('copied'), 'ok'); };
+  const text = r.uplink_token || r.config;
+  box.querySelector('#confText').textContent = text;
+  box.querySelector('#dlConf').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type: 'text/plain'})); a.download = (name || 'ctrl32-vpn').replace(/[^A-Za-z0-9._-]+/g, '-') + (r.uplink_token ? '.uplink.txt' : '.conf'); a.click(); };
+  box.querySelector('#cpConf').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(text); ctrl32.toast(t('copied'), 'ok'); };
   const keys = tplKeys(r);
   if(keys.length){ const show = k => { box.querySelector('#tplText').textContent = tplText(r, k); for(const b of box.querySelectorAll('[data-tpl]')) b.classList.toggle('active', b.dataset.tpl === k); };
     for(const b of box.querySelectorAll('[data-tpl]')) b.onclick = () => show(b.dataset.tpl); show(keys[0]); }
@@ -389,8 +481,8 @@ $('#addPeerBtn').onclick = () => { const f = $('#peerForm'); f.reset(); fillOrgs
   setKind('user'); mfaRows(); $('#peerErr').textContent = ''; $('#peerResult').hidden = true; $('#peerInputs').hidden = false; $('#peerSubmit').hidden = false; $('#peerDlg').showModal(); };
 $('#peerForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#peerErr').textContent = ''; $('#peerSubmit').disabled = true;
   try{
-    const body = {name: f.name.value.trim(), kind: KIND, org_id: f.org_id.value, device_id: f.device_id.value, note: f.note.value, reason: f.reason.value, password: f.password.value, code: f.code.value.trim(),
-      subnets: KIND === 'site' ? f.subnets.value.split(/[\s,]+/).filter(Boolean) : [], expires_at: isoFromLocal(f.expires_at.value)};
+    const body = {name: f.name.value.trim(), kind: KIND === 'uplink' ? 'site' : KIND, uplink: KIND === 'uplink', org_id: f.org_id.value, device_id: f.device_id.value, note: f.note.value, reason: f.reason.value, password: f.password.value, code: f.code.value.trim(),
+      subnets: (KIND === 'site' || KIND === 'uplink') ? f.subnets.value.split(/[\s,]+/).filter(Boolean) : [], expires_at: isoFromLocal(f.expires_at.value)};
     const r = await api('POST', '/api/v1/vpn/peers', body);
     f.password.value = ''; $('#peerInputs').hidden = true; $('#peerSubmit').hidden = true;
     const box = $('#peerResult'); box.innerHTML = resultHTML(r, KIND); box.hidden = false; wireResult(box, r, body.name); ctrl32.toast(t('peer added'), 'ok'); load();
@@ -442,12 +534,88 @@ $('#setForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $(
   try{ await api('PUT', '/api/v1/server/wireguard', {enabled: f.enabled.checked, listen_port: parseInt(f.listen_port.value, 10) || 51820, address: f.address.value.trim(), endpoint: f.endpoint.value.trim(), dns: f.dns.value.trim(), reason: f.reason.value});
     f.reason.value = ''; f.dataset.filled = ''; $('#setDlg').close(); ctrl32.toast(t('VPN server configured'), 'ok'); setTimeout(load, 1500); }
   catch(x){ $('#setErr').textContent = x.message; } finally { $('#setSubmit').disabled = false; } };
-$('#rulesetBtn').onclick = () => { $('#fwText').textContent = (V.interface && V.interface.firewall && V.interface.firewall.ruleset) || t('No firewall rules loaded yet.'); $('#fwDlg').showModal(); };
+$('#rulesetBtn').onclick = () => { renderServer(); $('#fwText').textContent = (V.interface && V.interface.firewall && V.interface.firewall.ruleset) || t('No firewall rules loaded yet.'); $('#fwDlg').showModal(); };
 $('#applyBtn').onclick = () => askReason('Apply the VPN again', 'Peers and access rules are sent to the server agent again.', async reason => { await api('POST', '/api/v1/vpn/apply', {reason}); ctrl32.toast(t('applied'), 'ok'); load(); });
+
+// ---- this server's uplink to a hub (VPN phase 3) ----
+let UPRULE_ID = '';
+function uplinkOn(){ return !!(V.uplink && V.uplink.configured); }
+function renderUplink(){
+  const u = V.uplink;
+  $('#uplinkCard').hidden = orgScope() || !u;
+  if(!u) return;
+  const on = uplinkOn();
+  $('#uplinkActions').hidden = !on; $('#uplinkConnectBtn').hidden = on;
+  $('#uplinkIntro').hidden = on;
+  if(!on){ kv($('#kvUplink'), [['State', badge('', t('not connected'))]]); }
+  else {
+    const fw = u.firewall || {};
+    const state = !u.running ? badge('bad', t('not running')) : (u.online ? badge('ok', t('connected')) : badge('warn', t('waiting for the hub')));
+    const tunnel = u.tunnel ? (u.tunnel.connected ? ' ' + badge('ok', t('tunnel up')) : ' ' + badge('warn', t('tunnel down')) + (u.tunnel.error ? ` <span class="small">${esc(u.tunnel.error)}</span>` : '')) : '';
+    const tr = u.transport === 'https' ? esc(t('HTTPS (TCP 443)')) + (u.tunnel_host ? ` <code>${esc(u.tunnel_host)}</code>` : '') + tunnel : esc(t('UDP (WireGuard)'));
+    const fwState = fw.error ? badge('bad', t('not applied')) + ` <span class="small">${esc(fw.error)}</span>` : (fw.applied ? badge('ok', t('default deny active')) : badge('warn', t('not loaded')));
+    const mode = {kernel: t('Linux: WireGuard and nftables'), userspace: t('Windows: inside the server agent'), simulation: t('simulation')}[u.mode] || '';
+    kv($('#kvUplink'), [['State', state], mode ? ['Runs', esc(mode)] : null, ['Hub', `<code>${esc(u.hub_endpoint)}</code>`], ['Transport', tr],
+      ['This server in the hub\'s VPN', `<code>${esc(u.address)}</code> <span class="muted small">${esc(u.name || '')}</span>`], ['Hub\'s VPN range', `<code>${esc(u.vpn_net)}</code>`],
+      ['Networks offered to the hub', (u.subnets || []).length ? u.subnets.map(s => `<code>${esc(s)}</code>`).join(' ') : `<span class="muted">${esc(t('none (only this server)'))}</span>`],
+      ['Last handshake', u.latest_handshake ? esc(fmt(u.latest_handshake)) : `<span class="muted">${esc(t('never'))}</span>`], ['Traffic', `${bytes(u.rx_bytes)} ↓ ${bytes(u.tx_bytes)} ↑`],
+      ['Firewall', fwState + ` <span class="muted small">${fw.rules || 0}</span> <span class="muted small">${esc(t('uplink rules'))}</span>`], ['Forwarding into the LAN', fw.forward ? badge('ok', t('on')) : badge('', t('off'))],
+      ['Connected since', u.connected_at ? esc(fmt(u.connected_at)) : '']]);
+  }
+  renderUplinkRules();
+}
+function renderUplinkRules(){
+  const rows = (V.uplink_rules || []).map(r => `<tr>
+    <td><b>${esc(r.name)}</b></td>
+    <td>${r.src_cidr ? `<code>${esc(r.src_cidr)}</code>` : `<span>${esc(t('the whole hub'))}</span>`}</td>
+    <td>${r.dest_type === 'server' ? esc(t('this server')) : (r.dest_cidr ? `<code>${esc(r.dest_cidr)}</code>` : esc(t('all offered networks')))}</td>
+    <td><code>${esc(r.protocol)}</code> ${r.ports ? `<code>${esc(r.ports)}</code>` : (r.protocol === 'tcp' || r.protocol === 'udp' ? `<span class="muted small">${esc(t('all ports'))}</span>` : '')}</td>
+    <td>${r.enabled ? badge('ok', t('enabled')) : badge('', t('disabled'))}</td>
+    <td class="nowrap"><button class="btn small" data-uredit="${r.id}" type="button">Edit</button><button class="btn small danger" data-uremove="${r.id}" type="button">Remove</button></td></tr>`).join('');
+  $('#uplinkRules tbody').innerHTML = rows || `<tr><td colspan="6" class="muted">${esc(t('No uplink rules: the hub reaches nothing on this server.'))}</td></tr>`;
+  for(const b of document.querySelectorAll('[data-uredit]')) b.onclick = () => openUplinkRule(b.dataset.uredit);
+  for(const b of document.querySelectorAll('[data-uremove]')) b.onclick = () => askReason('Remove uplink rule', 'The access from the hub it allowed ends at once.', async reason => { await api('POST', `/api/v1/vpn/uplink/rules/${b.dataset.uremove}/remove`, {reason}); ctrl32.toast(t('removed'), 'ok'); load(); });
+}
+function openUplinkConnect(replace){ const f = $('#uplinkForm'); f.reset(); mfaRows(); $('#uplinkErr').textContent = '';
+  $('#uplinkTitle').textContent = t(replace ? 'Replace the uplink configuration' : 'Connect to a hub');
+  $('#uplinkHint').textContent = t(replace ? 'After Rotate key on the hub, paste the new uplink configuration here. The uplink rules stay.' : 'On the hub: System → VPN → Add peer → Server (uplink). Paste the uplink configuration it shows here. The connection goes out from this server only; nothing from the hub is accepted until an uplink rule allows it.');
+  if(replace && V.uplink) f.transport.value = V.uplink.transport || 'udp';
+  $('#uplinkSubmit').textContent = t(replace ? 'Replace' : 'Connect'); $('#uplinkDlg').showModal(); }
+$('#uplinkConnectBtn').onclick = () => openUplinkConnect(false);
+$('#uplinkReplaceBtn').onclick = () => openUplinkConnect(true);
+$('#uplinkForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#uplinkErr').textContent = ''; $('#uplinkSubmit').disabled = true;
+  try{ await api('POST', '/api/v1/vpn/uplink', {token: f.token.value.trim(), transport: f.transport.value, reason: f.reason.value, password: f.password.value, code: f.code.value.trim()});
+    f.password.value = ''; f.token.value = ''; $('#uplinkDlg').close(); ctrl32.toast(t('connected to the hub'), 'ok'); load(); }
+  catch(x){ $('#uplinkErr').textContent = x.message; } finally { $('#uplinkSubmit').disabled = false; } };
+$('#uplinkDisconnectBtn').onclick = () => askReason('Disconnect from the hub', 'The uplink stops at once and its keys are deleted from this server. The uplink rules are kept for a later connection.', async reason => { await api('POST', '/api/v1/vpn/uplink/disconnect', {reason}); ctrl32.toast(t('disconnected'), 'ok'); load(); });
+$('#uplinkTransportBtn').onclick = () => { const f = $('#uplinkTrForm'); f.reset(); f.transport.value = V.uplink.transport || 'udp'; $('#uplinkTrErr').textContent = '';
+  f.transport.querySelector('[value=https]').disabled = !V.uplink.https_available;
+  $('#uplinkTrHint').textContent = t(V.uplink.https_available ? 'HTTPS carries the WireGuard packets inside a WebSocket through the hub\'s web address. Use it only when the network blocks outgoing UDP.' : 'The hub has no HTTPS address: only UDP is available.'); $('#uplinkTrDlg').showModal(); };
+$('#uplinkTrForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#uplinkTrErr').textContent = '';
+  try{ await api('POST', '/api/v1/vpn/uplink/transport', {transport: f.transport.value, reason: f.reason.value}); $('#uplinkTrDlg').close(); ctrl32.toast(t('saved'), 'ok'); load(); }catch(x){ $('#uplinkTrErr').textContent = x.message; } };
+$('#uplinkFwBtn').onclick = () => { const u = V.uplink || {}; $('#fwTitle').textContent = t(u.mode === 'userspace' ? 'Uplink rules enforced by the server agent' : 'Uplink firewall rules (nftables)');
+  $('#fwHint').textContent = t(u.mode === 'userspace' ? 'Generated by the server agent from the uplink rules; checked for every packet from the hub inside the agent.' : 'Generated by the server agent from the uplink rules; table ctrl32_uplink, loaded atomically.');
+  $('#fwText').textContent = (u.firewall && u.firewall.ruleset) || t('No firewall rules loaded yet.'); $('#fwDlg').showModal(); };
+function uplinkDestChanged(){ const f = $('#uplinkRuleForm'); const lan = f.dest_type.value === 'lan'; $('#uplinkDestRow').hidden = !lan; $('#uplinkPresetRow').hidden = lan;
+  $('#uplinkWinHint').hidden = !(lan && V.uplink && V.uplink.mode === 'userspace'); }
+$('#uplinkRuleForm').dest_type.onchange = uplinkDestChanged;
+function openUplinkRule(id){ UPRULE_ID = id || ''; const r = (V.uplink_rules || []).find(x => x.id === id) || {dest_type: 'server', protocol: 'tcp', ports: '', enabled: true};
+  const f = $('#uplinkRuleForm'); f.reset(); f.name.value = r.name || ''; f.src_cidr.value = r.src_cidr || ''; f.dest_type.value = r.dest_type; f.dest_cidr.value = r.dest_cidr || '';
+  f.protocol.value = r.protocol; f.ports.value = r.ports || ''; f.enabled.checked = r.enabled !== false; uplinkDestChanged();
+  const u = V.uplink || {};
+  $('#uplinkSrcHint').textContent = uplinkOn() ? t('Hub\'s VPN range') + ': ' + u.vpn_net + (u.hub_address ? ' · ' + t('the hub itself') + ': ' + u.hub_address : '') + ((u.subnets || []).length ? ' · ' + t('Networks offered to the hub') + ': ' + u.subnets.join(', ') : '') : t('Not connected: the rule is stored and applied when this server connects to a hub.');
+  $('#uplinkPresets').innerHTML = (V.uplink_services || []).map((s, i) => `<button class="btn small" type="button" data-upreset="${i}">${esc(t(s.name))} <span class="muted">${esc(s.ports)}</span></button>`).join('');
+  for(const b of document.querySelectorAll('[data-upreset]')) b.onclick = () => { const s = V.uplink_services[+b.dataset.upreset]; f.protocol.value = s.protocol; f.ports.value = s.ports; if(!f.name.value) f.name.value = t(s.name); };
+  $('#uplinkRuleTitle').textContent = t(id ? 'Edit uplink rule' : 'Add uplink rule'); $('#uplinkRuleErr').textContent = ''; $('#uplinkRuleDlg').showModal(); }
+$('#addUplinkRuleBtn').onclick = () => openUplinkRule('');
+$('#uplinkRuleForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#uplinkRuleErr').textContent = '';
+  const body = {name: f.name.value.trim(), src_cidr: f.src_cidr.value.trim(), dest_type: f.dest_type.value, dest_cidr: f.dest_type.value === 'lan' ? f.dest_cidr.value.trim() : '', protocol: f.protocol.value,
+    ports: (f.protocol.value === 'tcp' || f.protocol.value === 'udp') ? f.ports.value.trim() : '', enabled: f.enabled.checked, reason: f.reason.value};
+  try{ await api(UPRULE_ID ? 'PUT' : 'POST', UPRULE_ID ? `/api/v1/vpn/uplink/rules/${UPRULE_ID}` : '/api/v1/vpn/uplink/rules', body); $('#uplinkRuleDlg').close(); ctrl32.toast(t('saved'), 'ok'); load(); }catch(x){ $('#uplinkRuleErr').textContent = x.message; } };
 
 async function load(){
   V = await api('GET', '/api/v1/vpn');
-  noteBar(); renderServer(); renderLicense(); renderPeers(); renderRules();
+  noteBar(); renderServer(); renderLicense(); renderUplink(); renderPeers(); renderRules();
 }
 ctrl32.ready({requireAuth: true, requirePerm: 'system.admin|vpn.manage'}).then(async () => {
   if(ctrl32.can('system.admin')){ try{ ORGS = await api('GET', '/api/v1/organizations'); }catch(e){ ORGS = []; } }

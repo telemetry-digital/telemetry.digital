@@ -40,13 +40,20 @@ import (
 
 // ---- hub side --------------------------------------------------------------------------------------------------------
 
-// uplinkTunnelURL is the WebSocket URL of the HTTPS transport, or "" when this server has no HTTPS address.
+// uplinkTunnelURL is the WebSocket URL of the HTTPS transport, or "" when this server has no HTTPS address. A plain
+// http base URL on the loopback address (development and tests on one machine) is used as it is.
 func (s *Server) uplinkTunnelURL() string {
 	u, err := url.Parse(strings.TrimSpace(s.cfg.HTTP.BaseURL))
-	if err != nil || u.Scheme != "https" || u.Host == "" {
+	if err != nil || u.Host == "" {
 		return ""
 	}
-	return "https://" + u.Host + vpn.UplinkTunnelPath
+	switch {
+	case u.Scheme == "https":
+	case u.Scheme == "http" && vpn.ValidTunnelURL("http://"+u.Host) == nil:
+	default:
+		return ""
+	}
+	return u.Scheme + "://" + u.Host + vpn.UplinkTunnelPath
 }
 
 // uplinkConfig is what the hub shows once for an uplink peer: the token to paste on the remote server.
@@ -78,8 +85,9 @@ func (s *Server) newUplinkTunnel() *uptunnel.Handler {
 			if err != nil {
 				return netip.AddrPort{}, err
 			}
-			if !st.Enabled || st.ListenPort == 0 {
-				return netip.AddrPort{}, errors.New("the VPN is not enabled")
+			// a disabled VPN simply does not answer on the port; the datagrams are authenticated by WireGuard anyway
+			if st.PublicKey == "" || st.ListenPort == 0 {
+				return netip.AddrPort{}, errors.New("the VPN is not configured")
 			}
 			return netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), uint16(st.ListenPort)), nil
 		}}

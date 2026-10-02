@@ -131,7 +131,7 @@ func TestUplinkConnectKernel(t *testing.T) {
 	if w.Code != 200 || a.tunnel == nil {
 		t.Fatalf("transport: %d %s", w.Code, w.Body)
 	}
-	if f.ran("wg set wg1 peer "+tok.HubPublicKey+" endpoint 127.0.0.1:") < 0 || !strings.Contains(readFile(uplinkConfFile()), "Endpoint = 127.0.0.1:") {
+	if f.ran("wg set wg1 peer "+tok.HubPublicKey+" endpoint 127.0.0.1:") < 0 || f.ran("wg set wg1 peer "+tok.HubPublicKey+" persistent-keepalive 25") < 0 || !strings.Contains(readFile(uplinkConfFile()), "Endpoint = 127.0.0.1:") {
 		t.Fatalf("endpoint: %v", f.cmds)
 	}
 	_ = json.Unmarshal(w.Body.Bytes(), &st)
@@ -219,6 +219,37 @@ func TestUplinkConnectRefusals(t *testing.T) {
 	// rules and transport need a connected uplink
 	if w := call(a, "PUT", "/uplink/rules", UplinkRulesRequest{}); w.Code != 409 {
 		t.Fatalf("rules without uplink: %d", w.Code)
+	}
+}
+
+// WireGuard roams to the source of authenticated packets: while the HTTPS transport is on, the agent puts wg1 back
+// on the local end of the tunnel when a packet the hub still sent over UDP moved it.
+func TestUplinkTunnelEndpointWatch(t *testing.T) {
+	a, f, _ := uplinkAgent(t)
+	a.tunnelWatchEvery = 20 * time.Millisecond
+	tok, s := uplinkToken(t, "10.99.0.0/16", "10.99.0.7", "10.99.0.1", "192.168.1.0/24")
+	if w := call(a, "PUT", "/uplink", UplinkRequest{Token: s, Transport: "https", Rules: uplinkRules[:1]}); w.Code != 200 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	f.mu.Lock()
+	f.outputs["wg show wg1 endpoints"] = tok.HubPublicKey + "\t203.0.113.5:51820"
+	f.mu.Unlock()
+	want := "wg set wg1 peer " + tok.HubPublicKey + " endpoint " + a.tunnel.Endpoint()
+	ok := false
+	for i := 0; i < 100 && !ok; i++ {
+		time.Sleep(10 * time.Millisecond)
+		ok = f.ran(want) >= 0
+	}
+	if !ok {
+		t.Fatal("the endpoint was not put back on the tunnel")
+	}
+	call(a, "DELETE", "/uplink", nil)
+	f.mu.Lock()
+	f.cmds = nil
+	f.mu.Unlock()
+	time.Sleep(100 * time.Millisecond)
+	if f.ran("wg show wg1 endpoints") >= 0 {
+		t.Fatal("the watch runs after the disconnect")
 	}
 }
 

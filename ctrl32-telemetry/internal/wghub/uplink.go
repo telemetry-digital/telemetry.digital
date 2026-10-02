@@ -123,7 +123,12 @@ func (h *Hub) SetEndpoint(hubPublicKey, endpoint string) error {
 	if _, err := netip.ParseAddrPort(endpoint); err != nil {
 		return fmt.Errorf("endpoint %q must be ip:port", endpoint)
 	}
-	return h.dev.IpcSet("public_key=" + pub + "\nupdate_only=true\nendpoint=" + endpoint + "\n")
+	if err := h.dev.IpcSet("public_key=" + pub + "\nupdate_only=true\nendpoint=" + endpoint + "\npersistent_keepalive_interval=0\n"); err != nil {
+		return err
+	}
+	// switching the keepalive on again sends one at once, through the new endpoint: the hub learns it from that
+	// packet before it sends anything over the old path (which would move this side back, WireGuard roams)
+	return h.dev.IpcSet("public_key=" + pub + "\nupdate_only=true\npersistent_keepalive_interval=25\n")
 }
 
 // compileUplink builds the ruleset of an uplink.

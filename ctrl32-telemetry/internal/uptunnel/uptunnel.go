@@ -176,9 +176,8 @@ func relay(ws *websocket.Conn, udp *net.UDPConn, wgAddr *atomic.Pointer[net.UDPA
 				return
 			}
 			if wgAddr != nil {
-				if !from.IP.IsLoopback() {
-					continue
-				}
+				// the socket listens on 127.0.0.1, so only this host can send to it; the source address is not
+				// necessarily a loopback one (kernel WireGuard keeps the source address it used for the hub before)
 				wgAddr.Store(from)
 			}
 			wmu.Lock()

@@ -1,6 +1,7 @@
 # VPN for sites, technicians and devices
 
-*System → VPN* (0.64.0, spec 024, ADR-0018; phase 2 in 0.65.0, spec 025) turns the server into a WireGuard hub with
+*System → VPN* (0.64.0, spec 024, ADR-0018; phase 2 in 0.65.0, spec 025; phase 3 — the uplink to a hub — in 0.69.0,
+spec 027, ADR-0021) turns the server into a WireGuard hub with
 access rules. On Linux the server agent manages kernel WireGuard and an nftables table; on Windows (0.65.0, ADR-0020)
 the agent runs WireGuard itself and enforces the same rules in its own process (see *Windows servers*). An
 organization's administrator manages the VPN of the own organization under *Settings → VPN* (see *Organizations*).
@@ -11,6 +12,7 @@ organization's administrator manages the VPN of the own organization under *Sett
 | A site's whole LAN is connected (site-to-site) | a **site** peer: a router (OpenWrt, MikroTik, Teltonika, Linux) or a Raspberry Pi with the LAN as routed subnets |
 | Devices send data without TLS | a **device** peer and a rule *devices → this server : MQTT 1883* |
 | The server polls a PLC at a site (Modbus/OPC UA connectors) | nothing to add: the server itself may always reach the peers and site networks |
+| A telemetry server in a customer LAN without a public address is serviced remotely | an **uplink** to a hub with a public address (see *Uplink to a hub*): rules on the hub and on the customer server |
 
 Everything that arrives from the VPN is **dropped unless an access rule allows it** (default deny), also traffic to the
 server's own services. A new peer reaches nothing until a rule allows it.
@@ -150,6 +152,56 @@ inside the server agent* and *Access rules enforced by the server agent* instead
 
 Not yet verified on a real Windows server with remote peers.
 
+## Uplink to a hub (0.69.0, ADR-0021, spec 027)
+
+A server without a public address (in a customer's LAN) cannot be a hub for technicians. Instead it connects **out**
+to a hub — another telemetry server with a public address, typically a cloud server — and technicians of that hub
+reach it and its LAN **only as the rules on both sides allow**.
+
+```
+technician ──wg──▶ HUB (public, e.g. 10.99.0.1/16) ──wg (customer connects out)──▶ CUSTOMER SERVER (10.99.0.7) ──▶ PLC 192.168.50.20
+           hub's access rules:                              customer's uplink rules:
+           technician → uplink peer / its subnet : ports    hub range (or one technician) → this server / LAN host : ports
+```
+
+**On the hub** (*System → VPN → Add peer → Server (uplink)*): a site peer marked as an uplink, with the LAN subnets the
+hub may route to it (optional; without them only the server itself). It needs the licence like any site and the
+endpoint for peers. The configuration is an **uplink token** (`ctrl32-uplink-v1.…`, shown once after the password
+again, holding the remote server's private key; download or copy it, paste it on the remote server). *Rotate key*
+issues a new token; the old one, including its HTTPS secret, stops at once. Access rules as for sites: *technicians →
+Customer A : tcp 443* (peer), *technician → Customer A 192.168.50.20 : tcp 502* (site network). The peer list shows
+*Server (uplink)* and *via HTTPS* for an uplink on the HTTPS transport. A cloud hub should use a VPN range of its own
+(e.g. `10.99.0.1/16`): the customer servers' own VPN usually uses the default `10.66.0.1/24`, and overlapping ranges
+are refused on the customer side.
+
+**On the customer server** (*System → VPN → Uplink to a hub*, server administrators only): *Connect to a hub* —
+paste the token, choose the transport, give a reason and the password. The agent validates the token, refuses a hub
+range that overlaps the host's networks, its own VPN or its sites, and brings the uplink up:
+
+- **Linux:** interface `wg1` (`/etc/wireguard/wg1.conf`, no listening port of its own, keepalive 25 s, only the hub's
+  range routed into it) and the nftables table `inet ctrl32_uplink`: everything from `wg1` is dropped unless an uplink
+  rule accepts it (ping of the uplink address passes); towards the LAN it is forwarded with **masquerade** (LAN devices
+  see the customer server). Forwarding is on for `wg1` and — only while a LAN rule exists — on the LAN interface for the
+  replies; the table then drops anything else forwarded from that interface (the server does not become a router for
+  its LAN). Check: `wg show wg1`, `nft list table inet ctrl32_uplink`, `ip route show dev wg1`.
+- **Windows:** inside the agent (as the hub of ADR-0020): TCP to this server through `127.0.0.1`, TCP to LAN hosts
+  opened by the server itself; UDP and ping to LAN hosts are not offered.
+
+**Uplink rules** (default deny): *from* the hub's whole range or an address/subnet inside it (one technician), *to*
+*this server* (its uplink address, presets: web interface, MQTT in the tunnel — the broker listens on the uplink
+address, `mqtt.uplink_listen` — MQTT with TLS, SSH on Linux) or *a host or network in the LAN* (inside the networks
+offered to the hub), protocol and ports. Rules can be prepared before connecting. The card shows the state
+(*connected* = handshake within 3 minutes, *waiting for the hub*), the hub, the transport, the addresses and ranges,
+traffic, the generated rules (*Firewall rules*); *Replace configuration* (after a rotation on the hub) keeps the rules;
+*Disconnect* removes the interface and the table and deletes the keys (the rules stay). Audit: `vpn.uplink_connect`,
+`vpn.uplink_replace`, `vpn.uplink_transport`, `vpn.uplink_disconnect`, `vpn.uplink_rule_add|update|remove`.
+
+**HTTPS transport (networks that block UDP):** the token carries it when the hub has an `https` base URL. The agent
+then relays the WireGuard datagrams as WebSocket messages to `wss://<hub>/api/v1/vpn/uplink/tunnel` (through the hub's
+Caddy), and the hub's web service passes them to its WireGuard port on `127.0.0.1`. WireGuard still encrypts and
+authenticates everything; the WebSocket is opened only with the uplink's secret (stored on the hub as SHA-256). Slower
+when packets are lost (TCP inside TCP) — for maintenance access. Switch with *Transport*.
+
 ## Upgrade from earlier versions
 
 Peers created before 0.64.0 (kept by the agent) are imported once as device peers of the whole server, with the rule
@@ -158,7 +210,7 @@ web UI or SSH over the tunnel needs a rule. The import is audited (`vpn.import`)
 
 ## Limits and later phases
 
-- Linux servers with nftables, or Windows with the userspace hub; IPv4 only; the server needs a reachable UDP port (no
-  NAT traversal, no mesh).
-- Phase 3: a cloud hub for servers behind NAT (e.g. behind a Cloudflare Tunnel); on Windows, connections from the server
-  into sites.
+- Linux servers with nftables, or Windows with the userspace hub; IPv4 only; a hub needs a reachable UDP port (no
+  mesh); a server without one connects to a hub through an uplink (0.69.0).
+- One uplink per server; technicians always go through the hub; the hub's other sites are not routed to a customer
+  server. On Windows, connections from the server into sites are still not possible.

@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,14 +21,17 @@ import (
 
 // fakeHost records the programs the agent runs and fails the ones a test names.
 type fakeHost struct {
-	cmds  []string
-	fail  map[string]string // command prefix -> output of the failure
-	fwd   []bool
+	cmds    []string
+	fail    map[string]string // command prefix -> output of the failure
+	fwd     []bool
 	route   string            // output of `ip -4 -o route show dev wg0`
 	outputs map[string]string // command prefix -> output (uplink tests)
+	mu      sync.Mutex        // the uplink's endpoint watch runs commands from its own goroutine
 }
 
 func (f *fakeHost) exec(_ context.Context, _ time.Duration, name string, args ...string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	c := strings.TrimSpace(name + " " + strings.Join(args, " "))
 	f.cmds = append(f.cmds, c)
 	for p, out := range f.fail {
@@ -50,6 +54,8 @@ func (f *fakeHost) exec(_ context.Context, _ time.Duration, name string, args ..
 }
 
 func (f *fakeHost) ran(prefix string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for i, c := range f.cmds {
 		if strings.HasPrefix(c, prefix) {
 			return i
@@ -70,6 +76,7 @@ func vpnAgent(t *testing.T, enabled bool) (*Server, *fakeHost) {
 	a.localNets = func() []netip.Prefix { return []netip.Prefix{netip.MustParsePrefix("172.17.0.0/16")} }
 	a.setForwarding = func(on bool) error { f.fwd = append(f.fwd, on); return nil }
 	a.vpnHost = true
+	a.tunnelWatchEvery = 0
 	priv, pub, _ := vpn.GenerateKey()
 	_ = os.MkdirAll(wgDir, 0o700)
 	_ = os.WriteFile(wgKeyFile, []byte(priv+"\n"), 0o600)

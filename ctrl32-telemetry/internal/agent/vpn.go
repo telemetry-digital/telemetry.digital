@@ -88,6 +88,7 @@ func (a *Server) SetSimulation(dir string) {
 	a.setForwarding = func(bool) error { return nil }
 	a.ifForwarding = func(string) (bool, error) { return false, nil }
 	a.setIfForwarding = func(string, bool) error { return nil }
+	a.tunnelWatchEvery = 0
 }
 
 // setWGForwarding switches IPv4 forwarding for packets that arrive on wg0 only (the host's other interfaces keep

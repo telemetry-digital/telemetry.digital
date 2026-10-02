@@ -339,13 +339,72 @@ func (a *Server) uplinkEndpoint(u *uplinkStored) (string, error) {
 	}
 	a.tunnel, a.tunnelURL, a.tunnelKey = c, u.Token.TunnelURL, u.Token.TunnelKey
 	u.TunnelPort = c.Port()
+	if a.tunnelWatchEvery > 0 {
+		ctx, cancel := context.WithCancel(context.Background())
+		a.tunnelWatchStop = cancel
+		go a.watchTunnelEndpoint(ctx, u.Token.HubPublicKey, c.Endpoint())
+	}
 	return c.Endpoint(), nil
 }
 
 func (a *Server) stopTunnel() {
+	if a.tunnelWatchStop != nil {
+		a.tunnelWatchStop()
+		a.tunnelWatchStop = nil
+	}
 	if a.tunnel != nil {
 		a.tunnel.Close()
 		a.tunnel, a.tunnelURL, a.tunnelKey = nil, "", ""
+	}
+}
+
+// setKernelEndpoint points wg1 at an endpoint and sends a keepalive through it at once (switching the keepalive off
+// and on again sends one): the hub learns the new path from that packet before anything it still sends over the old
+// path moves this side back (WireGuard roams to the source of authenticated packets).
+func (a *Server) setKernelEndpoint(ctx context.Context, hubPub, endpoint string) error {
+	if out, err := a.run(ctx, 10*time.Second, "wg", "set", vpn.UplinkIface, "peer", hubPub, "endpoint", endpoint, "persistent-keepalive", "0"); err != nil {
+		return fmt.Errorf("setting the hub's endpoint failed: %s", firstLine(out))
+	}
+	if out, err := a.run(ctx, 10*time.Second, "wg", "set", vpn.UplinkIface, "peer", hubPub, "persistent-keepalive", "25"); err != nil {
+		return fmt.Errorf("setting the keepalive failed: %s", firstLine(out))
+	}
+	return nil
+}
+
+// watchTunnelEndpoint keeps WireGuard on the local end of the HTTPS transport. WireGuard roams to the source address
+// of every authenticated packet, so a packet the hub still sends directly over UDP (to the endpoint it knew before
+// the switch) would move the uplink back to UDP — exactly the path that is blocked. Until the hub has learned the
+// relay (it answers through it after the next handshake) the agent puts the endpoint back.
+func (a *Server) watchTunnelEndpoint(ctx context.Context, hubPub, endpoint string) {
+	t := time.NewTicker(a.tunnelWatchEvery)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		a.mu.Lock()
+		if ctx.Err() != nil { // replaced or stopped while waiting for the lock
+			a.mu.Unlock()
+			return
+		}
+		switch a.uplinkMode() {
+		case ModeKernel:
+			out, err := a.run(ctx, 5*time.Second, "wg", "show", vpn.UplinkIface, "endpoints")
+			if f := strings.Fields(out); err == nil && len(f) == 2 && f[0] == hubPub && f[1] != endpoint {
+				_ = a.setKernelEndpoint(ctx, hubPub, endpoint)
+			}
+		case ModeUserspace:
+			if a.upDev != nil {
+				for _, p := range a.upDev.Peers() {
+					if p.Endpoint != "" && p.Endpoint != endpoint {
+						_ = a.upDev.SetEndpoint(hubPub, endpoint)
+					}
+				}
+			}
+		}
+		a.mu.Unlock()
 	}
 }
 
@@ -483,8 +542,8 @@ func (a *Server) uplinkApplyKernel(ctx context.Context, u *uplinkStored, prev up
 		if out, err := a.run(ctx, 20*time.Second, "nft", "-f", uplinkNftFile); err != nil {
 			return restore(fmt.Errorf("loading the uplink firewall failed: %s", firstLine(out)))
 		}
-		if out, err := a.run(ctx, 10*time.Second, "wg", "set", vpn.UplinkIface, "peer", u.Token.HubPublicKey, "endpoint", ep); err != nil {
-			return restore(fmt.Errorf("setting the hub's endpoint failed: %s", firstLine(out)))
+		if err := a.setKernelEndpoint(ctx, u.Token.HubPublicKey, ep); err != nil {
+			return restore(err)
 		}
 	}
 	if err := a.setUplinkForwarding(prev.LANForward, u.LANForward, u.Forward); err != nil {
@@ -782,7 +841,7 @@ func (a *Server) startUplinkFromFiles() {
 			// the stored port was taken: point WireGuard at the new local end
 			_ = a.writeUplinkFiles(u, ep)
 			if a.uplinkMode() == ModeKernel {
-				_, _ = a.run(context.Background(), 10*time.Second, "wg", "set", vpn.UplinkIface, "peer", u.Token.HubPublicKey, "endpoint", ep)
+				_ = a.setKernelEndpoint(context.Background(), u.Token.HubPublicKey, ep)
 			}
 		}
 	}

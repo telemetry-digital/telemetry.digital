@@ -75,8 +75,11 @@ type Server struct {
 	tunnel          *uptunnel.Client
 	tunnelURL       string
 	tunnelKey       string
-	ifForwarding    func(iface string) (bool, error)
-	setIfForwarding func(iface string, on bool) error
+	tunnelWatchStop context.CancelFunc
+	// tunnelWatchEvery: how often the agent puts WireGuard back on the HTTPS transport (0 = never: tests, simulation)
+	tunnelWatchEvery time.Duration
+	ifForwarding     func(iface string) (bool, error)
+	setIfForwarding  func(iface string, on bool) error
 }
 
 func NewServer(socket, cfgPath, version, updateURL string, log *slog.Logger) *Server {
@@ -85,7 +88,7 @@ func NewServer(socket, cfgPath, version, updateURL string, log *slog.Logger) *Se
 	}
 	return &Server{socket: socket, cfgPath: cfgPath, version: version, updateURL: strings.TrimRight(updateURL, "/"), log: log, started: time.Now(), pgContainer: pgContainerDefault,
 		exec: run, localNets: vpn.LocalNets, setForwarding: setWGForwarding, vpnHost: !isWindows(), hub: newUserspaceHub(log),
-		startUplink: newUserspaceUplink(), ifForwarding: readForwarding, setIfForwarding: writeForwarding}
+		startUplink: newUserspaceUplink(), ifForwarding: readForwarding, setIfForwarding: writeForwarding, tunnelWatchEvery: 5 * time.Second}
 }
 
 // SetDBTools configures where the database tooling is (config [agent] pg_dump / pg_container).
