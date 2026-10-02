@@ -19,25 +19,31 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/vpn"
 )
 
-// Every VPN route needs system.admin (ADR-0018 decision 9) and peer creation and rotation are not offered to AI
-// assistants (they issue private keys behind a password check).
-func TestVPNRoutesNeedSystemAdmin(t *testing.T) {
+// The server's VPN settings need system.admin; peers, rules and grants are managed by the server administrator or
+// by an organization's VPN manager (vpn.manage, limited to the own organization in the handlers; ADR-0019). Peer
+// creation, rotation and access grants are not offered to AI assistants.
+func TestVPNRoutesPermissions(t *testing.T) {
 	src, err := os.ReadFile("server.go")
 	if err != nil {
 		t.Fatal(err)
 	}
-	re := regexp.MustCompile(`mux\.Handle\("([A-Z]+ /api/v1/(?:vpn|server/wireguard)[^"]*)", s\.require\("([a-z.]*)"`)
+	re := regexp.MustCompile(`mux\.Handle\("([A-Z]+ /api/v1/(?:vpn|server/wireguard)[^"]*)", s\.require\("([a-z.|]*)"`)
+	serverOnly := map[string]bool{"GET /api/v1/server/wireguard": true, "PUT /api/v1/server/wireguard": true, "POST /api/v1/vpn/apply": true}
 	n := 0
 	for _, m := range re.FindAllStringSubmatch(string(src), -1) {
 		n++
-		if m[2] != "system.admin" {
-			t.Errorf("%s needs %q, want system.admin", m[1], m[2])
+		want := "system.admin|vpn.manage"
+		if serverOnly[m[1]] {
+			want = "system.admin"
+		}
+		if m[2] != want {
+			t.Errorf("%s needs %q, want %q", m[1], m[2], want)
 		}
 	}
-	if n != 11 {
-		t.Fatalf("found %d VPN routes, want 11", n)
+	if n != 12 {
+		t.Fatalf("found %d VPN routes, want 12", n)
 	}
-	for _, op := range []string{"POST /api/v1/vpn/peers", "POST /api/v1/vpn/peers/{id}/rotate"} {
+	for _, op := range []string{"POST /api/v1/vpn/peers", "POST /api/v1/vpn/peers/{id}/rotate", "POST /api/v1/vpn/peers/{id}/grant"} {
 		if mcpExclusions[op] == "" {
 			t.Errorf("%s is offered to AI assistants", op)
 		}

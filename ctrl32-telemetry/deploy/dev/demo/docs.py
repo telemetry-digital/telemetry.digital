@@ -6,6 +6,8 @@
                        a display, firmware and a campaign, users and a custom role, an API token, a report template and
                        stored reports, a PWA app, the "overview" and "showcase" starter dashboards, and the VPN (a site,
                        a technician, a gateway and access rules; needs the agent's VPN simulation and a licence)
+  docs.py vpn          only the VPN part (phase 1 and 2: an organization administrator olivia.grant, four eyes for
+                       technicians' access, an approved and a pending access grant)
   docs.py live         keeps the cold chain and the energy meters current (a sample every 60 s)
   docs.py mqtt-creds   prints "user pass" of the smart-home MQTT accounts (used by dev.sh to start the simulators)
 
@@ -505,11 +507,78 @@ def vpn():
     return {"peers": peers}
 
 
+ORG_ADMIN, ORG_ADMIN_PW = "olivia.grant", "Olivia-docs-2026!"
+
+
+class Session:
+    """A second signed-in user (the organization's administrator of the VPN pictures)."""
+    def __init__(self):
+        import http.cookiejar
+        self.op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        self.csrf = ""
+
+    def call(self, m, path, body=None):
+        h = {"Content-Type": "application/json", "X-CSRF-Token": self.csrf}
+        req = urllib.request.Request(B + path, method=m, headers=h, data=json.dumps(body).encode() if body is not None else None)
+        try:
+            with self.op.open(req) as r:
+                t = r.read()
+                return json.loads(t) if t else {}
+        except urllib.error.HTTPError as e:
+            raise SystemExit(f"{m} {path}: {e.code} {e.read()[:300]}")
+
+    def login(self, user, pw):
+        self.call("POST", "/api/v1/auth/login", {"username": user, "password": pw})
+        self.csrf = self.call("GET", "/api/v1/auth/me")["csrf_token"]
+        return self
+
+
+def vpn2():
+    """VPN phase 2 (0.65.0): an administrator of the organization (org_admin only, no server administration) who
+    manages the organization's VPN, four eyes for technicians' access, one approved and one pending access grant, a
+    rule of the organization. Needs what vpn() needs; runs again without duplicating anything. The administrator's
+    password is set to ORG_ADMIN_PW so docshots.js can sign in as her."""
+    v = call("GET", "/api/v1/vpn")
+    if not v.get("supported") or not v.get("licensed"):
+        print("skip vpn2: needs the server agent with the VPN and a licence"); return None
+    u = by_name("/api/v1/users", ORG_ADMIN, key="username")
+    if not u:
+        u = call("POST", "/api/v1/users", {"username": ORG_ADMIN, "full_name": "Olivia Grant", "email": ORG_ADMIN + "@nitra-plant.example", "roles": ["org_admin"], "reason": "administrator of the Nitra plant organization"})["user"]
+    olivia = Session()
+    try:
+        olivia.login(ORG_ADMIN, ORG_ADMIN_PW)
+    except SystemExit:
+        once_pw = call("POST", f"/api/v1/users/{u['id']}/reset-password", {"reason": R})["initial_password"]
+        olivia.login(ORG_ADMIN, once_pw)
+        olivia.call("POST", "/api/v1/auth/password", {"current": once_pw, "new": ORG_ADMIN_PW})
+        olivia = Session().login(ORG_ADMIN, ORG_ADMIN_PW)
+    call("PUT", "/api/v1/settings/policy", {"four_eyes_vpn": True, "reason": "technicians' VPN access is approved by a second person (SOP-21)"})
+    mine = {p["name"]: p for p in olivia.call("GET", "/api/v1/vpn")["peers"]}
+    for name, note in (("Service laptop - P. Hughes", "Line 1 PLC service"), ("Tablet - E. Walsh", "HMI checks on night shifts")):
+        if name not in mine:
+            mine[name] = olivia.call("POST", "/api/v1/vpn/peers", {"name": name, "kind": "user", "note": note, "reason": R, "password": ORG_ADMIN_PW})["peer"]
+    site = next((p for p in mine.values() if p["kind"] == "site"), None)
+    rules = {r["name"] for r in olivia.call("GET", "/api/v1/vpn")["rules"]}
+    if site and "Nitra technicians → HMI line 1 (VNC 5900)" not in rules:
+        olivia.call("POST", "/api/v1/vpn/rules", {"name": "Nitra technicians → HMI line 1 (VNC 5900)", "sources": [{"type": "peer", "id": mine["Service laptop - P. Hughes"]["id"]}, {"type": "peer", "id": mine["Tablet - E. Walsh"]["id"]}],
+                                                 "dest_type": "site", "dest_peer_id": site["id"], "dest_cidr": "192.168.10.30", "protocol": "tcp", "ports": "5900", "enabled": True, "reason": R})
+    state = {p["id"]: p for p in olivia.call("GET", "/api/v1/vpn")["peers"]}
+    tablet, laptop = state[mine["Tablet - E. Walsh"]["id"]], state[mine["Service laptop - P. Hughes"]["id"]]
+    # the tablet: requested by Olivia, approved by the server administrator — access for 8 hours
+    if not tablet.get("grant") and not tablet.get("pending_grant"):
+        r = olivia.call("POST", f"/api/v1/vpn/peers/{tablet['id']}/grant", {"minutes": 480, "reason": "night shift 2 Oct, HMI alarm checks"})
+        call("POST", f"/api/v1/change-requests/{r['change_request']['id']}/approve", {"reason": "night shift confirmed by the plant manager"})
+    # the laptop: a request waiting in Settings → Approvals
+    if not laptop.get("grant") and not laptop.get("pending_grant"):
+        olivia.call("POST", f"/api/v1/vpn/peers/{laptop['id']}/grant", {"minutes": 120, "reason": "service call 2026-117, PLC program update"})
+    return {"org_admin": ORG_ADMIN}
+
+
 def setup():
     login()
     partitions()
     cold_chain(); energy(); dashboards(); rules(); flows(); mqtt_accounts(); home(); display(); firmware(); people(); settings(); incidents()
-    st["vpn"] = vpn(); save()
+    st["vpn"] = vpn(); st["vpn2"] = vpn2(); save()
     print("docs demo ready:", ", ".join(st))
 
 
@@ -540,4 +609,4 @@ if __name__ == "__main__":
     if cmd == "mqtt-creds":
         m = st["mqtt"]; print(m["auto"]["user"], m["auto"]["pass"], m["inbox"]["user"], m["inbox"]["pass"])
     else:
-        {"setup": setup, "live": live}[cmd]()
+        {"setup": setup, "live": live, "vpn": lambda: (login(), st.update(vpn=vpn(), vpn2=vpn2()), save())}[cmd]()

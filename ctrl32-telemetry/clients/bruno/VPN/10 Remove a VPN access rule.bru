@@ -1,7 +1,7 @@
 meta {
   name: Remove a VPN access rule
   type: http
-  seq: 9
+  seq: 10
 }
 
 post {
@@ -23,5 +23,5 @@ body:json {
 docs {
   Remove a VPN access rule
   
-  Requires permission `system.admin`.
+  Requires one of the permissions `system.admin`, `vpn.manage`.
 }

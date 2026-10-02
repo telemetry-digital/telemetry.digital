@@ -1,7 +1,7 @@
 meta {
   name: New key pair for a VPN peer (configuration shown once)
   type: http
-  seq: 6
+  seq: 7
 }
 
 post {
@@ -27,5 +27,5 @@ docs {
   
   The old key stops working at once. Needs the password (and authenticator code) again.
   
-  Requires permission `system.admin`.
+  Requires one of the permissions `system.admin`, `vpn.manage`.
 }

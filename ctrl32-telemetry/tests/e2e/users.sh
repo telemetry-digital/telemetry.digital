@@ -81,6 +81,44 @@ grep -q '"must_change_password":true' "$TMP/b2" && ok "must change password" || 
 curl -s -b "$JAR2" -o /dev/null -w '%{http_code}' "$BASE/api/v1/roles" > "$TMP/s2"; check "gated until password change" "$(cat "$TMP/s2")" 403
 req PATCH "/api/v1/users/$UID_" '{"disabled":true,"reason":"e2e cleanup"}' >/dev/null; check "cleanup: disable test user" "$(st)" 200
 
+echo "== server administration is separate from organization administration (ADR-0019)"
+echo "$ROLES" | grep -q '"name":"server_admin"' && ok "built-in role server_admin" || bad "server_admin missing"
+SA_ROLE=$(echo "$ROLES" | grep -o '{[^{}]*"name":"server_admin"[^{}]*}'); OA_ROLE=$(echo "$ROLES" | grep -o '{[^{}]*"name":"org_admin"[^{}]*}')
+echo "$SA_ROLE" | grep -q '"system.admin"' && ok "server_admin holds system.admin" || bad "server_admin: $SA_ROLE"
+echo "$OA_ROLE" | grep -q '"system.admin"' && bad "org_admin still holds system.admin" || ok "org_admin without system.admin"
+echo "$OA_ROLE" | grep -q '"vpn.manage"' && ok "org_admin manages the organization's VPN" || bad "org_admin: $OA_ROLE"
+echo "$ME" | grep -q '"system.admin"' && ok "the administrator keeps server access (server_admin)" || bad "admin lost system.admin"
+JAR3="$TMP/jar3"; CSRF3=""
+req3() { local m=$1 p=$2 d=${3:-}; printf '%s' "$d" > "$TMP/req3"
+  curl -s -b "$JAR3" -c "$JAR3" -X "$m" -H "Content-Type: application/json" -H "X-CSRF-Token: $CSRF3" -o "$TMP/b" -w '%{http_code}' ${d:+--data-binary @"$TMP/req3"} "$BASE$p" > "$TMP/s"; cat "$TMP/b"; }
+OA=$(req POST /api/v1/users "{\"username\":\"oa_$SUF\",\"full_name\":\"Org Admin\",\"email\":\"oa$SUF@example.com\",\"roles\":[\"org_admin\"],\"reason\":\"e2e\"}"); check "organization administrator created" "$(st)" 201
+OAID=$(echo "$OA" | grep -o '"user":{[^}]*' | jget id); OAPW=$(echo "$OA" | jget initial_password); OANEW="Users-e2e-$SUF-pass!"
+req3 POST /api/v1/auth/login "{\"username\":\"oa_$SUF\",\"password\":\"$OAPW\"}" >/dev/null; CSRF3=$(req3 GET /api/v1/auth/me | jget csrf_token)
+req3 POST /api/v1/auth/password "{\"current\":\"$OAPW\",\"new\":\"$OANEW\"}" >/dev/null
+req3 POST /api/v1/auth/login "{\"username\":\"oa_$SUF\",\"password\":\"$OANEW\"}" >/dev/null; check "org admin signs in" "$(st)" 200
+CSRF3=$(req3 GET /api/v1/auth/me | jget csrf_token)
+req3 GET /api/v1/organizations >/dev/null; check "org admin: organizations refused" "$(st)" 403
+req3 GET /api/v1/server >/dev/null; check "org admin: server refused" "$(st)" 403
+req3 GET /api/v1/server/backups >/dev/null; check "org admin: backups refused" "$(st)" 403
+req3 GET "/api/v1/export/organization?from=2026-01-01T00:00:00Z&to=2026-01-01T00:00:01Z" >/dev/null; check "org admin: organization export allowed" "$(st)" 200
+req3 POST /api/v1/users "{\"username\":\"sa_$SUF\",\"full_name\":\"x\",\"email\":\"sa$SUF@example.com\",\"roles\":[\"server_admin\"],\"reason\":\"e2e\"}" >/dev/null; check "org admin cannot grant server_admin" "$(st)" 403
+grep -q server_admin_required "$TMP/b" && ok "clear code" || bad "code: $(cat "$TMP/b")"
+req3 POST /api/v1/roles "{\"name\":\"srv_$SUF\",\"permissions\":[\"system.admin\"],\"reason\":\"e2e\"}" >/dev/null; check "org admin cannot create a role with system.admin" "$(st)" 403
+req3 POST "/api/v1/users/$MYID/reset-password" '{"reason":"e2e"}' >/dev/null; check "org admin cannot reset a server administrator's password" "$(st)" 403
+req3 POST "/api/v1/users/$MYID/mfa-reset" '{"reason":"e2e"}' >/dev/null; check "org admin cannot reset a server administrator's MFA" "$(st)" 403
+req3 PATCH "/api/v1/users/$MYID" '{"email":"takeover@example.com","reason":"e2e"}' >/dev/null; check "org admin cannot change a server administrator's account" "$(st)" 403
+req3 PATCH "/api/v1/users/$OAID" '{"roles":["viewer"],"reason":"e2e"}' >/dev/null; check "server-side: own org_admin cannot be dropped" "$(st)" 400
+req3 PATCH "/api/v1/users/$OAID" '{"disabled":true,"reason":"e2e"}' >/dev/null; check "server-side: cannot disable yourself" "$(st)" 400
+req PATCH "/api/v1/users/$OAID" '{"roles":["org_admin","server_admin"]}' >/dev/null; check "granting server_admin needs a reason" "$(st)" 400
+req PATCH "/api/v1/users/$OAID" '{"roles":["org_admin","server_admin"],"reason":"e2e second server administrator"}' >/dev/null; check "server administrator grants server_admin" "$(st)" 200
+req3 GET /api/v1/organizations >/dev/null; check "now the organizations are reachable" "$(st)" 200
+D=$(req GET "/api/v1/users/$OAID"); echo "$D" | grep -q '"role":"server_admin"' && echo "$D" | grep -q 'e2e second server administrator' && ok "grant with reason in the role history" || bad "history: $D"
+req3 PATCH "/api/v1/users/$OAID" '{"roles":["org_admin"],"reason":"e2e"}' >/dev/null; check "nobody drops their own server_admin" "$(st)" 400
+req PATCH "/api/v1/users/$OAID" '{"roles":["org_admin"],"reason":"e2e revoke"}' >/dev/null; check "server administrator revokes server_admin" "$(st)" 200
+req3 GET /api/v1/organizations >/dev/null; check "organizations refused again" "$(st)" 403
+req PATCH "/api/v1/users/$MYID" '{"roles":["org_admin"],"reason":"e2e"}' >/dev/null; check "own server_admin cannot be dropped" "$(st)" 400
+req PATCH "/api/v1/users/$OAID" '{"disabled":true,"reason":"e2e cleanup"}' >/dev/null; check "cleanup: disable org admin" "$(st)" 200
+
 echo "== audit entries"
 req GET "/api/v1/export/audit?format=csv" >/dev/null
 for a in role.create role.update user.create user.update user.password_reset user.mfa_reset user.sessions_revoke user.unlock; do grep -q "$a" "$TMP/b" && ok "audit $a" || bad "audit $a missing"; done

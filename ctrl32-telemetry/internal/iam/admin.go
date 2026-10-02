@@ -187,6 +187,44 @@ func (s *Service) UserPermissions(ctx context.Context, userID string) ([]string,
 	return out, nil
 }
 
+// ServerPermission is the permission of server administration (ADR-0019): organizations, server settings, the VPN
+// of the whole server, backups, updates, licence. Only the built-in role server_admin holds it by default.
+const ServerPermission = "system.admin"
+
+// ServerAdminRole is the built-in role of server administrators (ADR-0019).
+const ServerAdminRole = "server_admin"
+
+// PermissionsOfRoles returns the union of the permissions of the named roles as the organization resolves them
+// (an organization role shadows a built-in one of the same name, as when granting). Unknown names are an error.
+func (s *Service) PermissionsOfRoles(ctx context.Context, orgID string, names []string) (map[string]bool, error) {
+	out := map[string]bool{}
+	for _, n := range names {
+		var perms []string
+		err := s.pool.QueryRow(ctx, `SELECT permissions FROM core.role WHERE name = $1 AND (org_id IS NULL OR org_id = $2::uuid) ORDER BY org_id NULLS LAST LIMIT 1`, n, orgID).Scan(&perms)
+		if err != nil {
+			return nil, fmt.Errorf("role %q not found", n)
+		}
+		for _, p := range perms {
+			out[p] = true
+		}
+	}
+	return out, nil
+}
+
+// ServerAdmins counts enabled accounts (in enabled organizations) that hold server administration through any
+// current role, leaving out one user (excludeUser) and/or one role (excludeRole). It is the "last server
+// administrator" check: a change that would leave zero is refused.
+func (s *Service) ServerAdmins(ctx context.Context, excludeUser, excludeRole string) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `WITH cur AS (
+		SELECT user_id, role_id, (array_agg(event ORDER BY ts DESC, id DESC))[1] AS ev FROM core.user_role_history GROUP BY user_id, role_id)
+		SELECT count(DISTINCT u.id) FROM cur JOIN core.role r ON r.id = cur.role_id JOIN core.user_account u ON u.id = cur.user_id
+		JOIN core.organization o ON o.id = u.org_id
+		WHERE cur.ev = 'granted' AND $1 = ANY (r.permissions) AND u.disabled_at IS NULL AND o.disabled_at IS NULL
+		  AND ($2 = '' OR u.id::text <> $2) AND ($3 = '' OR r.id::text <> $3)`, ServerPermission, excludeUser, excludeRole).Scan(&n)
+	return n, err
+}
+
 // RoleHistory lists grants and revokes of a user, newest first.
 func (s *Service) RoleHistory(ctx context.Context, userID string) ([]RoleEvent, error) {
 	rows, err := s.pool.Query(ctx, `SELECT h.ts, r.name, h.event, COALESCE(a.username, ''), h.reason

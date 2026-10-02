@@ -79,19 +79,25 @@ func (s *Server) fourEyes(kind string, fn http.HandlerFunc) http.HandlerFunc {
 		if !reasonOf(w, reason) {
 			return
 		}
-		summary := s.changeSummary(r.Context(), kind, r.Method, r.URL.Path, body)
-		var id string
-		var expires time.Time
-		if err := s.pool.QueryRow(r.Context(), `INSERT INTO core.change_request (org_id, kind, method, path, body, summary, reason, requested_by, requested_by_name)
-			VALUES ($1::uuid, $2, $3, $4, $5::jsonb, $6, $7, NULLIF($8,'')::uuid, $9) RETURNING id::text, expires_at`,
-			p.OrgID, kind, r.Method, r.URL.RequestURI(), string(body), summary, reason, p.UserID, p.Username).Scan(&id, &expires); err != nil {
-			s.log.Error("change request insert", "err", err)
-			writeErr(w, 500, "change request could not be recorded")
-			return
-		}
-		s.audit(r, "change_request.create", "change_request", id, nil, map[string]any{"kind": kind, "method": r.Method, "path": r.URL.Path, "summary": summary}, reason)
-		writeJSON(w, 202, map[string]any{"status": "pending", "change_request": map[string]any{"id": id, "kind": kind, "summary": summary, "expires_at": expires}})
+		s.holdChange(w, r, kind, body, s.changeSummary(r.Context(), kind, r.Method, r.URL.Path, body), reason)
 	}
+}
+
+// holdChange stores the current call as a change request for a second person and answers 202. Handlers that validate
+// a request before holding it (VPN access grants) call it directly; body is the original JSON body.
+func (s *Server) holdChange(w http.ResponseWriter, r *http.Request, kind string, body []byte, summary, reason string) {
+	p := PrincipalFrom(r.Context())
+	var id string
+	var expires time.Time
+	if err := s.pool.QueryRow(r.Context(), `INSERT INTO core.change_request (org_id, kind, method, path, body, summary, reason, requested_by, requested_by_name)
+		VALUES ($1::uuid, $2, $3, $4, $5::jsonb, $6, $7, NULLIF($8,'')::uuid, $9) RETURNING id::text, expires_at`,
+		p.OrgID, kind, r.Method, r.URL.RequestURI(), string(body), summary, reason, p.UserID, p.Username).Scan(&id, &expires); err != nil {
+		s.log.Error("change request insert", "err", err)
+		writeErr(w, 500, "change request could not be recorded")
+		return
+	}
+	s.audit(r, "change_request.create", "change_request", id, nil, map[string]any{"kind": kind, "method": r.Method, "path": r.URL.Path, "summary": summary}, reason)
+	writeJSON(w, 202, map[string]any{"status": "pending", "change_request": map[string]any{"id": id, "kind": kind, "summary": summary, "expires_at": expires}})
 }
 
 // changeSummary describes the change in words for the approver.
@@ -162,6 +168,9 @@ func (s *Server) canApprove(p *iam.Principal, kind string) bool {
 		return p.Has("device.manage")
 	case "flows":
 		return p.Has("content.write") && p.Has("device.command")
+	case "vpn":
+		// the replayed grant checks again that the approver may manage that peer (server-wide peers: system.admin)
+		return p.Has("system.admin") || p.Has("vpn.manage")
 	}
 	return false
 }
@@ -172,8 +181,8 @@ func (s *Server) listChangeRequests(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := PrincipalFrom(r.Context())
-	if !p.Has("config.write") && !p.Has("device.manage") {
-		writeErr(w, 403, "config.write or device.manage permission required")
+	if !p.Has("config.write") && !p.Has("device.manage") && !p.Has("vpn.manage") && !p.Has("system.admin") {
+		writeErr(w, 403, "config.write, device.manage, vpn.manage or system.admin permission required")
 		return
 	}
 	// lazy expiry

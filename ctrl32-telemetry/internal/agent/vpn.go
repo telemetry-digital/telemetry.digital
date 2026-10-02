@@ -26,7 +26,8 @@ import (
 // nftables table ctrl32_vpn, and applies both together: the firewall first (checked with `nft -c` before), then the
 // peers (`wg syncconf`, no tunnel drops), then the routes of site subnets and forwarding. If a step fails everything
 // is put back as it was and the error is reported. The interface itself is still brought up by wg-quick@wg0, whose
-// PreUp loads the firewall before the interface exists.
+// PreUp loads the firewall before the interface exists. On Windows (no kernel WireGuard, no nftables) the agent runs
+// a userspace hub instead (hub.go, internal/wghub, ADR-0020) that enforces the same compiled rules in-process.
 //
 // wgctrl (netlink) was considered for applying peers; the wg CLI stays (ADR-0018): `wg syncconf` is atomic, proven in
 // production, and the wgctrl module would add five dependencies to the root process for structured statistics only.
@@ -104,7 +105,7 @@ func (a *Server) run(ctx context.Context, timeout time.Duration, name string, ar
 	return a.exec(ctx, timeout, name, args...)
 }
 
-func (a *Server) wgSupported() bool { return a.simulate || a.vpnHost }
+func (a *Server) wgSupported() bool { return a.vpnMode() != "" }
 
 func (a *Server) wgInstalled(ctx context.Context) bool {
 	_, err := a.run(ctx, 5*time.Second, "wg", "--version")
@@ -127,6 +128,10 @@ func (a *Server) wgState(ctx context.Context) WireGuardState {
 		Endpoint: st.Endpoint, DNS: st.DNS, PublicKey: st.PublicKey, UpdatedAt: st.UpdatedAt, Peers: []WireGuardPeer{}}
 	if !out.Supported {
 		return out
+	}
+	out.Mode = a.vpnMode()
+	if out.Mode == ModeUserspace {
+		return a.hubState(out, peers, vs)
 	}
 	out.Installed = a.wgInstalled(ctx)
 	if ip, _, err := net.ParseCIDR(st.Address); err == nil {
@@ -161,6 +166,33 @@ func (a *Server) wgState(ctx context.Context) WireGuardState {
 			}
 			wp.RxBytes, _ = strconv.ParseInt(f[5], 10, 64)
 			wp.TxBytes, _ = strconv.ParseInt(f[6], 10, 64)
+		}
+		out.Peers = append(out.Peers, wp)
+	}
+	return out
+}
+
+// hubState fills the state of the userspace hub: WireGuard is built in, the filter is the hub's own.
+func (a *Server) hubState(out WireGuardState, peers []wgPeerStored, vs vpnStored) WireGuardState {
+	out.Installed = true
+	out.Running = a.hub.Running()
+	if ip, _, err := net.ParseCIDR(out.Address); err == nil {
+		out.MQTT = ip.String() + ":1883"
+	}
+	live := map[string]hubPeer{}
+	for _, p := range a.hub.Peers() {
+		live[p.PublicKey] = p
+	}
+	out.Firewall = VPNFirewall{Rules: len(vs.Rules), Forward: vs.Forward, AppliedAt: vs.AppliedAt, Error: vs.Error, Ruleset: readFile(wgRulesFile)}
+	out.Firewall.Applied = out.Firewall.Ruleset != "" && out.Running && vs.Error == ""
+	for _, p := range peers {
+		wp := WireGuardPeer{ID: p.ID, Name: p.Name, PublicKey: p.PublicKey, Address: p.Address, Subnets: p.Subnets, Enabled: !p.Disabled, CreatedAt: p.CreatedAt, CreatedBy: p.CreatedBy}
+		if l, ok := live[p.PublicKey]; ok {
+			wp.Endpoint, wp.RxBytes, wp.TxBytes = l.Endpoint, l.Rx, l.Tx
+			if !l.Handshake.IsZero() {
+				wp.LatestHandshake = l.Handshake
+				wp.Online = time.Since(l.Handshake) < 3*time.Minute
+			}
 		}
 		out.Peers = append(out.Peers, wp)
 	}
@@ -355,7 +387,7 @@ func (a *Server) applyLive(ctx context.Context, st wgStored, oldPeers, newPeers 
 // hApplyVPN receives the complete VPN state from the web service.
 func (a *Server) hApplyVPN(w http.ResponseWriter, r *http.Request) {
 	if !a.wgSupported() {
-		writeErr(w, 501, "the VPN is not managed on Windows yet")
+		writeErr(w, 501, "the VPN is not managed on this platform")
 		return
 	}
 	a.mu.Lock()
@@ -399,7 +431,21 @@ func (a *Server) hApplyVPN(w http.ResponseWriter, r *http.Request) {
 		newVS.Rules = []vpn.FwRule{}
 	}
 	ctx := r.Context()
-	if st.Enabled && !a.simulate {
+	if a.vpnMode() == ModeUserspace {
+		if st.Enabled {
+			if err := a.hubApply(st, newPeers, newVS); err != nil {
+				a.log.Error("vpn apply failed, previous state kept", "err", err)
+				oldVS.Error = err.Error()
+				_ = saveJSON(wgVPNFile, oldVS, 0o600)
+				writeErr(w, 500, err.Error())
+				return
+			}
+		}
+		if err := a.writeHubRules(st, newPeers, newVS); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+	} else if st.Enabled && !a.simulate {
 		if err := a.applyLive(ctx, st, oldPeers, newPeers, oldVS, newVS); err != nil {
 			oldVS.Error = err.Error()
 			_ = saveJSON(wgVPNFile, oldVS, 0o600)
@@ -431,9 +477,10 @@ func decodeLarge(r *http.Request, dst any, max int64) error {
 // hSetWireGuard configures the interface: enabled, port, VPN address, endpoint and DNS for clients.
 func (a *Server) hSetWireGuard(w http.ResponseWriter, r *http.Request) {
 	if !a.wgSupported() {
-		writeErr(w, 501, "WireGuard is not managed on Windows; set http.tls_cert and http.tls_key in config.toml")
+		writeErr(w, 501, "WireGuard is not managed on this platform")
 		return
 	}
+	userspace := a.vpnMode() == ModeUserspace
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	var in WireGuardRequest
@@ -469,7 +516,7 @@ func (a *Server) hSetWireGuard(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 400, "endpoint must be host:port")
 			return
 		}
-	} else if !a.simulate {
+	} else if !a.simulate && !userspace {
 		if cs := a.caddyState(); cs.Domain != "" {
 			in.Endpoint = cs.Domain + ":" + strconv.Itoa(in.ListenPort)
 		}
@@ -487,7 +534,7 @@ func (a *Server) hSetWireGuard(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if in.Enabled && !a.simulate {
+	if in.Enabled && !a.simulate && !userspace {
 		missing := []string{}
 		if !a.wgInstalled(ctx) {
 			missing = append(missing, "wireguard-tools")
@@ -530,6 +577,29 @@ func (a *Server) hSetWireGuard(w http.ResponseWriter, r *http.Request) {
 	}
 	if vs.Rules == nil {
 		vs.Rules = []vpn.FwRule{}
+	}
+	if userspace {
+		// the hub is restarted with the new port, address and key; peers and rules are applied again
+		a.hub.Stop()
+		vs.Error = ""
+		if in.Enabled {
+			if err := a.hubApply(st, peers, vs); err != nil {
+				a.hub.Stop()
+				vs.Error = err.Error()
+				_ = saveJSON(wgVPNFile, vs, 0o600)
+				writeErr(w, 500, "the VPN could not be started: "+err.Error())
+				return
+			}
+		}
+		_ = saveJSON(wgVPNFile, vs, 0o600)
+		if err := a.writeHubRules(st, peers, vs); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		a.winFirewall(ctx, in.ListenPort, in.Enabled)
+		a.log.Info("wireguard configured (userspace hub)", "enabled", in.Enabled, "port", in.ListenPort, "address", in.Address, "endpoint", in.Endpoint)
+		writeJSON(w, 200, a.wgState(ctx))
+		return
 	}
 	// the firewall file must exist before wg-quick starts (PreUp loads it; without it wg0 does not come up)
 	if err := a.writeConfFiles(st, peers, vs); err != nil {

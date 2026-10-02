@@ -340,5 +340,127 @@ func RouterTemplates(c Client) map[string]string {
 	m.WriteString("# allow the tunnel into the LAN (the server's access rules decide who may), above any drop rule:\n")
 	m.WriteString("/ip firewall filter add chain=forward in-interface=ctrl32-vpn action=accept comment=\"ctrl32 VPN to LAN\" place-before=0\n")
 	out["mikrotik"] = m.String()
+
+	out["rutos"] = rutosTemplate(c, host, port, lan)
+	out["edgerouter"] = edgeRouterTemplate(c, host, port, lan)
+	out["pfsense"] = pfTemplate(c, host, port, lan, others, "pfSense")
+	out["opnsense"] = pfTemplate(c, host, port, lan, others, "OPNsense")
 	return out
+}
+
+// RouterTemplateKeys lists the keys RouterTemplates returns, in display order.
+var RouterTemplateKeys = []string{"wg_quick", "openwrt", "mikrotik", "rutos", "edgerouter", "pfsense", "opnsense"}
+
+// ClientTemplateKeys lists the keys ClientTemplates returns, in display order.
+var ClientTemplateKeys = []string{"windows", "mobile"}
+
+// rutosTemplate: Teltonika RUT routers with RutOS 7.x (uci, the same model as OpenWrt).
+func rutosTemplate(c Client, host, port, lan string) string {
+	var b strings.Builder
+	b.WriteString("# " + c.Name + " — Teltonika RUT with RutOS 7.x (SSH or System → Maintenance → CLI). Routed LAN: " + lan + "\n")
+	b.WriteString("# The same settings in the WebUI: Services → VPN → WireGuard → add instance \"ctrl32vpn\"\n")
+	b.WriteString("#   General: private key, IP address " + c.Address + "/32; Peers: add \"ctrl32hub\" with the values below,\n")
+	b.WriteString("#   enable \"Route allowed IPs\"; then Network → Firewall: allow forwarding from the zone of the tunnel to lan.\n")
+	b.WriteString("uci set network.ctrl32vpn=interface\nuci set network.ctrl32vpn.proto='wireguard'\n")
+	b.WriteString("uci set network.ctrl32vpn.private_key='" + c.PrivateKey + "'\n")
+	b.WriteString("uci add_list network.ctrl32vpn.addresses='" + c.Address + "/32'\n")
+	b.WriteString("uci set network.ctrl32hub=wireguard_ctrl32vpn\n")
+	b.WriteString("uci set network.ctrl32hub.description='ctrl32 telemetry'\n")
+	b.WriteString("uci set network.ctrl32hub.public_key='" + c.ServerPublicKey + "'\n")
+	if c.PresharedKey != "" {
+		b.WriteString("uci set network.ctrl32hub.preshared_key='" + c.PresharedKey + "'\n")
+	}
+	b.WriteString("uci set network.ctrl32hub.endpoint_host='" + host + "'\nuci set network.ctrl32hub.endpoint_port='" + port + "'\n")
+	b.WriteString("uci set network.ctrl32hub.persistent_keepalive='25'\nuci set network.ctrl32hub.route_allowed_ips='1'\n")
+	for _, a := range c.AllowedIPs {
+		b.WriteString("uci add_list network.ctrl32hub.allowed_ips='" + a + "'\n")
+	}
+	b.WriteString("uci commit network\n")
+	b.WriteString("# firewall: a zone for the tunnel that may forward into the LAN (the server decides who may)\n")
+	b.WriteString("uci set firewall.ctrl32vpn=zone\nuci set firewall.ctrl32vpn.name='ctrl32vpn'\nuci add_list firewall.ctrl32vpn.network='ctrl32vpn'\n")
+	b.WriteString("uci set firewall.ctrl32vpn.input='REJECT'\nuci set firewall.ctrl32vpn.output='ACCEPT'\nuci set firewall.ctrl32vpn.forward='REJECT'\n")
+	b.WriteString("uci set firewall.ctrl32vpn_lan=forwarding\nuci set firewall.ctrl32vpn_lan.src='ctrl32vpn'\nuci set firewall.ctrl32vpn_lan.dest='lan'\n")
+	b.WriteString("uci set firewall.lan_ctrl32vpn=forwarding\nuci set firewall.lan_ctrl32vpn.src='lan'\nuci set firewall.lan_ctrl32vpn.dest='ctrl32vpn'\n")
+	b.WriteString("uci commit firewall\n/etc/init.d/network reload\n/etc/init.d/firewall reload\n")
+	return b.String()
+}
+
+// edgeRouterTemplate: Ubiquiti EdgeRouter (EdgeOS) with the WireGuard package (wireguard-vyatta-ubnt) installed.
+func edgeRouterTemplate(c Client, host, port, lan string) string {
+	var b strings.Builder
+	q := func(s string) string { return "'" + s + "'" }
+	b.WriteString("# " + c.Name + " — Ubiquiti EdgeRouter (EdgeOS 2.x) with the WireGuard package installed. Routed LAN: " + lan + "\n")
+	b.WriteString("# Paste in the CLI (ssh). If wg0 is already used on this router, replace it with a free name (wg1, …).\n")
+	b.WriteString("configure\n")
+	b.WriteString("set interfaces wireguard wg0 description 'ctrl32 telemetry'\n")
+	b.WriteString("set interfaces wireguard wg0 address " + c.Address + "/32\n")
+	b.WriteString("set interfaces wireguard wg0 private-key " + q(c.PrivateKey) + "\n")
+	b.WriteString("set interfaces wireguard wg0 route-allowed-ip true\n")
+	peer := "set interfaces wireguard wg0 peer " + q(c.ServerPublicKey) + " "
+	b.WriteString(peer + "endpoint " + host + ":" + port + "\n")
+	for _, a := range c.AllowedIPs {
+		b.WriteString(peer + "allowed-ips " + a + "\n")
+	}
+	if c.PresharedKey != "" {
+		b.WriteString(peer + "preshared-key " + q(c.PresharedKey) + "\n")
+	}
+	b.WriteString(peer + "persistent-keepalive 25\n")
+	b.WriteString("# firewall: the tunnel only connects outwards, no WAN rule is needed. If a firewall ruleset is attached to\n")
+	b.WriteString("# the LAN interface (out) or to wg0 (in), allow traffic from wg0 into the LAN; the server's access rules decide who may.\n")
+	b.WriteString("commit\nsave\nexit\n")
+	return b.String()
+}
+
+// pfTemplate: step-by-step text for the web GUI of pfSense (WireGuard package) and OPNsense (built in).
+func pfTemplate(c Client, host, port, lan string, others []string, product string) string {
+	var b strings.Builder
+	menu, peerMenu := "VPN → WireGuard → Tunnels → Add", "VPN → WireGuard → Peers → Add"
+	if product == "OPNsense" {
+		menu, peerMenu = "VPN → WireGuard → Instances → Add", "VPN → WireGuard → Peers → Add"
+	}
+	b.WriteString("# " + c.Name + " — " + product + " (web interface). Routed LAN: " + lan + "\n")
+	if product == "pfSense" {
+		b.WriteString("0. System → Package Manager → Available Packages: install \"WireGuard\".\n")
+	}
+	b.WriteString("1. " + menu + "\n")
+	b.WriteString("   Description: ctrl32 telemetry, Listen port: leave empty or any free port\n")
+	b.WriteString("   Private key: " + c.PrivateKey + "\n")
+	b.WriteString("   Address: " + c.Address + "/32\n")
+	b.WriteString("2. " + peerMenu + "\n")
+	b.WriteString("   Public key: " + c.ServerPublicKey + "\n")
+	if c.PresharedKey != "" {
+		b.WriteString("   Pre-shared key: " + c.PresharedKey + "\n")
+	}
+	b.WriteString("   Endpoint: " + host + ", port " + port + ", Keep alive: 25\n")
+	b.WriteString("   Allowed IPs: " + strings.Join(c.AllowedIPs, ", ") + "\n")
+	b.WriteString("   Enable WireGuard and apply.\n")
+	b.WriteString("3. Interfaces → Assignments: add the WireGuard interface (e.g. WG_CTRL32), enable it, IPv4 none / static " + c.Address + "/32.\n")
+	b.WriteString("4. System → Routing → Gateways: add a gateway on WG_CTRL32 with the address " + c.Address + " (mark it far gateway if asked).\n")
+	b.WriteString("   System → Routing → Static Routes: route " + c.VPNNet + " through that gateway")
+	if len(others) > 0 {
+		b.WriteString(", and also " + strings.Join(others, ", "))
+	}
+	b.WriteString(".\n")
+	b.WriteString("5. Firewall → Rules → WG_CTRL32 (and the WireGuard group): pass traffic from " + c.VPNNet + " to " + lan + ";\n")
+	b.WriteString("   the server's access rules decide which peers may connect and to which ports.\n")
+	b.WriteString("6. Outbound NAT is not needed when this firewall is the default gateway of the LAN. Only if it is not,\n")
+	b.WriteString("   add an outbound NAT rule on the LAN interface for source " + c.VPNNet + ".\n")
+	return b.String()
+}
+
+// ClientTemplates are texts for a peer's own device (every kind): a .conf for the official WireGuard app for Windows
+// and instructions for the mobile apps (the QR code is shown next to it).
+func ClientTemplates(c Client) map[string]string {
+	var w strings.Builder
+	w.WriteString("# " + c.Name + " — WireGuard for Windows (official app from wireguard.com)\n")
+	w.WriteString("# Save as ctrl32-vpn.conf, then in the app: Import tunnel(s) from file → select it → Activate.\n")
+	w.WriteString("# Keep this file private: it contains the private key. Delete it after importing.\n")
+	w.WriteString(ClientConf(c))
+	var m strings.Builder
+	m.WriteString("# " + c.Name + " — Android and iPhone/iPad (official WireGuard app)\n")
+	m.WriteString("1. Install WireGuard from Google Play or the App Store.\n")
+	m.WriteString("2. Tap + → Scan from QR code, and scan the QR code shown on this page.\n")
+	m.WriteString("   Or: copy the configuration file to the phone and tap + → Import from file or archive.\n")
+	m.WriteString("3. Name the tunnel (e.g. ctrl32) and switch it on. The address in the VPN is " + c.Address + ".\n")
+	return map[string]string{"windows": w.String(), "mobile": m.String()}
 }

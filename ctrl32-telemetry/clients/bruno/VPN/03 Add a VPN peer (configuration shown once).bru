@@ -30,7 +30,7 @@ body:json {
 docs {
   Add a VPN peer (configuration shown once)
   
-  Kinds: `device` (sends data through the tunnel), `user` (a technician's laptop or phone), `site` (a router that connects its LAN: `subnets`). Without the license up to 5 peers of kinds device and user without an expiry (402 `license_required` otherwise). The private key is generated, returned once in `config` (and as a QR code; for a site also router templates) and never stored. Needs the caller's `password` again, and `code` from the authenticator app with two-factor sign-in (403 `step_up_required` / `step_up_failed`). A new peer reaches nothing until an access rule allows it.
+  Kinds: `device` (sends data through the tunnel), `user` (a technician's laptop or phone), `site` (a router that connects its LAN: `subnets`). Without the license up to 5 peers of kinds device and user without an expiry (402 `license_required` otherwise). The private key is generated, returned once in `config` (and as a QR code; for a site also router templates) and never stored. Needs the caller's `password` again, and `code` from the authenticator app with two-factor sign-in (403 `step_up_required` / `step_up_failed`). A new peer reaches nothing until an access rule allows it. An organization's VPN manager adds peers of the own organization only. With four eyes for VPN access (policy four_eyes_vpn) a technician (`user`) is added disabled and gets access through an approved grant.
   
-  Requires permission `system.admin`.
+  Requires one of the permissions `system.admin`, `vpn.manage`.
 }

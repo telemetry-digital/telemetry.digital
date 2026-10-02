@@ -1,6 +1,6 @@
 # ADR-0012: Správa servera z UI cez privilegovaného agenta
 
-**Stav:** prijaté 24. 9. 2026 · **doplnené 2. 10. 2026 ADR-0018** (VPN: peeri a pravidlá prístupu v databáze, agent aplikuje stav cez `PUT /vpn` spolu s tabuľkou nftables; operácie `POST/DELETE /wireguard/peers` nahradené)
+**Stav:** prijaté 24. 9. 2026 · **doplnené 2. 10. 2026 ADR-0019** (oprávnenie `system.admin` má len vstavaná rola `server_admin`, nie `org_admin`; správa servera je oddelená od správy organizácie) a **ADR-0020** (VPN na Windows: WireGuard v používateľskom priestore v agentovi) · **doplnené 2. 10. 2026 ADR-0018** (VPN: peeri a pravidlá prístupu v databáze, agent aplikuje stav cez `PUT /vpn` spolu s tabuľkou nftables; operácie `POST/DELETE /wireguard/peers` nahradené)
 **Kontext:** Používateľ chce, aby si nasadzovateľ nastavil všetko v našom UI, nie v príkazovom riadku: parametre servera prehľadne roztriedené, reštart, Caddy (doména, TLS, Cloudflare), aktualizácie a WireGuard server pre pripájanie zariadení. Služba `ctrl32-telemetry` beží zámerne bez privilégií (používateľ `ctrl32`, `ProtectSystem=strict`, `NoNewPrivileges`), konfigurácia je root-only 0640 a Caddy beží v Dockeri. Priame vykonávanie `systemctl`, `wg` alebo zápis do `/opt` z webovej služby by znamenalo dať jej root, čo je v rozpore s ADR-0007 (bezpečnostná základňa) a modelom hrozieb.
 
 ## Rozhodnutie

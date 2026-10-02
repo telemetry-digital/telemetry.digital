@@ -1,7 +1,9 @@
 # VPN for sites, technicians and devices
 
-*System → VPN* (0.64.0, spec 024, ADR-0018) turns the server into a WireGuard hub with access rules. Linux servers only
-(the server agent manages the interface and the firewall); on Windows the section stays hidden.
+*System → VPN* (0.64.0, spec 024, ADR-0018; phase 2 in 0.65.0, spec 025) turns the server into a WireGuard hub with
+access rules. On Linux the server agent manages kernel WireGuard and an nftables table; on Windows (0.65.0, ADR-0020)
+the agent runs WireGuard itself and enforces the same rules in its own process (see *Windows servers*). An
+organization's administrator manages the VPN of the own organization under *Settings → VPN* (see *Organizations*).
 
 | Goal | How |
 |---|---|
@@ -17,7 +19,8 @@ server's own services. A new peer reaches nothing until a rule allows it.
 
 - **Free:** up to 5 peers (technicians and devices), all access rules.
 - **With the license** (the same license as white labeling, *System → License*): unlimited peers, **sites** with routed
-  subnets (site-to-site) and **time-limited access** (an expiry date; the peer is disabled automatically).
+  subnets (site-to-site) and **time-limited access** (an expiry date or an access grant; the peer is disabled
+  automatically), including access approved by a second person.
 - Without the license existing peers keep working and rules can always be changed; adding a peer beyond the limit, a
   site or an expiry is refused with a message.
 
@@ -30,16 +33,19 @@ server's own services. A new peer reaches nothing until a rule allows it.
 2. *Add peer*: choose *Technician*, *Device* or *Site (router)*, a name, optionally the organization and a device, for a
    site the routed subnets (the LAN behind the router, e.g. `192.168.10.0/24`), optionally an expiry. Confirm with your
    password (and the authenticator code with two-factor sign-in). The configuration is shown **once**: a QR code for the
-   WireGuard app, the `.conf` file and, for a site, router texts (Linux/Raspberry Pi with wg-quick, OpenWrt, MikroTik
-   RouterOS 7). The private key is not stored on the server; a lost configuration means *Rotate key*.
+   WireGuard app, the `.conf` file, the file for the WireGuard app for Windows, steps for Android and iPhone and, for a
+   site, router texts (Linux/Raspberry Pi with wg-quick, OpenWrt, MikroTik RouterOS 7, Teltonika RUT with RutOS,
+   Ubiquiti EdgeRouter, pfSense, OPNsense). The private key is not stored on the server; a lost configuration means
+   *Rotate key*.
 3. *Add rule*: sources (all peers, all technicians/devices/sites, an organization, single peers), destination (this
    server, a site network or a host inside it, a peer), protocol and ports (`102, 502, 8000-8100`; empty = all ports).
    Presets for the server: MQTT inside the VPN (1883), the web interface (when it listens beyond localhost), MQTT/TLS,
    SSH.
 
 Every change needs a reason and is written to the audit trail (`vpn.peer_add`, `vpn.peer_update`, `vpn.peer_rotate`,
-`vpn.peer_remove`, `vpn.peer_expire`, `vpn.rule_add`, `vpn.rule_update`, `vpn.rule_remove`, `vpn.apply`, `vpn.import`,
-`server.wireguard`). *Disable* ends the access at once and keeps the key; *Remove* also removes rules towards the peer.
+`vpn.peer_remove`, `vpn.peer_expire`, `vpn.grant`, `vpn.rule_add`, `vpn.rule_update`, `vpn.rule_remove`, `vpn.apply`,
+`vpn.import`, `server.wireguard`, and for approvals `change_request.create`, `change_request.approve`,
+`change_request.reject`). *Disable* ends the access at once and keeps the key; *Remove* also removes rules towards the peer.
 
 ### Examples
 
@@ -51,6 +57,39 @@ Every change needs a reason and is written to the audit trail (`vpn.peer_add`, `
   `vpn.peer_expire`). Enabling it again needs a new expiry or none.
 - **Gateway without TLS:** device peer; rule *all devices → this server : tcp 1883*; the gateway publishes to
   `mqtt://10.66.0.1:1883` with its device token.
+
+## Access grants and four eyes (0.65.0)
+
+*Grant access* on a peer enables it — and every rule that names it — for a window: 2 hours, 8 hours, a day or a custom
+length (15 minutes to 30 days). When the window ends the peer is disabled again (`vpn.peer_expire`, with the grant). A
+new grant replaces the open one; *Disable* ends it at once. The peers table shows the open window ("access until …,
+approved by …").
+
+With *Settings → Security policy → Four eyes for VPN access* (off by default, per organization):
+
+- a new **technician** is added disabled (its configuration is still shown once, so it can be installed beforehand);
+- *Request access* (a grant) does not enable it but waits under *Settings → Approvals* (kind *VPN access*, e.g.
+  "VPN access for technician novak for 8 hours");
+- a **different** user with `vpn.manage` or `system.admin` approves or rejects it with a reason; on approval the grant
+  is executed under the approver's name and the window starts **then**; both names are in the audit trail and on the
+  peer;
+- enabling a technician or changing its expiry directly is refused (`approval_required`); disabling stays immediate;
+- devices and sites are not covered by the policy. Grants are not offered to AI assistants (MCP).
+
+## Organizations (0.65.0)
+
+The server administrator (`system.admin`, role `server_admin`) manages everything. An organization's administrator
+(`org_admin` holds `vpn.manage`) opens *Settings → VPN* and sees only the organization's own peers and rules:
+
+- new peers belong to the organization (they cannot be moved to another organization or to the whole server);
+- rule sources are the organization's peers or the whole organization; *all peers* and *all technicians/devices/sites*
+  span every organization and are for the server administrator only;
+- rule destinations are the organization's peers and sites, or this server with TCP to the offered services (MQTT, the
+  web interface, MQTT with TLS) or ping — never SSH of the host;
+- peers and rules of other organizations and of the whole server are invisible (404); the server settings, *Apply
+  again* and the generated firewall rules stay with the server administrator.
+
+The free limit of 5 peers counts every peer of the server.
 
 ### Site routers
 
@@ -93,6 +132,24 @@ Review of a production-like install (`deploy/install.sh`) before access rules ex
 Ping of the server's VPN address is always allowed (diagnostics). Peers' AllowedIPs on the server are their own address
 (and a site's subnets), so a peer cannot use another peer's or a site's address as its source.
 
+## Windows servers (0.65.0)
+
+On Windows the agent runs WireGuard itself (wireguard-go on a private userspace network stack, ADR-0020): no driver,
+no extra DLL, no change to Windows routing. Every packet from a peer passes the agent's filter, which is compiled from
+the same access rules (default deny, input and forward, replies of allowed connections). The page shows *Runs: Windows:
+inside the server agent* and *Access rules enforced by the server agent* instead of the nftables table. Differences:
+
+- services of this server are reached through `127.0.0.1` (they see that address, not the peer's); they must listen on
+  loopback or all addresses; UDP services of the server are not offered; SSH is not a preset;
+- forwarding between peers and to site subnets happens inside the agent;
+- the server itself cannot open connections into sites or to peers (connectors polling a PLC at a site need a Linux
+  server for now);
+- the agent opens the UDP port in Windows Firewall (rule *ctrl32 WireGuard*, removed when the VPN is disabled); open it
+  in the provider's firewall too;
+- if the agent stops, the VPN stops (fail closed).
+
+Not yet verified on a real Windows server with remote peers.
+
 ## Upgrade from earlier versions
 
 Peers created before 0.64.0 (kept by the agent) are imported once as device peers of the whole server, with the rule
@@ -101,7 +158,7 @@ web UI or SSH over the tunnel needs a rule. The import is audited (`vpn.import`)
 
 ## Limits and later phases
 
-- Linux servers with nftables only; IPv4 only; the server needs a reachable UDP port (no NAT traversal, no mesh).
-- Management needs `system.admin`; organizations are an attribute and a rule source, not yet a management scope.
-- Phase 2: Windows servers (userspace WireGuard with the same rules), approval of technician access by a second person,
-  more router templates. Phase 3: a cloud hub for servers behind NAT (e.g. behind a Cloudflare Tunnel).
+- Linux servers with nftables, or Windows with the userspace hub; IPv4 only; the server needs a reachable UDP port (no
+  NAT traversal, no mesh).
+- Phase 3: a cloud hub for servers behind NAT (e.g. behind a Cloudflare Tunnel); on Windows, connections from the server
+  into sites.

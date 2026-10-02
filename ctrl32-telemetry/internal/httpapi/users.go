@@ -54,6 +54,10 @@ func (s *Server) createRole(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "reason required")
 		return
 	}
+	if hasPerm(in.Permissions, iam.ServerPermission) && !p.Has(iam.ServerPermission) {
+		writeJSON(w, 403, map[string]string{"error": "a role with server administration (system.admin) can be created by a server administrator only", "code": "server_admin_required"})
+		return
+	}
 	role, err := s.iam.CreateRole(r.Context(), p.OrgID, in.Name, in.Permissions)
 	if err != nil {
 		writeErr(w, 400, err.Error())
@@ -87,6 +91,17 @@ func (s *Server) updateRole(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 403, "built-in roles cannot be changed; create an organization role instead")
 		return
 	}
+	had, has := hasPerm(before.Permissions, iam.ServerPermission), hasPerm(in.Permissions, iam.ServerPermission)
+	if (had || has) && !p.Has(iam.ServerPermission) {
+		writeJSON(w, 403, map[string]string{"error": "a role with server administration (system.admin) can be changed by a server administrator only", "code": "server_admin_required"})
+		return
+	}
+	if had && !has {
+		if n, err := s.iam.ServerAdmins(r.Context(), "", id); err != nil || n == 0 {
+			writeJSON(w, 409, map[string]string{"error": "the members of this role are the last server administrators; grant server_admin to someone else first", "code": "last_server_admin"})
+			return
+		}
+	}
 	after, err := s.iam.UpdateRole(r.Context(), p.OrgID, id, in.Permissions)
 	if err != nil {
 		writeErr(w, 400, err.Error())
@@ -94,6 +109,15 @@ func (s *Server) updateRole(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "role.update", "role", id, map[string]any{"permissions": before.Permissions}, map[string]any{"permissions": after.Permissions}, in.Reason)
 	writeJSON(w, 200, after)
+}
+
+func hasPerm(list []string, perm string) bool {
+	for _, x := range list {
+		if strings.TrimSpace(x) == perm {
+			return true
+		}
+	}
+	return false
 }
 
 // GET /api/v1/users/{id}: the full picture of one account.
@@ -122,6 +146,83 @@ func (s *Server) getUser(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"user": u, "permissions": perms, "role_history": hist, "api_tokens": tokens})
 }
 
+// ---- server administration is separate from organization administration (ADR-0019) ----------------------------------
+
+// guardServerAdminTarget refuses changes to an account that administers the server (holds system.admin) unless the
+// caller holds system.admin too: otherwise an organization administrator could take that account over (reset its
+// password, two-factor sign-in or e-mail) and with it the whole server.
+func (s *Server) guardServerAdminTarget(w http.ResponseWriter, r *http.Request, p *iam.Principal, userID string) bool {
+	if p.Has(iam.ServerPermission) {
+		return true
+	}
+	perms, err := s.iam.UserPermissions(r.Context(), userID)
+	if err != nil {
+		writeErr(w, 500, "query failed")
+		return false
+	}
+	for _, x := range perms {
+		if x == iam.ServerPermission {
+			writeJSON(w, 403, map[string]string{"error": "this account administers the server; only a server administrator (system.admin) may change it", "code": "server_admin_required"})
+			return false
+		}
+	}
+	return true
+}
+
+// checkRoleChange decides whether p may give user userID the roles want (nil = the roles stay): granting or
+// removing server administration needs system.admin, nobody removes their own administration roles, and the last
+// server administrator keeps server_admin. disable reports a request to disable the account.
+func (s *Server) checkRoleChange(w http.ResponseWriter, r *http.Request, p *iam.Principal, userID string, want []string, disable bool) bool {
+	ctx := r.Context()
+	curList, err := s.iam.UserPermissions(ctx, userID)
+	if err != nil {
+		writeErr(w, 500, "query failed")
+		return false
+	}
+	cur := map[string]bool{}
+	for _, x := range curList {
+		cur[x] = true
+	}
+	next := cur
+	if want != nil {
+		if next, err = s.iam.PermissionsOfRoles(ctx, p.OrgID, want); err != nil {
+			writeErr(w, 400, err.Error())
+			return false
+		}
+	}
+	if disable {
+		next = map[string]bool{}
+	}
+	if cur[iam.ServerPermission] != next[iam.ServerPermission] && !p.Has(iam.ServerPermission) {
+		writeJSON(w, 403, map[string]string{"error": "granting or removing server administration (server_admin) needs system.admin", "code": "server_admin_required"})
+		return false
+	}
+	if userID == p.UserID {
+		if disable {
+			writeErr(w, 400, "cannot disable yourself")
+			return false
+		}
+		for _, perm := range []string{"user.admin", iam.ServerPermission} {
+			if cur[perm] && !next[perm] {
+				writeErr(w, 400, "you cannot remove your own administration roles (org_admin, server_admin); ask another administrator")
+				return false
+			}
+		}
+	}
+	if cur[iam.ServerPermission] && !next[iam.ServerPermission] {
+		n, err := s.iam.ServerAdmins(ctx, userID, "")
+		if err != nil {
+			writeErr(w, 500, "query failed")
+			return false
+		}
+		if n == 0 {
+			writeJSON(w, 409, map[string]string{"error": "this is the last server administrator; grant server_admin to someone else first", "code": "last_server_admin"})
+			return false
+		}
+	}
+	return true
+}
+
 // userAction runs an administrative action on another account of the same organization, with a reason.
 func (s *Server) userAction(action string, fn func(r *http.Request, p *iam.Principal, u *iam.User) (map[string]any, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -135,6 +236,9 @@ func (s *Server) userAction(action string, fn func(r *http.Request, p *iam.Princ
 		u, err := s.iam.GetUser(r.Context(), id)
 		if err != nil || u.OrgID != p.OrgID {
 			writeErr(w, 404, "user not found")
+			return
+		}
+		if !s.guardServerAdminTarget(w, r, p, u.ID) {
 			return
 		}
 		detail, err := fn(r, p, u)

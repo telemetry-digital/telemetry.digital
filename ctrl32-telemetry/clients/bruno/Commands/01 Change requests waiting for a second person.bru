@@ -17,7 +17,7 @@ params:query {
 docs {
   Change requests waiting for a second person
   
-  Alarm rule and assignment changes held by the four-eyes policies (`status=pending`, default) or the full history (`status=all`). Requires config.write or device.manage.
+  Alarm rule and assignment changes held by the four-eyes policies (`status=pending`, default) or the full history (`status=all`). VPN access grants (kind `vpn`) appear here with four eyes for VPN access. Requires config.write, device.manage, vpn.manage or system.admin.
   
   Requires a signed-in user or an API token (any permission).
 }

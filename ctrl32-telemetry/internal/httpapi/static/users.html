@@ -42,6 +42,11 @@
     <div class="table-wrap"><table class="matrix" id="matrix"><thead></thead><tbody></tbody></table></div>
     <p class="muted" style="margin-bottom:0">Built-in roles are fixed. Organization roles (marked) can be edited below; a user's permissions are the union of all their roles.</p>
   </div>
+  <div class="card note-bar" style="margin-top:16px" id="serverAdminNote">
+    <h2 style="margin-top:0">Server administration</h2>
+    <p class="muted">The built-in role <b>server_admin</b> administers the whole server: every organization, server settings, the VPN of the whole server, backups, updates and the licence (permission system.admin). <b>org_admin</b> administers this organization only. Only a server administrator may grant or remove server_admin, always with a reason; the last server administrator cannot lose it, and nobody can remove their own administration roles or disable themselves.</p>
+    <p class="muted" style="margin-bottom:0" id="serverAdminCount"></p>
+  </div>
   <div class="card" id="roleEditor" style="margin-top:16px">
     <h2>Organization roles</h2>
     <div id="orgRoles"></div>
@@ -77,14 +82,19 @@
 <script>
 const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
 let PERMS = [], ROLES = [], USERS = [];
-const roleBadge = r => { const role = ROLES.find(x => x.name === r); return `<span class="badge ${role && role.is_admin ? 'primary' : ''}" title="${esc(role ? role.permissions.join(', ') : '')}">${esc(r)}</span>`; };
+const roleBadge = r => { const role = ROLES.find(x => x.name === r); return `<span class="badge ${role && serverRole(role) ? 'warn' : (role && role.is_admin ? 'primary' : '')}" title="${esc(role ? role.permissions.join(', ') : '')}">${esc(r)}</span>`; };
+// a role that holds system.admin administers the whole server: only server administrators grant or remove it
+const serverRole = r => (r.permissions || []).includes('system.admin');
+const roleLocked = (r, self, has) => (serverRole(r) && !ctrl32.can('system.admin')) || (self && has && (r.name === 'org_admin' || r.name === 'server_admin'));
 const status = u => u.disabled_at ? '<span class="badge bad">disabled</span>' : (u.locked_until && new Date(u.locked_until) > new Date() ? '<span class="badge warn">locked</span>' : (u.must_change_password ? '<span class="badge warn">password change</span>' : '<span class="badge ok">active</span>'));
 const permBox = (name, checked, disabled) => { const p = PERMS.find(x => x.name === name) || {}; return `<label class="inline"><input type="checkbox" name="perm" value="${esc(name)}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>${esc(name)}<small>${esc(p.description || '')}</small></span></label>`; };
 async function loadAll(){
   [PERMS, ROLES, USERS] = await Promise.all([api('GET','/api/v1/permissions'), api('GET','/api/v1/roles'), api('GET','/api/v1/users')]);
   renderUsers(); renderMatrix(); renderOrgRoles();
-  $('#newRolePerms').innerHTML = PERMS.map(p => permBox(p.name, false, false)).join('');
-  $('#newUserRoles').innerHTML = ROLES.map(r => `<label class="inline"><input type="checkbox" name="role" value="${esc(r.name)}" ${r.name === 'viewer' ? 'checked' : ''}><span>${esc(r.name)}${r.builtin ? '' : ' <span class="badge">org</span>'}<small>${esc(r.permissions.join(', '))}</small></span></label>`).join('');
+  $('#newRolePerms').innerHTML = PERMS.map(p => permBox(p.name, false, p.name === 'system.admin' && !ctrl32.can('system.admin'))).join('');
+  $('#newUserRoles').innerHTML = ROLES.map(r => `<label class="inline"><input type="checkbox" name="role" value="${esc(r.name)}" ${r.name === 'viewer' ? 'checked' : ''}${roleLocked(r, false, false) ? ' disabled' : ''}><span>${esc(r.name)}${r.builtin ? '' : ' <span class="badge">org</span>'}<small>${esc(r.permissions.join(', '))}</small></span></label>`).join('');
+  const sa = ROLES.find(r => r.name === 'server_admin');
+  $('#serverAdminCount').textContent = sa ? `server_admin: ${sa.users} ${sa.users === 1 ? 'user' : 'users'} on this server. Review who holds it and remove it where it is not needed.` : '';
 }
 function renderUsers(){
   $('#users tbody').innerHTML = USERS.map(u => `<tr class="clickable" data-id="${u.id}"><td><b>${esc(u.username)}</b></td><td>${esc(u.full_name)}</td><td>${esc(u.email || '')}</td><td>${(u.roles || []).map(roleBadge).join(' ') || '<span class="muted">none</span>'}</td><td>${u.mfa_enabled ? '<span class="badge ok">on</span>' : '<span class="badge">off</span>'}</td><td>${status(u)}</td><td>${fmt(u.last_login_at)}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">no users</td></tr>';
@@ -125,7 +135,7 @@ async function openUser(id){
   const u = d.user, self = ctrl32.me && ctrl32.me.user_id === u.id;
   dlg.innerHTML = `<div class="row"><h2 style="margin:0">${esc(u.username)}</h2>${status(u)}${u.mfa_enabled ? '<span class="badge ok">MFA on</span>' : '<span class="badge">MFA off</span>'}<span class="grow"></span><button class="btn ghost icon" id="dlgClose" type="button" aria-label="Close">${ctrl32.ICON.close}</button></div>
     <form id="profile" class="form" style="margin-top:12px"><div class="row"><label>Full name <input name="full_name" value="${esc(u.full_name)}" maxlength="128"></label><label>E-mail <input name="email" type="email" value="${esc(u.email || '')}" maxlength="254"></label></div>
-    <div><div class="muted" style="font-size:13px;margin-bottom:4px">Roles</div><div class="perm-grid">${ROLES.map(r => `<label class="inline"><input type="checkbox" name="role" value="${esc(r.name)}" ${(u.roles||[]).includes(r.name) ? 'checked' : ''} ${self && r.name === 'org_admin' ? 'disabled' : ''}><span>${esc(r.name)}${r.builtin ? '' : ' <span class="badge">org</span>'}</span></label>`).join('')}</div></div>
+    <div><div class="muted" style="font-size:13px;margin-bottom:4px">Roles</div><div class="perm-grid">${ROLES.map(r => `<label class="inline"><input type="checkbox" name="role" value="${esc(r.name)}" ${(u.roles||[]).includes(r.name) ? 'checked' : ''} ${roleLocked(r, self, (u.roles||[]).includes(r.name)) ? 'disabled' : ''}><span>${esc(r.name)}${r.builtin ? '' : ' <span class="badge">org</span>'}</span></label>`).join('')}</div></div>
     <div><div class="muted" style="font-size:13px;margin-bottom:4px">Effective permissions (${d.permissions.length})</div><div class="perm-list">${d.permissions.map(p => `<span class="badge primary" title="${esc((PERMS.find(x=>x.name===p)||{}).description || '')}">${esc(p)}</span>`).join('') || '<span class="muted">none</span>'}</div></div>
     <label>Reason for the change (audit trail) <input name="reason" maxlength="200"></label><div class="err" id="profileErr"></div>
     <div class="actions"><button class="btn primary" type="submit">Save changes</button>
@@ -144,7 +154,8 @@ async function openUser(id){
   cameraGroups(u, () => { const r = form.reason.value.trim(); if(!r){ $('#profileErr').textContent = 'reason is required'; form.reason.focus(); } return r; });
   const reason = () => { const r = form.reason.value.trim(); if(!r){ $('#profileErr').textContent = 'reason is required'; form.reason.focus(); return null; } return r; };
   form.onsubmit = async e => { e.preventDefault(); const r = reason(); if(!r) return; $('#profileErr').textContent='';
-    const roles = [...form.querySelectorAll('input[name=role]:checked')].map(i => i.value); if(self && !roles.includes('org_admin')) roles.push('org_admin');
+    // disabled boxes keep their state (the server checks again: server_admin, own administration roles)
+    const roles = [...form.querySelectorAll('input[name=role]:checked')].map(i => i.value);
     try{ await api('PATCH', `/api/v1/users/${u.id}`, {full_name: form.full_name.value, email: form.email.value, roles, reason: r}); ctrl32.toast('saved','ok'); openUser(u.id); }catch(x){ $('#profileErr').textContent = x.message; } };
   for(const b of form.querySelectorAll('[data-act]')) b.onclick = async () => { const r = reason(); if(!r) return; $('#profileErr').textContent=''; const act = b.dataset.act;
     try{

@@ -169,7 +169,7 @@ export type ChangeRequest = {
   decision_reason?: string | null;
   expires_at?: string;
   id?: string;
-  kind?: "limits" | "assignments" | "calibration";
+  kind?: "limits" | "assignments" | "calibration" | "flows" | "vpn";
   method?: string;
   path?: string;
   reason?: string;
@@ -883,6 +883,7 @@ export type Policy = {
   four_eyes_assignments?: boolean;
   four_eyes_commands?: boolean;
   four_eyes_limits?: boolean;
+  four_eyes_vpn?: boolean;
   mfa_required_all?: boolean;
   mfa_required_roles?: string[];
   password_min_length?: number;
@@ -1245,6 +1246,8 @@ export type VPNPeer = {
   endpoint?: string;
   expired?: boolean;
   expires_at?: string | null;
+  /** open access window: starts_at, ends_at, requested_by, approved_by */
+  grant?: Record<string, unknown>;
   id?: string;
   key_rotated_at?: string | null;
   kind?: "device" | "user" | "site";
@@ -1255,6 +1258,8 @@ export type VPNPeer = {
   online?: boolean;
   org_id?: string;
   org_name?: string;
+  /** grant request waiting for a second person: change_request_id, requested_by, requested_at, summary */
+  pending_grant?: Record<string, unknown>;
   public_key?: string;
   rx_bytes?: number;
   subnets?: string[];
@@ -1271,6 +1276,8 @@ export type VPNRule = {
   enabled?: boolean;
   id?: string;
   name?: string;
+  /** owner organization; empty = the whole server */
+  org_id?: string;
   ports?: string;
   protocol?: "tcp" | "udp" | "icmp" | "any";
   sources?: VPNSource[];
@@ -1840,7 +1847,7 @@ export class Ctrl32Client {
 
   /** Change requests waiting for a second person
    *
-   * Alarm rule and assignment changes held by the four-eyes policies (`status=pending`, default) or the full history (`status=all`). Requires config.write or device.manage.
+   * Alarm rule and assignment changes held by the four-eyes policies (`status=pending`, default) or the full history (`status=all`). VPN access grants (kind `vpn`) appear here with four eyes for VPN access. Requires config.write, device.manage, vpn.manage or system.admin.
    * 
    * Requires a signed-in user or an API token (any permission). */
   getChangeRequests(query?: { status?: string; /** pending (default) | approved | rejected | expired | failed | all */ }): Promise<ChangeRequest[]> {
@@ -1849,7 +1856,7 @@ export class Ctrl32Client {
 
   /** Approve a change request
    *
-   * A different user than the requester, holding the permission of the change (config.write for limits, device.manage for assignments). The original call is replayed under the approver's identity; `code` and `result` are its response.
+   * A different user than the requester, holding the permission of the change (config.write for limits, device.manage for assignments, vpn.manage or system.admin for VPN access grants). The original call is replayed under the approver's identity; `code` and `result` are its response.
    * 
    * Requires a signed-in user or an API token (any permission). */
   postChangeRequestsIdApprove(id: string, body: {
@@ -3270,9 +3277,9 @@ export class Ctrl32Client {
 
   /** Export an organization as a ZIP archive
    *
-   * CSV files of every table of the organization for a period, with a manifest and SHA-256 checksums.
+   * CSV files of every table of the caller's organization for a period, with a manifest and SHA-256 checksums. An organization administrator task (user.admin) since 0.65.0.
    * 
-   * Requires permission `system.admin`. */
+   * Requires permission `user.admin`. */
   getExportOrganization(query?: { from?: string; /** RFC 3339 start (optional) */ to?: string; /** RFC 3339 end (optional) */ }): Promise<Response> {
     return this.request<Response>('GET', `/api/v1/export/organization`, query, undefined, true);
   }
@@ -6212,24 +6219,27 @@ export class Ctrl32Client {
 
   /** Set the four-eyes policies
    *
-   * `four_eyes_commands`: commands wait for approval. `four_eyes_limits`: alarm rule changes become change requests. `four_eyes_assignments`: device ↔ datastream assignments become change requests. At least one field.
+   * `four_eyes_commands`: commands wait for approval. `four_eyes_limits`: alarm rule changes become change requests. `four_eyes_assignments`: device ↔ datastream assignments become change requests. `four_eyes_vpn`: VPN access of technicians needs a grant approved by a second person. At least one field.
    * 
    * Requires permission `user.admin`. */
   putSettingsPolicy(body: {
     four_eyes_assignments?: boolean;
     four_eyes_commands?: boolean;
     four_eyes_limits?: boolean;
+    four_eyes_vpn?: boolean;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
   }): Promise<{
     four_eyes_assignments?: boolean;
     four_eyes_commands?: boolean;
     four_eyes_limits?: boolean;
+    four_eyes_vpn?: boolean;
   }> {
     return this.request<{
     four_eyes_assignments?: boolean;
     four_eyes_commands?: boolean;
     four_eyes_limits?: boolean;
+    four_eyes_vpn?: boolean;
   }>('PUT', `/api/v1/settings/policy`, undefined, body, false);
   }
 
@@ -7193,21 +7203,26 @@ export class Ctrl32Client {
 
   /** VPN: interface, firewall, license, peers and access rules
    *
-   * The interface and the nftables table from the agent (`interface.firewall.ruleset` is the generated table), whether the server is licensed for site peers, time-limited access and more than `free_limit` peers, every peer with its live state (handshake, traffic) and every access rule. `services` are the server's ports a rule can open to the VPN.
+   * The interface and the nftables table from the agent (`interface.firewall.ruleset` is the generated table), whether the server is licensed for site peers, time-limited access and more than `free_limit` peers, every peer with its live state (handshake, traffic) and every access rule. `services` are the server's ports a rule can open to the VPN. A server administrator (system.admin) sees everything (`scope` server); an organization's VPN manager (vpn.manage) sees only the peers and rules of the own organization, no generated table and no host administration service (`scope` organization). `four_eyes`: technicians' access needs a second person's approval (policy four_eyes_vpn); peers then carry `grant` (the open access window) and `pending_grant` (a request waiting for approval).
    * 
-   * Requires permission `system.admin`. */
+   * Requires one of the permissions `system.admin`, `vpn.manage`. */
   getVpn(): Promise<{
     /** configured, connected, error */
     agent?: Record<string, unknown>;
     buy_url?: string;
+    /** policy four_eyes_vpn of the caller's organization */
+    four_eyes?: boolean;
     /** peers allowed without the license */
     free_limit?: number;
+    /** min and max length of an access grant */
+    grant_minutes?: Record<string, unknown>;
     /** WireGuard state of the agent without peers, with firewall {applied, rules, forward, applied_at, error, ruleset} */
     interface?: Record<string, unknown>;
     licensed?: boolean;
     peers?: VPNPeer[];
     peers_used?: number;
     rules?: VPNRule[];
+    scope?: "server" | "organization";
     services?: ({
       key?: string;
       name?: string;
@@ -7216,21 +7231,26 @@ export class Ctrl32Client {
     })[];
     /** development agent: nothing is applied to a host */
     simulated?: boolean;
-    /** the agent manages the VPN on this host (Linux) */
+    /** the agent manages the VPN on this host (Linux: kernel WireGuard and nftables; Windows: userspace hub) */
     supported?: boolean;
   }> {
     return this.request<{
     /** configured, connected, error */
     agent?: Record<string, unknown>;
     buy_url?: string;
+    /** policy four_eyes_vpn of the caller's organization */
+    four_eyes?: boolean;
     /** peers allowed without the license */
     free_limit?: number;
+    /** min and max length of an access grant */
+    grant_minutes?: Record<string, unknown>;
     /** WireGuard state of the agent without peers, with firewall {applied, rules, forward, applied_at, error, ruleset} */
     interface?: Record<string, unknown>;
     licensed?: boolean;
     peers?: VPNPeer[];
     peers_used?: number;
     rules?: VPNRule[];
+    scope?: "server" | "organization";
     services?: ({
       key?: string;
       name?: string;
@@ -7239,7 +7259,7 @@ export class Ctrl32Client {
     })[];
     /** development agent: nothing is applied to a host */
     simulated?: boolean;
-    /** the agent manages the VPN on this host (Linux) */
+    /** the agent manages the VPN on this host (Linux: kernel WireGuard and nftables; Windows: userspace hub) */
     supported?: boolean;
   }>('GET', `/api/v1/vpn`, undefined, undefined, false);
   }
@@ -7264,9 +7284,9 @@ export class Ctrl32Client {
 
   /** Add a VPN peer (configuration shown once)
    *
-   * Kinds: `device` (sends data through the tunnel), `user` (a technician's laptop or phone), `site` (a router that connects its LAN: `subnets`). Without the license up to 5 peers of kinds device and user without an expiry (402 `license_required` otherwise). The private key is generated, returned once in `config` (and as a QR code; for a site also router templates) and never stored. Needs the caller's `password` again, and `code` from the authenticator app with two-factor sign-in (403 `step_up_required` / `step_up_failed`). A new peer reaches nothing until an access rule allows it.
+   * Kinds: `device` (sends data through the tunnel), `user` (a technician's laptop or phone), `site` (a router that connects its LAN: `subnets`). Without the license up to 5 peers of kinds device and user without an expiry (402 `license_required` otherwise). The private key is generated, returned once in `config` (and as a QR code; for a site also router templates) and never stored. Needs the caller's `password` again, and `code` from the authenticator app with two-factor sign-in (403 `step_up_required` / `step_up_failed`). A new peer reaches nothing until an access rule allows it. An organization's VPN manager adds peers of the own organization only. With four eyes for VPN access (policy four_eyes_vpn) a technician (`user`) is added disabled and gets access through an approved grant.
    * 
-   * Requires permission `system.admin`. */
+   * Requires one of the permissions `system.admin`, `vpn.manage`. */
   postVpnPeers(body: {
     /** authenticator code when two-factor sign-in is on */
     code?: string;
@@ -7288,6 +7308,15 @@ export class Ctrl32Client {
     subnets?: string[];
   }): Promise<{
     allowed_ips?: string[];
+    /** four eyes: the technician is added disabled; request a grant */
+    approval_required?: boolean;
+    client_template_keys?: string[];
+    client_templates?: {
+      /** Android and iPhone steps */
+      mobile?: string;
+      /** .conf for the WireGuard app for Windows */
+      windows?: string;
+    };
     /** wg-quick configuration with the private key (shown once) */
     config?: string;
     peer?: VPNPeer;
@@ -7295,14 +7324,28 @@ export class Ctrl32Client {
     qr?: string;
     /** the server's VPN address */
     server?: string;
+    template_keys?: string[];
     templates?: {
+      edgerouter?: string;
       mikrotik?: string;
       openwrt?: string;
+      opnsense?: string;
+      pfsense?: string;
+      rutos?: string;
       wg_quick?: string;
     };
   }> {
     return this.request<{
     allowed_ips?: string[];
+    /** four eyes: the technician is added disabled; request a grant */
+    approval_required?: boolean;
+    client_template_keys?: string[];
+    client_templates?: {
+      /** Android and iPhone steps */
+      mobile?: string;
+      /** .conf for the WireGuard app for Windows */
+      windows?: string;
+    };
     /** wg-quick configuration with the private key (shown once) */
     config?: string;
     peer?: VPNPeer;
@@ -7310,9 +7353,14 @@ export class Ctrl32Client {
     qr?: string;
     /** the server's VPN address */
     server?: string;
+    template_keys?: string[];
     templates?: {
+      edgerouter?: string;
       mikrotik?: string;
       openwrt?: string;
+      opnsense?: string;
+      pfsense?: string;
+      rutos?: string;
       wg_quick?: string;
     };
   }>('POST', `/api/v1/vpn/peers`, undefined, body, false);
@@ -7320,9 +7368,9 @@ export class Ctrl32Client {
 
   /** Change, disable or enable a VPN peer
    *
-   * Fields that are present change. `expires_at` "" clears the expiry; enabling an expired peer needs a new expiry or none. New routed subnets and setting an expiry need the license; renaming, disabling, enabling and clearing never do.
+   * Fields that are present change. `expires_at` "" clears the expiry; enabling an expired peer needs a new expiry or none. New routed subnets and setting an expiry need the license; renaming, disabling, enabling and clearing never do. With four eyes for VPN access, enabling a technician or changing its expiry is refused (409 `approval_required`): request a grant.
    * 
-   * Requires permission `system.admin`. */
+   * Requires one of the permissions `system.admin`, `vpn.manage`. */
   patchVpnPeersId(id: string, body: {
     /** uuid or "" */
     device_id?: string;
@@ -7346,11 +7394,51 @@ export class Ctrl32Client {
   }>('PATCH', `/api/v1/vpn/peers/${encodeURIComponent(id)}`, undefined, body, false);
   }
 
+  /** Time-limited access for a VPN peer
+   *
+   * Enables the peer — and every rule that names it — for `minutes` (15 to 43200); afterwards it is disabled again (audited `vpn.peer_expire`). A new grant replaces the open one. With four eyes for VPN access (policy four_eyes_vpn) a grant for a technician (`user` peer) is held as a change request (202, Settings → Approvals) and starts when a different user approves it. Needs the license (402 `license_required`).
+   * 
+   * Requires one of the permissions `system.admin`, `vpn.manage`. */
+  postVpnPeersIdGrant(id: string, body: {
+    /** length of the access window, 15 to 43200 */
+    minutes: number;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    grant?: {
+      /** the second person (four eyes) */
+      approved_by?: string;
+      ends_at?: string;
+      id?: string;
+      minutes?: number;
+      peer?: string;
+      peer_id?: string;
+      requested_by?: string;
+      starts_at?: string;
+    };
+    ok?: boolean;
+  }> {
+    return this.request<{
+    grant?: {
+      /** the second person (four eyes) */
+      approved_by?: string;
+      ends_at?: string;
+      id?: string;
+      minutes?: number;
+      peer?: string;
+      peer_id?: string;
+      requested_by?: string;
+      starts_at?: string;
+    };
+    ok?: boolean;
+  }>('POST', `/api/v1/vpn/peers/${encodeURIComponent(id)}/grant`, undefined, body, false);
+  }
+
   /** Remove a VPN peer
    *
    * Access ends at once. Rules with the peer as destination are removed; the peer is dropped from the sources of other rules (a rule left without sources is removed).
    * 
-   * Requires permission `system.admin`. */
+   * Requires one of the permissions `system.admin`, `vpn.manage`. */
   postVpnPeersIdRemove(id: string, body: {
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
@@ -7370,7 +7458,7 @@ export class Ctrl32Client {
    *
    * The old key stops working at once. Needs the password (and authenticator code) again.
    * 
-   * Requires permission `system.admin`. */
+   * Requires one of the permissions `system.admin`, `vpn.manage`. */
   postVpnPeersIdRotate(id: string, body: {
     code?: string;
     password: string;
@@ -7398,23 +7486,23 @@ export class Ctrl32Client {
 
   /** Add a VPN access rule
    *
-   * Default deny: peers reach only what a rule allows. Sources: `{type: all}`, `{type: kind, kind}`, `{type: peer, id}`, `{type: org, id}`. Destination: `server` (this server's VPN address, e.g. MQTT 1883), `peer` (a peer's VPN address) or `site` (the routed subnets of a site, or `dest_cidr` inside them, e.g. one PLC). Ports for tcp/udp: "102, 502, 8000-8100" (empty = all).
+   * Default deny: peers reach only what a rule allows. Sources: `{type: all}`, `{type: kind, kind}`, `{type: peer, id}`, `{type: org, id}`. Destination: `server` (this server's VPN address, e.g. MQTT 1883), `peer` (a peer's VPN address) or `site` (the routed subnets of a site, or `dest_cidr` inside them, e.g. one PLC). Ports for tcp/udp: "102, 502, 8000-8100" (empty = all). An organization's VPN manager creates rules of the own organization: sources are its peers or the organization, destinations its peers and sites or the offered services of this server (tcp to their ports, or icmp).
    * 
-   * Requires permission `system.admin`. */
+   * Requires one of the permissions `system.admin`, `vpn.manage`. */
   postVpnRules(body: VPNRuleInput): Promise<Record<string, unknown>> {
     return this.request<Record<string, unknown>>('POST', `/api/v1/vpn/rules`, undefined, body, false);
   }
 
   /** Change a VPN access rule
    *
-   * Requires permission `system.admin`. */
+   * Requires one of the permissions `system.admin`, `vpn.manage`. */
   putVpnRulesId(id: string, body: VPNRuleInput): Promise<Record<string, unknown>> {
     return this.request<Record<string, unknown>>('PUT', `/api/v1/vpn/rules/${encodeURIComponent(id)}`, undefined, body, false);
   }
 
   /** Remove a VPN access rule
    *
-   * Requires permission `system.admin`. */
+   * Requires one of the permissions `system.admin`, `vpn.manage`. */
   postVpnRulesIdRemove(id: string, body: {
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;

@@ -119,13 +119,27 @@ func (s *Server) require(perm string, fn http.HandlerFunc) http.Handler {
 			writeErr(w, http.StatusForbidden, "this AI access is read-only")
 			return
 		}
-		if perm != "" && !p.Has(perm) {
+		if !permOK(p, perm) {
 			s.log.Warn("permission denied", "security", true, "user", p.Username, "perm", perm, "path", path)
 			writeErr(w, http.StatusForbidden, "permission denied: "+perm)
 			return
 		}
 		fn(w, r)
 	})
+}
+
+// permOK: perm "" is any signed-in user, "a|b" any of the permissions (e.g. "system.admin|vpn.manage": the server
+// administrator or the organization's VPN manager; the handler then limits the latter to the own organization).
+func permOK(p *iam.Principal, perm string) bool {
+	if perm == "" {
+		return true
+	}
+	for _, one := range strings.Split(perm, "|") {
+		if p.Has(one) {
+			return true
+		}
+	}
+	return false
 }
 
 // audit records a change performed by the current principal (URS I-01).

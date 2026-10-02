@@ -75,7 +75,8 @@
     meLoaded = true;
     return me;
   }
-  const can = (p) => !!(me && me.permissions && me.permissions.includes(p));
+  // can('a') or can('a|b'): any of the permissions (as the server's "a|b" routes)
+  const can = (p) => !!(me && me.permissions && String(p).split('|').some((x) => me.permissions.includes(x)));
   async function api(method, url, body) {
     const h = { 'Content-Type': 'application/json' };
     if (csrf) h['X-CSRF-Token'] = csrf;
@@ -212,7 +213,7 @@
         { href: '/settings/branding', label: 'Branding and theme' }, { href: '/settings/templates', label: 'Report templates' },
         { href: '/settings/reports', label: 'Stored reports' }, { href: '/settings/connectors', label: 'Connectors' },
         { href: '/settings/languages', label: 'Languages' }, { href: '/settings/translations', label: 'Translations' },
-        { href: '/settings/apps', label: 'Apps' }, { href: '/settings/export', label: 'Organization export' }, { href: '/settings/notifications', label: 'Notifications' }, { href: '/settings/approvals', label: 'Approvals' }, { href: '/settings/policy', label: 'Security policy' }, { href: '/settings/ai', label: 'AI assistants' }] },
+        { href: '/settings/apps', label: 'Apps' }, { href: '/vpn', label: 'VPN', show: can('vpn.manage') && !can('system.admin') }, { href: '/settings/export', label: 'Organization export', show: can('user.admin') }, { href: '/settings/notifications', label: 'Notifications' }, { href: '/settings/approvals', label: 'Approvals' }, { href: '/settings/policy', label: 'Security policy' }, { href: '/settings/ai', label: 'AI assistants' }] },
       { href: '/organizations', label: 'System', icon: ICON.system, show: can('system.admin'), sec: 'system', children: [
         { href: '/organizations', label: 'Organizations' }, { href: '/server', label: 'Server' }, { href: '/server/domain', label: 'Domain and TLS' },
         { href: '/server/vpn', label: 'VPN' }, { href: '/server/backups', label: 'Backups' }, { href: '/server/redundancy', label: 'Redundant database' }, { href: '/server/updates', label: 'Updates' }, { href: '/landing/edit', label: 'Front page' }] },

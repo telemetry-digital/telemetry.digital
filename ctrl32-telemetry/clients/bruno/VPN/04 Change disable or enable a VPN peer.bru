@@ -32,7 +32,7 @@ body:json {
 docs {
   Change, disable or enable a VPN peer
   
-  Fields that are present change. `expires_at` "" clears the expiry; enabling an expired peer needs a new expiry or none. New routed subnets and setting an expiry need the license; renaming, disabling, enabling and clearing never do.
+  Fields that are present change. `expires_at` "" clears the expiry; enabling an expired peer needs a new expiry or none. New routed subnets and setting an expiry need the license; renaming, disabling, enabling and clearing never do. With four eyes for VPN access, enabling a technician or changing its expiry is refused (409 `approval_required`): request a grant.
   
-  Requires permission `system.admin`.
+  Requires one of the permissions `system.admin`, `vpn.manage`.
 }

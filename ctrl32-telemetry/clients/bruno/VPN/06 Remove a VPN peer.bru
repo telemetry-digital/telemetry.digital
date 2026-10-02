@@ -1,7 +1,7 @@
 meta {
   name: Remove a VPN peer
   type: http
-  seq: 5
+  seq: 6
 }
 
 post {
@@ -25,5 +25,5 @@ docs {
   
   Access ends at once. Rules with the peer as destination are removed; the peer is dropped from the sources of other rules (a rule left without sources is removed).
   
-  Requires permission `system.admin`.
+  Requires one of the permissions `system.admin`, `vpn.manage`.
 }
