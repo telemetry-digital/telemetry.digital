@@ -39,8 +39,8 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   expect("datastreams to bind", !!(ds && ds.t), true);
   const slug = "period-probe-" + (Date.now() % 100000);
   const spec = { version: 1, kind: "dashboard", layout: { type: "grid", row_height: 96 }, range: "24h", refresh_s: 60, widgets: [
-    { id: "log", type: "period_table", geometry: { x: 0, y: 0, w: 6, h: 6 }, bindings: { datastreams: [ds.t] }, params: { title: "Denný záznam teplôt", interval: "day", values: "min,max", period: "last_7d", low: 3, high: 7, total: true, decimals: 1 } },
-    { id: "meters", type: "period_table", geometry: { x: 6, y: 0, w: 6, h: 6 }, bindings: { datastreams: ds.m }, params: { title: "Spotreba energie", interval: "month", values: "delta", period: "this_year", total: true, decimals: 1, series: [{ label: "Hlavný elektromer" }, { label: "Kúrenie" }] } }] };
+    { id: "log", type: "period_table", geometry: { x: 0, y: 0, w: 6, h: 6 }, bindings: { datastreams: [ds.t] }, params: { title: "Daily temperature log", interval: "day", values: "min,max", period: "last_7d", low: 3, high: 7, total: true, decimals: 1 } },
+    { id: "meters", type: "period_table", geometry: { x: 6, y: 0, w: 6, h: 6 }, bindings: { datastreams: ds.m }, params: { title: "Energy consumption", interval: "month", values: "delta", period: "this_year", total: true, decimals: 1, series: [{ label: "Main meter" }, { label: "Heating" }] } }] };
   const made = await ev(`ctrl32.api('POST','/api/v1/dashboards',{name:'${slug}',spec:${JSON.stringify(spec)},reason:'headless probe'}).then(r => r.slug)`);
   expect("dashboard created", typeof made === "string", true);
   await go("/dashboards/" + made, 4000);

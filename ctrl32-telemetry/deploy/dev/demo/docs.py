@@ -15,7 +15,7 @@ from common import B, call, login, state_path
 import common, urllib.request
 
 STATE = state_path("docs.json")
-R = "ukážka pre dokumentáciu"
+R = "documentation demo"
 NOW = int(time.time())
 st = json.load(open(STATE, encoding="utf-8")) if os.path.exists(STATE) else {}
 
@@ -119,14 +119,14 @@ def room(t, rng):
 @once("cold")
 def cold_chain():
     sites = call("GET", "/api/v1/sites")
-    site = next((s for s in sites if s["name"] in ("Demo site", "Lekáreň Nitra – sklad liekov")), None)
+    site = next((s for s in sites if s["name"] in ("Demo site", "Nitra pharmacy – medicine store")), None)
     if site:
-        call("PATCH", f"/api/v1/sites/{site['id']}", {"name": "Lekáreň Nitra – sklad liekov", "address": "Štefánikova 12, Nitra", "reason": R})
+        call("PATCH", f"/api/v1/sites/{site['id']}", {"name": "Nitra pharmacy – medicine store", "address": "12 Station Road, Nitra", "reason": R})
         sid = site["id"]
     else:
-        sid = call("POST", "/api/v1/sites", {"name": "Lekáreň Nitra – sklad liekov", "address": "Štefánikova 12, Nitra", "reason": R})["id"]
+        sid = call("POST", "/api/v1/sites", {"name": "Nitra pharmacy – medicine store", "address": "12 Station Road, Nitra", "reason": R})["id"]
     assets = {a["name"]: a for a in call("GET", "/api/v1/assets")}
-    ren = {"Fridge 1": "Chladnička liekov 1", "Room 1": "Sklad liekov – miestnosť"}
+    ren = {"Fridge 1": "Medicine fridge 1", "Room 1": "Medicine store – room"}
     for old, new in ren.items():
         if old in assets:
             call("PATCH", f"/api/v1/assets/{assets[old]['id']}", {"name": new, "reason": R})
@@ -134,23 +134,23 @@ def cold_chain():
     dss = {(d.get("asset"), d["key"]): d["id"] for d in call("GET", "/api/v1/datastreams")}
     # the seed device esp32-demo feeds fridge 1 and the room
     esp = next(x for x in call("GET", "/api/v1/devices") if x["external_id"] == "esp32-demo")
-    call("PATCH", f"/api/v1/devices/{esp['id']}", {"name": "Záznamník teploty – sklad (ESP32)", "location": {"lat": 48.3076, "lon": 18.0858}, "reason": R})
+    call("PATCH", f"/api/v1/devices/{esp['id']}", {"name": "Temperature logger – store (ESP32)", "location": {"lat": 48.3076, "lon": 18.0858}, "reason": R})
     esp_tok = call("POST", f"/api/v1/devices/{esp['id']}/token", {"reason": R})["token"]
-    f1 = dss.get(("Chladnička liekov 1", "temp")) or dss.get(("Fridge 1", "temp"))
-    rt = dss.get(("Sklad liekov – miestnosť", "temp")) or dss.get(("Room 1", "temp"))
-    rh = dss.get(("Sklad liekov – miestnosť", "rh")) or dss.get(("Room 1", "rh"))
-    a2 = asset(sid, "fridge", "Chladnička liekov 2", {"storage_class": "2-8C", "model": "Liebherr MKv 3910"})
-    a3 = asset(sid, "freezer", "Mraznička vakcín", {"storage_class": "-25..-15C"})
-    d2, t2 = device("logger-t2", "Záznamník teploty T2", loc=(48.3079, 18.0861))
-    d3, t3 = device("logger-t3", "Záznamník teploty T3", loc=(48.3073, 18.0866))
+    f1 = dss.get(("Medicine fridge 1", "temp")) or dss.get(("Fridge 1", "temp"))
+    rt = dss.get(("Medicine store – room", "temp")) or dss.get(("Room 1", "temp"))
+    rh = dss.get(("Medicine store – room", "rh")) or dss.get(("Room 1", "rh"))
+    a2 = asset(sid, "fridge", "Medicine fridge 2", {"storage_class": "2-8C", "model": "Liebherr MKv 3910"})
+    a3 = asset(sid, "freezer", "Vaccine freezer", {"storage_class": "-25..-15C"})
+    d2, t2 = device("logger-t2", "Temperature logger T2", loc=(48.3079, 18.0861))
+    d3, t3 = device("logger-t3", "Temperature logger T3", loc=(48.3073, 18.0866))
     f2 = stream(a2, d2, "temp", "temperature", "°C", interval="15 minutes")
     fz = stream(a3, d3, "temp", "temperature", "°C", interval="15 minutes")
-    call("PUT", f"/api/v1/devices/{d2}/attributes", {"attributes": {"interval_s": 900, "probe": "PT1000 v glykole"}, "reason": R})
+    call("PUT", f"/api/v1/devices/{d2}/attributes", {"attributes": {"interval_s": 900, "probe": "PT1000 in glycol"}, "reason": R})
     # notification channels and an escalation policy (not attached to the rules: without an SMTP server every alarm
     # would open an "alarm not delivered" incident), then alarm rules before the history so it raises and clears alarms
-    ch1 = named("/api/v1/notification-channels", "Lekárnik – e-mail", {"kind": "email", "settings": {"recipients": ["lekarnik@lekaren-nitra.example"]}})
-    ch2 = named("/api/v1/notification-channels", "Dispečing – webhook", {"kind": "webhook", "settings": {"url": "https://dispecing.example/hooks/ctrl32", "secret": uuid.uuid4().hex}})
-    pol = named("/api/v1/escalation-policies", "Chladový reťazec – eskalácia", {"steps": [{"after_s": 0, "channel_id": ch1}, {"after_s": 900, "channel_id": ch2}]})
+    ch1 = named("/api/v1/notification-channels", "Pharmacist – e-mail", {"kind": "email", "settings": {"recipients": ["pharmacist@nitra-pharmacy.example"]}})
+    ch2 = named("/api/v1/notification-channels", "Dispatch centre – webhook", {"kind": "webhook", "settings": {"url": "https://dispatch.example/hooks/ctrl32", "secret": uuid.uuid4().hex}})
+    pol = named("/api/v1/escalation-policies", "Cold chain – escalation", {"steps": [{"after_s": 0, "channel_id": ch1}, {"after_s": 900, "channel_id": ch2}]})
     have = {(r["datastream_id"], r["type"]) for r in call("GET", "/api/v1/alarm-rules")}
     for ds, typ, warn, act in [(f2, "high", 7.5, 8), (f2, "low", 2.5, 2), (fz, "high", -18, -15)]:
         if (ds, typ) not in have:
@@ -158,7 +158,7 @@ def cold_chain():
     if (f2, "comm_loss") not in have:
         call("POST", "/api/v1/alarm-rules", {"datastream_id": f2, "type": "comm_loss", "delay_seconds": 3600, "reason": R})
     # the room temperature gets a logger of its own (the seed device carries the fridge and the room humidity)
-    d0, t0 = device("logger-room", "Záznamník – miestnosť skladu")
+    d0, t0 = device("logger-room", "Logger – store room")
     if not any(x["datastream_id"] == rt for x in call("GET", f"/api/v1/devices/{d0}")["datastreams"]):
         call("POST", f"/api/v1/devices/{d0}/datastreams", {"datastream_id": rt, "reason": R})
     # 30 days, a sample every 15 minutes, sent as the loggers' own time-stamped readings (quality ok; with "bf": 1
@@ -182,9 +182,9 @@ def cold_chain():
 
 
 # ---------------------------------------------------------------------------------------------- energy
-METERS = [("L1", "Elektromer – Linka 1", 46, "line"), ("L2", "Elektromer – Linka 2", 31, "line"),
-          ("KOMP", "Elektromer – kompresorovňa", 17, "base"), ("ADM", "Elektromer – administratíva a osvetlenie", 9, "office"),
-          ("FVE", "Fotovoltika – strecha haly", 80, "solar")]
+METERS = [("L1", "Energy meter – Line 1", 46, "line"), ("L2", "Energy meter – Line 2", 31, "line"),
+          ("COMP", "Energy meter – compressor room", 17, "base"), ("ADM", "Energy meter – offices and lighting", 9, "office"),
+          ("PV", "Solar PV – hall roof", 80, "solar")]
 
 
 def meter_kwh(kind, peak, t, rng):
@@ -209,18 +209,18 @@ def meter_kwh(kind, peak, t, rng):
 
 @once("energy")
 def energy():
-    site = next(s for s in call("GET", "/api/v1/sites") if s["name"] == "Závod Nitra")["id"]
+    site = next(s for s in call("GET", "/api/v1/sites") if s["name"] == "Nitra plant")["id"]
     sources, ids = [], {}
     start = (NOW - 400 * 86400) // 3600 * 3600
     for i, (code, name, peak, kind) in enumerate(METERS):
         a = asset(site, "meter", name)
         d, tok = device("em-" + code.lower(), name, loc=(48.2905 + i * 0.0006, 18.1168 + i * 0.0009))
-        ds = stream(a, d, "energia", "energy", "kWh", kind="counter")
+        ds = stream(a, d, "energy", "energy", "kWh", kind="counter")
         rng, cum, samples = random.Random(100 + i), 10000.0 * (i + 1), []
         for t in range(start, NOW, 3600):
-            samples.append({"ts": t, "v": {"energia": round(cum, 2)}})
+            samples.append({"ts": t, "v": {"energy": round(cum, 2)}})
             cum += meter_kwh(kind, peak, t, rng)
-        samples.append({"ts": NOW, "v": {"energia": round(cum, 2)}})
+        samples.append({"ts": NOW, "v": {"energy": round(cum, 2)}})
         send(tok, samples)
         sources.append({"datastream_id": ds, "role": "production" if kind == "solar" else "consumption"})
         ids[code] = {"ds": ds, "token": tok, "cum": cum, "kind": kind, "peak": peak}
@@ -246,30 +246,30 @@ def dashboards():
     c, e = st["cold"], st["energy"]
     out = {}
     cold = [
-        w("v1", "value", 0, 0, 3, 2, [c["f1"]], title="Chladnička liekov 1", decimals=1, sparkline=True),
-        w("v2", "value", 3, 0, 3, 2, [c["f2"]], title="Chladnička liekov 2", decimals=1, sparkline=True),
-        w("v3", "value", 6, 0, 3, 2, [c["fz"]], title="Mraznička vakcín", decimals=1, sparkline=True),
-        w("al", "alarms", 9, 0, 3, 4, None, title="Alarmy", limit=10),
-        w("ch", "chart", 0, 2, 9, 3, [c["f1"], c["f2"]], title="Teplota chladničiek (7 dní)", range="7d", band=True, legend=True, series=[{"label": "Chladnička 1"}, {"label": "Chladnička 2"}]),
-        w("pt", "period_table", 0, 5, 8, 5, [c["f1"], c["f2"]], title="Denný záznam teplôt (min / max, limity 2–8 °C)", interval="day", values="min,max", period="last_30d", low=2, high=8, total=True, decimals=1, series=[{"label": "Chladnička 1"}, {"label": "Chladnička 2"}]),
-        w("rm", "chart", 8, 5, 4, 3, [c["rt"], c["rh"]], title="Sklad – teplota a vlhkosť", range="7d", series=[{"label": "°C"}, {"label": "% RH"}]),
-        w("hm", "heatmap", 8, 8, 4, 2, [c["f2"]], title="Chladnička 2 – hodina × deň", range="7d"),
+        w("v1", "value", 0, 0, 3, 2, [c["f1"]], title="Medicine fridge 1", decimals=1, sparkline=True),
+        w("v2", "value", 3, 0, 3, 2, [c["f2"]], title="Medicine fridge 2", decimals=1, sparkline=True),
+        w("v3", "value", 6, 0, 3, 2, [c["fz"]], title="Vaccine freezer", decimals=1, sparkline=True),
+        w("al", "alarms", 9, 0, 3, 4, None, title="Alarms", limit=10),
+        w("ch", "chart", 0, 2, 9, 3, [c["f1"], c["f2"]], title="Fridge temperature (7 days)", range="7d", band=True, legend=True, series=[{"label": "Fridge 1"}, {"label": "Fridge 2"}]),
+        w("pt", "period_table", 0, 5, 8, 5, [c["f1"], c["f2"]], title="Daily temperature log (min / max, limits 2–8 °C)", interval="day", values="min,max", period="last_30d", low=2, high=8, total=True, decimals=1, series=[{"label": "Fridge 1"}, {"label": "Fridge 2"}]),
+        w("rm", "chart", 8, 5, 4, 3, [c["rt"], c["rh"]], title="Store – temperature and humidity", range="7d", series=[{"label": "°C"}, {"label": "% RH"}]),
+        w("hm", "heatmap", 8, 8, 4, 2, [c["f2"]], title="Fridge 2 – hour × day", range="7d"),
     ]
     spec = {"version": 1, "kind": "dashboard", "layout": {"type": "grid", "row_height": 90}, "range": "7d", "refresh_s": 60, "widgets": cold}
-    out["cold"] = dash("Chladový reťazec – sklad liekov", spec)
-    cons = [e[k]["ds"] for k in ("L1", "L2", "KOMP", "ADM")]
-    lbl = [{"label": "Linka 1"}, {"label": "Linka 2"}, {"label": "Kompresorovňa"}, {"label": "Administratíva"}]
+    out["cold"] = dash("Cold chain – medicine store", spec)
+    cons = [e[k]["ds"] for k in ("L1", "L2", "COMP", "ADM")]
+    lbl = [{"label": "Line 1"}, {"label": "Line 2"}, {"label": "Compressor room"}, {"label": "Offices"}]
     en = [
-        w("a1", "agg_card", 0, 0, 3, 2, [e["L1"]["ds"]], title="Linka 1 – spotreba za 30 dní", agg="delta", range="30d", icon="bolt", decimals=0, unit="kWh"),
-        w("a2", "agg_card", 3, 0, 3, 2, [e["L2"]["ds"]], title="Linka 2 – spotreba za 30 dní", agg="delta", range="30d", icon="bolt", decimals=0, unit="kWh"),
-        w("a3", "agg_card", 6, 0, 3, 2, [e["KOMP"]["ds"]], title="Kompresorovňa za 30 dní", agg="delta", range="30d", icon="bolt", decimals=0, unit="kWh"),
-        w("a4", "agg_card", 9, 0, 3, 2, [e["FVE"]["ds"]], title="Fotovoltika – výroba za 30 dní", agg="delta", range="30d", icon="sun", decimals=0, unit="kWh", color="#16a34a"),
-        w("pd", "period_table", 0, 2, 12, 5, cons + [e["FVE"]["ds"]], title="Denná spotreba – posledných 7 dní (kWh)", interval="day", values="delta", period="last_7d", total=True, decimals=0, series=lbl + [{"label": "Fotovoltika"}]),
-        w("pt", "period_table", 0, 7, 12, 7, cons + [e["FVE"]["ds"]], title="Mesačná spotreba a výroba (kWh)", interval="month", values="delta", period="last_12m", total=True, decimals=0, series=lbl + [{"label": "Fotovoltika"}]),
+        w("a1", "agg_card", 0, 0, 3, 2, [e["L1"]["ds"]], title="Line 1 – consumption, 30 days", agg="delta", range="30d", icon="bolt", decimals=0, unit="kWh"),
+        w("a2", "agg_card", 3, 0, 3, 2, [e["L2"]["ds"]], title="Line 2 – consumption, 30 days", agg="delta", range="30d", icon="bolt", decimals=0, unit="kWh"),
+        w("a3", "agg_card", 6, 0, 3, 2, [e["COMP"]["ds"]], title="Compressor room, 30 days", agg="delta", range="30d", icon="bolt", decimals=0, unit="kWh"),
+        w("a4", "agg_card", 9, 0, 3, 2, [e["PV"]["ds"]], title="Solar PV – generation, 30 days", agg="delta", range="30d", icon="sun", decimals=0, unit="kWh", color="#16a34a"),
+        w("pd", "period_table", 0, 2, 12, 5, cons + [e["PV"]["ds"]], title="Daily consumption – last 7 days (kWh)", interval="day", values="delta", period="last_7d", total=True, decimals=0, series=lbl + [{"label": "Solar PV"}]),
+        w("pt", "period_table", 0, 7, 12, 7, cons + [e["PV"]["ds"]], title="Monthly consumption and generation (kWh)", interval="month", values="delta", period="last_12m", total=True, decimals=0, series=lbl + [{"label": "Solar PV"}]),
     ]
     spec = {"version": 1, "kind": "dashboard", "layout": {"type": "grid", "row_height": 90}, "range": "30d", "refresh_s": 300, "widgets": en}
-    out["energy"] = dash("Energie – mesačná spotreba", spec)
-    for kind, name in (("overview", "Prehľad"), ("showcase", "Ukážka všetkých widgetov")):
+    out["energy"] = dash("Energy – monthly consumption", spec)
+    for kind, name in (("overview", "Overview"), ("showcase", "Showcase – all widgets")):
         s = call("GET", f"/api/v1/dashboards/starter?kind={kind}")
         out[kind] = dash(name, s["spec"])
     return out
@@ -284,16 +284,16 @@ def incidents():
     acked = None
     for a in alarms:
         if a.get("state") == "active" and a.get("severity") == "warning":
-            call("POST", f"/api/v1/alarms/{a['id']}/ack", {"reason": "Mraznička otvorená pri vyskladnení, sledujem"}); acked = a["id"]; break
+            call("POST", f"/api/v1/alarms/{a['id']}/ack", {"reason": "Freezer opened while picking an order, monitoring"}); acked = a["id"]; break
     # incidents the server opened for alarms it could not deliver (no SMTP here): close all but the newest
     auto = [i for i in call("GET", "/api/v1/incidents") if i["kind"] == "alarm_undelivered" and i["status"] == "open"]
     for i in auto[1:]:
-        call("PATCH", f"/api/v1/incidents/{i['id']}", {"status": "closed", "cause": "Ukážkový server nemá nastavený SMTP server.", "capa": "SMTP nastaviť v config.toml pred ostrou prevádzkou.", "reason": R})
-    i1 = call("POST", "/api/v1/incidents", {"title": "Chladnička liekov 2 – teplota nad 8 °C", "severity": "critical", "impact": "Inzulíny a vakcíny v chladničke 2 mimo 2–8 °C, karanténa do posúdenia.", "reason": R})["id"]
-    i2 = call("POST", "/api/v1/incidents", {"title": "Linka 1 – opakované zastavenia lisu", "severity": "major", "impact": "Strata cca 6 % výkonu zmeny.", "reason": R})["id"]
-    call("PATCH", f"/api/v1/incidents/{i2}", {"status": "investigating", "note": "Údržba kontroluje snímač polohy.", "reason": R})
-    i3 = call("POST", "/api/v1/incidents", {"title": "Výpadok záznamníka T3 (batéria)", "severity": "minor", "reason": R})["id"]
-    call("PATCH", f"/api/v1/incidents/{i3}", {"status": "closed", "cause": "Vybitá batéria záznamníka.", "capa": "Výmena batérií raz ročne zaradená do plánu údržby.", "reason": R})
+        call("PATCH", f"/api/v1/incidents/{i['id']}", {"status": "closed", "cause": "The demo server has no SMTP server configured.", "capa": "Configure SMTP in config.toml before going live.", "reason": R})
+    i1 = call("POST", "/api/v1/incidents", {"title": "Medicine fridge 2 – temperature above 8 °C", "severity": "critical", "impact": "Insulins and vaccines in fridge 2 outside 2–8 °C, quarantined until assessed.", "reason": R})["id"]
+    i2 = call("POST", "/api/v1/incidents", {"title": "Line 1 – repeated press stops", "severity": "major", "impact": "About 6 % of the shift output lost.", "reason": R})["id"]
+    call("PATCH", f"/api/v1/incidents/{i2}", {"status": "investigating", "note": "Maintenance is checking the position sensor.", "reason": R})
+    i3 = call("POST", "/api/v1/incidents", {"title": "Logger T3 outage (battery)", "severity": "minor", "reason": R})["id"]
+    call("PATCH", f"/api/v1/incidents/{i3}", {"status": "closed", "cause": "The logger battery was flat.", "capa": "Yearly battery replacement added to the maintenance plan.", "reason": R})
     return {"acked_alarm": acked, "ids": [i1, i2, i3]}
 
 
@@ -305,22 +305,22 @@ def rules():
     out = []
     spec = {"inputs": [{"name": "t", "datastream_id": c["f2"]}, {"name": "room", "datastream_id": c["rt"]}], "match": "all",
             "conditions": [{"input": "t", "op": ">", "value": 7.5}, {"input": "room", "op": "<", "value": 26}],
-            "actions": [{"type": "notify", "channel_id": c["ch1"], "subject": "Chladnička 2: {t} °C – skontrolujte dvere"}, {"type": "alarm", "severity": "warning"}],
-            "clear_actions": [{"type": "notify", "channel_id": c["ch1"], "subject": "Chladnička 2 je opäť v limite"}]}
-    out.append(call("POST", "/api/v1/rules", {"name": "Chladnička 2 – otvorené dvere", "description": "Teplota stúpa, hoci miestnosť nie je prehriata", "spec": spec, "reason": R})["id"])
+            "actions": [{"type": "notify", "channel_id": c["ch1"], "subject": "Fridge 2: {t} °C – check the door"}, {"type": "alarm", "severity": "warning"}],
+            "clear_actions": [{"type": "notify", "channel_id": c["ch1"], "subject": "Fridge 2 is back within limits"}]}
+    out.append(call("POST", "/api/v1/rules", {"name": "Fridge 2 – door left open", "description": "The temperature rises although the room is not overheated", "spec": spec, "reason": R})["id"])
     if prod:
         ds = prod["lines"][0]["ds"]
-        spec = {"inputs": [{"name": "teplota", "datastream_id": ds["teplota"]}, {"name": "stav", "datastream_id": ds["stav"]}], "match": "all",
-                "conditions": [{"input": "teplota", "op": ">=", "value": 70}, {"input": "stav", "op": "==", "value": 1}],
-                "actions": [{"type": "alarm", "severity": "action"}, {"type": "notify", "channel_id": c["ch2"], "subject": "Lis linky 1 sa prehrieva: {teplota} °C"}]}
-        out.append(call("POST", "/api/v1/rules", {"name": "Linka 1 – prehriatie lisu", "description": "Teplota lisu nad 70 °C počas behu", "spec": spec, "reason": R})["id"])
+        spec = {"inputs": [{"name": "temperature", "datastream_id": ds["temperature"]}, {"name": "state", "datastream_id": ds["state"]}], "match": "all",
+                "conditions": [{"input": "temperature", "op": ">=", "value": 70}, {"input": "state", "op": "==", "value": 1}],
+                "actions": [{"type": "alarm", "severity": "action"}, {"type": "notify", "channel_id": c["ch2"], "subject": "Line 1 press overheating: {temperature} °C"}]}
+        out.append(call("POST", "/api/v1/rules", {"name": "Line 1 – press overheating", "description": "Press temperature above 70 °C while running", "spec": spec, "reason": R})["id"])
     return out
 
 
 def flow(name, spec):
     old = next((f["flow"] for f in call("GET", "/api/v1/flows") if f["flow"]["name"] == name), None)
     if old:
-        call("PUT", f"/api/v1/flows/{old['slug']}", {"spec": spec, "reason": "prehľadnejšie rozloženie uzlov"}); return old["slug"]
+        call("PUT", f"/api/v1/flows/{old['slug']}", {"spec": spec, "reason": "clearer node layout"}); return old["slug"]
     r = call("POST", "/api/v1/flows", {"name": name, "spec": spec, "reason": R})
     return r.get("slug") or r["flow"]["slug"]
 
@@ -333,22 +333,22 @@ def flows():
         {"id": "t", "type": "ds_value", "x": 20, "y": 60, "settings": {"datastream": c["f2"]}},
         {"id": "hot", "type": "stable_for", "x": 200, "y": 60, "settings": {"condition": "value > 8", "seconds": 600}},
         {"id": "rl", "type": "rate_limit", "x": 380, "y": 60, "settings": {"count": 1, "period_s": 3600}},
-        {"id": "mail", "type": "notify", "x": 560, "y": 10, "settings": {"channel": c["ch1"], "subject": "Chladnička 2: {{ fixed(value, 1) }} °C dlhšie ako 10 min"}},
-        {"id": "inc", "type": "incident", "x": 560, "y": 110, "settings": {"action": "open", "severity": "major", "title": "Chladnička 2 mimo 2–8 °C"}},
-        {"id": "dbg", "type": "debug", "x": 740, "y": 10, "settings": {"expr": "'odoslané ' + str(value)"}},
-        {"id": "note", "type": "comment", "x": 20, "y": 180, "settings": {"text": "Teplota nad 8 °C dlhšie ako 10 minút → e-mail lekárnikovi a incident (najviac raz za hodinu)."}}],
+        {"id": "mail", "type": "notify", "x": 560, "y": 10, "settings": {"channel": c["ch1"], "subject": "Fridge 2: {{ fixed(value, 1) }} °C for more than 10 min"}},
+        {"id": "inc", "type": "incident", "x": 560, "y": 110, "settings": {"action": "open", "severity": "major", "title": "Fridge 2 outside 2–8 °C"}},
+        {"id": "dbg", "type": "debug", "x": 740, "y": 10, "settings": {"expr": "'sent ' + str(value)"}},
+        {"id": "note", "type": "comment", "x": 20, "y": 180, "settings": {"text": "Temperature above 8 °C for more than 10 minutes → an e-mail to the pharmacist and an incident (at most once an hour)."}}],
         "wires": [{"from": "t", "port": 0, "to": "hot"}, {"from": "hot", "port": 0, "to": "rl"}, {"from": "rl", "port": 0, "to": "mail"},
                   {"from": "rl", "port": 0, "to": "inc"}, {"from": "mail", "port": 0, "to": "dbg"}]}
-    out.append(flow("Chladnička 2 – upozornenie lekárnikovi", spec))
+    out.append(flow("Fridge 2 – alert to the pharmacist", spec))
     spec = {"nodes": [
         {"id": "s", "type": "schedule", "x": 40, "y": 60, "settings": {"mode": "daily", "times": "06:00", "weekdays": ["mon", "tue", "wed", "thu", "fri"]}},
-        {"id": "m", "type": "template", "x": 220, "y": 60, "settings": {"text": "Ranný prehľad energie: {{ fmtTime(now(), '2006-01-02') }}", "target": "text"}},
-        {"id": "n", "type": "notify", "x": 420, "y": 60, "settings": {"channel": c["ch2"], "subject": "Ranný prehľad", "text": "{{ msg.text }}"}},
-        {"id": "p", "type": "ds_value", "x": 40, "y": 180, "settings": {"datastream": e["FVE"]["ds"], "min_interval_s": 900}},
+        {"id": "m", "type": "template", "x": 220, "y": 60, "settings": {"text": "Morning energy summary: {{ fmtTime(now(), '2006-01-02') }}", "target": "text"}},
+        {"id": "n", "type": "notify", "x": 420, "y": 60, "settings": {"channel": c["ch2"], "subject": "Morning summary", "text": "{{ msg.text }}"}},
+        {"id": "p", "type": "ds_value", "x": 40, "y": 180, "settings": {"datastream": e["PV"]["ds"], "min_interval_s": 900}},
         {"id": "d", "type": "deadband", "x": 220, "y": 180, "settings": {"band": 5}},
-        {"id": "g", "type": "debug", "x": 420, "y": 180, "settings": {"expr": "'FVE ' + fixed(value, 0) + ' kWh'"}}],
+        {"id": "g", "type": "debug", "x": 420, "y": 180, "settings": {"expr": "'PV ' + fixed(value, 0) + ' kWh'"}}],
         "wires": [{"from": "s", "port": 0, "to": "m"}, {"from": "m", "port": 0, "to": "n"}, {"from": "p", "port": 0, "to": "d"}, {"from": "d", "port": 0, "to": "g"}]}
-    out.append(flow("Energie – ranný prehľad", spec))
+    out.append(flow("Energy – morning summary", spec))
     for slug in out:
         try: call("POST", f"/api/v1/flows/{slug}/deploy", {"reason": R})
         except SystemExit as x: print("deploy", slug, x)
@@ -358,9 +358,9 @@ def flows():
 # ---------------------------------------------------------------------------------------------- smart home
 @once("mqtt")
 def mqtt_accounts():
-    a = call("POST", "/api/v1/mqtt-sources", {"kind": "account", "name": "Rodinný dom – Zigbee a Tasmota", "adopt": "auto", "reason": R})
-    b = call("POST", "/api/v1/mqtt-sources", {"kind": "account", "name": "Kancelária – nové zariadenia", "adopt": "inbox", "reason": R})
-    p = call("POST", "/api/v1/provision-profiles", {"name": "Senzory teploty – sklad", "strategy": "create", "transport": "http", "approval": True, "auto_datastreams": True, "max_devices": 50, "name_pattern": "Senzor {serial}", "site_id": st["cold"]["site"], "reason": R})
+    a = call("POST", "/api/v1/mqtt-sources", {"kind": "account", "name": "Family house – Zigbee and Tasmota", "adopt": "auto", "reason": R})
+    b = call("POST", "/api/v1/mqtt-sources", {"kind": "account", "name": "Office – new devices", "adopt": "inbox", "reason": R})
+    p = call("POST", "/api/v1/provision-profiles", {"name": "Temperature sensors – store", "strategy": "create", "transport": "http", "approval": True, "auto_datastreams": True, "max_devices": 50, "name_pattern": "Sensor {serial}", "site_id": st["cold"]["site"], "reason": R})
     return {"auto": {"id": a["id"], "user": a["username"], "pass": a["password"]}, "inbox": {"id": b["id"], "user": b["username"], "pass": b["password"]}, "profile": p.get("id")}
 
 
@@ -372,8 +372,8 @@ def simulators(wait=True):
     m = st["mqtt"]
     procs = []
     for args in (["z2m", "-user", m["auto"]["user"], "-pass", m["auto"]["pass"]],
-                 ["tasmota", "-user", m["auto"]["user"], "-pass", m["auto"]["pass"], "-id", "KUCHYNA"],
-                 ["shelly", "-user", m["inbox"]["user"], "-pass", m["inbox"]["pass"], "-id", "KANCELARIA1"]):
+                 ["tasmota", "-user", m["auto"]["user"], "-pass", m["auto"]["pass"], "-id", "GARAGE"],
+                 ["shelly", "-user", m["inbox"]["user"], "-pass", m["inbox"]["pass"], "-id", "OFFICE1"]):
         log = open(os.path.join(root, ".dev", "homesim-" + args[0] + ".log"), "w")
         procs.append(subprocess.Popen([exe] + args + ["-wait", "86400"], stdout=log, stderr=subprocess.STDOUT))
     return procs
@@ -393,15 +393,15 @@ def home():
     lights = [x["id"] for x in ents if x.get("component") in ("light", "switch")]
     sc = []
     if lights:
-        sc.append(call("POST", "/api/v1/scenes", {"name": "Večer", "icon": "moon", "capture": lights, "reason": R})["id"])
-        sc.append(call("POST", "/api/v1/scenes", {"name": "Odchod z domu", "icon": "door", "actions": [{"entity_id": i, "service": "turn_off"} for i in lights], "reason": R})["id"])
+        sc.append(call("POST", "/api/v1/scenes", {"name": "Evening", "icon": "moon", "capture": lights, "reason": R})["id"])
+        sc.append(call("POST", "/api/v1/scenes", {"name": "Leaving home", "icon": "door", "actions": [{"entity_id": i, "service": "turn_off"} for i in lights], "reason": R})["id"])
     return {"entities": len(ents), "scenes": sc}
 
 
 # ---------------------------------------------------------------------------------------------- the rest
 def video_walls():
     """Ids of the demo video walls: the control room first, then the gatehouse (empty without cameras.py)."""
-    ws = sorted(call("GET", "/api/v1/video/walls"), key=lambda x: 0 if x["name"].startswith("Vel") else 1)
+    ws = sorted(call("GET", "/api/v1/video/walls"), key=lambda x: 0 if x["name"].startswith("Control room") else 1)
     return [x["id"] for x in ws]
 
 
@@ -411,7 +411,7 @@ def display():
     walls = video_walls()
     items = [{"kind": "dashboard", "slug": st["dashboards"]["cold"]}]
     if walls: items.insert(0, {"kind": "wall", "wall": walls[1], "screen": 0})
-    d = call("POST", "/api/v1/displays/pair", {"code": hello["code"], "name": "Vrátnica – TV", "location": "Areál Nitra, vrátnica", "offline_alert": False, "content": {"items": items}, "reason": R})
+    d = call("POST", "/api/v1/displays/pair", {"code": hello["code"], "name": "Gatehouse – TV", "location": "Nitra site, gatehouse", "offline_alert": False, "content": {"items": items}, "reason": R})
     return d.get("id")
 
 
@@ -419,28 +419,28 @@ def display():
 def firmware():
     blob = os.urandom(4096) + b"ctrl32-demo-firmware"
     bnd = uuid.uuid4().hex
-    fields = {"name": "Záznamník teploty", "version": "1.5.0", "hw": "esp32-logger", "notes": "Kratší interval pri prekročení limitu, opravené hlásenie batérie.", "reason": R}
+    fields = {"name": "Temperature logger", "version": "1.5.0", "hw": "esp32-logger", "notes": "Shorter interval when a limit is exceeded, battery reporting fixed.", "reason": R}
     body = b"".join(f"--{bnd}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode() for k, v in fields.items())
     body += f"--{bnd}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"logger-1.5.0.bin\"\r\nContent-Type: application/octet-stream\r\n\r\n".encode() + blob + f"\r\n--{bnd}--\r\n".encode()
     fw = json.loads(raw("POST", "/api/v1/firmware", body, "multipart/form-data; boundary=" + bnd))
-    camp = call("POST", "/api/v1/fota/campaigns", {"name": "Záznamníky – jeseň 2026", "firmware_id": fw["id"], "device_ids": [st["cold"]["esp"]], "reason": R})
-    call("POST", f"/api/v1/devices/{st['cold']['esp']}/commands", {"method": "reboot", "args": {"delay_s": 5}, "ttl_seconds": 600, "reason": "reštart po zmene intervalu"})
+    camp = call("POST", "/api/v1/fota/campaigns", {"name": "Loggers – autumn 2026", "firmware_id": fw["id"], "device_ids": [st["cold"]["esp"]], "reason": R})
+    call("POST", f"/api/v1/devices/{st['cold']['esp']}/commands", {"method": "reboot", "args": {"delay_s": 5}, "ttl_seconds": 600, "reason": "restart after the interval change"})
     return {"firmware": fw["id"], "campaign": camp.get("id")}
 
 
 @once("people")
 def people():
-    role = by_name("/api/v1/roles", "technik_chladenia")
-    role = role["id"] if role else call("POST", "/api/v1/roles", {"name": "technik_chladenia", "permissions": ["data.read", "alarm.ack", "data.export", "device.manage"], "reason": R})["id"]
+    role = by_name("/api/v1/roles", "refrigeration_technician")
+    role = role["id"] if role else call("POST", "/api/v1/roles", {"name": "refrigeration_technician", "permissions": ["data.read", "alarm.ack", "data.export", "device.manage"], "reason": R})["id"]
     have = {u["username"] for u in call("GET", "/api/v1/users")}
     users = []
-    for u, n, r in (("jana.kovacova", "Jana Kováčová", ["operator"]), ("peter.horvath", "Peter Horváth", ["engineer"]),
-                    ("eva.mrazova", "Eva Mrázová", ["qa"]), ("martin.balaz", "Martin Baláž", ["technik_chladenia"])):
+    for u, n, r in (("jane.cooper", "Jane Cooper", ["operator"]), ("peter.hughes", "Peter Hughes", ["engineer"]),
+                    ("emma.walsh", "Emma Walsh", ["qa"]), ("martin.reed", "Martin Reed", ["refrigeration_technician"])):
         if u not in have:
-            call("POST", "/api/v1/users", {"username": u, "full_name": n, "email": u + "@zavod-nitra.example", "roles": r, "reason": R})
+            call("POST", "/api/v1/users", {"username": u, "full_name": n, "email": u + "@nitra-plant.example", "roles": r, "reason": R})
         users.append(u)
-    if not by_name("/api/v1/tokens", "Power BI – export dát"):
-        call("POST", "/api/v1/tokens", {"name": "Power BI – export dát", "scopes": ["data.read", "data.export"]})
+    if not by_name("/api/v1/tokens", "Power BI – data export"):
+        call("POST", "/api/v1/tokens", {"name": "Power BI – data export", "scopes": ["data.read", "data.export"]})
     return {"role": role, "users": users}
 
 
@@ -448,26 +448,26 @@ def people():
 def settings():
     c = st["cold"]
     out = {}
-    con = by_name("/api/v1/connectors", "LoRaWAN – ChirpStack areál") or call("POST", "/api/v1/connectors", {"kind": "chirpstack_http", "name": "LoRaWAN – ChirpStack areál", "auto_create_devices": True, "reason": R})
+    con = by_name("/api/v1/connectors", "LoRaWAN – ChirpStack site") or call("POST", "/api/v1/connectors", {"kind": "chirpstack_http", "name": "LoRaWAN – ChirpStack site", "auto_create_devices": True, "reason": R})
     out["connector"] = con.get("id")
     walls = video_walls()
-    app = {"slug": "velin", "name": "Velín – kamery", "short_name": "Velín", "start_url": f"/video/walls/{walls[0]}" if walls else "/video",
+    app = {"slug": "control-room", "name": "Control room – cameras", "short_name": "Control room", "start_url": f"/video/walls/{walls[0]}" if walls else "/video",
            "sections": ["cameras", "dashboards", "incidents"], "theme_color": "#0e7490", "camera_layout": "grid", "reason": R}
     apps = {a["slug"] for a in call("GET", "/api/v1/pwa-apps")}
-    if "velin" not in apps: call("POST", "/api/v1/pwa-apps", app)
-    out["app"] = "velin"
-    if "lieky" not in apps: call("POST", "/api/v1/pwa-apps", {"slug": "lieky", "name": "Sklad liekov", "short_name": "Lieky", "start_url": f"/dashboards/{st['dashboards']['cold']}", "sections": ["dashboards", "incidents"], "locked": True, "reason": R})
+    if "control-room" not in apps: call("POST", "/api/v1/pwa-apps", app)
+    out["app"] = "control-room"
+    if "medicines" not in apps: call("POST", "/api/v1/pwa-apps", {"slug": "medicines", "name": "Medicine store", "short_name": "Medicines", "start_url": f"/dashboards/{st['dashboards']['cold']}", "sections": ["dashboards", "incidents"], "locked": True, "reason": R})
     # report template, then two stored reports
     spec = call("GET", "/api/v1/report-templates/observations/default-spec")["spec"]
-    call("PUT", "/api/v1/report-templates/observations", {"name": "Protokol teplôt – sklad liekov", "locale": "sk", "spec": spec, "reason": R})
+    call("PUT", "/api/v1/report-templates/observations", {"name": "Temperature log – medicine store", "locale": "en", "spec": spec, "reason": R})
     to = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(NOW)); fr = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(NOW - 7 * 86400))
     try:
         raw("GET", f"/api/v1/export/observations?datastream_id={c['f2']}&from={fr}&to={to}&format=pdf")
-        raw("GET", f"/api/v1/period-table/export?datastreams={c['f1']},{c['f2']}&interval=day&values=min,max&period=last_month&low=2&high=8&total=1&format=pdf&title=Teploty%20chladni%C4%8Diek")
+        raw("GET", f"/api/v1/period-table/export?datastreams={c['f1']},{c['f2']}&interval=day&values=min,max&period=last_month&low=2&high=8&total=1&format=pdf&title=Fridge%20temperatures")
     except Exception as x: print("reports:", x)
     # a pending change request for the approvals screen: four-eyes on limits, one rule change, policy off again
     call("PUT", "/api/v1/settings/policy", {"four_eyes_limits": True, "reason": R})
-    try: call("POST", "/api/v1/alarm-rules", {"datastream_id": c["f1"], "type": "high", "warning": 7.0, "action": 8, "hysteresis": 0.2, "reason": "sprísnenie varovania podľa SOP-12"})
+    try: call("POST", "/api/v1/alarm-rules", {"datastream_id": c["f1"], "type": "high", "warning": 7.0, "action": 8, "hysteresis": 0.2, "reason": "tighter warning per SOP-12"})
     finally: call("PUT", "/api/v1/settings/policy", {"four_eyes_limits": False, "reason": R})
     return out
 
@@ -493,7 +493,7 @@ def live():
             call("POST", "/api/v1/d/telemetry", {"ts": t, "v": {"temp": fridge_temp("freezer", t, rng, c["excursion_until"])}}, token=c["t3"])
             for m in e.values():
                 m["cum"] += meter_kwh(m["kind"], m["peak"], t, rng) / 60
-                call("POST", "/api/v1/d/telemetry", {"ts": t, "v": {"energia": round(m["cum"], 3)}}, token=m["token"])
+                call("POST", "/api/v1/d/telemetry", {"ts": t, "v": {"energy": round(m["cum"], 3)}}, token=m["token"])
             # keep the meter readings; everything else in the state file belongs to setup
             cur = json.load(open(STATE, encoding="utf-8")); cur["energy"] = e
             json.dump(cur, open(STATE, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
