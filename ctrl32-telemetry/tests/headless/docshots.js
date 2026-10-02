@@ -103,7 +103,8 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   const devices = (await api("/api/v1/devices")) || [];
   const flows = (await api("/api/v1/flows")) || [];
   const short = { "site-cameras-on-the-floor-plan": "floor-plan", "line-1-process-screen": "scada-line-1", "production-line-overview": "production-lines",
-    "cold-chain-medicine-store": "cold-chain", "energy-monthly-consumption": "energy-monthly", "overview": "overview", "showcase-all-widgets": "showcase" };
+    "cold-chain-medicine-store": "cold-chain", "energy-monthly-consumption": "energy-monthly", "overview": "overview", "showcase-all-widgets": "showcase",
+    "overview-of-all-sensors": "sensors-overview", "energy-overview": "energy-overview", "cold-chain-overview": "cold-chain-overview" };
   const slugName = (s) => short[s] || s;
   const prodDash = () => dashes.find((d) => d.slug === "production-line-overview") || dashes[0];
   const cam = (n) => (cams.find((c) => c.name === n) || cams[0] || {}).id;
@@ -122,7 +123,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await page("dashboards-new-dialog", "/dashboards", { click: "#newBtn" });
   for (const d of dashes) {
     const n = slugName(d.slug);
-    await page(`dashboards-${n}`, `/dashboards/${d.slug}`, { wait: 6000, full: n === "showcase" || n === "cold-chain" || n === "energy-monthly", maxH: 3200 });
+    await page(`dashboards-${n}`, `/dashboards/${d.slug}`, { wait: 6000, full: ["showcase", "cold-chain", "energy-monthly", "sensors-overview", "energy-overview", "cold-chain-overview"].includes(n), maxH: 3200 });
     await page(`dashboards-${n}-edit`, `/dashboards/${d.slug}/edit`, { wait: 5000 });
   }
   const cold = dashes.find((d) => d.slug === "cold-chain-medicine-store");
@@ -133,6 +134,37 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
     await page("dashboards-period-table-widget", `/dashboards/${cold.slug}`, { wait: 6000, clip: "js:document.querySelector('.pt-bar').parentElement.parentElement" });
     // the toolbar alone: the period, ◀ ▶ and the Excel / CSV / PDF export buttons
     if (wanted("dashboards-period-table-toolbar")) { await go(`/dashboards/${cold.slug}`, 6000); await shot("dashboards-period-table-toolbar", { clip: ".pt-bar", pad: 12 }); }
+  }
+  // overviews (0.68.0): the filter bar with a choice open, the overview table with its column filters, the totals of a
+  // grouped table, the data source of a widget and the filters of the dashboard settings in the editor, the global search
+  const ccOv = dashes.find((d) => d.slug === "cold-chain-overview"), sensOv = dashes.find((d) => d.slug === "overview-of-all-sensors"), enOv = dashes.find((d) => d.slug === "energy-overview");
+  if (ccOv) {
+    if (wanted("dashboards-filter-bar")) { await go(`/dashboards/${ccOv.slug}`, 6000); await ev("(() => { const d = document.querySelectorAll('#vFilters .df-pick')[2]; if (d) d.open = true; return !!d; })()"); await sleep(800);
+      await shot("dashboards-filter-bar", { clip: "js:(() => { const b = document.querySelector('#vFilters'); const m = document.querySelector('#vFilters details[open] .df-menu'); if (!b) return null; return { getBoundingClientRect: () => { const r = b.getBoundingClientRect(), q = m ? m.getBoundingClientRect() : r; return { x: r.x, y: r.y, width: r.width, height: Math.max(r.bottom, q.bottom) - r.y + 4 }; }, scrollIntoView: () => {} }; })()" }); }
+    await page("dashboards-edit-data-source", `/dashboards/${ccOv.slug}/edit`, { wait: 5000, before: "(() => { const w = document.querySelector('#eGrid .dash-widget[data-id=\"trend\"]'); if (w) w.click(); return !!w; })()", afterWait: 2500, clip: "#eProps", pad: 6 });
+    await page("dashboards-edit-filters", `/dashboards/${ccOv.slug}/edit`, { wait: 5000, click: "#eSettings", clip: "#setDlg", pad: -2 });
+  }
+  if (sensOv && wanted("dashboards-overview-table")) {
+    await go(`/dashboards/${sensOv.slug}?f.quantity=temperature`, 6000);
+    await ev("(() => { const b = document.querySelector('[data-id=\"sensors\"] .ot-ftoggle'); if (b) b.click(); return !!b; })()"); await sleep(600);
+    await ev("(() => { const s = document.querySelector('[data-id=\"sensors\"] .ot-filters [data-f=\"alarm\"]'); if (s) { s.value = 'alarm'; s.dispatchEvent(new Event('change')); } return !!s; })()"); await sleep(600);
+    await shot("dashboards-overview-table", { clip: "[data-id=\"sensors\"]", pad: 4 });
+  }
+  if (enOv && wanted("dashboards-overview-group-totals")) { await go(`/dashboards/${enOv.slug}`, 7000); await shot("dashboards-overview-group-totals", { clip: "[data-id=\"meters\"]", pad: 4 }); }
+  if (wanted("start-global-search")) {
+    await go(ccOv ? `/dashboards/${ccOv.slug}` : "/", 5000);
+    await ev("ctrl32.openSearch('fridge'); true"); await sleep(2500);
+    await shot("start-global-search");
+  }
+  if (sensOv && wanted("dashboards-public-filters")) {
+    // the public link as a visitor sees it: signed out, only the filters marked public
+    const sh = await api(`/api/v1/dashboards/${sensOv.slug}/share`);
+    if (sh && sh.token) {
+      await ev("ctrl32.api('POST', '/api/v1/auth/logout', {}).then(() => true, () => true)"); await sleep(500);
+      await page("dashboards-public-filters", `/p/${sh.token}?f.quantity=temperature`, { wait: 7000 });
+      const relog = await ev(`fetch('/api/v1/auth/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: ${JSON.stringify(user)}, password: ${JSON.stringify(pass)}})}).then(r => r.status)`);
+      if (relog !== 200) problems.push("sign-in again after the public link failed: " + relog);
+    } else problems.push("dashboards-public-filters: the overview has no public link");
   }
 
   // ---- devices
@@ -409,6 +441,8 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   const prod = prodDash();
   if (prod) await page("dashboards-phone", `/dashboards/${prod.slug}`, { wait: 6000 });
   if (cold) await page("dashboards-phone-cold-chain", `/dashboards/${cold.slug}`, { wait: 6000 });
+  const ccOvPhone = dashes.find((d) => d.slug === "cold-chain-overview");
+  if (ccOvPhone) await page("dashboards-phone-overview", `/dashboards/${ccOvPhone.slug}`, { wait: 6000 });
   await page("video-phone-live", "/video", { wait: 9000 });
   if (gate) await page("video-phone-camera", `/video/cameras/${gate}`, { wait: 8000 });
   await page("energy-phone", "/energy", { wait: 4000 });

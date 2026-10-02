@@ -122,7 +122,7 @@
   }, { needsDs: true, label: 'LED indicators' });
 
   reg('alarm_count', async (el, p, ctx) => {
-    const al = await api('GET', P('/api/v1/alarms')); const act = al.filter((a) => !a.cleared_at && (!p.severity || a.severity === p.severity)); const n = act.length;
+    const al = WG.inScope(await api('GET', P('/api/v1/alarms')), ctx); const act = al.filter((a) => !a.cleared_at && (!p.severity || a.severity === p.severity)); const n = act.length;
     const base = n === 0 ? '#16a34a' : act.some((a) => a.severity === 'action') ? '#dc2626' : '#d97706'; const { c } = colFor(ctx, p, n, base);
     el.innerHTML = `<div class="dw-center"><span style="color:${c}">${icon(p.icon || 'bell', 30)}</span><div class="dw-big" style="color:${c}">${n}</div><div class="muted" style="font-size:12px">${p.severity ? esc(p.severity) + ' · ' : ''}active alarms</div></div>`;
   }, { alarms: true, label: 'Alarm count' });
@@ -254,6 +254,102 @@
     };
     draw();
   }, { needsDs: true, label: 'Entity table' });
+
+  // Overview table (0.68.0): many datastreams, usually selected by a query and following the dashboard filters, with
+  // search, sorting, column filters (value range, quality, stale/fresh, alarm), grouping, pages, highlighting and the
+  // export of the filtered rows (Excel, CSV; data.export, never on a public link). The server answers one query with
+  // the latest values, active alarms, the limits of the alarm rules and minimum/maximum/change in the range.
+  const OT_LBL = { site: 'Site', asset: 'Asset', asset_type: 'Asset type', device: 'Device', datastream: 'Datastream', quantity: 'Quantity', value: 'Value', measured: 'Measured', age: 'Age', quality: 'Quality', alarm: 'Alarm', limits: 'Limits', min: 'Minimum', max: 'Maximum', change: 'Change' };
+  const OT_NUM = new Set(['value', 'age', 'min', 'max', 'change']);
+  const STALE = { '15m': 900e3, '1h': 3600e3, '6h': 6 * 3600e3, '24h': 86400e3 };
+  const SEV_RANK = { warning: 1, action: 2, critical: 3 };
+  const ageOf = (r) => (r.latest ? Date.now() - Date.parse(r.latest.measured_at) : null);
+  const ageTxt = (ms) => { if (ms == null) return '—'; const s = ms / 1000; return s < 60 ? Math.round(s) + ' s' : s < 3600 ? Math.round(s / 60) + ' min' : s < 172800 ? Math.round(s / 3600) + ' h' : Math.round(s / 86400) + ' d'; };
+  const staleOf = (r, p) => { const a = ageOf(r); if (a == null) return true; const lim = STALE[p.stale_after] || (r.interval_s ? Math.max(2 * r.interval_s * 1000, 120e3) : 3600e3); return a > lim; };
+  const rowVal = (r) => (r.latest ? numVal(r.latest) : null);
+  const outOfLimits = (r, v) => { const l = r.limits || {}; if (v == null) return ''; if ((l.high_action != null && v >= l.high_action) || (l.low_action != null && v <= l.low_action)) return 'bad'; if ((l.high_warn != null && v >= l.high_warn) || (l.low_warn != null && v <= l.low_warn)) return 'warn'; return ''; };
+  const limTxt = (l) => { if (!l) return '—'; const lo = l.low_action ?? l.low_warn, hi = l.high_action ?? l.high_warn; return lo == null && hi == null ? '—' : (lo != null && hi != null ? `${lo} … ${hi}` : lo != null ? `≥ ${lo}` : `≤ ${hi}`); };
+  function otKey(r, k) {
+    switch (k) {
+      case 'value': return rowVal(r); case 'age': return ageOf(r); case 'measured': return r.latest ? Date.parse(r.latest.measured_at) : null;
+      case 'quality': return r.latest ? r.latest.quality : ''; case 'alarm': return r.alarm ? SEV_RANK[r.alarm.severity] || 1 : 0;
+      case 'limits': return limTxt(r.limits); case 'min': case 'max': case 'change': return r.window ? r.window[k] : null;
+      case 'datastream': return (r.label || r.key || '').toLowerCase(); default: return String(r[k] || '').toLowerCase();
+    }
+  }
+  const otGroup = (r, g) => (g === 'device' ? r.device || '—' : r[g] || '—');
+  reg('overview_table', async (el, p, ctx) => {
+    // the column a table is grouped by is shown in the group rows instead
+    const cols = (Array.isArray(p.columns) && p.columns.length ? p.columns : ['site', 'asset', 'datastream', 'value', 'age', 'quality', 'alarm']).filter((c) => OT_LBL[c] && c !== p.group_by);
+    const win = u.winOf(p, ctx); const needWin = cols.some((c) => c === 'min' || c === 'max' || c === 'change');
+    const extra = { latest: '1' }; if (needWin) { extra.from = new Date(win.t0).toISOString(); extra.to = new Date(win.t1).toISOString(); }
+    let res; try { res = await ctx.query(extra); } catch (x) { noData(el, x.message); return; }
+    const rows = res.items; const st = el._ot || (el._ot = { q: '', sort: '', dir: 1, page: 0, vmin: '', vmax: '', quality: '', fresh: '', alarm: '', open: false });
+    const dec = (r) => (p.decimals != null && p.decimals !== '' ? p.decimals : 2); const hl = p.highlight || 'both';
+    const pageSize = clamp(Math.round(p.page_size || 25), 5, 200);
+    const filtered = () => rows.filter((r) => {
+      if (st.q) { const t = st.q.toLowerCase(); if (![r.site, r.asset, r.asset_type, r.device, r.key, r.label, r.quantity].some((x) => x && String(x).toLowerCase().includes(t))) return false; }
+      const v = rowVal(r);
+      if (st.vmin !== '' && !(v != null && v >= +st.vmin)) return false;
+      if (st.vmax !== '' && !(v != null && v <= +st.vmax)) return false;
+      if (st.quality === 'ok' && !(r.latest && (r.latest.quality === 'ok' || r.latest.quality === 'backfilled'))) return false;
+      if (st.quality === 'doubtful' && !(r.latest && r.latest.quality !== 'ok' && r.latest.quality !== 'backfilled')) return false;
+      if (st.fresh === 'fresh' && staleOf(r, p)) return false;
+      if (st.fresh === 'stale' && !staleOf(r, p)) return false;
+      if (st.alarm === 'alarm' && !r.alarm) return false;
+      if (st.alarm === 'none' && r.alarm) return false;
+      return true;
+    });
+    const sorted = (list) => { if (!st.sort && !p.group_by) return list; const g = p.group_by; return list.slice().sort((a, b) => { if (g) { const ga = otGroup(a, g).toLowerCase(), gb = otGroup(b, g).toLowerCase(); if (ga !== gb) return ga > gb ? 1 : -1; } if (!st.sort) return 0; const ka = otKey(a, st.sort), kb = otKey(b, st.sort); if (ka == null && kb == null) return 0; if (ka == null) return 1; if (kb == null) return -1; return (ka > kb ? 1 : ka < kb ? -1 : 0) * st.dir; }); };
+    const cell = (r, c) => {
+      const v = rowVal(r);
+      switch (c) {
+        case 'value': { const lim = hl === 'both' || hl === 'limits' ? outOfLimits(r, v) : ''; const cf = WG.condFormat(null, p, v); const col = cf.value || (lim === 'bad' ? 'var(--bad,#dc2626)' : lim === 'warn' ? 'var(--warn,#d97706)' : (p.value_color || 'inherit'));
+          return `<td style="text-align:right;font-weight:600;white-space:nowrap;color:${col}">${v == null ? (r.latest && r.latest.value_json != null ? esc(JSON.stringify(r.latest.value_json)) : '—') : num(v, dec(r))} <span class="muted" style="font-weight:400">${esc(r.unit || '')}</span></td>`; }
+        case 'age': { const s = staleOf(r, p); return `<td style="white-space:nowrap">${ageTxt(ageOf(r))}${s && r.latest ? ' <span class="badge warn">' + esc(tr('stale')) + '</span>' : ''}</td>`; }
+        case 'measured': return `<td style="white-space:nowrap">${r.latest ? fmt(r.latest.measured_at) : '—'}</td>`;
+        case 'quality': return `<td>${r.latest ? `<span class="badge ${r.latest.quality === 'ok' || r.latest.quality === 'backfilled' ? 'ok' : 'warn'}">${esc(r.latest.quality)}</span>` : ''}</td>`;
+        case 'alarm': return `<td>${r.alarm ? `<span class="badge ${r.alarm.severity === 'warning' ? 'warn' : 'bad'}">${esc(r.alarm.severity)}${r.alarm.acknowledged ? ' ✓' : ''}</span>` : '<span class="muted">—</span>'}</td>`;
+        case 'limits': return `<td style="white-space:nowrap" class="muted">${esc(limTxt(r.limits))}</td>`;
+        case 'min': case 'max': case 'change': { const x = r.window ? r.window[c] : null; const lim = c !== 'change' && (hl === 'both' || hl === 'limits') ? outOfLimits(r, x) : ''; return `<td style="text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums${lim ? ';color:var(--' + lim + ')' : ''}">${x == null ? '—' : num(x, dec(r)) + (r.unit ? ` <span class="muted">${esc(r.unit)}</span>` : '')}</td>`; }
+        case 'device': return `<td class="notranslate">${r.device ? (WG.isPublic() ? esc(r.device) : `<a href="/devices/${esc(r.device_id)}">${esc(r.device)}</a>`) : '—'}</td>`;
+        case 'datastream': return `<td class="notranslate" title="${esc(r.quantity)}">${esc(r.label || r.key)}</td>`;
+        default: return `<td class="notranslate">${esc(r[c] || '—')}</td>`;
+      }
+    };
+    const draw = () => {
+      const list = sorted(filtered()); const pages = Math.max(1, Math.ceil(list.length / pageSize)); if (st.page >= pages) st.page = pages - 1;
+      const shown = list.slice(st.page * pageSize, (st.page + 1) * pageSize);
+      const th = (c) => `<th data-k="${c}" style="cursor:pointer;white-space:nowrap${OT_NUM.has(c) ? ';text-align:right' : ''}">${esc(tr(OT_LBL[c]))}${st.sort === c ? (st.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
+      const totals = {}; if (p.group_by && p.group_totals) for (const r of list) { const g = otGroup(r, p.group_by); const x = r.window ? r.window.change : null; if (x != null) totals[g] = (totals[g] || 0) + x; }
+      const counts = {}; if (p.group_by) for (const r of list) { const g = otGroup(r, p.group_by); counts[g] = (counts[g] || 0) + 1; }
+      let body = '', last = null;
+      for (const r of shown) {
+        if (p.group_by) { const g = otGroup(r, p.group_by); if (g !== last) { last = g; body += `<tr class="ot-group"><td colspan="${cols.length}"><b class="notranslate">${esc(g)}</b> <span class="muted">· ${counts[g]}${totals[g] != null ? ' · ' + esc(tr('change')) + ' ' + num(totals[g], dec(r)) + (r.unit ? ' ' + esc(r.unit) : '') : ''}</span></td></tr>`; } }
+        const sev = r.alarm && (hl === 'both' || hl === 'alarms') ? (r.alarm.severity === 'warning' ? 'warn' : 'bad') : '';
+        body += `<tr class="${sev ? 'ot-' + sev : ''}" data-ds="${esc(r.id)}">${cols.map((c) => cell(r, c)).join('')}</tr>`;
+      }
+      const canExport = !WG.isPublic() && p.export !== false && !ctx.edit && (!window.ctrl32 || !ctrl32.can || ctrl32.can('data.export'));
+      const sel = (k, opts) => `<select data-f="${k}">${opts.map(([v, l]) => `<option value="${v}" ${st[k] === v ? 'selected' : ''}>${esc(tr(l))}</option>`).join('')}</select>`;
+      const active = st.vmin !== '' || st.vmax !== '' || st.quality || st.fresh || st.alarm;
+      el.innerHTML = `<div class="ot-bar">${p.search !== false ? `<input class="dw-search ot-q" type="search" placeholder="${esc(tr('Search…'))}" value="${esc(st.q)}">` : ''}${p.column_filters !== false ? `<button type="button" class="btn small ghost ot-ftoggle${active ? ' on' : ''}" aria-expanded="${st.open}">${esc(tr('Column filters'))}${active ? ' •' : ''}</button>` : ''}<span class="muted ot-count">${list.length === rows.length ? rows.length : list.length + ' / ' + rows.length}${res.truncated ? ' · ' + esc(tr('first')) + ' ' + rows.length + ' / ' + res.total : ''}</span><span style="flex:1"></span>${canExport ? `<button type="button" class="btn small ghost" data-x="xlsx">Excel</button><button type="button" class="btn small ghost" data-x="csv">CSV</button>` : ''}</div>`
+        + (p.column_filters !== false && st.open ? `<div class="ot-filters"><label>${esc(tr('Value'))} <input type="number" step="any" data-f="vmin" value="${esc(st.vmin)}" placeholder="${esc(tr('from'))}"> – <input type="number" step="any" data-f="vmax" value="${esc(st.vmax)}" placeholder="${esc(tr('to'))}"></label><label>${esc(tr('Quality'))} ${sel('quality', [['', 'all'], ['ok', 'good'], ['doubtful', 'doubtful']])}</label><label>${esc(tr('Age'))} ${sel('fresh', [['', 'all'], ['fresh', 'fresh'], ['stale', 'stale']])}</label><label>${esc(tr('Alarm'))} ${sel('alarm', [['', 'all'], ['alarm', 'in alarm'], ['none', 'no alarm']])}</label>${active ? `<button type="button" class="btn small ghost" data-freset>${esc(tr('Clear'))}</button>` : ''}</div>` : '')
+        + `<div class="table-wrap ot-wrap"><table class="ot-table"><thead><tr>${cols.map(th).join('')}</tr></thead><tbody>${body || `<tr><td colspan="${cols.length}" class="muted">${esc(tr(rows.length ? 'nothing found' : 'No datastreams match the query or the filters.'))}</td></tr>`}</tbody></table></div>`
+        + (pages > 1 ? `<div class="ot-pages"><button type="button" class="btn small ghost" data-pg="-1" ${st.page ? '' : 'disabled'}>◀</button><span class="muted">${st.page + 1} / ${pages}</span><button type="button" class="btn small ghost" data-pg="1" ${st.page < pages - 1 ? '' : 'disabled'}>▶</button></div>` : '');
+      for (const h of el.querySelectorAll('th[data-k]')) h.onclick = (e) => { e.stopPropagation(); if (st.sort === h.dataset.k) st.dir = -st.dir; else { st.sort = h.dataset.k; st.dir = OT_NUM.has(h.dataset.k) || h.dataset.k === 'alarm' ? -1 : 1; } draw(); };
+      const q = el.querySelector('.ot-q'); if (q) q.oninput = () => { st.q = q.value; st.page = 0; const pos = q.selectionStart; draw(); const q2 = el.querySelector('.ot-q'); q2.focus(); q2.setSelectionRange(pos, pos); };
+      const ft = el.querySelector('.ot-ftoggle'); if (ft) ft.onclick = (e) => { e.stopPropagation(); st.open = !st.open; draw(); };
+      for (const f of el.querySelectorAll('.ot-filters [data-f]')) f.onchange = () => { st[f.dataset.f] = f.value; st.page = 0; draw(); };
+      const fr = el.querySelector('[data-freset]'); if (fr) fr.onclick = (e) => { e.stopPropagation(); Object.assign(st, { vmin: '', vmax: '', quality: '', fresh: '', alarm: '', page: 0 }); draw(); };
+      for (const b of el.querySelectorAll('[data-pg]')) b.onclick = (e) => { e.stopPropagation(); st.page += +b.dataset.pg; draw(); };
+      for (const b of el.querySelectorAll('[data-x]')) b.onclick = async (e) => { e.stopPropagation(); b.disabled = true;
+        try { const body = { ids: list.map((r) => r.id), columns: cols, format: b.dataset.x, title: p.title || tr('Overview'), decimals: p.decimals != null && p.decimals !== '' ? p.decimals : 2 }; if (needWin) { body.from = extra.from; body.to = extra.to; }
+          const blob = await api('POST', '/api/v1/datastreams/export', body); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (p.title || 'overview').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_') + '.' + b.dataset.x; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        } catch (x) { if (window.ctrl32 && ctrl32.toast) ctrl32.toast(x.message, 'bad'); } b.disabled = false; };
+      for (const tr0 of el.querySelectorAll('tr[data-ds]')) tr0.ondblclick = () => { if (window.ctrl32Scada && ctrl32Scada.openTag) ctrl32Scada.openTag(tr0.dataset.ds, { trendOnly: true }); };
+    };
+    draw();
+  }, { needsDs: true, label: 'Overview table' });
 
   // ---- other ----------------------------------------------------------------------------------------------------
   const clockFmt = (el) => { const tz = el.dataset.tz || undefined, h12 = el.dataset.f === '12h'; const now = new Date(); let t, d; try { t = now.toLocaleTimeString(document.documentElement.lang || [], { timeZone: tz, hour12: h12, hour: '2-digit', minute: '2-digit', second: '2-digit' }); d = now.toLocaleDateString(document.documentElement.lang || [], { timeZone: tz, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) { t = now.toLocaleTimeString(document.documentElement.lang || undefined); d = now.toLocaleDateString(document.documentElement.lang || undefined); } el.querySelector('.dw-time').textContent = t; const de = el.querySelector('.dw-date'); if (de) de.textContent = d; };

@@ -1,0 +1,35 @@
+meta {
+  name: Datastreams of a widget of the shared dashboard
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public/:token/datastreams/query
+  body: none
+  auth: inherit
+}
+
+params:path {
+  token: 
+}
+
+params:query {
+  widget: 
+  ~f_site: 
+  ~f_asset_type: 
+  ~f_quantity: 
+  ~f_device: 
+  ~f_attr: 
+  ~f_q: 
+  ~limit: 
+  ~latest: 
+  ~from: 
+  ~to: 
+}
+
+docs {
+  Datastreams of a widget of the shared dashboard
+  
+  The datastreams of the widget `widget` — its query source or its bound datastreams — within the dashboard's scope, narrowed by the dashboard filters when the widget follows them: a filter marked public takes the viewer's `f_` value, any other filter its default. Answer as `GET /api/v1/datastreams/query`.
+}

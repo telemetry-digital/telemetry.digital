@@ -229,7 +229,7 @@ func validateRichParam(d ScreenParam, v any) (any, error) {
 }
 
 var timeWidgets = setOf("chart", "bar_time", "state_timeline", "ts_table")
-var valueWidgets = setOf("value", "gauge", "bars", "table", "value_card", "agg_card", "progress", "level_card", "thermometer", "radial_gauge", "linear_gauge", "entity_table", "battery", "signal", "compass", "ts_table", "alarm_count")
+var valueWidgets = setOf("value", "gauge", "bars", "table", "value_card", "agg_card", "progress", "level_card", "thermometer", "radial_gauge", "linear_gauge", "entity_table", "overview_table", "battery", "signal", "compass", "ts_table", "alarm_count")
 
 // withCommon completes the catalogue once at start-up: every type gets the common settings, time-based types the
 // time/series settings, value-like types conditional formatting. Parameters a type already defines win.

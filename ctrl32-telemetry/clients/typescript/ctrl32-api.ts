@@ -23,6 +23,7 @@ export type AccountRequest = {
 
 export type Alarm = {
   cleared_at?: string | null;
+  datastream_id?: string | null;
   id?: string;
   /** datastream key, or input name for rule alarms */
   key?: string;
@@ -320,6 +321,7 @@ export type Dashboard = {
 };
 
 export type DashboardSpec = {
+  filters?: (Record<string, unknown>)[];
   /** screen-v1 */
   format?: string;
   /** {type: grid, columns: 12, row_height} */
@@ -2135,7 +2137,7 @@ export class Ctrl32Client {
   /** A starter dashboard spec built from the organization's data
    *
    * Requires permission `data.read`. */
-  getDashboardsStarter(query?: { kind?: string; /** overview (default), showcase, mimic (widget symbols on a canvas) or plant (mixing plant process picture) */ }): Promise<{
+  getDashboardsStarter(query?: { kind?: string; /** overview (default), sensors (overview of all sensors), energy (energy overview), coldchain (cold chain overview), showcase, mimic (widget symbols on a canvas) or plant (mixing plant process picture) */ }): Promise<{
     kind?: string;
     name?: string;
     spec?: DashboardSpec;
@@ -2236,11 +2238,121 @@ export class Ctrl32Client {
     return this.request<Datastream>('POST', `/api/v1/datastreams`, undefined, body, false);
   }
 
+  /** Export rows of an overview table
+   *
+   * The datastreams `ids` in this order (the filtered and sorted view of an overview table, at most 2000) with the chosen `columns` (site, asset, asset_type, device, datastream, quantity, value, measured, age, quality, alarm, limits, min, max, change; value adds a unit column) as `format` xlsx (default) or csv. min, max and change need `from`/`to`. Audited.
+   * 
+   * Requires permission `data.export`. */
+  postDatastreamsExport(body: {
+    columns?: string[];
+    /** 0–6 */
+    decimals?: number;
+    format?: "xlsx" | "csv";
+    from?: string;
+    ids: string[];
+    title?: string;
+    to?: string;
+  }): Promise<Response> {
+    return this.request<Response>('POST', `/api/v1/datastreams/export`, undefined, body, true);
+  }
+
+  /** Choices of dashboard filters
+   *
+   * For each kind the values with the number of datastreams: `site`, `asset_type`, `quantity`, `device`, `attr:<key>` (values of an attribute) and `attr_keys` (attribute names). The other filters narrow the choices (a filter does not narrow its own).
+   * 
+   * Requires permission `data.read`. */
+  getDatastreamsFacets(query?: { kinds?: string; /** comma-separated, default site,asset_type,quantity,device */ site?: string; /** comma-separated site ids */ asset_type?: string; /** comma-separated asset types (fridge, meter, …) */ quantity?: string; /** comma-separated quantities (temperature, energy, …) */ device?: string; /** comma-separated device ids (the device a datastream is assigned to) */ attr?: string; /** key=value of an asset or datastream attribute, repeatable (several values of one key: any of them) */ q?: string; /** free text: key, quantity, asset, asset type, site, device or name contains it */ name?: string; /** name pattern of asset / key, * and ? as wildcards (no wildcard = contains) */ ids?: string; /** comma-separated datastream ids (at most 500): only these */ f_site?: string; /** dashboard filter: like site */ f_asset_type?: string; /** dashboard filter */ f_quantity?: string; /** dashboard filter */ f_device?: string; /** dashboard filter */ f_attr?: string; /** dashboard filter, key=value, repeatable */ f_q?: string; /** dashboard filter: free text */ }): Promise<Record<string, ({
+    label?: string;
+    n?: number;
+    value?: string;
+  })[]>> {
+    return this.request<Record<string, ({
+    label?: string;
+    n?: number;
+    value?: string;
+  })[]>>('GET', `/api/v1/datastreams/facets`, query, undefined, false);
+  }
+
   /** Latest value of several datastreams
    *
    * Requires permission `data.read`. */
   getDatastreamsLatest(query: { ids: string; /** comma-separated datastream ids */ }): Promise<Record<string, LatestValue>> {
     return this.request<Record<string, LatestValue>>('GET', `/api/v1/datastreams/latest`, query, undefined, false);
+  }
+
+  /** Datastreams selected by a query (overviews)
+   *
+   * Datastreams of the organization matching sites, asset types, quantities, devices, attributes, free text and a name pattern — the dynamic data source of dashboard widgets and the filter bar of dashboards (0.68.0). Several values of one parameter match any of them; different parameters must all match; plain and `f_` (dashboard filter) parameters both apply. Ordered by site, asset and key. `latest=1` adds the latest value, the active alarm and the limits of the alarm rules; `from`/`to` add minimum, maximum and change (consumption of a meter) in that window.
+   * 
+   * Requires permission `data.read`. */
+  getDatastreamsQuery(query?: { site?: string; /** comma-separated site ids */ asset_type?: string; /** comma-separated asset types (fridge, meter, …) */ quantity?: string; /** comma-separated quantities (temperature, energy, …) */ device?: string; /** comma-separated device ids (the device a datastream is assigned to) */ attr?: string; /** key=value of an asset or datastream attribute, repeatable (several values of one key: any of them) */ q?: string; /** free text: key, quantity, asset, asset type, site, device or name contains it */ name?: string; /** name pattern of asset / key, * and ? as wildcards (no wildcard = contains) */ ids?: string; /** comma-separated datastream ids (at most 500): only these */ f_site?: string; /** dashboard filter: like site */ f_asset_type?: string; /** dashboard filter */ f_quantity?: string; /** dashboard filter */ f_device?: string; /** dashboard filter */ f_attr?: string; /** dashboard filter, key=value, repeatable */ f_q?: string; /** dashboard filter: free text */ limit?: number; /** 1–500, default 100 */ latest?: string; /** 1: latest value, active alarm, limits */ from?: string; /** window start (RFC 3339) */ to?: string; /** window end (default now) */ }): Promise<{
+    items?: ({
+      /** active alarm {severity, count, acknowledged} */
+      alarm?: Record<string, unknown>;
+      asset?: string;
+      asset_id?: string;
+      asset_type?: string;
+      device?: string;
+      /** assigned device */
+      device_id?: string;
+      id?: string;
+      /** expected interval */
+      interval_s?: number;
+      key?: string;
+      kind?: string;
+      /** display name (attribute name) */
+      label?: string;
+      /** {measured_at, value, value_json, quality} */
+      latest?: Record<string, unknown> | null;
+      /** alarm-rule limits {high_warn, high_action, low_warn, low_action} */
+      limits?: Record<string, unknown>;
+      quantity?: string;
+      site?: string;
+      site_id?: string;
+      unit?: string;
+      /** {min, max, first, last, change, n} between from and to */
+      window?: Record<string, unknown>;
+    })[];
+    limit?: number;
+    /** all matches */
+    total?: number;
+    /** more matches than limit */
+    truncated?: boolean;
+  }> {
+    return this.request<{
+    items?: ({
+      /** active alarm {severity, count, acknowledged} */
+      alarm?: Record<string, unknown>;
+      asset?: string;
+      asset_id?: string;
+      asset_type?: string;
+      device?: string;
+      /** assigned device */
+      device_id?: string;
+      id?: string;
+      /** expected interval */
+      interval_s?: number;
+      key?: string;
+      kind?: string;
+      /** display name (attribute name) */
+      label?: string;
+      /** {measured_at, value, value_json, quality} */
+      latest?: Record<string, unknown> | null;
+      /** alarm-rule limits {high_warn, high_action, low_warn, low_action} */
+      limits?: Record<string, unknown>;
+      quantity?: string;
+      site?: string;
+      site_id?: string;
+      unit?: string;
+      /** {min, max, first, last, change, n} between from and to */
+      window?: Record<string, unknown>;
+    })[];
+    limit?: number;
+    /** all matches */
+    total?: number;
+    /** more matches than limit */
+    truncated?: boolean;
+  }>('GET', `/api/v1/datastreams/query`, query, undefined, false);
   }
 
   /** Datastream detail
@@ -4873,9 +4985,97 @@ export class Ctrl32Client {
     return this.request<Datastream[]>('GET', `/api/v1/public/${encodeURIComponent(token)}/datastreams`, undefined, undefined, false);
   }
 
+  /** Choices of the public filters
+   *
+   * Like `GET /api/v1/datastreams/facets`, only for filters the owner marked public and only within the dashboard's scope. */
+  getPublicTokenDatastreamsFacets(token: string, query?: { kinds?: string; f_site?: string; f_asset_type?: string; f_quantity?: string; f_device?: string; f_attr?: string; f_q?: string; }): Promise<Record<string, ({
+    label?: string;
+    n?: number;
+    value?: string;
+  })[]>> {
+    return this.request<Record<string, ({
+    label?: string;
+    n?: number;
+    value?: string;
+  })[]>>('GET', `/api/v1/public/${encodeURIComponent(token)}/datastreams/facets`, query, undefined, false);
+  }
+
   /** Latest values (bound datastreams only) */
   getPublicTokenDatastreamsLatest(token: string, query: { ids: string; }): Promise<Record<string, LatestValue>> {
     return this.request<Record<string, LatestValue>>('GET', `/api/v1/public/${encodeURIComponent(token)}/datastreams/latest`, query, undefined, false);
+  }
+
+  /** Datastreams of a widget of the shared dashboard
+   *
+   * The datastreams of the widget `widget` — its query source or its bound datastreams — within the dashboard's scope, narrowed by the dashboard filters when the widget follows them: a filter marked public takes the viewer's `f_` value, any other filter its default. Answer as `GET /api/v1/datastreams/query`. */
+  getPublicTokenDatastreamsQuery(token: string, query: { widget: string; /** widget id */ f_site?: string; f_asset_type?: string; f_quantity?: string; f_device?: string; f_attr?: string; /** key=value, repeatable */ f_q?: string; limit?: number; latest?: string; /** 1 */ from?: string; to?: string; }): Promise<{
+    items?: ({
+      /** active alarm {severity, count, acknowledged} */
+      alarm?: Record<string, unknown>;
+      asset?: string;
+      asset_id?: string;
+      asset_type?: string;
+      device?: string;
+      /** assigned device */
+      device_id?: string;
+      id?: string;
+      /** expected interval */
+      interval_s?: number;
+      key?: string;
+      kind?: string;
+      /** display name (attribute name) */
+      label?: string;
+      /** {measured_at, value, value_json, quality} */
+      latest?: Record<string, unknown> | null;
+      /** alarm-rule limits {high_warn, high_action, low_warn, low_action} */
+      limits?: Record<string, unknown>;
+      quantity?: string;
+      site?: string;
+      site_id?: string;
+      unit?: string;
+      /** {min, max, first, last, change, n} between from and to */
+      window?: Record<string, unknown>;
+    })[];
+    limit?: number;
+    /** all matches */
+    total?: number;
+    /** more matches than limit */
+    truncated?: boolean;
+  }> {
+    return this.request<{
+    items?: ({
+      /** active alarm {severity, count, acknowledged} */
+      alarm?: Record<string, unknown>;
+      asset?: string;
+      asset_id?: string;
+      asset_type?: string;
+      device?: string;
+      /** assigned device */
+      device_id?: string;
+      id?: string;
+      /** expected interval */
+      interval_s?: number;
+      key?: string;
+      kind?: string;
+      /** display name (attribute name) */
+      label?: string;
+      /** {measured_at, value, value_json, quality} */
+      latest?: Record<string, unknown> | null;
+      /** alarm-rule limits {high_warn, high_action, low_warn, low_action} */
+      limits?: Record<string, unknown>;
+      quantity?: string;
+      site?: string;
+      site_id?: string;
+      unit?: string;
+      /** {min, max, first, last, change, n} between from and to */
+      window?: Record<string, unknown>;
+    })[];
+    limit?: number;
+    /** all matches */
+    total?: number;
+    /** more matches than limit */
+    truncated?: boolean;
+  }>('GET', `/api/v1/public/${encodeURIComponent(token)}/datastreams/query`, query, undefined, false);
   }
 
   /** Devices shown in the shared dashboard */
@@ -5860,6 +6060,37 @@ export class Ctrl32Client {
     })[];
     scene?: string;
   }>('POST', `/api/v1/scenes/${encodeURIComponent(id)}/activate`, undefined, body, false);
+  }
+
+  /** Search everything by name
+   *
+   * Devices, datastreams, assets, sites, dashboards, cameras, flows, incidents and users of the organization whose name (or external id, key, address, title, e-mail) contains `q`. Each kind only with the permission that shows it (data.read; cameras video.view and the caller's camera groups; users user.admin). At most `limit` hits per kind; `more` lists kinds with further hits.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  getSearch(query: { q: string; /** 1–100 characters */ limit?: number; /** hits per kind, 1–20, default 5 */ kinds?: string; /** comma-separated subset: device, datastream, asset, site, dashboard, camera, flow, incident, user */ }): Promise<{
+    more?: string[];
+    q?: string;
+    results?: ({
+      id?: string;
+      kind?: string;
+      subtitle?: string;
+      title?: string;
+      /** page of the object */
+      url?: string;
+    })[];
+  }> {
+    return this.request<{
+    more?: string[];
+    q?: string;
+    results?: ({
+      id?: string;
+      kind?: string;
+      subtitle?: string;
+      title?: string;
+      /** page of the object */
+      url?: string;
+    })[];
+  }>('GET', `/api/v1/search`, query, undefined, false);
   }
 
   /** Server status and configuration summary

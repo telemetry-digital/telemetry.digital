@@ -95,8 +95,12 @@ func StarterSpec(ctx context.Context, pool *pgxpool.Pool, org, kind string) (str
 	case "plant":
 		name = "Mixing plant — process picture"
 		return name, plantPicture(ds), nil
+	case "sensors", "energy", "coldchain":
+		name, spec := overviewStarter(kind)
+		raw, err := json.Marshal(spec)
+		return name, raw, err
 	default:
-		return "", nil, errors.New("kind must be overview, showcase, mimic or plant")
+		return "", nil, errors.New("kind must be overview, sensors, energy, coldchain, showcase, mimic or plant")
 	}
 	spec := map[string]any{"version": 1, "kind": "dashboard", "layout": map[string]any{"type": "grid", "columns": 12, "row_height": 96}, "range": "24h", "refresh_s": 30, "widgets": widgets}
 	if kind == "mimic" {
@@ -338,5 +342,12 @@ func showcaseMore(w func(id, typ string, x, y, wd, h int, binds map[string][]str
 		w("rswitch", "round_switch", 8, y+16, 2, 3, devs, map[string]any{"title": "Round switch", "key": "run"}),
 		w("styled", "value", 10, y+16, 2, 3, dsb(first), map[string]any{"title": "Styled", "bg_color": "#0f172a", "text_color": "#f8fafc", "border_width": 0, "radius": 16, "shadow": true, "title_icon": "bolt", "value_size": 40, "sparkline": false}),
 		w("period", "period_table", 0, y+19, 12, 4, dsb(ds), map[string]any{"title": "Period table (daily min and max)", "interval": "day", "values": "min,max", "period": "last_7d", "total": true, "decimals": 1}),
+		withSource(w("overview", "overview_table", 0, y+23, 12, 5, dsb(nil), map[string]any{"title": "Overview table — every datastream (query source)", "page_size": 10}), map[string]any{}),
 	}
+}
+
+// withSource gives a starter widget a query source (its datastreams are selected by the server, 0.68.0).
+func withSource(w map[string]any, src map[string]any) map[string]any {
+	w["source"] = src
+	return w
 }

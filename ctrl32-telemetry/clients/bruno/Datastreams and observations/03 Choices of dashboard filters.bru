@@ -1,0 +1,37 @@
+meta {
+  name: Choices of dashboard filters
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/datastreams/facets
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~kinds: 
+  ~site: 
+  ~asset_type: 
+  ~quantity: 
+  ~device: 
+  ~attr: 
+  ~q: 
+  ~name: 
+  ~ids: 
+  ~f_site: 
+  ~f_asset_type: 
+  ~f_quantity: 
+  ~f_device: 
+  ~f_attr: 
+  ~f_q: 
+}
+
+docs {
+  Choices of dashboard filters
+  
+  For each kind the values with the number of datastreams: `site`, `asset_type`, `quantity`, `device`, `attr:<key>` (values of an attribute) and `attr_keys` (attribute names). The other filters narrow the choices (a filter does not narrow its own).
+  
+  Requires permission `data.read`.
+}

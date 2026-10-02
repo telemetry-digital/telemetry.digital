@@ -14,6 +14,7 @@
 <main class="container">
   <div class="page-head"><h1 id="pTitle">Public dashboard</h1><span class="badge ok" id="liveBadge" hidden title="Values update as they arrive">live</span><span class="grow"></span><label style="flex-direction:row;align-items:center;gap:6px">Range <select id="pRange"></select></label><button class="btn" id="pRefresh" type="button">Refresh</button></div>
   <p class="muted" id="pErr" hidden>This link is no longer valid.</p>
+  <div id="pFilters" hidden></div>
   <div id="pGrid"></div>
 </main>
 <script src="/app.js"></script>
@@ -21,6 +22,7 @@
 <script src="/vendor/tabler-icons.js"></script>
 <script src="/widgets.js"></script>
 <script src="/widgets-more.js"></script>
+<script src="/dashfilters.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const token = decodeURIComponent(location.pathname.split('/')[2] || '');
@@ -31,7 +33,10 @@ ctrl32.ready({}).then(async () => {
     const d = await ctrl32.api('GET', `/api/v1/public/${encodeURIComponent(token)}`);
     $('#pTitle').textContent = d.name; document.title = d.name;
     $('#pRange').innerHTML = ['1h','6h','8h','12h','today','24h','7d','30d','90d'].map(r => `<option ${r === d.spec.range ? 'selected' : ''}>${r}</option>`).join('');
-    const run = async () => { fn = await ctrl32Widgets.render($('#pGrid'), d.spec, {range: $('#pRange').value}); };
+    // dashboard filters: only those the owner marked public (the server applies the defaults of the others)
+    const fc = ctrl32DashFilters.mount($('#pFilters'), d.spec, {public: true, key: 'p/' + token, onChange: () => run()});
+    const rf = (d.spec.filters || []).some(x => x.kind === 'range' && x.public); $('#pRange').closest('label').hidden = rf;
+    const run = async () => { fn = await ctrl32Widgets.render($('#pGrid'), d.spec, {range: rf ? (fc.values.range || d.spec.range) : $('#pRange').value, filters: fc.values}); };
     $('#pRange').onchange = run; $('#pRefresh').onclick = () => fn && fn();
     await run();
     timer = setInterval(() => fn && fn(), Math.max(5, d.spec.refresh_s || 30) * 1000);

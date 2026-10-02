@@ -2,6 +2,8 @@
 // A screen is {version, kind, layout:{type:"grid", columns:12, row_height} | {type:"canvas", width, height}, range,
 // refresh_s, widgets:[{id, type, geometry:{x,y,w,h}, bindings:{datastreams:[], devices:[]}, params:{}}]}. Kind "mimic"
 // uses the canvas layout (pixels) and process symbols. Widgets read through the public API only.
+// Format 1.1 (0.68.0, additive): spec.filters (the dashboard filter bar) and per widget source (datastreams selected
+// by a query on the server) and follow (the widget follows the dashboard filters; filters only narrow).
 // No dependencies except Leaflet (vendored, BSD-2) for the map widget, loaded on demand.
 (function () {
   'use strict';
@@ -113,6 +115,45 @@
   }
   function sparkline(points, c) { if (points.length < 2) return ''; const t0 = points[0].t, t1 = points[points.length - 1].t, vs = points.map((p) => p.v), lo = Math.min(...vs), hi = Math.max(...vs); return `<svg viewBox="0 0 120 30" style="width:120px;height:30px;display:block;flex:none"><path d="${points.map((p, k) => (k ? 'L' : 'M') + ((p.t - t0) / ((t1 - t0) || 1) * 120).toFixed(1) + ',' + (28 - ((p.v - lo) / ((hi - lo) || 1)) * 26).toFixed(1)).join(' ')}" fill="none" stroke="${c}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`; }
 
+  // ---- dashboard filters and query sources (0.68.0) -----------------------------------------------------
+  // Filter values: {site: [ids], asset_type: [], quantity: [], device: [ids], attr: {key: [values]}, q: text, range}.
+  // A widget with a source has its datastreams selected by the server; a widget that follows the filters is narrowed
+  // by them (datastreams, the devices of those datastreams, or the alarms of those datastreams).
+  const MANY = new Set(['table', 'entity_table', 'overview_table']);
+  const FKINDS = ['site', 'asset_type', 'quantity', 'device'];
+  const filtersActive = (f) => !!f && (FKINDS.some((k) => (f[k] || []).length) || !!f.q || Object.values(f.attr || {}).some((v) => v && v.length));
+  function defaultFilters(spec) {
+    const f = { site: [], asset_type: [], quantity: [], device: [], attr: {}, q: '', range: '' };
+    for (const d of (spec && spec.filters) || []) { const v = d.default; if (d.kind === 'search') f.q = v || ''; else if (d.kind === 'range') f.range = v || ''; else if (d.kind === 'attribute') f.attr[d.key] = [].concat(v || []); else f[d.kind] = [].concat(v || []); }
+    return f;
+  }
+  const maxRows = (w) => (MANY.has(w.type) ? 500 : 24);
+  function queryParams(w, f, extra) {
+    const q = new URLSearchParams(); const s = w.source;
+    if (PUBLIC) q.set('widget', w.id || '');
+    else if (s) { for (const k of FKINDS) if ((s[k] || []).length) q.set(k, s[k].join(',')); for (const [k, v] of Object.entries(s.attr || {})) for (const x of [].concat(v)) q.append('attr', k + '=' + x); if (s.name) q.set('name', s.name); }
+    else { const b = ((w.bindings || {}).datastreams || []).slice(0, 500); if (b.length) q.set('ids', b.join(',')); }
+    if (w.follow && f) { for (const k of FKINDS) if ((f[k] || []).length) q.set('f_' + k, f[k].join(',')); for (const [k, v] of Object.entries(f.attr || {})) for (const x of v || []) q.append('f_attr', k + '=' + x); if (f.q) q.set('f_q', f.q); }
+    q.set('limit', String(Math.min((s && s.limit) || maxRows(w), w.type === 'devices' || w.type === 'map' || ALARM_TYPES.has(w.type) ? 500 : maxRows(w))));
+    for (const [k, v] of Object.entries(extra || {})) if (v != null && v !== '') q.set(k, v);
+    return q;
+  }
+  const queryDS = (w, f, extra) => api('GET', P('/api/v1/datastreams/query?' + queryParams(w, f, extra)));
+  // resolve: the effective bindings of a widget for the current filter values (cached 30 s per card)
+  async function resolve(w, f) {
+    const b = w.bindings || {}; const act = !!w.follow && filtersActive(f); const out = { bindings: b, scopeDS: null, devScope: null, truncated: false, total: null };
+    if (w.source || (act && (b.datastreams || []).length)) {
+      const r = await queryDS(w, f); out.bindings = Object.assign({}, b, { datastreams: r.items.map((x) => x.id) }); out.truncated = r.truncated; out.total = r.total; out.items = r.items; return out;
+    }
+    if (act && (ALARM_TYPES.has(w.type) || w.type === 'devices' || w.type === 'map')) {
+      const r = await queryDS(Object.assign({}, w, { source: null, bindings: {} }), f, { limit: 500 });
+      out.scopeDS = new Set(r.items.map((x) => x.id)); out.devScope = new Set(r.items.map((x) => x.device_id).filter(Boolean));
+    }
+    return out;
+  }
+  const inScope = (list, ctx) => (ctx && ctx.scopeDS ? list.filter((a) => a.datastream_id && ctx.scopeDS.has(a.datastream_id)) : list);
+  const devScope = (list, ctx) => (ctx && ctx.devScope ? list.filter((d) => ctx.devScope.has(d.id)) : list);
+
   // ---- widgets: (el, params, ctx {range, bindings, w, h}) -----------------------------------------
   const W = {};
   const ids = (ctx) => (ctx.bindings && ctx.bindings.datastreams) || [];
@@ -174,8 +215,8 @@
     const all = await datastreams(); const list = ids(ctx); const lv = await latest(list);
     el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Asset</th><th>Datastream</th><th style="text-align:right">Value</th><th>Unit</th><th>Measured</th><th>Quality</th></tr></thead><tbody>${list.map((id, i) => { const d = sInfo(all, id, i, p), v = lv[id]; if (d.hidden) return ''; const lvl = level(v && v.value, p); return `<tr><td>${esc(d.asset)}</td><td>${esc(d.label || d.key)}</td><td style="text-align:right;font-weight:600;color:${lvlColor(lvl, 'inherit', p)}">${v ? num(v.value, d.dec) : '—'}</td><td>${esc(d.unit)}</td><td>${v ? fmt(v.measured_at) : '—'}</td><td>${v ? (v.quality !== 'ok' ? `<span class="badge warn">${esc(v.quality)}</span>` : '<span class="badge ok">ok</span>') : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
   };
-  W.alarms = async (el, p) => {
-    const al = await api('GET', P('/api/v1/alarms')); const lim = p.limit || 10; const active = al.filter((a) => !a.cleared_at); const rows = active.concat(al.filter((a) => a.cleared_at)).slice(0, lim);
+  W.alarms = async (el, p, ctx) => {
+    const al = inScope(await api('GET', P('/api/v1/alarms')), ctx); const lim = p.limit || 10; const active = al.filter((a) => !a.cleared_at); const rows = active.concat(al.filter((a) => a.cleared_at)).slice(0, lim);
     // acknowledging (alarm.ack, with a reason; never on a public link) stops the escalation and fires the flows'
     // Alarm trigger "acknowledged"
     const canAck = !PUBLIC && window.ctrl32 && typeof ctrl32.can === 'function' && ctrl32.can('alarm.ack');
@@ -183,11 +224,11 @@
     for (const b of el.querySelectorAll('[data-ack]')) b.onclick = async () => {
       const reason = ctrl32.ask('Reason for acknowledging this alarm:'); if (!reason) return;
       b.disabled = true;
-      try { await api('POST', '/api/v1/alarms/' + b.dataset.ack + '/ack', { reason }); if (ctrl32.toast) ctrl32.toast(ctrl32.t('alarm acknowledged'), 'ok'); await W.alarms(el, p); } catch (e) { b.disabled = false; if (ctrl32.toast) ctrl32.toast(e.message, 'bad'); }
+      try { await api('POST', '/api/v1/alarms/' + b.dataset.ack + '/ack', { reason }); if (ctrl32.toast) ctrl32.toast(ctrl32.t('alarm acknowledged'), 'ok'); await W.alarms(el, p, ctx); } catch (e) { b.disabled = false; if (ctrl32.toast) ctrl32.toast(e.message, 'bad'); }
     };
   };
   W.devices = async (el, p, ctx) => {
-    const ds = await devices(ctx.bindings && ctx.bindings.devices); const lim = p.limit || 20;
+    const ds = devScope(await devices(ctx.bindings && ctx.bindings.devices), ctx); const lim = p.limit || 20;
     el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Device</th><th>Transport</th><th>State</th><th>Last seen</th></tr></thead><tbody>${ds.filter((d) => !d.revoked_at).slice(0, lim).map((d) => { const [s, b] = devState(d); return `<tr><td>${PUBLIC ? esc(d.name || d.external_id) : '<a href="/devices/' + d.id + '">' + esc(d.name || d.external_id) + '</a>'}</td><td>${esc(d.transport)}</td><td><span class="badge ${b}">${s}</span></td><td>${d.last_seen ? fmt(d.last_seen) : '—'}</td></tr>`; }).join('') || '<tr><td colspan="4" class="muted">no devices</td></tr>'}</tbody></table></div>`;
   };
   // ---- control widgets: every send is a command with a reason; disabled in public mode and without device.command ----
@@ -244,7 +285,7 @@
     const cfg = mapConfig();
     if (!cfg.tile_url) { el.innerHTML = '<div class="muted" style="padding:24px;text-align:center">No map tiles configured. Set the tile URL under Settings → Branding (own tile server, a provider with a key, or OpenStreetMap for light use).</div>'; return; }
     await loadLeaflet();
-    const devs = (await devices(ctx.bindings && ctx.bindings.devices)).filter((d) => d.location && d.location.lat != null && d.location.lon != null && !d.revoked_at);
+    const devs = devScope(await devices(ctx.bindings && ctx.bindings.devices), ctx).filter((d) => d.location && d.location.lat != null && d.location.lon != null && !d.revoked_at);
     el.innerHTML = `<div class="map-box" style="height:100%;min-height:200px;border-radius:var(--radius);overflow:hidden"></div>`;
     const map = makeMap(el.querySelector('.map-box'), cfg); const pts = [];
     for (const d of devs) { const [s, , c] = devState(d); const ll = [d.location.lat, d.location.lon]; pts.push(ll); L.circleMarker(ll, { radius: 8, color: '#fff', weight: 2, fillColor: c, fillOpacity: 0.95 }).addTo(map).bindPopup(`<b>${esc(d.name || d.external_id)}</b><br>${s} · ${d.last_seen ? esc(fmt(d.last_seen)) : 'never'}<br><span style="font-size:11px">${d.location.source === 'fixed' ? 'fixed position' : 'reported ' + (d.location.updated_at ? esc(fmt(d.location.updated_at)) : '')}</span><br><a href="/devices/${d.id}">open device</a>`); }
@@ -373,33 +414,36 @@
   function register(type, fn, o) { o = o || {}; W[type] = fn; if (o.label) LABELS[type] = o.label; if (o.needsDs) NEEDS_DS.add(type); if (o.alarms) ALARM_TYPES.add(type); }
   // Live updates (SSE): one stream per rendered dashboard; an event re-renders only the widgets bound to it, debounced.
   let ES = null, liveTimer = null;
-  function connectLive(container, spec, refreshOne, layer) {
+  // bindsOf(i): the effective bindings of widget i (query sources and filters resolved); at most 200 datastreams live
+  function connectLive(container, spec, refreshOne, layer, bindsOf) {
     if (ES) { ES.close(); ES = null; }
+    bindsOf = bindsOf || ((i) => (spec.widgets[i] || {}).bindings || {});
     const ds = new Set(), devs = new Set(); let allDevs = false, alarms = false;
     const layerTags = layer ? layer.tags() : new Set(); layerTags.forEach((id) => ds.add(id)); let layerDue = false;
-    for (const w of spec.widgets || []) { const b = w.bindings || {}; (b.datastreams || []).forEach((id) => ds.add(id)); if (Array.isArray(b.devices)) { if (!b.devices.length && (w.type === 'map' || w.type === 'devices')) allDevs = true; b.devices.forEach((id) => devs.add(id)); } if (ALARM_TYPES.has(w.type)) alarms = true; }
-    if (!ds.size && !devs.size && !allDevs && !alarms) return;
-    const qs = 'datastreams=' + [...ds].join(',') + '&devices=' + (allDevs ? 'all' : [...devs].join(',')) + '&alarms=' + (alarms ? 1 : 0);
+    (spec.widgets || []).forEach((w, i) => { const b = bindsOf(i) || {}; (b.datastreams || []).forEach((id) => ds.add(id)); if (Array.isArray(b.devices)) { if (!b.devices.length && (w.type === 'map' || w.type === 'devices')) allDevs = true; b.devices.forEach((id) => devs.add(id)); } if (ALARM_TYPES.has(w.type)) alarms = true; });
+    if (!ds.size && !devs.size && !allDevs && !alarms) return '';
+    const qs = 'datastreams=' + [...ds].slice(0, 200).join(',') + '&devices=' + (allDevs ? 'all' : [...devs].slice(0, 200).join(',')) + '&alarms=' + (alarms ? 1 : 0);
     const pending = new Set();
-    const flush = () => { liveTimer = null; const cards = [...container.querySelectorAll('.dash-widget')]; for (const i of pending) { if (cards[i]) refreshOne(cards[i]); } pending.clear(); if (layerDue && layer) { layerDue = false; layer.refresh(); } };
-    const mark = (pred) => { (spec.widgets || []).forEach((w, i) => { if (pred(w)) pending.add(i); }); if ((pending.size || layerDue) && !liveTimer) liveTimer = setTimeout(flush, 400); };
+    const flush = () => { liveTimer = null; const cards = [...container.querySelectorAll('.dash-widget')]; for (const i of pending) { if (cards[i]) refreshOne(cards[i], true); } pending.clear(); if (layerDue && layer) { layerDue = false; layer.refresh(); } };
+    const mark = (pred) => { (spec.widgets || []).forEach((w, i) => { if (pred(w, bindsOf(i) || {})) pending.add(i); }); if ((pending.size || layerDue) && !liveTimer) liveTimer = setTimeout(flush, 400); };
     const es = new EventSource(P('/api/v1/stream') + '?' + qs, { withCredentials: true }); ES = es;
     const state = (connected) => window.dispatchEvent(new CustomEvent('ctrl32:live', { detail: { connected } }));
     es.onopen = () => state(true); es.onerror = () => state(false);
-    es.addEventListener('observation', (e) => { const d = JSON.parse(e.data); if (layerTags.has(d.datastream_id)) layerDue = true; mark((w) => ((w.bindings || {}).datastreams || []).includes(d.datastream_id)); });
-    es.addEventListener('device', (e) => { const d = JSON.parse(e.data); mark((w) => (w.type === 'map' || w.type === 'devices') && (!((w.bindings || {}).devices || []).length || w.bindings.devices.includes(d.device_id))); });
+    es.addEventListener('observation', (e) => { const d = JSON.parse(e.data); if (layerTags.has(d.datastream_id)) layerDue = true; mark((w, b) => (b.datastreams || []).includes(d.datastream_id)); });
+    es.addEventListener('device', (e) => { const d = JSON.parse(e.data); mark((w, b) => (w.type === 'map' || w.type === 'devices') && (!(b.devices || []).length || b.devices.includes(d.device_id))); });
     es.addEventListener('alarm', () => mark((w) => ALARM_TYPES.has(w.type)));
     es.addEventListener('command', (e) => { const d = JSON.parse(e.data); const out = PENDING.get(d.command_id); if (!out) return; const det = d.detail || {}; const res = det.result && typeof det.result === 'object' ? det.result : {}; showCmd(out, d.status, { readback: res.readback, error: det.error }); if (d.status !== 'queued' && d.status !== 'sent' && d.status !== 'pending') PENDING.delete(d.command_id); });
     window.addEventListener('pagehide', () => es.close(), { once: true });
+    return qs;
   }
   window.addEventListener('ctrl32:live', (e) => { const b = document.querySelector('#liveBadge'); if (b) b.hidden = !e.detail.connected; });
   function place(card, g) { card.style.gridColumn = `${g.x + 1} / span ${g.w}`; card.style.gridRow = `${g.y + 1} / span ${g.h}`; }
   // Canvas (mimic) layout: widgets sit at absolute pixel positions on a fixed-size canvas that is scaled to the container width.
   function placeCanvas(card, g) { card.style.left = g.x + 'px'; card.style.top = g.y + 'px'; card.style.width = g.w + 'px'; card.style.height = g.h + 'px'; }
   function fitMimic(container) { const wrap = container.querySelector('.mimic-wrap'), m = container.querySelector('.mimic'); if (!wrap || !m) return 1; const W0 = +m.dataset.w || 1600, H0 = +m.dataset.h || 900; const s = Math.max(0.1, Math.min(1.5, (wrap.clientWidth || W0) / W0)); m.style.transform = `scale(${s})`; wrap.style.height = Math.round(H0 * s) + 'px'; return s; }
-  // render(container, spec, {range, header(widget, index) -> html, onReady}) → refresh()
+  // render(container, spec, {range, filters, header(widget, index) -> html, onReady}) → refresh()
   async function render(container, spec, opts) {
-    opts = opts || {}; const range = opts.range || spec.range || '24h'; const rowH = (spec.layout && spec.layout.row_height) || 96; const canvas = isCanvas(spec);
+    opts = opts || {}; const range = opts.range || spec.range || '24h'; const filters = opts.filters || defaultFilters(spec); const rowH = (spec.layout && spec.layout.row_height) || 96; const canvas = isCanvas(spec);
     if (canvas) {
       const W0 = spec.layout.width || 1600, H0 = spec.layout.height || 900;
       container.innerHTML = `<div class="mimic-wrap"><div class="mimic" data-w="${W0}" data-h="${H0}" style="width:${W0}px;height:${H0}px"><div class="sc-host"></div>${(spec.widgets || []).map((w, i) => { const f = framed(w); return `<div class="dash-widget mimic-widget${f ? ' card' : ''}" data-i="${i}" data-id="${esc(w.id || '')}">${f || opts.header ? `<div class="dash-head${f ? '' : ' mimic-tools'}">${f ? `<b class="dash-title">${esc((w.params && w.params.title) || labelOf(w.type))}</b>` : ''}<span class="grow"></span>${opts.header ? opts.header(w, i) : ''}</div>` : ''}<div class="dash-body"><span class="muted">loading…</span></div></div>`; }).join('')}</div></div>`;
@@ -411,23 +455,42 @@
       container.innerHTML = `<div class="dash-grid" style="--row-h:${rowH}px">${(spec.widgets || []).map((w, i) => `<div class="card dash-widget" data-i="${i}" data-id="${esc(w.id || '')}"><div class="dash-head"><b class="dash-title">${esc((w.params && w.params.title) || labelOf(w.type))}</b><span class="grow"></span>${opts.header ? opts.header(w, i) : ''}</div><div class="dash-body"><span class="muted">loading…</span></div></div>`).join('')}</div>`;
       for (const card of container.querySelectorAll('.dash-widget')) place(card, spec.widgets[+card.dataset.i].geometry || { x: 0, y: 0, w: 6, h: 3 });
     }
-    const ctxOf = (w, card) => { const g = w.geometry || { w: 6, h: 3 }; const c = canvas ? { range, bindings: w.bindings || {}, w: Math.max(1, Math.round(g.w / 130)), h: Math.max(1, Math.round(g.h / 96)), px_h: g.h } : { range, bindings: w.bindings || {}, w: g.w, h: g.h, px_h: g.h * rowH }; c.cond = (v) => condFormat(card, w.params || {}, v); c.edit = !!opts.header; return c; };
-    for (const card of container.querySelectorAll('.dash-widget')) { const w = spec.widgets[+card.dataset.i]; decorate(card, w, opts, () => ctxOf(w, null)); }
+    const ctxOf = (w, card) => { const g = w.geometry || { w: 6, h: 3 }; const res = (card && card._res) || null; const binds = res ? res.bindings : (w.bindings || {});
+      const c = canvas ? { range, bindings: binds, w: Math.max(1, Math.round(g.w / 130)), h: Math.max(1, Math.round(g.h / 96)), px_h: g.h } : { range, bindings: binds, w: g.w, h: g.h, px_h: g.h * rowH };
+      c.cond = (v) => condFormat(card, w.params || {}, v); c.edit = !!opts.header; c.filters = filters; c.query = (extra) => queryDS(w, filters, extra);
+      if (res) { c.scopeDS = res.scopeDS; c.devScope = res.devScope; c.truncated = res.truncated; c.total = res.total; }
+      return c; };
+    for (const card of container.querySelectorAll('.dash-widget')) { const w = spec.widgets[+card.dataset.i]; decorate(card, w, opts, () => ctxOf(w, card)); }
     for (const card of container.querySelectorAll('.dash-widget')) filterBar(card, spec.widgets[+card.dataset.i], () => refreshOne(card));
-    const refreshOne = async (card) => {
+    const HEAVY = new Set(['overview_table', 'period_table']);
+    const refreshOne = async (card, live) => {
       const w0 = spec.widgets[+card.dataset.i]; const w = card._ovr ? Object.assign({}, w0, { params: Object.assign({}, w0.params, card._ovr) }) : w0; const body = card.querySelector('.dash-body');
-      if (NEEDS_DS.has(w.type) && !((w.bindings || {}).datastreams || []).length) { body.innerHTML = '<span class="muted">Select datastreams in the widget properties.</span>'; return; }
+      // a live event refreshes a heavy table at most every 5 s
+      if (live && HEAVY.has(w.type) && Date.now() - (card._last || 0) < 5000) { if (!card._later) card._later = setTimeout(() => { card._later = null; refreshOne(card, false); }, 5000); return; }
+      card._last = Date.now();
+      if (w.source || w.follow) {
+        if (!card._res || Date.now() - card._resAt > 30e3) { try { card._res = await resolve(w, filters); card._resAt = Date.now(); } catch (e) { body.innerHTML = `<span class="muted">${esc(e.message)}</span>`; return; } }
+        const t = card.querySelector('.dw-trunc'); if (t) t.remove();
+        if (card._res.truncated) { const h = card.querySelector('.dash-head'); if (h) { const s = document.createElement('span'); s.className = 'badge warn dw-trunc'; s.title = TR('The query matches more datastreams than the widget shows; narrow the filters.'); s.textContent = card._res.bindings.datastreams.length + ' / ' + card._res.total; const g = h.querySelector('.grow'); (g || h).after(s); } }
+      }
+      const binds = card._res ? card._res.bindings : (w.bindings || {});
+      if (NEEDS_DS.has(w.type) && !(binds.datastreams || []).length) { body.innerHTML = `<span class="muted">${w.source || w.follow ? TR('No datastreams match the query or the filters.') : 'Select datastreams in the widget properties.'}</span>`; return; }
       const ctx = ctxOf(w, card);
       try { await (W[w.type] || (async (el) => { el.innerHTML = '<span class="muted">unknown widget</span>'; }))(body, w.params || {}, ctx); }
       catch (e) { body.innerHTML = `<span class="muted">${esc(e.message)}</span>`; }
     };
     const layer = canvas ? container._scada : null;
-    const refresh = async () => Promise.all([...container.querySelectorAll('.dash-widget')].map(refreshOne).concat(layer ? [layer.refresh()] : []));
+    const cardsNow = () => [...container.querySelectorAll('.dash-widget')];
+    const bindsOf = (i) => { const c = cardsNow()[i]; return c && c._res ? c._res.bindings : (spec.widgets[i] || {}).bindings || {}; };
+    let liveKey = null;
+    const live = () => { if (opts.live !== false && window.EventSource) { const k = JSON.stringify(spec.widgets.map((w, i) => bindsOf(i))); if (k !== liveKey) { liveKey = k; connectLive(container, spec, refreshOne, layer, bindsOf); } } };
+    const refresh = async () => { await Promise.all(cardsNow().map((c) => refreshOne(c)).concat(layer ? [layer.refresh()] : [])); if (liveKey !== null) live(); };
     await refresh();
-    if (opts.live !== false && window.EventSource) connectLive(container, spec, refreshOne, layer);
+    live();
     return refresh;
   }
   window.ctrl32Widgets = { tr: TR, aggLabel, rangeLabel, isPublic: () => !!PUBLIC, isDisplay: () => PUBLIC.startsWith('~'), apiPath: P, render, renderChart, setPublic, series, datastreams, latest, devices, loadLeaflet, makeMap, mapConfig, RANGE_MS, labelOf, isCanvas, fitMimic, placeCanvas, MIMIC_TYPES, register, condFormat, icon: ICON, get types() { return Object.keys(W); },
+    defaultFilters, filtersActive, queryDS, queryParams, maxRows, inScope, devScope,
     // helpers for renderers registered from other files (widgets-more.js)
     util: { esc, api, fmt, num, color, COLORS, dsInfo, sInfo, dsLabel, ids, level, lvlColor, niceTicks, timeTicks, sparkline, seriesWin, winOf, statsOf, hourly, ctlHead, ctlSend, ctlCurrent, reasonInput, canCmd, P } };
 })();

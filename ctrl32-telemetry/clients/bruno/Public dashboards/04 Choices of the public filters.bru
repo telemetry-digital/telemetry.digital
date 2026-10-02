@@ -1,0 +1,31 @@
+meta {
+  name: Choices of the public filters
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public/:token/datastreams/facets
+  body: none
+  auth: inherit
+}
+
+params:path {
+  token: 
+}
+
+params:query {
+  ~kinds: 
+  ~f_site: 
+  ~f_asset_type: 
+  ~f_quantity: 
+  ~f_device: 
+  ~f_attr: 
+  ~f_q: 
+}
+
+docs {
+  Choices of the public filters
+  
+  Like `GET /api/v1/datastreams/facets`, only for filters the owner marked public and only within the dashboard's scope.
+}

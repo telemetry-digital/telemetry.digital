@@ -24,6 +24,16 @@
   .wcard .muted { font-size: 12px; line-height: 1.3; }
   @media (max-width: 520px) { .wcard { grid-template-columns: 80px 1fr; } .wcard svg { width: 80px; height: 44px; } }
   #view .dash-grid { min-height: 200px; }
+  .src-box { border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 8px; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  .src-box legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
+  .src-box select[multiple] { min-height: 70px; font-size: 12px; }
+  .flt-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0; }
+  .flt-row select { width: 130px; flex: none; }
+  .flt-row [data-fkey] { width: 120px; flex: none; }
+  .flt-row [data-flabel] { flex: 1 1 70px; width: auto; min-width: 0; }
+  .flt-row input, .flt-row select { min-height: 0; padding: 3px 6px; font-size: 13px; }
+  .flt-row input[type=checkbox] { width: auto; padding: 0; }
+  .flt-row label { display: inline-flex; flex-direction: row; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -41,6 +51,7 @@
       <h2 style="margin-top:0">New dashboard</h2>
       <label>Name <input name="name" required maxlength="128" placeholder="Production hall 1"></label>
       <label>Kind and start <select name="kind">
+        <optgroup label="Overview (filters and query sources: new devices appear on their own)"><option value="sensors">Overview of all sensors</option><option value="energy">Energy overview</option><option value="coldchain">Cold chain overview</option></optgroup>
         <optgroup label="Dashboard (widgets on a grid)"><option value="overview">Dashboard — overview (devices, alarms, latest values)</option><option value="showcase">Dashboard — showcase (all widget types)</option><option value="empty">Dashboard — empty</option></optgroup>
         <optgroup label="Process picture (SCADA drawing)"><option value="picture">Process picture — empty drawing</option><option value="picture-widgets">Process picture with widgets — drawing and a trend</option><option value="plant">Process picture — mixing plant (demo)</option><option value="mimic">Process picture — widget symbols (legacy showcase)</option></optgroup>
       </select></label>
@@ -54,10 +65,11 @@
 
 <section id="view" hidden>
   <div class="page-head"><h1 id="vTitle"></h1><span class="muted" id="vMeta"></span><span class="badge ok" id="liveBadge" hidden title="Values update as they arrive">live</span><span class="grow"></span>
-    <label style="flex-direction:row;align-items:center;gap:6px">Range <select id="vRange"></select></label>
+    <label id="vRangeL" style="flex-direction:row;align-items:center;gap:6px">Range <select id="vRange"></select></label>
     <button class="btn" id="vRefresh" type="button" title="Refresh now">Refresh</button>
     <a class="btn" id="vEdit" hidden>Edit</a>
   </div>
+  <div id="vFilters" hidden></div>
   <div id="vGrid"></div>
 </section>
 
@@ -69,6 +81,7 @@
     <a class="btn" id="eCancel">Cancel</a>
   </div>
   <p class="muted" id="eHintGrid">Drag a widget by its title to move it on the grid, drag the corner to resize, click it to edit its properties on the right. Widgets show live data while you edit.</p>
+  <div id="eFilters" hidden></div>
   <p class="muted" id="eHintCanvas" hidden>Drag a symbol to move it on the canvas (10 px grid), drag the corner to resize, click it to edit its properties on the right. Values update live while you edit.</p>
   <div class="dash-editor">
     <div id="eGrid"></div>
@@ -83,6 +96,10 @@
       <label>Name <input name="name" required maxlength="128"></label>
       <div class="row"><label>Default range <select name="range"></select></label><label>Refresh (s) <input name="refresh_s" type="number" min="5" max="3600" value="30"></label><label id="setRowH">Row height (px) <input name="row_height" type="number" min="60" max="240" value="96"></label><label id="setW" hidden>Canvas width (px) <input name="width" type="number" min="600" max="4000" value="1600"></label><label id="setH" hidden>Canvas height (px) <input name="height" type="number" min="300" max="3000" value="900"></label></div>
       <label class="inline"><input type="checkbox" name="is_default"><span>Show on the home page (default)</span></label>
+      <h3 style="margin:8px 0 0">Filters</h3>
+      <div class="muted" style="font-size:12px">A bar on top of the dashboard: widgets that follow the dashboard filters show only what matches the chosen values. The values chosen in the filter bar of the editor are saved as the defaults. Public: viewers of the public link may change the filter; otherwise its default applies there.</div>
+      <div id="fltList"></div>
+      <div><button class="btn small" type="button" id="fltAdd">Add filter</button></div>
       <h3 style="margin:8px 0 0">Public link</h3>
       <div class="muted" style="font-size:12px">Anyone with the link sees this dashboard read-only, without signing in — only the data its widgets bind. Regenerating invalidates the old link.</div>
       <div id="shareBox" class="muted">…</div>
@@ -114,11 +131,12 @@
 <script src="/widgets.js"></script>
 <script src="/widgets-more.js"></script>
 <script src="/scada-editor.js"></script>
+<script src="/dashfilters.js"></script>
 <script>
 const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api, WG = ctrl32Widgets;
 const parts = location.pathname.split('/').filter(Boolean); // dashboards | dashboards/slug | dashboards/slug/edit
 const SLUG = parts[1] || '', MODE = parts[2] || (SLUG ? 'view' : 'list');
-let CAT = null, DS = [], DEVS = [], DASH = null, SPEC = null, SEL = -1, refreshFn = null, timer = null;
+let CAT = null, DS = [], DEVS = [], DASH = null, SPEC = null, SEL = -1, refreshFn = null, timer = null, FACETS = {}, EFC = null;
 const uid = () => 'w' + Math.random().toString(36).slice(2, 8);
 
 // ---- list ----
@@ -142,8 +160,14 @@ async function loadView(){
   $('#vTitle').textContent = DASH.name; document.title = DASH.name + ' — Dashboards'; $('#vMeta').textContent = `v${DASH.version}${DASH.is_default ? ' · default' : ''}`;
   $('#vRange').innerHTML = ['1h','6h','8h','12h','today','24h','7d','30d','90d'].map(r => `<option ${r === SPEC.range ? 'selected' : ''}>${r}</option>`).join('');
   if(ctrl32.can('content.write')){ $('#vEdit').hidden = false; $('#vEdit').href = `/dashboards/${SLUG}/edit`; }
-  const run = async () => { refreshFn = await WG.render($('#vGrid'), SPEC, {range: $('#vRange').value}); };
-  $('#vRange').onchange = run; $('#vRefresh').onclick = () => refreshFn && refreshFn();
+  // dashboard filters (0.68.0): values in the URL and remembered per viewer; a range filter replaces the Range select,
+  // which otherwise keeps its value in the URL too (f.range)
+  const me = ctrl32.me || {}; const fc = ctrl32DashFilters.mount($('#vFilters'), SPEC, {key: (me.id || me.username || '') + '/' + SLUG, onChange: () => run()});
+  const rf = (SPEC.filters || []).some(d => d.kind === 'range'); $('#vRangeL').hidden = rf;
+  const ur = new URLSearchParams(location.search).get('f.range'); if(!rf && ur && ctrl32DashFilters.RANGES.includes(ur)) $('#vRange').value = ur;
+  const run = async () => { refreshFn = await WG.render($('#vGrid'), SPEC, {range: rf ? (fc.values.range || SPEC.range) : $('#vRange').value, filters: fc.values}); };
+  $('#vRange').onchange = () => { const u = new URLSearchParams(location.search); if($('#vRange').value === SPEC.range) u.delete('f.range'); else u.set('f.range', $('#vRange').value); history.replaceState(null, '', location.pathname + (u.toString() ? '?' + u : '')); run(); };
+  $('#vRefresh').onclick = () => refreshFn && refreshFn();
   await run(); clearInterval(timer); timer = setInterval(() => refreshFn && refreshFn(), (SPEC.refresh_s || 30) * 1000);
 }
 
@@ -180,7 +204,7 @@ window.addEventListener('beforeunload', e => { if(DIRTY){ e.preventDefault(); e.
 let EDITOR = null;
 function redraw(){ return EDITOR ? EDITOR.reload() : drawEdit(); }
 async function drawEdit(){
-  refreshFn = await WG.render($('#eGrid'), SPEC, {range: SPEC.range, header: (w, i) => `<button class="btn small ghost" type="button" data-del="${i}" title="Remove">✕</button>`});
+  refreshFn = await WG.render($('#eGrid'), SPEC, {range: (EFC && EFC.values.range) || SPEC.range, filters: EFC ? EFC.values : undefined, header: (w, i) => `<button class="btn small ghost" type="button" data-del="${i}" title="Remove">✕</button>`});
   const cards = [...document.querySelectorAll('#eGrid .dash-widget')];
   cards.forEach((card, i) => {
     card.classList.add('editing'); if(i === SEL) card.classList.add('selected');
@@ -200,7 +224,9 @@ async function drawEdit(){
 function select(i){ SEL = i; document.querySelectorAll('#eGrid .dash-widget').forEach((c, k) => c.classList.toggle('selected', k === i)); renderProps(); }
 // readable names of option codes (period table, spec 023); the page translates them like any text
 const OPT_LABEL = { periods: 'a row per period', datastreams: 'a row per datastream', this_week: 'this week', last_week: 'last week', this_month: 'this month', last_month: 'last month', this_year: 'this year', last_year: 'last year', last_7d: 'last 7 days', last_30d: 'last 30 days', last_12m: 'last 12 months',
-  'min,max': 'min and max', 'min,max,avg': 'min, max and average', avg: 'average', last: 'last value', delta: 'consumption', 'first,last,delta': 'start, end and consumption', 'min,max,out': 'min, max and out of limits', count: 'samples' };
+  'min,max': 'min and max', 'min,max,avg': 'min, max and average', avg: 'average', last: 'last value', delta: 'consumption', 'first,last,delta': 'start, end and consumption', 'min,max,out': 'min, max and out of limits', count: 'samples',
+  // overview table columns and grouping (0.68.0)
+  site: 'Site', asset: 'Asset', asset_type: 'Asset type', device: 'Device', datastream: 'Datastream', quantity: 'Quantity', value: 'Value', measured: 'Measured', age: 'Age', quality: 'Quality', alarm: 'Alarm', limits: 'Limits', min: 'Minimum', max: 'Maximum', change: 'Change' };
 function pickHTML(name, options, chosen, label){ return `<div class="pick"><label>${esc(label)} <input data-filter="${name}" placeholder="filter…"></label><select multiple data-pick="${name}">${options.map(o => `<option value="${o.id}" ${chosen.includes(o.id) ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select><span class="muted" style="font-size:11px">${chosen.length} selected · Ctrl/Cmd+click for several</span></div>`; }
 // Property panel (spec 002): settings grouped into tabs Data, Appearance, Series, Time, Actions; colour, icon,
 // date-time, multi-choice, per-series and conditional-formatting editors. Every change applies immediately.
@@ -221,7 +247,7 @@ function paramHTML(p, v){
   case 'icon': return `<label>${lab} <span class="row" style="gap:6px;align-items:center;flex-wrap:nowrap"><select data-p="${p.name}" style="flex:1">${iconOpts(v)}</select><span class="icon-prev">${v && window.ctrl32Widgets ? ctrl32Widgets.icon(v, 20) : ''}</span></span></label>`;
   case 'camera': return `<label>${lab} <select data-p="${p.name}"><option value="">—</option>${(window.CAM_LIST || []).map(c => `<option value="${esc(c.id)}" ${c.id === v ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}${v && !(window.CAM_LIST || []).some(c => c.id === v) ? `<option value="${esc(v)}" selected>${esc(v)}</option>` : ''}</select></label>`;
   case 'datetime': return `<label>${lab} <input type="datetime-local" data-p="${p.name}" value="${toLocalDT(v)}"></label>`;
-  case 'multi': return `<fieldset style="border:none;padding:0;margin:0"><span style="font-size:13px">${lab}</span><div class="row" style="gap:10px;flex-wrap:wrap">${(p.options || []).map(o => `<label class="inline"><input type="checkbox" data-pm="${p.name}" value="${esc(o)}" ${(Array.isArray(v) ? v : []).includes(o) ? 'checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div></fieldset>`;
+  case 'multi': return `<fieldset style="border:none;padding:0;margin:0"><span style="font-size:13px">${lab}</span><div class="row" style="gap:10px;flex-wrap:wrap">${(p.options || []).map(o => `<label class="inline"><input type="checkbox" data-pm="${p.name}" value="${esc(o)}" ${(Array.isArray(v) ? v : []).includes(o) ? 'checked' : ''}><span>${esc(OPT_LABEL[o] || o)}</span></label>`).join('')}</div></fieldset>`;
   case 'series': return seriesHTML(p, Array.isArray(v) ? v : []);
   case 'ranges': return rangesHTML(p, Array.isArray(v) ? v : []);
   default: return `<label>${lab} <input data-p="${p.name}" value="${esc(v)}"></label>`;
@@ -250,7 +276,9 @@ function renderProps(target){
   html += `<div class="tabs ptabs" role="tablist" style="margin-bottom:8px">${TABS.filter(([k]) => groups.has(k)).map(([k, l]) => `<button type="button" role="tab" class="tab${k === PTAB ? ' active' : ''}" data-tab="${k}" aria-selected="${k === PTAB}">${l}</button>`).join('')}</div>`;
   const sec = {data: '', appearance: '', series: '', time: '', actions: ''};
   if(canvas()) sec.data += `<div class="row">${['x', 'y', 'w', 'h'].map(k => `<label style="max-width:70px">${k} <input type="number" data-g="${k}" value="${w.geometry[k]}" min="0" step="10"></label>`).join('')}</div>`;
-  if((d.binds || []).includes('datastreams')){ sec.data += pickHTML('datastreams', DS.map(x => ({id: x.id, label: `${x.asset} / ${x.key} [${x.unit}]`})), w.bindings.datastreams || [], 'Datastreams'); if(!(w.bindings.datastreams || []).length) sec.data += '<div style="color:#d97706;font-size:12px">No datastream selected yet — pick one above; the widget stays empty until then.</div>'; }
+  if((d.binds || []).includes('datastreams')){ sec.data += sourceHTML(w);
+    if(!w.source){ sec.data += pickHTML('datastreams', DS.map(x => ({id: x.id, label: `${x.asset} / ${x.key} [${x.unit}]`})), w.bindings.datastreams || [], 'Datastreams'); if(!(w.bindings.datastreams || []).length) sec.data += '<div style="color:#d97706;font-size:12px">No datastream selected yet — pick one above; the widget stays empty until then.</div>'; } }
+  if((d.binds || []).length || ['alarms', 'alarm_count'].includes(w.type)) sec.data += `<label class="inline" title="Narrowed by the values chosen in the filter bar of the dashboard"><input type="checkbox" data-follow ${w.follow ? 'checked' : ''}><span>Follow the dashboard filters</span></label>${w.follow && !(SPEC.filters || []).length ? '<div class="muted" style="font-size:12px">The dashboard has no filters yet — add them under Dashboard settings.</div>' : ''}`;
   if((d.binds || []).includes('devices')) sec.data += pickHTML('devices', DEVS.map(x => ({id: x.id, label: `${x.name || x.external_id} (${x.external_id})`})), w.bindings.devices || [], 'Devices (empty = all)');
   for(const p of d.params || []){ const v = w.params[p.name] ?? p.default ?? ''; sec[p.group || 'data'] = (sec[p.group || 'data'] || '') + paramHTML(p, v); }
   html += Object.entries(sec).map(([k, s]) => `<div class="props" data-sec="${k}" ${k === PTAB ? '' : 'hidden'} style="display:flex;flex-direction:column;gap:8px">${s}${k !== 'data' && s ? `<button class="btn small ghost" type="button" data-treset="${k}" style="align-self:flex-start">Reset this tab to defaults</button>` : ''}</div>`).join('');
@@ -263,6 +291,7 @@ function renderProps(target){
   for(const b of box.querySelectorAll('[data-cclear]')) b.onclick = () => { const t = b.previousElementSibling; t.value = ''; t.dispatchEvent(new Event('change', {bubbles: true})); };
   const numOrNull = (x) => x === '' ? null : parseFloat(x);
   const applyProps = () => { for(const sel of box.querySelectorAll('[data-pick]')) w.bindings[sel.dataset.pick] = [...sel.selectedOptions].map(o => o.value);
+    applySource(box, w); const fl = box.querySelector('[data-follow]'); if(fl){ if(fl.checked) w.follow = true; else delete w.follow; }
     for(const el of box.querySelectorAll('[data-g]')){ const v = parseInt(el.value, 10); if(!isNaN(v)) w.geometry[el.dataset.g] = Math.max(el.dataset.g === 'w' || el.dataset.g === 'h' ? 20 : 0, v); }
     for(const el of box.querySelectorAll('[data-p]')){ const p = (d.params || []).find(x => x.name === el.dataset.p); if(!p) continue;
       if(p.kind === 'bool') w.params[p.name] = el.checked; else if(p.kind === 'number') w.params[p.name] = numOrNull(el.value); else if(p.kind === 'list') w.params[p.name] = el.value.split(',').map(s => s.trim()).filter(Boolean);
@@ -278,9 +307,56 @@ function renderProps(target){
   box.querySelector('#pApply').onclick = applyProps;
   box.onchange = e => { if(e.target.matches('[data-p][data-p]') && e.target.tagName === 'SELECT' && e.target.closest('label') && e.target.closest('label').querySelector('.icon-prev')) e.target.closest('label').querySelector('.icon-prev').innerHTML = e.target.value ? ctrl32Widgets.icon(e.target.value, 20) : '';
     if(e.target.matches('[data-r="op"]')){ const v2 = e.target.closest('[data-rng]').querySelector('[data-r="v2"]'); v2.hidden = e.target.value !== 'between'; }
-    if(e.target.matches('[data-pick],[data-p],[data-g],[data-pm],[data-s],[data-r]')){ if(e.target.matches('[data-pick]')) reopen(); else applyProps(); } };
+    if(e.target.matches('[data-pick],[data-p],[data-g],[data-pm],[data-s],[data-r],[data-src],[data-srcmode],[data-follow]')){ if(e.target.matches('[data-pick],[data-srcmode],[data-follow]')) reopen(); else { applyProps(); if(e.target.matches('[data-src]')) srcPreview(box, w); } } };
+  srcPreview(box, w);
   box.querySelector('#pRemove').onclick = () => { SPEC.widgets.splice(SEL, 1); SEL = -1; dirty(); if(EDITOR){ EDITOR.commit(); EDITOR.select([]); redraw(); } else { drawEdit(); renderProps(); } };
 }
+// Data source (0.68.0): a fixed list of datastreams, or a query resolved by the server (sites, asset types,
+// quantities, devices, attributes, name pattern) so new devices appear on their own.
+function srcPick(name, options, chosen, label){ return `<label>${esc(label)} <select multiple data-src="${name}">${options.map(o => `<option value="${esc(o.value)}" ${chosen.includes(o.value) ? 'selected' : ''}>${esc(o.label)}${o.n ? ' (' + o.n + ')' : ''}</option>`).join('')}${chosen.filter(c => !options.some(o => o.value === c)).map(c => `<option value="${esc(c)}" selected>${esc(c)}</option>`).join('')}</select></label>`; }
+function sourceHTML(w){
+  const s = w.source; const many = ['table', 'entity_table', 'overview_table'].includes(w.type); const max = many ? 500 : 24;
+  let h = `<fieldset class="src-box"><legend>Data source</legend><label class="inline"><input type="radio" name="srcmode" data-srcmode value="fixed" ${s ? '' : 'checked'}><span>Fixed list of datastreams</span></label><label class="inline"><input type="radio" name="srcmode" data-srcmode value="query" ${s ? 'checked' : ''}><span>Query — matching datastreams, new devices appear automatically</span></label>`;
+  if(s){ const f = FACETS || {}; const attrs = Object.entries(s.attr || {}).map(([k, v]) => [].concat(v).map(x => k + '=' + x).join(', ')).join(', ');
+    h += `<div class="muted" style="font-size:12px">Empty fields select everything; several values of one field match any of them. Ctrl/Cmd+click for several.</div>`
+      + srcPick('site', f.site || [], s.site || [], 'Sites') + srcPick('asset_type', f.asset_type || [], s.asset_type || [], 'Asset types')
+      + srcPick('quantity', f.quantity || [], (s.quantity || []).filter(q => !q.endsWith('*')), 'Quantities')
+      + `<label>Quantity pattern <input data-src="qpattern" value="${esc((s.quantity || []).filter(q => q.endsWith('*')).join(', '))}" placeholder="energy*"></label>`
+      + srcPick('device', f.device || [], s.device || [], 'Devices')
+      + `<label>Attributes <input data-src="attr" value="${esc(attrs)}" placeholder="storage_class=2-8C"></label>`
+      + `<label>Name (asset / key, * and ? as wildcards) <input data-src="name" value="${esc(s.name || '')}" placeholder="Fridge*"></label>`
+      + `<label>At most <input type="number" data-src="limit" min="1" max="${max}" value="${s.limit || max}" style="width:90px"> datastreams</label><div class="muted src-prev" style="font-size:12px"></div>`; }
+  return h + '</fieldset>';
+}
+function applySource(box, w){
+  const mode = box.querySelector('[data-srcmode]:checked'); if(!mode) return;
+  if(mode.value === 'fixed'){ delete w.source; return; }
+  const s = w.source || {}; const val = (k) => { const el = box.querySelector(`[data-src="${k}"]`); return el ? (el.multiple ? [...el.selectedOptions].map(o => o.value) : el.value.trim()) : undefined; };
+  if(!box.querySelector('[data-src]')){ w.source = {limit: ['table', 'entity_table', 'overview_table'].includes(w.type) ? 500 : 12}; w.bindings.datastreams = []; return; }
+  const out = {}; for(const k of ['site', 'asset_type', 'device']){ const v = val(k); if(v && v.length) out[k] = v; }
+  const qs = (val('quantity') || []).concat(String(val('qpattern') || '').split(',').map(x => x.trim()).filter(Boolean)); if(qs.length) out.quantity = qs;
+  const attr = {}; for(const part of String(val('attr') || '').split(',')){ const [k, ...v] = part.split('='); if(k && k.trim() && v.length && v.join('=').trim()) (attr[k.trim()] = attr[k.trim()] || []).push(v.join('=').trim()); } if(Object.keys(attr).length) out.attr = attr;
+  const nm = val('name'); if(nm) out.name = nm; const lim = parseInt(val('limit'), 10); out.limit = isNaN(lim) ? s.limit : lim;
+  w.source = out;
+}
+async function srcPreview(box, w){ const el = box.querySelector('.src-prev'); if(!el || !w.source) return; el.textContent = '…';
+  try{ const r = await WG.queryDS(Object.assign({}, w, {follow: false}), null, {limit: 1}); el.textContent = ctrl32.t('Matches') + ' ' + r.total + ' ' + ctrl32.t('datastreams') + (r.total > (w.source.limit || 0) ? ' · ' + ctrl32.t('the widget shows the first') + ' ' + w.source.limit : ''); }catch(x){ el.textContent = x.message; } }
+// Filters of the dashboard (Dashboard settings): kind, attribute key, label, several values, public.
+const FKIND = [['site', 'Site'], ['asset_type', 'Asset type'], ['device', 'Device'], ['quantity', 'Quantity'], ['attribute', 'Attribute (tag)'], ['search', 'Search'], ['range', 'Time range']];
+function fltRows(list){
+  const keys = (FACETS.attr_keys || []);
+  $('#fltList').innerHTML = (list.length ? '' : '<div class="muted" style="font-size:12px">No filters.</div>') + list.map((f, i) => `<div class="flt-row" data-fi="${i}"><select data-fk>${FKIND.map(([k, l]) => `<option value="${k}" ${k === f.kind ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
+    <input data-fkey list="fltKeys" placeholder="attribute, e.g. storage_class" value="${esc(f.key || '')}" ${f.kind === 'attribute' ? '' : 'hidden'}><input data-flabel placeholder="Label (optional)" maxlength="40" value="${esc(f.label || '')}">
+    <label ${['search', 'range'].includes(f.kind) ? 'style="visibility:hidden"' : ''}><input type="checkbox" data-fmulti ${f.multi ? 'checked' : ''}>several</label><label><input type="checkbox" data-fpub ${f.public ? 'checked' : ''}>public</label><button class="btn small ghost" type="button" data-fdel title="Remove">✕</button></div>`).join('') + `<datalist id="fltKeys">${keys.map(k => `<option value="${esc(k)}">`).join('')}</datalist>`;
+  const read = () => [...document.querySelectorAll('#fltList [data-fi]')].map(r => { const f = {kind: r.querySelector('[data-fk]').value}; const old = list[+r.dataset.fi] || {}; if(f.kind === 'attribute') f.key = r.querySelector('[data-fkey]').value.trim(); const l = r.querySelector('[data-flabel]').value.trim(); if(l) f.label = l; if(r.querySelector('[data-fmulti]').checked && !['search', 'range'].includes(f.kind)) f.multi = true; if(r.querySelector('[data-fpub]').checked) f.public = true; if(old.kind === f.kind && old.key === f.key && old.default !== undefined) f.default = old.default; return f; });
+  for(const r of document.querySelectorAll('#fltList [data-fi]')){ r.querySelector('[data-fk]').onchange = () => fltRows(read()); r.querySelector('[data-fdel]').onclick = () => { const l = read(); l.splice(+r.dataset.fi, 1); fltRows(l); }; }
+  $('#fltAdd').onclick = () => { const l = read(); const have = new Set(l.map(f => f.kind)); const k = (FKIND.find(([x]) => !have.has(x) && x !== 'attribute') || ['attribute'])[0]; l.push({kind: k, multi: !['search', 'range'].includes(k), public: true}); fltRows(l); };
+  $('#fltList')._read = read;
+}
+// the editor's filter bar: a live preview, and its values become the defaults when saving
+function mountEditorFilters(){ EFC = ctrl32DashFilters.mount($('#eFilters'), SPEC, {editor: true, onChange: () => { if(!EDITOR) drawEdit(); }}); }
+function filterDefaults(){ if(!EFC || !(SPEC.filters || []).length) return; const v = EFC.values;
+  for(const f of SPEC.filters){ const cur = f.kind === 'search' ? v.q : f.kind === 'range' ? v.range : f.kind === 'attribute' ? (v.attr[f.key] || []) : (v[f.kind] || []); if(cur && (!Array.isArray(cur) || cur.length)) f.default = Array.isArray(cur) && !f.multi ? cur.slice(0, 1) : cur; else delete f.default; } }
 function addWidget(type){ const d = defOf(type); const params = {}; for(const p of d.params || []) if(p.default !== undefined && (!p.group || p.group === 'data')) params[p.name] = p.default; if((d.params || []).some(p => p.name === 'title')) params.title = d.label; // only widgets that have a title (not pipe, instrument)
   const maxY = SPEC.widgets.reduce((m, w) => Math.max(m, w.geometry.y + w.geometry.h), 0);
   const n = SPEC.widgets.length; const geometry = canvas() ? {x: 40 + (n % 6) * 60, y: 40 + (n % 6) * 40, w: d.default_size[0] * 100, h: d.default_size[1] * 100} : {x: 0, y: maxY, w: d.default_size[0], h: d.default_size[1]};
@@ -301,17 +377,20 @@ function renderShare(sh){ const box = $('#shareBox'); box.className = '';
     el.onclick = async () => { const r = needReason(); if(r === null) return; try{ const res = m === 'POST' ? await api('POST', `/api/v1/dashboards/${encodeURIComponent(SLUG)}/share`, {reason: r}) : await api('DELETE', `/api/v1/dashboards/${encodeURIComponent(SLUG)}/share?reason=${encodeURIComponent(r)}`); ctrl32.toast(msg, 'ok'); renderShare(res); }catch(x){ ctrl32.toast(x.message, 'bad'); } }; }
 }
 async function loadEdit(){
-  [CAT, DS, DEVS, DASH] = await Promise.all([api('GET','/api/v1/dashboards/catalog'), api('GET','/api/v1/datastreams'), api('GET','/api/v1/devices'), api('GET', `/api/v1/dashboards/${encodeURIComponent(SLUG)}`)]);
-  SPEC = DASH.spec; $('#eTitle').textContent = 'Edit: ' + DASH.name; document.title = 'Edit ' + DASH.name; $('#eCancel').href = `/dashboards/${SLUG}`;
+  [CAT, DS, DEVS, DASH, FACETS] = await Promise.all([api('GET','/api/v1/dashboards/catalog'), api('GET','/api/v1/datastreams'), api('GET','/api/v1/devices'), api('GET', `/api/v1/dashboards/${encodeURIComponent(SLUG)}`), api('GET', '/api/v1/datastreams/facets?kinds=site,asset_type,quantity,device,attr_keys').catch(() => ({}))]);
+  SPEC = DASH.spec; mountEditorFilters(); $('#eTitle').textContent = 'Edit: ' + DASH.name; document.title = 'Edit ' + DASH.name; $('#eCancel').href = `/dashboards/${SLUG}`;
   const groups = {mimic: 'Process symbols', charts: 'Charts', values: 'Values', lists: 'Lists', control: 'Control', other: 'Other'};
   $('#catalog').innerHTML = Object.keys(groups).map(g => `<h3>${esc(groups[g])}</h3>` + CAT.widgets.filter(w => w.group === g).map(w => `<button class="wcard" type="button" data-add="${w.type}">${THUMBS[w.type] || THUMBS.text}<span><b>${esc(w.label)}</b><span class="muted">${esc(w.help)}</span></span></button>`).join('')).join('');
   for(const b of document.querySelectorAll('[data-add]')) b.onclick = () => addWidget(b.dataset.add);
   $('#eAdd').onclick = () => $('#addDlg').showModal();
   $('#setForm').range.innerHTML = CAT.ranges.map(r => `<option>${r}</option>`).join('');
-  $('#eSettings').onclick = () => { const f = $('#setForm'); f.name.value = DASH.name; f.range.value = SPEC.range; f.refresh_s.value = SPEC.refresh_s; f.row_height.value = SPEC.layout.row_height || 96; f.width.value = SPEC.layout.width || 1600; f.height.value = SPEC.layout.height || 900; $('#setRowH').hidden = canvas(); $('#setW').hidden = !canvas(); $('#setH').hidden = !canvas(); f.is_default.checked = !!DASH.is_default; $('#setDlg').showModal(); loadShare(); };
-  $('#setForm').onsubmit = e => { e.preventDefault(); const f = e.target; DASH.name = f.name.value; SPEC.range = f.range.value; SPEC.refresh_s = parseInt(f.refresh_s.value, 10) || 30; if(canvas()){ SPEC.layout.width = parseInt(f.width.value, 10) || 1600; SPEC.layout.height = parseInt(f.height.value, 10) || 900; } SPEC.layout.row_height = parseInt(f.row_height.value, 10) || 96; DASH.is_default = f.is_default.checked; $('#eTitle').textContent = 'Edit: ' + DASH.name; $('#setDlg').close(); dirty(); if(EDITOR) EDITOR.commit(); redraw(); };
+  $('#eSettings').onclick = () => { const f = $('#setForm'); f.name.value = DASH.name; f.range.value = SPEC.range; f.refresh_s.value = SPEC.refresh_s; f.row_height.value = SPEC.layout.row_height || 96; f.width.value = SPEC.layout.width || 1600; f.height.value = SPEC.layout.height || 900; $('#setRowH').hidden = canvas(); $('#setW').hidden = !canvas(); $('#setH').hidden = !canvas(); f.is_default.checked = !!DASH.is_default; fltRows(JSON.parse(JSON.stringify(SPEC.filters || []))); $('#setDlg').showModal(); loadShare(); };
+  $('#setForm').onsubmit = e => { e.preventDefault(); const f = e.target; DASH.name = f.name.value; SPEC.range = f.range.value; SPEC.refresh_s = parseInt(f.refresh_s.value, 10) || 30; if(canvas()){ SPEC.layout.width = parseInt(f.width.value, 10) || 1600; SPEC.layout.height = parseInt(f.height.value, 10) || 900; } SPEC.layout.row_height = parseInt(f.row_height.value, 10) || 96; DASH.is_default = f.is_default.checked;
+    const fl = $('#fltList')._read ? $('#fltList')._read() : []; const bad = fl.find(x => x.kind === 'attribute' && !/^[A-Za-z0-9_.-]{1,40}$/.test(x.key || '')); if(bad){ ctrl32.toast('an attribute filter needs the attribute name', 'bad'); return; }
+    if(fl.length) SPEC.filters = fl; else delete SPEC.filters; mountEditorFilters();
+    $('#eTitle').textContent = 'Edit: ' + DASH.name; $('#setDlg').close(); dirty(); if(EDITOR) EDITOR.commit(); redraw(); };
   $('#eSave').onclick = () => { $('#saveErr').textContent=''; $('#saveForm').reset(); $('#saveDlg').showModal(); };
-  $('#saveForm').onsubmit = async e => { e.preventDefault(); $('#saveErr').textContent='';
+  $('#saveForm').onsubmit = async e => { e.preventDefault(); $('#saveErr').textContent=''; filterDefaults();
     try{ const res = await api('PUT', `/api/v1/dashboards/${encodeURIComponent(SLUG)}`, {name: DASH.name, spec: SPEC, is_default: DASH.is_default, reason: e.target.reason.value}); DIRTY = false; const warn = (res && res.warnings) || []; if(warn.length){ ctrl32.toast('dashboard saved · ' + warn.join('; '), 'warn'); $('#saveDlg').close(); setTimeout(() => { location.href = `/dashboards/${SLUG}`; }, 4000); return; } ctrl32.toast('dashboard saved','ok'); location.href = `/dashboards/${SLUG}`; }catch(x){ $('#saveErr').textContent = x.message; if(EDITOR) EDITOR.showError(x.message); } };
   const del = document.createElement('button'); del.className = 'btn danger'; del.type = 'button'; del.textContent = 'Retire'; $('#eCancel').before(del);
   del.onclick = () => { $('#delErr').textContent=''; $('#delForm').reset(); $('#delDlg').showModal(); };

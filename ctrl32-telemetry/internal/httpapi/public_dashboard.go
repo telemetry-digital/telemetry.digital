@@ -59,6 +59,7 @@ func (s *Server) shareOf(ctx context.Context, org, slug string) (*shareInfo, boo
 		return nil, false
 	}
 	si.collect()
+	s.resolveSources(ctx, si)
 	return si, true
 }
 
@@ -229,7 +230,7 @@ func (s *Server) publicAlarms(w http.ResponseWriter, r *http.Request) {
 	for id := range si.DS {
 		ids = append(ids, id)
 	}
-	rows, err := s.pool.Query(r.Context(), `SELECT a.id::text, a.raised_at, a.cleared_at, a.state, a.severity, a.retrospective, a.value::float8, a.detail->>'key'
+	rows, err := s.pool.Query(r.Context(), `SELECT a.id::text, a.raised_at, a.cleared_at, a.state, a.severity, a.retrospective, a.value::float8, a.detail->>'key', a.datastream_id::text
 		FROM core.alarm a WHERE a.org_id = $1::uuid AND a.datastream_id = ANY($2::uuid[]) ORDER BY a.raised_at DESC LIMIT 100`, si.Org, ids)
 	if err != nil {
 		writeErr(w, 500, "query failed")
@@ -242,9 +243,9 @@ func (s *Server) publicAlarms(w http.ResponseWriter, r *http.Request) {
 		var cleared *time.Time
 		var retro bool
 		var val *float64
-		var key *string
-		if rows.Scan(&id, &raised, &cleared, &state, &sev, &retro, &val, &key) == nil {
-			out = append(out, map[string]any{"id": id, "raised_at": raised, "cleared_at": cleared, "state": state, "severity": sev, "retrospective": retro, "value": val, "key": key})
+		var key, ds *string
+		if rows.Scan(&id, &raised, &cleared, &state, &sev, &retro, &val, &key, &ds) == nil {
+			out = append(out, map[string]any{"id": id, "raised_at": raised, "cleared_at": cleared, "state": state, "severity": sev, "retrospective": retro, "value": val, "key": key, "datastream_id": ds})
 		}
 	}
 	writeJSON(w, 200, out)

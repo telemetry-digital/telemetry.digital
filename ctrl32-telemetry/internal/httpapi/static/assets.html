@@ -167,10 +167,13 @@ async function loadAssets(){
   if(!siteId){ $('#assets').innerHTML = '<p class="muted">Create a site first (Assets → Sites).</p>'; return; }
   const site = SITES.find(s => s.id === siteId); $('#siteInfo').textContent = site ? `${site.tz}${site.address ? ' · ' + site.address : ''}` : '';
   [ASSETS, DS] = await Promise.all([api('GET',`/api/v1/assets?site_id=${siteId}`), api('GET','/api/v1/datastreams')]);
-  $('#assets').innerHTML = ASSETS.map(a => { const ds = DS.filter(d => d.asset_id === a.id); return `<div class="card"><div class="row"><b>${esc(a.name)}</b><span class="badge">${esc(a.type)}</span><span class="grow"></span>${canCfg() ? `<button class="btn small" type="button" data-newds="${a.id}" data-name="${esc(a.name)}">+ datastream</button>` : ''}</div>
+  $('#assets').innerHTML = ASSETS.map(a => { const ds = DS.filter(d => d.asset_id === a.id); return `<div class="card" data-asset="${a.id}"><div class="row"><b>${esc(a.name)}</b><span class="badge">${esc(a.type)}</span><span class="grow"></span>${canCfg() ? `<button class="btn small" type="button" data-newds="${a.id}" data-name="${esc(a.name)}">+ datastream</button>` : ''}</div>
     <div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>Key</th><th>Quantity</th><th>Kind</th><th>Interval</th></tr></thead><tbody>${ds.map(d => `<tr class="clickable" data-ds="${d.id}"><td><code>${esc(d.key)}</code></td><td>${esc(d.quantity)} [${esc(d.unit)}]</td><td>${esc(d.kind)}</td><td>${esc(d.expected_interval || '—')}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">no datastreams</td></tr>'}</tbody></table></div></div>`; }).join('') || '<p class="muted">No assets in this site yet.</p>';
   for(const b of document.querySelectorAll('[data-newds]')) b.onclick = () => { const f = $('#dsForm'); f.reset(); f.dataset.asset = b.dataset.newds; $('#dsAssetName').textContent = 'Asset: ' + b.dataset.name; $('#dsErr').textContent=''; $('#dsNewDlg').showModal(); };
   for(const tr of document.querySelectorAll('[data-ds]')) tr.onclick = () => openDS(tr.dataset.ds);
+  const want = new URLSearchParams(location.search);
+  if(want.get('asset')){ const c = document.querySelector(`[data-asset="${CSS.escape(want.get('asset'))}"]`); if(c){ c.scrollIntoView({block: 'center'}); c.style.outline = '2px solid var(--primary)'; } }
+  if(want.get('ds') && !loadAssets._opened){ loadAssets._opened = true; openDS(want.get('ds')); }
 }
 $('#newAssetBtn').onclick = () => { $('#assetForm').reset(); $('#assetErr').textContent=''; $('#assetDlg').showModal(); };
 $('#assetForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#assetErr').textContent=''; try{ await api('POST','/api/v1/assets',{site_id: siteId, type: f.type.value, name: f.name.value, reason: f.reason.value}); $('#assetDlg').close(); ctrl32.toast('asset created','ok'); loadAssets(); }catch(x){ $('#assetErr').textContent = x.message; } };
