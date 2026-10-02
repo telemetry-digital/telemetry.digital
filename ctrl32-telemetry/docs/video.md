@@ -440,7 +440,7 @@ are personal data (GDPR): set the retention to what the purpose needs and mark t
 `go run ./tools/camsim -rtsp :8554 -http :8555` serves test cameras:
 `rtsp://127.0.0.1:8554/<label>/<h264|mjpeg>/<W>x<H>` and `http://127.0.0.1:8555/<label>/<W>x<H>` — a picture with the
 label, a clock and moving shapes; H.264 uses raw (I_PCM) macroblocks, so it needs a lot of bandwidth. `-loop 50`
-encodes 50 frames once and repeats them, for load tests of many cameras (`-fps 25`). `-onvif BRANA,VRATNICA` adds
+encodes 50 frames once and repeats them, for load tests of many cameras (`-fps 25`). `-onvif GATE,GATEHOUSE` adds
 ONVIF devices at `http://127.0.0.1:8555/onvif/<label>/device_service` (user `admin`, password `admin`) with PTZ that
 moves the picture, `-motion-every 45s` reports motion periodically, `/sim/motion/<label>?on=1|0` switches it by hand,
 and `-discovery 127.0.0.1:3702` answers WS-Discovery. A path ending in `/opus` adds silent Opus sound, `/g711`

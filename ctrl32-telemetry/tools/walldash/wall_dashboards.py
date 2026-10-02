@@ -86,7 +86,7 @@ def spec(kind='dashboard', range_='24h', refresh=15, layout=None):
 
 DASHBOARDS = []
 
-# ---- 1. prehľad steny ---------------------------------------------------------------------------
+# ---- 1. wall overview -----------------------------------------------------------------------------
 add('text', 0, 0, 12, 1, {'title': 'ctrl32 wall', 'style': 'heading', 'text': 'Three real devices send live values to telemetry.digital: P4 (home and heating zones), reTerminal (i550 drive over EtherCAT, production, sensors, UPS) and F7 Discovery (PLC). Everything on this page is a real measurement — no demo data.'})
 add('devices', 0, 1, 4, 3, {'title': 'Wall devices', 'limit': 10}, devices=[DEV['p4'], DEV['f7'], DEV['rt']])
 add('alarms', 4, 1, 4, 3, {'title': 'Alarms', 'limit': 8})
@@ -114,7 +114,7 @@ add('chart', 6, 14, 6, 2, {'title': 'Light at the wall [lx]', 'chart': 'step', '
 add('text', 0, 16, 12, 1, {'title': 'Note', 'style': 'note', 'text': 'More screens: P4 — zones and home · reTerminal — drive · reTerminal — zones, production, sensors, UPS · F7 Discovery — PLC · System — runtime · Process picture of the zones and the drive.'})
 DASHBOARDS.append(('wall-prehlad', 'ctrl32 wall — overview', spec(), True))
 
-# ---- 2. P4 — zóny a domácnosť ---------------------------------------------------------------------
+# ---- 2. P4 — zones and home ------------------------------------------------------------------------
 add('text', 0, 0, 12, 1, {'title': 'P4 home dashboard', 'style': 'heading', 'text': 'Three heating zones with setpoints, efficiency and limits; home scenes; values from the Simatic PLC; net32 links; runtime state.'})
 for i, z in enumerate('abc'):
     add('gauge', i * 4, 1, 2, 2, {'title': f'Zone {z.upper()} — temperature', 'decimals': 1, 'y_min': 0, 'y_max': 40, 'warn': 26, 'action': 30}, (f'p4.temp_{z}',))
@@ -172,7 +172,7 @@ add('chart', 6, 9, 6, 2, {'title': 'DC link voltage (24 h)', 'chart': 'line', 'd
 add('text', 0, 11, 12, 1, {'title': 'Note', 'style': 'note', 'text': 'The gauge ranges (3000 rpm, 10 A, 10 Nm, 800 V) are defaults; adjust them in the editor to the drive nameplate.'})
 DASHBOARDS.append(('reterminal-pohon', 'reTerminal — i550 drive', spec(), False))
 
-# ---- 4. reTerminal — zóny, výroba, senzory, UPS -----------------------------------------------------
+# ---- 4. reTerminal — zones, production, sensors, UPS ---------------------------------------------------
 add('text', 0, 0, 12, 1, {'title': 'reTerminal — zones, production, sensors and UPS', 'style': 'heading', 'text': 'Three temperature zones with heating, a production piece counter, accelerometer, light, tilt and shock, power supply and the UPS battery.'})
 for i, z in enumerate('abc'):
     add('gauge', i * 4, 1, 2, 2, {'title': f'Zone {z.upper()} [°C]', 'decimals': 1, 'y_min': 0, 'y_max': 60, 'warn': 40, 'action': 50}, (f'rt.z_temp_{z}',))
@@ -221,7 +221,7 @@ add('value', 6, 7, 3, 2, {'title': 'Overruns', 'decimals': 0, 'sparkline': False
 add('heatmap', 9, 7, 3, 2, {'title': 'plc_real by hour', 'range': '7d', 'decimals': 2}, ('f7.plc_real',))
 DASHBOARDS.append(('f7-plc', 'F7 Discovery — PLC', spec(), False))
 
-# ---- 6. Systém — runtime --------------------------------------------------------------------------
+# ---- 6. System — runtime --------------------------------------------------------------------------
 add('text', 0, 0, 12, 1, {'title': 'System — runtime of all boards', 'style': 'heading', 'text': 'Cycle, longest cycle, overruns, uptime and link state of every wall device side by side.'})
 add('devices', 0, 1, 4, 3, {'title': 'Devices', 'limit': 10}, devices=[DEV['p4'], DEV['f7'], DEV['rt']])
 add('bars', 4, 1, 4, 3, {'title': 'Cycle [µs]', 'decimals': 0}, ('p4.sys_cycle_us', 'f7.sys_cycle_us', 'rt.sys_cycle_us'))
@@ -243,7 +243,7 @@ add('value', 0, 11, 4, 1, {'title': 'P4 net32 peers', 'decimals': 0, 'sparkline'
 add('alarms', 4, 11, 8, 2, {'title': 'Alarms', 'limit': 8})
 DASHBOARDS.append(('system-runtime', 'System — runtime of all boards', spec(), False))
 
-# ---- 7. Mimika: zóny a pohon (ISA-101 canvas) -----------------------------------------------------
+# ---- 7. Mimic: zones and drive (ISA-101 canvas) ---------------------------------------------------
 add('text', 20, 20, 900, 60, {'title': 'Process picture — reTerminal zones and the i550 drive', 'style': 'normal', 'text': 'Grey process, colour only for abnormal states. Zone heating shown as pumps, temperatures as instruments, the drive as a motor with speed and current.'})
 for i, z in enumerate('abc'):
     x = 120 + i * 420

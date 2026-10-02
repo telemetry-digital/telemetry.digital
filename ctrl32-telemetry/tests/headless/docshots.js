@@ -22,7 +22,7 @@ const port = 9391;
 fs.mkdirSync(out, { recursive: true });
 const profile = tmp + "/cdp-profile-docshots";
 fs.rmSync(profile, { recursive: true, force: true });
-const proc = spawn(chrome, ["--headless=new", "--disable-gpu", "--no-first-run", "--hide-scrollbars", "--autoplay-policy=no-user-gesture-required", "--remote-debugging-port=" + port, "--user-data-dir=" + profile, "--window-size=1440,900", "about:blank"], { stdio: "ignore" });
+const proc = spawn(chrome, ["--headless=new", "--disable-gpu", "--no-first-run", "--hide-scrollbars", "--autoplay-policy=no-user-gesture-required", "--remote-debugging-port=" + port, "--user-data-dir=" + profile, "--window-size=1440,900", "--lang=en-US", "--accept-lang=en-US", "about:blank"], { stdio: "ignore" });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function json(url) { return new Promise((res, rej) => http.get(url, (r) => { let d = ""; r.on("data", (c) => (d += c)); r.on("end", () => res(JSON.parse(d))); }).on("error", rej)); }
 
@@ -38,6 +38,8 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
     if (msg.id && pending[msg.id]) { pending[msg.id](msg); delete pending[msg.id]; } };
   const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending[i] = r; ws.send(JSON.stringify({ id: i, method, params })); });
   await send("Page.enable"); await send("Runtime.enable");
+  // an English browser: native widgets (file inputs, date pickers) and Accept-Language follow it
+  await send("Emulation.setLocaleOverride", { locale: "en-US" });
   // no native dialogs: a stray click on a delete button cannot confirm anything
   await send("Page.addScriptToEvaluateOnNewDocument", { source: "window.alert = () => {}; window.confirm = () => false; window.prompt = () => null;" });
   const ev = async (expr) => { const r = await send("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true }); return r.result.result ? r.result.result.value : undefined; };
@@ -99,13 +101,13 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   const cams = (await api("/api/v1/video/cameras")) || [];
   const devices = (await api("/api/v1/devices")) || [];
   const flows = (await api("/api/v1/flows")) || [];
-  const short = { "areal-kamery-na-podoryse": "floor-plan", "linka-1-procesna-obrazovka": "scada-line-1", "vyroba-prehlad-liniek": "production-lines",
-    "chladovy-retazec-sklad-liekov": "cold-chain", "energie-mesacna-spotreba": "energy-monthly", "prehlad": "overview", "ukazka-vsetkych-widgetov": "showcase" };
+  const short = { "site-cameras-on-the-floor-plan": "floor-plan", "line-1-process-screen": "scada-line-1", "production-line-overview": "production-lines",
+    "cold-chain-medicine-store": "cold-chain", "energy-monthly-consumption": "energy-monthly", "overview": "overview", "showcase-all-widgets": "showcase" };
   const slugName = (s) => short[s] || s;
-  const prodDash = () => dashes.find((d) => d.slug === "vyroba-prehlad-liniek") || dashes[0];
+  const prodDash = () => dashes.find((d) => d.slug === "production-line-overview") || dashes[0];
   const cam = (n) => (cams.find((c) => c.name === n) || cams[0] || {}).id;
-  const wallCR = (walls.find((w) => w.name.startsWith("Vel")) || walls[0] || {}).id;
-  const wallGate = (walls.find((w) => w.name === "Vrátnica") || walls[1] || {}).id;
+  const wallCR = (walls.find((w) => w.name.startsWith("Control room")) || walls[0] || {}).id;
+  const wallGate = (walls.find((w) => w.name === "Gatehouse") || walls[1] || {}).id;
   const dev = (ext) => (devices.find((d) => d.external_id === ext) || devices[0] || {}).id;
 
   // ---- start
@@ -122,7 +124,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
     await page(`dashboards-${n}`, `/dashboards/${d.slug}`, { wait: 6000, full: n === "showcase" || n === "cold-chain" || n === "energy-monthly", maxH: 3200 });
     await page(`dashboards-${n}-edit`, `/dashboards/${d.slug}/edit`, { wait: 5000 });
   }
-  const cold = dashes.find((d) => d.slug === "chladovy-retazec-sklad-liekov");
+  const cold = dashes.find((d) => d.slug === "cold-chain-medicine-store");
   if (cold) {
     await page("dashboards-edit-add-widget", `/dashboards/${cold.slug}/edit`, { wait: 4000, click: "#eAdd" });
     await page("dashboards-edit-widget-properties", `/dashboards/${cold.slug}/edit`, { wait: 4000, before: "(() => { const r = document.querySelectorAll('.dash-resize')[1]; if (r) r.parentElement.click(); return !!r; })()", afterWait: 1500 });
@@ -155,21 +157,24 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await page("automation-rule-editor", "/assets/automation", { wait: 3000, click: "#newAutoBtn" });
   await page("automation-incidents", "/incidents", { wait: 3000 });
   await page("automation-incident-new-dialog", "/incidents", { wait: 3000, click: "#newBtn" });
-  await page("automation-incident-detail", "/incidents", { wait: 3000, before: "(() => { const r = [...document.querySelectorAll('#list tbody tr[data-id]')].find(t => /teplota nad 8/.test(t.textContent)); if (r) r.click(); return !!r; })()", afterWait: 1500 });
+  await page("automation-incident-detail", "/incidents", { wait: 3000, before: "(() => { const r = [...document.querySelectorAll('#list tbody tr[data-id]')].find(t => /temperature above 8/.test(t.textContent)); if (r) r.click(); return !!r; })()", afterWait: 1500 });
   await page("automation-flows", "/flows", { wait: 3000 });
   await page("automation-flows-new-dialog", "/flows", { click: "#newBtn" });
-  const flow = (flows[0] || {}).flow;
+  // the demo server has no SMTP: delivery errors of the flows' e-mail nodes are left out of the debug panel
+  const quietDebug = "(() => { const l = document.querySelector('#dbgList'); if (!l) return false; [...l.children].forEach((r) => { if (r.querySelector('.badge.bad')) r.remove(); }); const i = document.querySelector('#dbgInfo'); if (i) i.textContent = i.textContent.replace(/\\d+/, l.children.length); return true; })()";
+  const flow = (flows.find((f) => f.flow.slug.startsWith("fridge")) || flows[0] || {}).flow;
   for (const f of flows) {
-    const n = f.flow.slug.startsWith("chlad") ? "cold-chain" : f.flow.slug.startsWith("energ") ? "energy" : f.flow.slug;
-    await page(`automation-flow-editor-${n}`, `/flows/${f.flow.slug}`, { wait: 4000 });
+    const n = f.flow.slug.startsWith("fridge") ? "cold-chain" : f.flow.slug.startsWith("energ") ? "energy" : f.flow.slug;
+    await page(`automation-flow-editor-${n}`, `/flows/${f.flow.slug}`, { wait: 4000, before: quietDebug });
   }
   if (flow) {
-    await page("automation-flow-change-reason", `/flows/${flow.slug}`, { wait: 4000, click: "#tSave" });
-    await page("automation-flow-versions", `/flows/${flow.slug}`, { wait: 4000, click: "#tVersions" });
+    await page("automation-flow-change-reason", `/flows/${flow.slug}`, { wait: 4000, before: quietDebug, click: "#tSave" });
+    await page("automation-flow-versions", `/flows/${flow.slug}`, { wait: 4000, before: quietDebug, click: "#tVersions" });
     if (wanted("automation-flow-node-settings")) {
       await go(`/flows/${flow.slug}`, 4000);
       const r = await ev(`(() => { const n = document.querySelector('.fe-node[data-id="hot"]') || document.querySelector('.fe-node'); if (!n) return null; const b = n.getBoundingClientRect(); return {x: b.x + b.width / 2, y: b.y + b.height / 2}; })()`);
       if (r) { await send("Input.dispatchMouseEvent", { type: "mousePressed", x: r.x, y: r.y, button: "left", clickCount: 1 }); await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: r.x, y: r.y, button: "left", clickCount: 1 }); await sleep(1200); }
+      await ev(quietDebug);
       await shot("automation-flow-node-settings");
     }
   }
@@ -188,9 +193,9 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await page("video-add-camera-dialog", "/video/manage", { wait: 3000, click: "#addCam" });
   await page("video-evidence", "/video/evidence", { wait: 3000 });
   await page("video-settings", "/video/settings", { wait: 3000 });
-  const gate = cam("Brána"), rec = cam("Parkovisko sever");
+  const gate = cam("Gate"), rec = cam("Car park north");
   if (gate) {
-    await page("video-camera-live", `/video/cameras/${cam("Hala 1")}`, { wait: 8000 });
+    await page("video-camera-live", `/video/cameras/${cam("Hall 1")}`, { wait: 8000 });
     // a camera with PTZ: the pad and zoom buttons are on the picture (shown by default on wide screens)
     await page("video-camera-ptz", `/video/cameras/${gate}`, { wait: 8000 });
   }

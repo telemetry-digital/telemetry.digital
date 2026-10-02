@@ -54,6 +54,7 @@ case "${1:-}" in
         SELECT (lpad(to_hex(floor(extract(epoch FROM clock_timestamp())*1000)::bigint),12,'0')||'7'||substr(h,1,3)||substr('89ab',1+(get_byte(decode(substr(h,4,2),'hex'),0)&3),1)||substr(h,6,15))::uuid
         FROM (SELECT md5(random()::text||clock_timestamp()::text) h) r \$b\$\$f\$; END IF; END \$do\$"
     mkdir -p "$D/reports" "$D/firmware" "$D/video"
+    rm -f "$D/cameras.json" "$D/production.json" "$D/docs.json"  # demo state belongs to the old database
     sed -e "s|^url = .*|url = \"postgres://ctrl32_app:devpw@127.0.0.1:5433/ctrl32_dev?sslmode=disable\"|" \
         -e "s|^admin_url = .*|admin_url = \"$DEVURL\"|" \
         -e 's|^app_password = .*|app_password = "devpw"|' -e 's|REPLACE-WITH-RANDOM-32-CHARS|dev-not-a-secret-0123456789abcdef|' \
@@ -72,13 +73,13 @@ case "${1:-}" in
     curl -s -c "$J" -b "$J" -H 'Content-Type: application/json' -d '{"username":"admin","password":"admin1234"}' http://127.0.0.1:8080/api/v1/auth/login >/dev/null
     CSRF=$(curl -s -b "$J" http://127.0.0.1:8080/api/v1/auth/me | node -pe 'JSON.parse(require("fs").readFileSync(0)).csrf_token')
     curl -s -b "$J" -X PUT -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
-      -d '{"enabled":["sk","cs","en"],"default":"sk","reason":"dev"}' http://127.0.0.1:8080/api/v1/i18n/languages >/dev/null
+      -d '{"enabled":["en","sk","cs"],"default":"en","reason":"dev"}' http://127.0.0.1:8080/api/v1/i18n/languages >/dev/null
     log "admin / admin1234 — seed details in $D/seed.txt"
     ;;
   restart) build; serve ;;
   camsim)
     go build -o "$D/camsim" ./tools/camsim
-    start_bg camsim "$D/camsim" -rtsp :8554 -http :8555 -fps 8 -onvif BRANA,VRATNICA -motion-every 45s
+    start_bg camsim "$D/camsim" -rtsp :8554 -http :8555 -fps 8 -onvif GATE,GATEHOUSE -motion-every 45s
     log "camera simulator: rtsp://127.0.0.1:8554/<label>/<h264|mjpeg>/<W>x<H>[/opus|/g711] (log: $D/camsim.log)"
     ;;
   demo)
@@ -89,12 +90,12 @@ case "${1:-}" in
     start_bg production python3 production.py live
     python3 docs.py setup
     start_bg docs python3 docs.py live
-    read -r MU1 MP1 MU2 MP2 < <(python3 docs.py mqtt-creds)
+    read -r MU1 MP1 MU2 MP2 < <(python3 docs.py mqtt-creds | tr -d '\r')  # no CR from Python on Windows
     (cd "$R" && go build -o "$D/mqttsim" ./tools/mqttsim)
     # the zigbee2mqtt simulator raises its temperature by 0.1 °C a second: restart it every 2 minutes (21–33 °C)
     start_bg homesim-z2m bash -c 'while true; do "$0" z2m -user "$1" -pass "$2" -wait 120; done' "$D/mqttsim" "$MU1" "$MP1"
-    start_bg homesim-tasmota "$D/mqttsim" tasmota -user "$MU1" -pass "$MP1" -id KUCHYNA -wait 864000
-    start_bg homesim-shelly "$D/mqttsim" shelly -user "$MU2" -pass "$MP2" -id KANCELARIA1 -wait 864000
+    start_bg homesim-tasmota "$D/mqttsim" tasmota -user "$MU1" -pass "$MP1" -id GARAGE -wait 864000
+    start_bg homesim-shelly "$D/mqttsim" shelly -user "$MU2" -pass "$MP2" -id OFFICE1 -wait 864000
     log "demo ready; the production feeder sends data every 10 s, the cold chain and energy meters every 60 s (logs in $D)"
     ;;
   stop) for n in production docs homesim-z2m homesim-tasmota homesim-shelly camsim server; do stop_one "$n"; done; log "stopped" ;;
