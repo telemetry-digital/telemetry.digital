@@ -33,17 +33,21 @@ func TestVPNRoutesPermissions(t *testing.T) {
 	for _, m := range re.FindAllStringSubmatch(string(src), -1) {
 		n++
 		want := "system.admin|vpn.manage"
-		if serverOnly[m[1]] {
+		// the uplink of this server to a hub (phase 3) is server administration
+		if serverOnly[m[1]] || strings.Contains(m[1], "/api/v1/vpn/uplink") {
 			want = "system.admin"
 		}
 		if m[2] != want {
 			t.Errorf("%s needs %q, want %q", m[1], m[2], want)
 		}
 	}
-	if n != 12 {
-		t.Fatalf("found %d VPN routes, want 12", n)
+	if n != 18 {
+		t.Fatalf("found %d VPN routes, want 18", n)
 	}
-	for _, op := range []string{"POST /api/v1/vpn/peers", "POST /api/v1/vpn/peers/{id}/rotate", "POST /api/v1/vpn/peers/{id}/grant"} {
+	if !strings.Contains(string(src), `mux.HandleFunc("GET /api/v1/vpn/uplink/tunnel", s.uplinkTunnelWS)`) || vpn.UplinkTunnelPath != "/api/v1/vpn/uplink/tunnel" {
+		t.Error("the HTTPS transport's endpoint moved")
+	}
+	for _, op := range []string{"POST /api/v1/vpn/peers", "POST /api/v1/vpn/peers/{id}/rotate", "POST /api/v1/vpn/peers/{id}/grant", "POST /api/v1/vpn/uplink"} {
 		if mcpExclusions[op] == "" {
 			t.Errorf("%s is offered to AI assistants", op)
 		}

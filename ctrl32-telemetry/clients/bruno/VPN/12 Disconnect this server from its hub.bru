@@ -1,0 +1,25 @@
+meta {
+  name: Disconnect this server from its hub
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/v1/vpn/uplink/disconnect
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Disconnect this server from its hub
+  
+  Stops the uplink interface, removes its firewall table and deletes its keys. The uplink rules are kept for the next connection.
+  
+  Requires permission `system.admin`.
+}

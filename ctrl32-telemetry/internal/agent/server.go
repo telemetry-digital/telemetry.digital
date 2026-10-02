@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/release"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/uptunnel"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/vpn"
 )
 
@@ -67,6 +68,15 @@ type Server struct {
 	hub           userspaceHub // Windows: WireGuard and the access rules inside the agent (ADR-0020); nil elsewhere
 	localNets     func() []netip.Prefix
 	setForwarding func(on bool) error
+	// uplink to a hub (uplink.go): the userspace device starter (Windows; nil elsewhere), the running device and the
+	// HTTPS transport, and per-interface forwarding (replaced by fakes in tests and by the simulation)
+	startUplink     uplinkStartFunc
+	upDev           uplinkDevice
+	tunnel          *uptunnel.Client
+	tunnelURL       string
+	tunnelKey       string
+	ifForwarding    func(iface string) (bool, error)
+	setIfForwarding func(iface string, on bool) error
 }
 
 func NewServer(socket, cfgPath, version, updateURL string, log *slog.Logger) *Server {
@@ -74,7 +84,8 @@ func NewServer(socket, cfgPath, version, updateURL string, log *slog.Logger) *Se
 		updateURL = "https://portal.telemetry.digital/dl"
 	}
 	return &Server{socket: socket, cfgPath: cfgPath, version: version, updateURL: strings.TrimRight(updateURL, "/"), log: log, started: time.Now(), pgContainer: pgContainerDefault,
-		exec: run, localNets: vpn.LocalNets, setForwarding: setWGForwarding, vpnHost: !isWindows(), hub: newUserspaceHub(log)}
+		exec: run, localNets: vpn.LocalNets, setForwarding: setWGForwarding, vpnHost: !isWindows(), hub: newUserspaceHub(log),
+		startUplink: newUserspaceUplink(), ifForwarding: readForwarding, setIfForwarding: writeForwarding}
 }
 
 // SetDBTools configures where the database tooling is (config [agent] pg_dump / pg_container).
@@ -108,8 +119,15 @@ func (a *Server) Serve(ctx context.Context) error {
 		if a.vpnMode() == ModeUserspace {
 			a.hub.Stop()
 		}
+		a.mu.Lock()
+		if a.upDev != nil {
+			a.upDev.Stop()
+		}
+		a.stopTunnel()
+		a.mu.Unlock()
 	}()
 	a.startHubFromFiles()
+	a.startUplinkFromFiles()
 	a.log.Info("agent listening", "socket", a.socket, "version", a.version)
 	if !a.simulate {
 		go a.runScheduler(ctx)
@@ -129,6 +147,7 @@ func (a *Server) routes() http.Handler {
 		mux.HandleFunc("GET /wireguard", a.hWireGuard)
 		mux.HandleFunc("PUT /wireguard", a.hSetWireGuard)
 		mux.HandleFunc("PUT /vpn", a.hApplyVPN)
+		a.uplinkRoutes(mux)
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 501, "not available in the VPN simulation of the agent (vpn_simulate)")
 		})
@@ -140,6 +159,7 @@ func (a *Server) routes() http.Handler {
 	mux.HandleFunc("GET /wireguard", a.hWireGuard)
 	mux.HandleFunc("PUT /wireguard", a.hSetWireGuard)
 	mux.HandleFunc("PUT /vpn", a.hApplyVPN)
+	a.uplinkRoutes(mux)
 	mux.HandleFunc("POST /update", a.hUpdate)
 	mux.HandleFunc("GET /backups", a.hBackups)
 	mux.HandleFunc("POST /backups", a.hCreateBackup)

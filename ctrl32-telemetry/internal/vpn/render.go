@@ -121,7 +121,8 @@ func ValidateDesired(d *Desired, server netip.Prefix, localNets []netip.Prefix) 
 	return nil
 }
 
-// LocalNets lists the IPv4 networks of the host's interfaces except the VPN interface (loopback included).
+// LocalNets lists the IPv4 networks of the host's interfaces except the VPN interfaces (wg0 and the uplink's wg1;
+// loopback included).
 func LocalNets() []netip.Prefix {
 	var out []netip.Prefix
 	ifs, err := net.Interfaces()
@@ -129,7 +130,7 @@ func LocalNets() []netip.Prefix {
 		return nil
 	}
 	for _, i := range ifs {
-		if i.Name == Iface {
+		if i.Name == Iface || i.Name == UplinkIface {
 			continue
 		}
 		addrs, _ := i.Addrs()

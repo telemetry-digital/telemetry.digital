@@ -115,6 +115,9 @@ type MQTTConfig struct {
 	TLSListen string `toml:"tls_listen"` // TLS listener, e.g. ":8883"; requires http.tls_cert/key or mqtt.tls_cert/key
 	WSListen  string `toml:"ws_listen"`  // MQTT over WebSocket for the UI, e.g. ":1884"
 	VPNListen string `toml:"vpn_listen"` // extra plain listener inside the WireGuard network, e.g. "10.66.0.1:1883"; bound with retries
+	// UplinkListen: plain listener on this server's address in a hub's VPN (uplink, set by the agent on Linux), e.g.
+	// "10.99.0.7:1883"; bound with retries. The uplink's firewall decides who may connect.
+	UplinkListen string `toml:"uplink_listen"`
 	TLSCert   string `toml:"tls_cert"`   // optional separate certificate for MQTT
 	TLSKey    string `toml:"tls_key"`
 }

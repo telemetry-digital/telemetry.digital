@@ -129,7 +129,10 @@ type Config struct {
 	Address    netip.Prefix // the server's VPN address with the VPN prefix, e.g. 10.66.0.1/24
 	// Dial connects an accepted connection to a service of the server; default 127.0.0.1:<port>.
 	Dial func(ctx context.Context, port uint16) (net.Conn, error)
-	Log  *slog.Logger
+	// DialLAN connects an accepted connection to a host of the server's LAN (uplink mode, uplink.go); default a plain
+	// TCP connection from the host.
+	DialLAN func(ctx context.Context, dst netip.AddrPort) (net.Conn, error)
+	Log     *slog.Logger
 }
 
 // PeerStats are live values of one peer.
@@ -153,6 +156,8 @@ type Hub struct {
 	peers   map[string]bool // hex public keys configured on the device
 	conns   chan struct{}
 	log     *slog.Logger
+	uplink  bool
+	lan     []netip.Prefix // uplink mode: the LAN subnets offered to the hub
 }
 
 func b64ToHex(k string) (string, error) {
@@ -174,6 +179,12 @@ func hexToB64(k string) string {
 // Start creates the virtual interface, the stack and the WireGuard device and listens on the UDP port. No peer is
 // configured and everything from the VPN is dropped until Apply.
 func Start(cfg Config) (*Hub, error) {
+	return start(cfg, false, "listen_port="+strconv.Itoa(cfg.ListenPort)+"\n")
+}
+
+// start builds the hub; in uplink mode (uplink.go) the stack also accepts connections to allowed LAN hosts and the
+// hub relays them from the host.
+func start(cfg Config, uplink bool, ipc string) (*Hub, error) {
 	if !cfg.Address.Addr().Is4() {
 		return nil, errors.New("the VPN address must be IPv4")
 	}
@@ -190,7 +201,13 @@ func Start(cfg Config) (*Hub, error) {
 			return d.DialContext(ctx, "tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(int(port))))
 		}
 	}
-	h := &Hub{cfg: cfg, filter: NewFilter(cfg.Address), peers: map[string]bool{}, conns: make(chan struct{}, maxConns), log: cfg.Log}
+	if cfg.DialLAN == nil {
+		cfg.DialLAN = func(ctx context.Context, dst netip.AddrPort) (net.Conn, error) {
+			var d net.Dialer
+			return d.DialContext(ctx, "tcp", dst.String())
+		}
+	}
+	h := &Hub{cfg: cfg, filter: NewFilter(cfg.Address), peers: map[string]bool{}, conns: make(chan struct{}, maxConns), log: cfg.Log, uplink: uplink}
 	s := stack.New(stack.Options{
 		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol},
 		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol, icmp.NewProtocol4},
@@ -205,6 +222,11 @@ func Start(cfg Config) (*Hub, error) {
 		return nil, fmt.Errorf("VPN address: %v", e)
 	}
 	s.AddRoute(tcpip.Route{Destination: header.IPv4EmptySubnet, NIC: 1})
+	if uplink {
+		// connections to LAN hosts end in this stack (the filter lets only allowed ones in) and are relayed from the host
+		s.SetPromiscuousMode(1, true)
+		s.SetSpoofing(1, true)
+	}
 	fwd := tcp.NewForwarder(s, 0, 256, h.relay)
 	s.SetTransportProtocolHandler(tcp.ProtocolNumber, fwd.HandlePacket)
 	h.stack, h.tun = s, t
@@ -214,7 +236,7 @@ func Start(cfg Config) (*Hub, error) {
 		Verbosef: func(string, ...any) {},
 		Errorf:   func(f string, a ...any) { cfg.Log.Warn("wireguard: " + fmt.Sprintf(f, a...)) },
 	})
-	if err := h.dev.IpcSet("private_key=" + priv + "\nlisten_port=" + strconv.Itoa(cfg.ListenPort) + "\n"); err != nil {
+	if err := h.dev.IpcSet("private_key=" + priv + "\n" + ipc); err != nil {
 		h.Stop()
 		return nil, fmt.Errorf("WireGuard: %w", err)
 	}
@@ -235,7 +257,17 @@ func (h *Hub) relay(r *tcp.ForwarderRequest) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	up, err := h.cfg.Dial(ctx, id.LocalPort)
+	var up net.Conn
+	var err error
+	dst := netip.AddrFrom4(id.LocalAddress.As4())
+	switch {
+	case dst == h.cfg.Address.Addr():
+		up, err = h.cfg.Dial(ctx, id.LocalPort)
+	case h.uplink && h.filter.lanTarget(dst):
+		up, err = h.cfg.DialLAN(ctx, netip.AddrPortFrom(dst, id.LocalPort))
+	default:
+		err = errors.New("not a relayed destination")
+	}
 	cancel()
 	if err != nil {
 		<-h.conns

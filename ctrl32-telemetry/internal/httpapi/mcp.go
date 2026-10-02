@@ -72,6 +72,7 @@ var mcpExclusions = map[string]string{
 	"POST /api/v1/vpn/peers":                            "issues a private key; needs the user's password (and authenticator code) again in the browser",
 	"POST /api/v1/vpn/peers/{id}/rotate":                "issues a private key; needs the user's password (and authenticator code) again in the browser",
 	"POST /api/v1/vpn/peers/{id}/grant":                 "opens network access into sites for a person; granted (and approved) by people in the browser",
+	"POST /api/v1/vpn/uplink":                           "connects this server to an outside network with a pasted private key; needs the user's password (and authenticator code) again in the browser",
 }
 
 // mcpExcluded gives the reason an operation is not offered to assistants ("" = offered).
@@ -80,7 +81,7 @@ func mcpExcluded(op *apiOp) string {
 		return r
 	}
 	switch op.P {
-	case "device", "connector", "relay", "display", "replica token":
+	case "device", "connector", "relay", "display", "replica token", "uplink":
 		return "authenticated with a " + op.P + " credential, not by a user"
 	}
 	switch op.T {

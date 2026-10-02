@@ -23,7 +23,8 @@ type fakeHost struct {
 	cmds  []string
 	fail  map[string]string // command prefix -> output of the failure
 	fwd   []bool
-	route string // output of `ip -4 -o route show dev wg0`
+	route   string            // output of `ip -4 -o route show dev wg0`
+	outputs map[string]string // command prefix -> output (uplink tests)
 }
 
 func (f *fakeHost) exec(_ context.Context, _ time.Duration, name string, args ...string) (string, error) {
@@ -32,6 +33,11 @@ func (f *fakeHost) exec(_ context.Context, _ time.Duration, name string, args ..
 	for p, out := range f.fail {
 		if strings.HasPrefix(c, p) {
 			return out, errors.New(name + ": " + out)
+		}
+	}
+	for p, out := range f.outputs {
+		if strings.HasPrefix(c, p) {
+			return out, nil
 		}
 	}
 	switch {

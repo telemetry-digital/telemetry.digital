@@ -59,6 +59,10 @@ type ruleset struct {
 	routed []netip.Prefix // addresses (/32) and routed subnets of the configured peers
 	rules  []rule
 	text   string
+	// uplink mode (uplink.go): the hub is the only peer; packets to the LAN subnets the server offers are accepted into
+	// the stack when a forward rule allows them (TCP only) and relayed from the host
+	uplink bool
+	lan    []netip.Prefix
 }
 
 // Packet is the parsed header of an IPv4 packet.
@@ -317,6 +321,16 @@ func (f *Filter) Decide(b []byte) Verdict {
 	rs := f.rs.Load()
 	if p.Dst == rs.server {
 		if (p.Proto == protoICMP && p.ICMPType == icmpEcho) || rs.match(vpn.ChainInput, p) != "" {
+			f.input.Add(1)
+			return Input
+		}
+		f.dropped.Add(1)
+		return Drop
+	}
+	if rs.uplink {
+		// from the hub: only TCP to an allowed LAN host enters the stack (and is relayed); every packet of the
+		// connection is checked against the rules again, so removing a rule ends the connection
+		if p.Proto == protoTCP && rs.vpnNet.Contains(p.Src) && contains(rs.lan, p.Dst) && rs.match(vpn.ChainForward, p) != "" {
 			f.input.Add(1)
 			return Input
 		}

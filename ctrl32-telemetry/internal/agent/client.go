@@ -131,6 +131,35 @@ func (c *Client) ApplyVPN(ctx context.Context, d vpn.Desired) (*WireGuardState, 
 	return &st, err
 }
 
+// ConnectUplink connects this server to a hub (or replaces the uplink's configuration) with a pasted token and the
+// compiled uplink rules; the agent validates and applies everything and rolls back on failure.
+func (c *Client) ConnectUplink(ctx context.Context, in UplinkRequest) (*WireGuardState, error) {
+	var st WireGuardState
+	err := c.do(ctx, "PUT", "/uplink", in, &st, 5*time.Minute) // may apt-get install wireguard-tools
+	return &st, err
+}
+
+// UplinkRules applies the compiled uplink access rules.
+func (c *Client) UplinkRules(ctx context.Context, rules []vpn.FwRule) (*WireGuardState, error) {
+	var st WireGuardState
+	err := c.do(ctx, "PUT", "/uplink/rules", UplinkRulesRequest{Rules: rules}, &st, 2*time.Minute)
+	return &st, err
+}
+
+// UplinkTransport switches between UDP and the HTTPS transport.
+func (c *Client) UplinkTransport(ctx context.Context, transport string) (*WireGuardState, error) {
+	var st WireGuardState
+	err := c.do(ctx, "PUT", "/uplink/transport", UplinkTransportRequest{Transport: transport}, &st, 2*time.Minute)
+	return &st, err
+}
+
+// DisconnectUplink removes the uplink and its keys.
+func (c *Client) DisconnectUplink(ctx context.Context) (*WireGuardState, error) {
+	var st WireGuardState
+	err := c.do(ctx, "DELETE", "/uplink", nil, &st, 2*time.Minute)
+	return &st, err
+}
+
 func (c *Client) Update(ctx context.Context, version, updatesUntil string) (*UpdateResult, error) {
 	var r UpdateResult
 	err := c.do(ctx, "POST", "/update", UpdateRequest{Version: version, UpdatesUntil: updatesUntil}, &r, 10*time.Minute)

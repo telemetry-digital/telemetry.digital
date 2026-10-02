@@ -1,0 +1,32 @@
+meta {
+  name: Add an uplink access rule
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/api/v1/vpn/uplink/rules
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "dest_cidr": "string",
+    "dest_type": "server",
+    "enabled": true,
+    "name": "string",
+    "ports": "string",
+    "protocol": "tcp",
+    "reason": "string",
+    "src_cidr": "string"
+  }
+}
+
+docs {
+  Add an uplink access rule
+  
+  What the hub may reach on this server (default deny): from the hub's VPN range or an address/subnet inside it (`src_cidr`, empty = the whole range) to `server` (this server's uplink address, e.g. the web interface) or `lan` (a host or subnet of the networks offered to the hub, `dest_cidr`; empty = all of them; forwarded with masquerade, so LAN devices see this server). The hub's own access rules must allow the technician too. Without a connected uplink the rule is stored and applied on connecting.
+  
+  Requires permission `system.admin`.
+}
