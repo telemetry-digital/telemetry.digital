@@ -170,19 +170,11 @@ func (e *Engine) Start(ctx context.Context) {
 	e.mu.Lock()
 	e.ctx = ctx
 	e.mu.Unlock()
-	rows, err := e.pool.Query(ctx, `SELECT org_id::text, slug FROM core.flow WHERE valid_to IS NULL AND state = 'deployed'`)
+	list, err := e.deployedFlows(ctx)
 	if err != nil {
 		e.log.Error("load flows", "err", err)
 		return
 	}
-	var list [][2]string
-	for rows.Next() {
-		var o, s string
-		if rows.Scan(&o, &s) == nil {
-			list = append(list, [2]string{o, s})
-		}
-	}
-	rows.Close()
 	for _, l := range list {
 		if err := e.Reload(ctx, l[0], l[1]); err != nil {
 			e.log.Error("start flow", "org", l[0], "flow", l[1], "err", err)
@@ -203,12 +195,33 @@ func (e *Engine) Start(ctx context.Context) {
 	}()
 }
 
-// Reload (re)starts a flow from its current stored version, or stops it when it is not deployed.
+// deployedFlows lists the flows (organization, slug) with a deployed version. The deployed version runs even when
+// newer drafts were saved after it: saving a draft never stops a running flow, not even across a restart.
+func (e *Engine) deployedFlows(ctx context.Context) ([][2]string, error) {
+	rows, err := e.pool.Query(ctx, `SELECT DISTINCT org_id::text, slug FROM core.flow WHERE state = 'deployed'`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list [][2]string
+	for rows.Next() {
+		var o, s string
+		if rows.Scan(&o, &s) == nil {
+			list = append(list, [2]string{o, s})
+		}
+	}
+	return list, rows.Err()
+}
+
+// Reload (re)starts a flow from its deployed version, or stops it when no version is deployed. Drafts saved after
+// the deployed version do not matter: the deployed one runs until another version is deployed or the flow is
+// disabled or removed.
 func (e *Engine) Reload(ctx context.Context, org, slug string) error {
 	var id, name, state, createdBy string
 	var version int
 	var raw []byte
-	err := e.pool.QueryRow(ctx, `SELECT id::text, name, version, state, spec, coalesce(created_by::text, '') FROM core.flow WHERE org_id = $1::uuid AND slug = $2 AND valid_to IS NULL`,
+	err := e.pool.QueryRow(ctx, `SELECT id::text, name, version, state, spec, coalesce(created_by::text, '') FROM core.flow
+		WHERE org_id = $1::uuid AND slug = $2 AND state = 'deployed' ORDER BY version DESC LIMIT 1`,
 		org, slug).Scan(&id, &name, &version, &state, &raw, &createdBy)
 	e.stop(org, slug)
 	if err != nil || state != "deployed" {

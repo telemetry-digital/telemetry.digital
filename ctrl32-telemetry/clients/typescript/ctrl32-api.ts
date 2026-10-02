@@ -747,7 +747,7 @@ export type ObservationBuckets = {
   from: string;
   points: ({
     avg?: number | null;
-    /** any row with quality other than ok */
+    /** any row with quality other than ok or backfilled */
     flagged: boolean;
     max?: number | null;
     min?: number | null;
@@ -834,7 +834,7 @@ export type PeriodCell = {
   delta?: number;
   /** first reading */
   first?: number;
-  /** a sample with quality other than ok */
+  /** a sample with quality other than ok or backfilled */
   flagged?: boolean;
   /** last reading */
   last?: number;
@@ -1375,21 +1375,22 @@ export class Ctrl32Client {
 
   /** Create an alarm rule (new version)
    *
-   * A rule of the same type on the same datastream is superseded (its `valid_to` is set); the new row carries the next version number. With the policy `four_eyes_limits` the call answers 202 with a pending change request instead.
+   * A rule of the same type on the same datastream is superseded (its `valid_to` is set); the new row carries the next version number. With the policy `four_eyes_limits` the call answers 202 with a pending change request instead. Types: `high`/`low` (value at or above/below the limits), `low_battery` (battery level at or below the limits), `power_loss` (value 0 = power lost; no limits), `door_open` (value other than 0 = open; no limits), `comm_loss` (no new value for longer than the limits in seconds; without limits 1.5 × the expected interval). `sensor_fault` is refused (devices do not report sensor faults). The condition must hold for `delay_seconds` before the alarm is raised.
    * 
    * Requires permission `config.write`. */
   postAlarmRules(body: {
-    /** action limit */
+    /** action limit (comm_loss: seconds) */
     action?: number | null;
     datastream_id: string;
+    /** the condition must hold this long before the alarm is raised */
     delay_seconds?: number;
     /** optional; empty = global e-mail recipients */
     escalation_policy_id?: string;
     hysteresis?: number;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
-    type: "high" | "low" | "comm_loss" | "sensor_fault" | "low_battery" | "power_loss" | "door_open";
-    /** warning limit */
+    type: "high" | "low" | "low_battery" | "power_loss" | "door_open" | "comm_loss";
+    /** warning limit (comm_loss: seconds) */
     warning?: number | null;
   }): Promise<AlarmRule> {
     return this.request<AlarmRule>('POST', `/api/v1/alarm-rules`, undefined, body, false);
@@ -6700,6 +6701,28 @@ export class Ctrl32Client {
    * Requires permission `video.view`. */
   getVideoCamerasIdLive(id: string, query?: { audio?: string; /** 1 = with the sound (needs video.audio) */ quality?: string; /** sub (default; falls back to main) or main */ }): Promise<unknown> {
     return this.request<unknown>('GET', `/api/v1/video/cameras/${encodeURIComponent(id)}/live`, query, undefined, false);
+  }
+
+  /** Record a picture saved in the player
+   *
+   * The player in the browser burns the privacy masks into a saved picture. A picture without them (a stream opened with unmask=1) may be saved only with video.unmask; it is audited (video.unmask).
+   * 
+   * Requires permission `video.view`. */
+  postVideoCamerasIdPictureSaved(id: string, body: {
+    /** time of the picture, RFC 3339 */
+    at?: string;
+    /** the picture carries no privacy masks */
+    unmasked?: boolean;
+  }): Promise<{
+    audited?: boolean;
+    /** the camera has privacy masks */
+    masked?: boolean;
+  }> {
+    return this.request<{
+    audited?: boolean;
+    /** the camera has privacy masks */
+    masked?: boolean;
+  }>('POST', `/api/v1/video/cameras/${encodeURIComponent(id)}/picture-saved`, undefined, body, false);
   }
 
   /** Recorded video (WebSocket)

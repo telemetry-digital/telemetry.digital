@@ -50,7 +50,7 @@ value and `ts` to the measurement time.
 | | Device command | a command with the permissions of the flow's owner and the four-eyes policy |
 | | Device attribute | a shared attribute the device receives over MQTT; governed like a command |
 | | Notify | through a notification channel (e-mail, SMS, push, voice, webhook) |
-| | Incident | opens (once until resolved) or resolves an incident |
+| | Incident | opens (once until resolved) or resolves an incident; open and resolve nodes with the same *incident key* belong together (without a key an open node keys the incident by itself and a resolve node resolves every open incident of the flow) |
 | | HTTP request | only to hosts on the allow-list (Flows → Settings); response in `msg.status`, `msg.body` |
 | | Debug | shows the message or an expression in the debug panel |
 | Other | Comment | a note on the canvas |

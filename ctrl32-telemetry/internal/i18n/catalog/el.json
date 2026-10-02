@@ -2372,5 +2372,20 @@
  "Energy and reports": "Ενέργεια και αναφορές",
  "consumption of meters, daily logs, Excel and PDF": "κατανάλωση μετρητών, ημερήσια αρχεία, Excel και PDF",
  "Automation and AI": "Αυτοματισμός και AI",
- "flows, alarms with notifications, AI assistants": "ροές, συναγερμοί με ειδοποιήσεις, βοηθοί AI"
+ "flows, alarms with notifications, AI assistants": "ροές, συναγερμοί με ειδοποιήσεις, βοηθοί AI",
+ "Incident key (open and resolve with the same key belong together)": "Κλειδί περιστατικού (άνοιγμα και επίλυση με το ίδιο κλειδί ανήκουν μαζί)",
+ "Acknowledge": "Επιβεβαίωση",
+ "Reason for acknowledging this alarm:": "Αιτία επιβεβαίωσης του συναγερμού:",
+ "alarm acknowledged": "ο συναγερμός επιβεβαιώθηκε",
+ "outside the allowed range": "εκτός του επιτρεπόμενου εύρους",
+ "low battery (battery level at or below the limits)": "χαμηλή μπαταρία (στάθμη στα όρια ή κάτω από αυτά)",
+ "power loss (value 0 = no power)": "διακοπή ρεύματος (τιμή 0 = χωρίς τροφοδοσία)",
+ "door open (value other than 0)": "ανοιχτή πόρτα (τιμή διαφορετική από 0)",
+ "communication loss (no new value)": "απώλεια επικοινωνίας (καμία νέα τιμή)",
+ "Warning and action limits: the value at or above them.": "Όρια προειδοποίησης και ενέργειας: η τιμή σε αυτά ή πάνω από αυτά.",
+ "Warning and action limits: the value at or below them.": "Όρια προειδοποίησης και ενέργειας: η τιμή σε αυτά ή κάτω από αυτά.",
+ "Warning and action limits in the unit of the datastream (%, V).": "Όρια προειδοποίησης και ενέργειας στη μονάδα της ροής δεδομένων (%, V).",
+ "No limits: a value of 0 (false) raises the alarm, any other value clears it.": "Χωρίς όρια: τιμή 0 (ψευδές) ενεργοποιεί τον συναγερμό, κάθε άλλη τιμή τον αναιρεί.",
+ "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).": "Χωρίς όρια: τιμή διαφορετική από 0 (αληθές) ενεργοποιεί τον συναγερμό μετά την καθυστέρηση (πόσο μπορεί να μείνει ανοιχτή η πόρτα).",
+ "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.": "Όρια σε δευτερόλεπτα χωρίς νέα τιμή· κενό = 1,5 × το αναμενόμενο διάστημα της ροής δεδομένων. Μια νέα τιμή αναιρεί τον συναγερμό."
 }

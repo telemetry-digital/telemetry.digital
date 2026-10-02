@@ -281,7 +281,7 @@ function renderProps(target){
     if(e.target.matches('[data-pick],[data-p],[data-g],[data-pm],[data-s],[data-r]')){ if(e.target.matches('[data-pick]')) reopen(); else applyProps(); } };
   box.querySelector('#pRemove').onclick = () => { SPEC.widgets.splice(SEL, 1); SEL = -1; dirty(); if(EDITOR){ EDITOR.commit(); EDITOR.select([]); redraw(); } else { drawEdit(); renderProps(); } };
 }
-function addWidget(type){ const d = defOf(type); const params = {}; for(const p of d.params || []) if(p.default !== undefined && (!p.group || p.group === 'data')) params[p.name] = p.default; params.title = d.label;
+function addWidget(type){ const d = defOf(type); const params = {}; for(const p of d.params || []) if(p.default !== undefined && (!p.group || p.group === 'data')) params[p.name] = p.default; if((d.params || []).some(p => p.name === 'title')) params.title = d.label; // only widgets that have a title (not pipe, instrument)
   const maxY = SPEC.widgets.reduce((m, w) => Math.max(m, w.geometry.y + w.geometry.h), 0);
   const n = SPEC.widgets.length; const geometry = canvas() ? {x: 40 + (n % 6) * 60, y: 40 + (n % 6) * 40, w: d.default_size[0] * 100, h: d.default_size[1] * 100} : {x: 0, y: maxY, w: d.default_size[0], h: d.default_size[1]};
   SPEC.widgets.push({id: uid(), type, geometry, bindings: Object.fromEntries((d.binds || []).map(b => [b, []])), params});

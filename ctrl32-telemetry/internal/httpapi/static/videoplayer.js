@@ -295,9 +295,22 @@
         const src = mode === 'jpeg' ? canvas : video;
         c.width = mode === 'jpeg' ? canvas.width : video.videoWidth; c.height = mode === 'jpeg' ? canvas.height : video.videoHeight;
         if (!c.width) return null;
-        c.getContext('2d').drawImage(src, 0, 0);
+        const g = c.getContext('2d');
+        g.drawImage(src, 0, 0);
+        // the privacy masks (spec 016) are burnt into a saved picture exactly as the player covers them; the server
+        // sends none only to a user who may see the camera unmasked (video.unmask, audited)
+        g.fillStyle = '#000';
+        for (const p of MASKS) {
+          if (!Array.isArray(p) || p.length < 3) continue;
+          g.beginPath();
+          p.forEach((q, i) => { const x = (+q[0]) * c.width, y = (+q[1]) * c.height; if (i) g.lineTo(x, y); else g.moveTo(x, y); });
+          g.closePath(); g.fill('evenodd');
+        }
         return c;
       },
+      // the masks that cover the picture, and whether the server sent it unmasked (?unmask=1 with video.unmask)
+      get masks() { return MASKS.slice(); },
+      get unmasked() { return box.dataset.unmasked === '1'; },
       get zoom() { return z; },
       zoomBy(f) { zoomAt(f); },
       zoomReset() { z = 1; applyZoom(); },

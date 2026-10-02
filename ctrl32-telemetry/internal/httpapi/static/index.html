@@ -50,7 +50,7 @@
       </div>
       <div class="card">
         <h2>Alarms</h2>
-        <div class="table-wrap"><table id="alarms"><thead><tr><th>Raised</th><th>Severity</th><th>State</th><th>Key</th><th>Value</th><th>Retro</th></tr></thead><tbody></tbody></table></div>
+        <div class="table-wrap"><table id="alarms"><thead><tr><th>Raised</th><th>Severity</th><th>State</th><th>Key</th><th>Value</th><th>Retro</th><th></th></tr></thead><tbody></tbody></table></div>
       </div>
       <div class="card">
         <h2>Devices</h2>
@@ -132,7 +132,9 @@ async function refresh(){
   const from = new Date(Date.now()-6*3600e3).toISOString();
   draw(await j(`/api/v1/observations?datastream_id=${id}&from=${encodeURIComponent(from)}&limit=5000`));
   const al = await j(`/api/v1/alarms?datastream_id=${id}`);
-  $('#alarms tbody').innerHTML = al.map(x=>`<tr><td>${fmt(x.raised_at)}</td><td class="${esc(x.severity)}">${esc(x.severity)}</td><td>${esc(x.state)}</td><td>${esc(x.key)}</td><td>${x.value}</td><td>${x.retrospective?'yes':''}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">none</td></tr>';
+  const canAck = ctrl32.can('alarm.ack');
+  $('#alarms tbody').innerHTML = al.map(x=>`<tr><td>${fmt(x.raised_at)}</td><td class="${esc(x.severity)}">${esc(x.severity)}</td><td>${esc(x.state)}</td><td>${esc(x.key)}</td><td>${x.value}</td><td>${x.retrospective?'yes':''}</td><td>${canAck && x.state === 'active' && !x.cleared_at ? `<button class="btn small" type="button" data-ack="${esc(x.id)}">Acknowledge</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">none</td></tr>';
+  for(const b of document.querySelectorAll('#alarms [data-ack]')) b.onclick = async () => { const reason = ctrl32.ask('Reason for acknowledging this alarm:'); if(!reason) return; try{ await ctrl32.api('POST', `/api/v1/alarms/${b.dataset.ack}/ack`, {reason}); ctrl32.toast(ctrl32.t('alarm acknowledged'), 'ok'); refresh(); }catch(e){ ctrl32.toast(e.message, 'bad'); } };
 }
 ctrl32.ready().then(({me, brand}) => {
   if(!me){ showLanding(); return; }

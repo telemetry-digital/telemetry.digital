@@ -2372,5 +2372,20 @@
  "Energy and reports": "Energia ja raportit",
  "consumption of meters, daily logs, Excel and PDF": "mittareiden kulutus, päivälokit, Excel ja PDF",
  "Automation and AI": "Automaatio ja AI",
- "flows, alarms with notifications, AI assistants": "kulut, hälytykset ilmoituksineen, AI-avustajat"
+ "flows, alarms with notifications, AI assistants": "kulut, hälytykset ilmoituksineen, AI-avustajat",
+ "Incident key (open and resolve with the same key belong together)": "Häiriöavain (samalla avaimella avaaminen ja ratkaiseminen kuuluvat yhteen)",
+ "Acknowledge": "Kuittaa",
+ "Reason for acknowledging this alarm:": "Hälytyksen kuittauksen syy:",
+ "alarm acknowledged": "hälytys kuitattu",
+ "outside the allowed range": "sallitun alueen ulkopuolella",
+ "low battery (battery level at or below the limits)": "akku vähissä (varaus rajoilla tai niiden alla)",
+ "power loss (value 0 = no power)": "sähkökatko (arvo 0 = ei virtaa)",
+ "door open (value other than 0)": "ovi auki (arvo muu kuin 0)",
+ "communication loss (no new value)": "yhteyden menetys (ei uutta arvoa)",
+ "Warning and action limits: the value at or above them.": "Varoitus- ja toimenpiderajat: arvo rajoilla tai niiden yllä.",
+ "Warning and action limits: the value at or below them.": "Varoitus- ja toimenpiderajat: arvo rajoilla tai niiden alla.",
+ "Warning and action limits in the unit of the datastream (%, V).": "Varoitus- ja toimenpiderajat datavirran yksikössä (%, V).",
+ "No limits: a value of 0 (false) raises the alarm, any other value clears it.": "Ei rajoja: arvo 0 (epätosi) laukaisee hälytyksen, mikä tahansa muu arvo kumoaa sen.",
+ "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).": "Ei rajoja: arvo muu kuin 0 (tosi) laukaisee hälytyksen viiveen jälkeen (kuinka kauan ovi saa olla auki).",
+ "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.": "Rajat sekunteina ilman uutta arvoa; tyhjä = 1,5 × datavirran odotettu väli. Uusi arvo kumoaa hälytyksen."
 }

@@ -78,6 +78,9 @@ req POST /api/v1/rules "{\"name\":\"bad-$SUF\",\"spec\":{\"inputs\":$IN,\"action
 
 echo "== rule with every action type"
 SPEC="{\"inputs\":$IN,\"match\":\"all\",\"conditions\":[{\"input\":\"t_in\",\"op\":\">=\",\"value\":30},{\"input\":\"t_out\",\"op\":\"<\",\"value\":10}],\"actions\":[{\"type\":\"notify\",\"channel_id\":\"$CH\",\"subject\":\"hot {rule}: t_in={t_in}\"},{\"type\":\"webhook\",\"url\":\"http://127.0.0.1:$SINK_PORT/inline\",\"secret\":\"$SECRET\"},{\"type\":\"command\",\"device_id\":\"$MB\",\"key\":\"setpoint\",\"value\":\"t_in - 10\"},{\"type\":\"alarm\",\"severity\":\"action\"},{\"type\":\"derive\",\"datastream_id\":\"$DS3\",\"expr\":\"t_in - t_out\"}],\"clear_actions\":[{\"type\":\"notify\",\"channel_id\":\"$CH\"}]}"
+req PUT /api/v1/flows/settings '{"allowed_hosts":[],"reason":"e2e reset"}' >/dev/null
+req POST /api/v1/rules "{\"name\":\"hostless-$SUF\",\"spec\":$SPEC,\"reason\":\"e2e\"}" >/dev/null; check "webhook to a host off the allow-list refused" "$(st)" 400
+req PUT /api/v1/flows/settings '{"allowed_hosts":["127.0.0.1"],"reason":"e2e: the webhook sink"}' >/dev/null; check "sink host allowed" "$(st)" 200
 req POST /api/v1/rules/test "{\"spec\":$SPEC}" >/dev/null; check "dry run" "$(st)" 200
 [[ "$(jx "$TMP/b" "j.condition")" == "false" && "$(jx "$TMP/b" "j.missing.length")" == "2" ]] && ok "dry run: no data yet, both inputs missing" || bad "dry run: $(head -c 200 "$TMP/b")"
 R1=$(req POST /api/v1/rules "{\"name\":\"rule-a-$SUF\",\"description\":\"all actions\",\"spec\":$SPEC,\"reason\":\"e2e\"}" | jget id); check "create" "$(st)" 201

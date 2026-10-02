@@ -119,6 +119,9 @@ sed -e "s|^url = .*|url = \"$(db_url ctrl32_app "$APP_PW" "$TEST_DB")\"|" \
 "$BIN" admin bootstrap -config "$CONFIG" > "$LOGS/bootstrap.log" 2>&1 || { tail "$LOGS/bootstrap.log"; exit 2; }
 "$BIN" admin reset-password -username admin -password admin1234 -permanent -allow-weak -config "$CONFIG" > /dev/null || exit 2
 ORG=$(psql -Atq "$DB_ADMIN" -c "SELECT slug FROM core.organization ORDER BY created_at LIMIT 1")
+# Go tests that need the database schema (skipped in the unit phase without CTRL32_TEST_DB)
+if CTRL32_TEST_DB="$DB_ADMIN" go test -count=1 -run 'DB$' ./internal/... > "$LOGS/go-test-db.log" 2>&1; then res "go test (database)" ok
+else res "go test (database)" "FAIL (test-results/go-test-db.log)"; fi
 set_mfa_optional() { # true|false — the dev organization does not force MFA enrolment while the suites run
   psql -q "$DB_ADMIN" -c "UPDATE core.organization SET settings = jsonb_set(coalesce(settings, '{}'), '{security}',
     coalesce(settings->'security', '{}') || '{\"mfa_optional\": $1}') WHERE slug = '$ORG'"

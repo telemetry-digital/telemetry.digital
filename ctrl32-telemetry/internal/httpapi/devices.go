@@ -223,8 +223,10 @@ func (s *Server) ackAlarm(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "reason required")
 		return
 	}
-	tag, err := s.pool.Exec(r.Context(), `UPDATE core.alarm SET state = 'acknowledged' WHERE id = $1::uuid AND org_id = $2::uuid AND state = 'active'`, id, p.OrgID)
-	if err != nil || tag.RowsAffected() == 0 {
+	var dsID, sev string
+	var value *float64
+	if err := s.pool.QueryRow(r.Context(), `UPDATE core.alarm SET state = 'acknowledged' WHERE id = $1::uuid AND org_id = $2::uuid AND state = 'active'
+		RETURNING coalesce(datastream_id::text, ''), severity, value::float8`, id, p.OrgID).Scan(&dsID, &sev, &value); err != nil {
 		writeErr(w, 404, "active alarm not found")
 		return
 	}
@@ -233,5 +235,9 @@ func (s *Server) ackAlarm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "alarm.acknowledge", "alarm", id, map[string]any{"state": "active"}, map[string]any{"state": "acknowledged"}, in.Reason)
+	// live pages and the flows' Alarm trigger ("acknowledged") learn about it at once
+	if s.live != nil {
+		s.live.Alarm(p.OrgID, id, dsID, "acknowledged", sev, value)
+	}
 	writeJSON(w, 200, map[string]any{"ok": true})
 }

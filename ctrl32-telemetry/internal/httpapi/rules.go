@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -77,6 +79,21 @@ func (s *Server) checkSpec(w http.ResponseWriter, r *http.Request, org string, s
 	if err := s.rules.CheckRefs(r.Context(), org, spec); err != nil {
 		writeErr(w, 400, err.Error())
 		return false
+	}
+	// webhook actions call only hosts of the organization's allow-list, like the flows' HTTP request nodes
+	for _, a := range append(append([]rules.Action{}, spec.Actions...), spec.ClearActions...) {
+		if a.Type != "webhook" {
+			continue
+		}
+		u, err := url.Parse(a.URL)
+		if err != nil || !(flowRefs{s, r.Context(), org}).HostAllowed(u.Hostname()) {
+			host := ""
+			if u != nil {
+				host = u.Hostname()
+			}
+			writeErr(w, 400, fmt.Sprintf("webhook: host %q is not on the organization's allow-list (Flows → Settings)", host))
+			return false
+		}
 	}
 	if spec.HasCommands() && !PrincipalFrom(r.Context()).Has("device.command") {
 		writeErr(w, 403, "device.command permission required for rules that send commands")

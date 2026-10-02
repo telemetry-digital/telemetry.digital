@@ -77,9 +77,9 @@ func TestElementsRejected(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "canvas") {
 		t.Errorf("grid with elements: %v", err)
 	}
-	// An empty picture is still refused.
-	if _, err := validateScreenSpec(mimicSpec(`[]`)); err == nil {
-		t.Error("empty picture accepted")
+	// An empty picture is allowed (a new one, or one whose last element was removed).
+	if _, err := validateScreenSpec(mimicSpec(`[]`)); err != nil {
+		t.Errorf("empty picture refused: %v", err)
 	}
 }
 

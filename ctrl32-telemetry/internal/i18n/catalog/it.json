@@ -2372,5 +2372,20 @@
  "Energy and reports": "Energia e report",
  "consumption of meters, daily logs, Excel and PDF": "consumi dei contatori, registri giornalieri, Excel e PDF",
  "Automation and AI": "Automazione e IA",
- "flows, alarms with notifications, AI assistants": "flussi, allarmi con notifiche, assistenti IA"
+ "flows, alarms with notifications, AI assistants": "flussi, allarmi con notifiche, assistenti IA",
+ "Incident key (open and resolve with the same key belong together)": "Chiave dell'incidente (apertura e risoluzione con la stessa chiave vanno insieme)",
+ "Acknowledge": "Conferma",
+ "Reason for acknowledging this alarm:": "Motivo della conferma dell'allarme:",
+ "alarm acknowledged": "allarme confermato",
+ "outside the allowed range": "fuori dall'intervallo consentito",
+ "low battery (battery level at or below the limits)": "batteria scarica (livello pari o inferiore ai limiti)",
+ "power loss (value 0 = no power)": "mancanza di alimentazione (valore 0 = nessuna alimentazione)",
+ "door open (value other than 0)": "porta aperta (valore diverso da 0)",
+ "communication loss (no new value)": "perdita di comunicazione (nessun nuovo valore)",
+ "Warning and action limits: the value at or above them.": "Limiti di avviso e di azione: il valore pari o superiore.",
+ "Warning and action limits: the value at or below them.": "Limiti di avviso e di azione: il valore pari o inferiore.",
+ "Warning and action limits in the unit of the datastream (%, V).": "Limiti di avviso e di azione nell'unità del flusso di dati (%, V).",
+ "No limits: a value of 0 (false) raises the alarm, any other value clears it.": "Nessun limite: un valore 0 (falso) attiva l'allarme, qualsiasi altro valore lo cancella.",
+ "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).": "Nessun limite: un valore diverso da 0 (vero) attiva l'allarme dopo il ritardo (per quanto tempo la porta può restare aperta).",
+ "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.": "Limiti in secondi senza un nuovo valore; vuoto = 1,5 × l'intervallo previsto del flusso di dati. Un nuovo valore cancella l'allarme."
 }

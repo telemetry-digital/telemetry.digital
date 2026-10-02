@@ -2372,5 +2372,20 @@
  "Energy and reports": "Energy and reports",
  "consumption of meters, daily logs, Excel and PDF": "consumption of meters, daily logs, Excel and PDF",
  "Automation and AI": "Automation and AI",
- "flows, alarms with notifications, AI assistants": "flows, alarms with notifications, AI assistants"
+ "flows, alarms with notifications, AI assistants": "flows, alarms with notifications, AI assistants",
+ "Incident key (open and resolve with the same key belong together)": "Incident key (open and resolve with the same key belong together)",
+ "Acknowledge": "Acknowledge",
+ "Reason for acknowledging this alarm:": "Reason for acknowledging this alarm:",
+ "alarm acknowledged": "alarm acknowledged",
+ "outside the allowed range": "outside the allowed range",
+ "low battery (battery level at or below the limits)": "low battery (battery level at or below the limits)",
+ "power loss (value 0 = no power)": "power loss (value 0 = no power)",
+ "door open (value other than 0)": "door open (value other than 0)",
+ "communication loss (no new value)": "communication loss (no new value)",
+ "Warning and action limits: the value at or above them.": "Warning and action limits: the value at or above them.",
+ "Warning and action limits: the value at or below them.": "Warning and action limits: the value at or below them.",
+ "Warning and action limits in the unit of the datastream (%, V).": "Warning and action limits in the unit of the datastream (%, V).",
+ "No limits: a value of 0 (false) raises the alarm, any other value clears it.": "No limits: a value of 0 (false) raises the alarm, any other value clears it.",
+ "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).": "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).",
+ "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.": "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it."
 }

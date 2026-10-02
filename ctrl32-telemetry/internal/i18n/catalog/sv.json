@@ -2372,5 +2372,20 @@
  "Energy and reports": "Energi och rapporter",
  "consumption of meters, daily logs, Excel and PDF": "förbrukning på mätare, dagliga loggar, Excel och PDF",
  "Automation and AI": "Automation och AI",
- "flows, alarms with notifications, AI assistants": "flöden, larm med aviseringar, AI-assistenter"
+ "flows, alarms with notifications, AI assistants": "flöden, larm med aviseringar, AI-assistenter",
+ "Incident key (open and resolve with the same key belong together)": "Incidentnyckel (öppning och lösning med samma nyckel hör ihop)",
+ "Acknowledge": "Kvittera",
+ "Reason for acknowledging this alarm:": "Anledning till att kvittera larmet:",
+ "alarm acknowledged": "larm kvitterat",
+ "outside the allowed range": "utanför tillåtet intervall",
+ "low battery (battery level at or below the limits)": "lågt batteri (nivå på eller under gränserna)",
+ "power loss (value 0 = no power)": "strömavbrott (värde 0 = ingen ström)",
+ "door open (value other than 0)": "dörr öppen (värde skilt från 0)",
+ "communication loss (no new value)": "kommunikationsförlust (inget nytt värde)",
+ "Warning and action limits: the value at or above them.": "Varnings- och åtgärdsgränser: värdet på eller över dem.",
+ "Warning and action limits: the value at or below them.": "Varnings- och åtgärdsgränser: värdet på eller under dem.",
+ "Warning and action limits in the unit of the datastream (%, V).": "Varnings- och åtgärdsgränser i dataströmmens enhet (%, V).",
+ "No limits: a value of 0 (false) raises the alarm, any other value clears it.": "Inga gränser: värdet 0 (falskt) utlöser larmet, alla andra värden återställer det.",
+ "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).": "Inga gränser: ett värde skilt från 0 (sant) utlöser larmet efter fördröjningen (hur länge dörren får stå öppen).",
+ "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.": "Gränser i sekunder utan nytt värde; tomt = 1,5 × dataströmmens förväntade intervall. Ett nytt värde återställer larmet."
 }

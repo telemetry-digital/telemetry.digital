@@ -687,12 +687,23 @@ func (f *flow) process(n *rnode, m *Message, dry bool) {
 			return
 		}
 		action, sev := str("action"), str("severity")
+		ikey := ""
+		if k := str("key"); k != "" {
+			if ikey, err = f.render(k, m); err != nil {
+				f.fail(n, m, err)
+				return
+			}
+			ikey = strings.TrimSpace(ikey)
+		}
+		dedup := IncidentKey(f.org, f.slug, n.spec.ID, action, ikey)
 		if dry || f.temp {
-			f.dryAction(n, m, "would "+action+" incident: "+title)
+			f.dryAction(n, m, "would "+action+" incident: "+title+incidentKeyNote(action, ikey))
 			return
 		}
-		dedup := "flow:" + f.org + "/" + f.slug + "/" + n.spec.ID
 		detail := map[string]any{"flow": f.name, "version": f.version, "node": n.spec.ID, "topic": m.Topic, "value": m.Value, "trigger": m.Trigger}
+		if ikey != "" {
+			detail["key"] = ikey
+		}
 		f.act(n, m, func(ctx context.Context) (map[string]Value, error) {
 			return nil, f.e.host.Incident(ctx, f.org, action, sev, title, dedup, detail)
 		}, action+" incident: "+title)
@@ -1249,6 +1260,10 @@ func (e *Engine) Inject(ctx context.Context, org, slug, node string, value Value
 }
 
 func testMsg(n *rnode, value Value, topic string) *Message {
+	if topic == "" && n.spec.Type == "inject" {
+		// the Manual inject node's own Topic setting, unless the caller gave one
+		topic, _ = n.spec.Settings["topic"].(string)
+	}
 	if topic == "" {
 		topic = nameOr(n.spec)
 	}
@@ -1296,4 +1311,35 @@ func flattenFields(dst map[string]Value, prefix string, obj map[string]any, dept
 			}
 		}
 	}
+}
+
+// IncidentFlowWide ends the key of a resolve without an incident key: it resolves every open incident of the flow.
+const IncidentFlowWide = "/*"
+
+// IncidentKey is the deduplication key of a flow's incident. Open and resolve nodes with the same incident key pair
+// up ("flow:<org>/<flow>#<key>"). Without a key an open node keys the incident by itself ("flow:<org>/<flow>/<node>",
+// as before incident keys existed, so incidents already open stay matched) and a resolve node resolves every open
+// incident of the flow (the key ends in IncidentFlowWide).
+func IncidentKey(org, slug, node, action, key string) string {
+	if r := []rune(key); len(r) > 200 {
+		key = string(r[:200])
+	}
+	switch {
+	case key != "":
+		return "flow:" + org + "/" + slug + "#" + key
+	case action == "resolve":
+		return "flow:" + org + "/" + slug + IncidentFlowWide
+	default:
+		return "flow:" + org + "/" + slug + "/" + node
+	}
+}
+
+func incidentKeyNote(action, key string) string {
+	switch {
+	case key != "":
+		return " (key " + key + ")"
+	case action == "resolve":
+		return " (every open incident of the flow)"
+	}
+	return ""
 }

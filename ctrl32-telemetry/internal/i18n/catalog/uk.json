@@ -2372,5 +2372,20 @@
  "Energy and reports": "Енергія та звіти",
  "consumption of meters, daily logs, Excel and PDF": "споживання лічильників, щоденні журнали, Excel і PDF",
  "Automation and AI": "Автоматизація та ШІ",
- "flows, alarms with notifications, AI assistants": "потоки, тривоги зі сповіщеннями, ШІ-асистенти"
+ "flows, alarms with notifications, AI assistants": "потоки, тривоги зі сповіщеннями, ШІ-асистенти",
+ "Incident key (open and resolve with the same key belong together)": "Ключ інциденту (відкриття й вирішення з однаковим ключем пов'язані)",
+ "Acknowledge": "Підтвердити",
+ "Reason for acknowledging this alarm:": "Причина підтвердження тривоги:",
+ "alarm acknowledged": "тривогу підтверджено",
+ "outside the allowed range": "поза дозволеним діапазоном",
+ "low battery (battery level at or below the limits)": "низький заряд батареї (рівень на межах або нижче)",
+ "power loss (value 0 = no power)": "втрата живлення (значення 0 = немає живлення)",
+ "door open (value other than 0)": "двері відчинено (значення, відмінне від 0)",
+ "communication loss (no new value)": "втрата зв'язку (немає нового значення)",
+ "Warning and action limits: the value at or above them.": "Межі попередження та дії: значення на них або вище.",
+ "Warning and action limits: the value at or below them.": "Межі попередження та дії: значення на них або нижче.",
+ "Warning and action limits in the unit of the datastream (%, V).": "Межі попередження та дії в одиниці потоку даних (%, V).",
+ "No limits: a value of 0 (false) raises the alarm, any other value clears it.": "Без меж: значення 0 (хибність) викликає тривогу, будь-яке інше значення її скидає.",
+ "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).": "Без меж: значення, відмінне від 0 (істина), викликає тривогу після затримки (скільки двері можуть лишатися відчиненими).",
+ "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.": "Межі в секундах без нового значення; порожньо = 1,5 × очікуваного інтервалу потоку даних. Нове значення скидає тривогу."
 }

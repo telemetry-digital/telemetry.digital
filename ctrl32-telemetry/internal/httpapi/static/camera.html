@@ -171,8 +171,12 @@ $('#bPrevSpan').onclick = prevSpan;
 $('#bZoomIn').onclick = () => ensurePlayer().zoomBy(1.25);
 $('#bZoomOut').onclick = () => ensurePlayer().zoomBy(1 / 1.25);
 $('#bZoomReset').onclick = () => ensurePlayer().zoomReset();
-$('#bSnap').onclick = () => {
+$('#bSnap').onclick = async () => {
+  // the player burns the privacy masks into the picture; a picture without them needs video.unmask and is audited
   const c = P && P.snapshot(); if (!c) return;
+  if (P.unmasked) {
+    try { await api('POST', `/api/v1/video/cameras/${ID}/picture-saved`, {unmasked: true, at: new Date(CUR || Date.now()).toISOString()}); } catch (x) { ctrl32.toast(x.message, 'bad'); return; }
+  }
   const a = document.createElement('a'); a.download = `${CAM.name}-${new Date(CUR || Date.now()).toISOString().replace(/[:.]/g, '-')}.png`; a.href = c.toDataURL('image/png'); a.click();
 };
 // sound: switching it on reconnects with the sound (the main stream); off reconnects without it

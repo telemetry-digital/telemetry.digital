@@ -2372,5 +2372,20 @@
  "Energy and reports": "Energia ja aruanded",
  "consumption of meters, daily logs, Excel and PDF": "arvestite tarbimine, päevalogid, Excel ja PDF",
  "Automation and AI": "Automatiseerimine ja AI",
- "flows, alarms with notifications, AI assistants": "vood, häired teavitustega, AI-assistendid"
+ "flows, alarms with notifications, AI assistants": "vood, häired teavitustega, AI-assistendid",
+ "Incident key (open and resolve with the same key belong together)": "Intsidendi võti (sama võtmega avamine ja lahendamine kuuluvad kokku)",
+ "Acknowledge": "Kinnita",
+ "Reason for acknowledging this alarm:": "Häire kinnitamise põhjus:",
+ "alarm acknowledged": "häire kinnitatud",
+ "outside the allowed range": "lubatud vahemikust väljas",
+ "low battery (battery level at or below the limits)": "aku tühjeneb (tase piiridel või allpool)",
+ "power loss (value 0 = no power)": "toitekatkestus (väärtus 0 = toide puudub)",
+ "door open (value other than 0)": "uks lahti (väärtus muu kui 0)",
+ "communication loss (no new value)": "side kadumine (uut väärtust pole)",
+ "Warning and action limits: the value at or above them.": "Hoiatus- ja tegevuspiirid: väärtus piiridel või kõrgemal.",
+ "Warning and action limits: the value at or below them.": "Hoiatus- ja tegevuspiirid: väärtus piiridel või madalamal.",
+ "Warning and action limits in the unit of the datastream (%, V).": "Hoiatus- ja tegevuspiirid andmevoo ühikus (%, V).",
+ "No limits: a value of 0 (false) raises the alarm, any other value clears it.": "Piirideta: väärtus 0 (väär) käivitab häire, iga muu väärtus tühistab selle.",
+ "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).": "Piirideta: väärtus muu kui 0 (tõene) käivitab häire pärast viivitust (kui kaua võib uks lahti olla).",
+ "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.": "Piirid sekundites ilma uue väärtuseta; tühi = 1,5 × andmevoo oodatav intervall. Uus väärtus tühistab häire."
 }

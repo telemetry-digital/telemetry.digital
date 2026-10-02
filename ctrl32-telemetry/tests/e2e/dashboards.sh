@@ -74,6 +74,11 @@ req POST /api/v1/dashboards "{\"name\":\"Bad $SUF\",\"spec\":{\"widgets\":[{\"ty
 req POST /api/v1/dashboards "{\"name\":\"Bad $SUF\",\"spec\":{\"version\":1,\"kind\":\"dashboard\",\"layout\":{\"type\":\"grid\",\"row_height\":96},\"range\":\"6h\",\"refresh_s\":30,\"widgets\":[{\"id\":\"a\",\"type\":\"chart\",\"geometry\":{\"x\":0,\"y\":0,\"w\":6,\"h\":3},\"bindings\":{\"datastreams\":[\"nonsense\"]},\"params\":{}}]},\"reason\":\"e2e\"}" >/dev/null; check "binding ids validated" "$(st)" 400
 req POST /api/v1/dashboards "{\"name\":\"Empty $SUF\",\"spec\":{\"version\":1,\"kind\":\"dashboard\",\"layout\":{\"type\":\"grid\",\"row_height\":96},\"range\":\"6h\",\"refresh_s\":30,\"widgets\":[{\"id\":\"a\",\"type\":\"chart\",\"geometry\":{\"x\":0,\"y\":0,\"w\":6,\"h\":3},\"bindings\":{\"datastreams\":[]},\"params\":{}}]},\"reason\":\"e2e\"}" >/dev/null; check "widget without a datastream is saved (chosen later)" "$(st)" 201
 req DELETE "/api/v1/dashboards/empty-$SUF?reason=e2e" >/dev/null; check "empty dashboard retired" "$(st)" 200
+EMPTY="{\"version\":1,\"kind\":\"dashboard\",\"layout\":{\"type\":\"grid\",\"row_height\":96},\"range\":\"24h\",\"refresh_s\":30,\"widgets\":[]}"
+req POST /api/v1/dashboards "{\"name\":\"Blank $SUF\",\"spec\":$EMPTY,\"reason\":\"e2e\"}" >/dev/null; check "\"Dashboard — empty\" can be created" "$(st)" 201
+req PUT "/api/v1/dashboards/blank-$SUF" "{\"spec\":{\"version\":1,\"widgets\":[{\"id\":\"a\",\"type\":\"text\",\"geometry\":{\"x\":0,\"y\":0,\"w\":4,\"h\":2},\"bindings\":{},\"params\":{}}]},\"reason\":\"e2e\"}" >/dev/null; check "a widget added" "$(st)" 200
+req PUT "/api/v1/dashboards/blank-$SUF" "{\"spec\":$EMPTY,\"reason\":\"e2e: every widget removed\"}" >/dev/null; check "saved after removing every widget" "$(st)" 200
+req DELETE "/api/v1/dashboards/blank-$SUF?reason=e2e" >/dev/null; check "blank dashboard retired" "$(st)" 200
 req POST /api/v1/dashboards "{\"name\":\"Bad $SUF\",\"spec\":{\"widgets\":[{\"type\":\"blink\"}]},\"reason\":\"e2e\"}" >/dev/null; check "unknown widget rejected" "$(st)" 400
 req POST /api/v1/dashboards "{\"name\":\"Hala $SUF\",\"spec\":$SPEC,\"reason\":\"e2e\"}" >/dev/null; check "duplicate slug rejected" "$(st)" 409
 SPEC2=$(echo "$SPEC" | sed 's/"range":"6h"/"range":"24h"/')

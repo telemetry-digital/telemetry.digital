@@ -2372,5 +2372,20 @@
  "Energy and reports": "Energi og rapporter",
  "consumption of meters, daily logs, Excel and PDF": "forbrug på målere, daglige logs, Excel og PDF",
  "Automation and AI": "Automatisering og AI",
- "flows, alarms with notifications, AI assistants": "flows, alarmer med notifikationer, AI-assistenter"
+ "flows, alarms with notifications, AI assistants": "flows, alarmer med notifikationer, AI-assistenter",
+ "Incident key (open and resolve with the same key belong together)": "Hændelsesnøgle (åbning og løsning med samme nøgle hører sammen)",
+ "Acknowledge": "Kvittér",
+ "Reason for acknowledging this alarm:": "Begrundelse for kvittering af alarmen:",
+ "alarm acknowledged": "alarm kvitteret",
+ "outside the allowed range": "uden for det tilladte område",
+ "low battery (battery level at or below the limits)": "lavt batteri (niveau på eller under grænserne)",
+ "power loss (value 0 = no power)": "strømsvigt (værdi 0 = ingen strøm)",
+ "door open (value other than 0)": "dør åben (værdi forskellig fra 0)",
+ "communication loss (no new value)": "kommunikationstab (ingen ny værdi)",
+ "Warning and action limits: the value at or above them.": "Advarsels- og handlingsgrænser: værdien på eller over dem.",
+ "Warning and action limits: the value at or below them.": "Advarsels- og handlingsgrænser: værdien på eller under dem.",
+ "Warning and action limits in the unit of the datastream (%, V).": "Advarsels- og handlingsgrænser i datastrømmens enhed (%, V).",
+ "No limits: a value of 0 (false) raises the alarm, any other value clears it.": "Ingen grænser: en værdi på 0 (falsk) udløser alarmen, enhver anden værdi ophæver den.",
+ "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).": "Ingen grænser: en værdi forskellig fra 0 (sand) udløser alarmen efter forsinkelsen (hvor længe døren må stå åben).",
+ "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.": "Grænser i sekunder uden ny værdi; tom = 1,5 × datastrømmens forventede interval. En ny værdi ophæver alarmen."
 }

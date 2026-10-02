@@ -2372,5 +2372,20 @@
  "Energy and reports": "Енергия и отчети",
  "consumption of meters, daily logs, Excel and PDF": "потребление на броячи, дневни записи, Excel и PDF",
  "Automation and AI": "Автоматизация и ИИ",
- "flows, alarms with notifications, AI assistants": "потоци, аларми с известия, AI асистенти"
+ "flows, alarms with notifications, AI assistants": "потоци, аларми с известия, AI асистенти",
+ "Incident key (open and resolve with the same key belong together)": "Ключ на инцидента (отваряне и разрешаване с един и същ ключ са свързани)",
+ "Acknowledge": "Потвърди",
+ "Reason for acknowledging this alarm:": "Причина за потвърждаване на алармата:",
+ "alarm acknowledged": "алармата е потвърдена",
+ "outside the allowed range": "извън разрешения диапазон",
+ "low battery (battery level at or below the limits)": "слаба батерия (ниво на или под границите)",
+ "power loss (value 0 = no power)": "отпадане на захранването (стойност 0 = няма захранване)",
+ "door open (value other than 0)": "отворена врата (стойност, различна от 0)",
+ "communication loss (no new value)": "загуба на комуникация (няма нова стойност)",
+ "Warning and action limits: the value at or above them.": "Граници за предупреждение и действие: стойността на или над тях.",
+ "Warning and action limits: the value at or below them.": "Граници за предупреждение и действие: стойността на или под тях.",
+ "Warning and action limits in the unit of the datastream (%, V).": "Граници за предупреждение и действие в единицата на потока от данни (%, V).",
+ "No limits: a value of 0 (false) raises the alarm, any other value clears it.": "Без граници: стойност 0 (невярно) задейства аларма, всяка друга стойност я изчиства.",
+ "No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).": "Без граници: стойност, различна от 0 (вярно), задейства аларма след закъснението (колко дълго вратата може да остане отворена).",
+ "Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.": "Граници в секунди без нова стойност; празно = 1,5 × очаквания интервал на потока от данни. Нова стойност изчиства алармата."
 }

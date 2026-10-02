@@ -67,6 +67,7 @@ var mcpExclusions = map[string]string{
 	"GET /api/v1/pwa-apps/{slug}/launch":                "used by the installed app window itself",
 	"GET /api/v1/i18n/{locale}":                         "the translation catalog of the web UI (large; the texts are in the pages)",
 	"GET /api/v1/branding/icon":                         "browser icon of the web UI",
+	"POST /api/v1/video/cameras/{id}/picture-saved":     "records a picture saved by the video player in the browser",
 	"GET /api/v1/public/{token}/hmi/objects/{slug}/svg": "graphic of a shared picture, fetched by the public page",
 }
 

@@ -126,3 +126,40 @@ func (s *Server) maskedExportAllowed(w http.ResponseWriter, r *http.Request, c c
 	}
 	return true
 }
+
+// pictureSaved records a picture saved from the player in the browser. The player burns the privacy masks into the
+// picture; a picture without them (the stream was opened with ?unmask=1) may be saved only with video.unmask and is
+// audited, like every other way the full picture of a masked camera leaves the server.
+func (s *Server) pictureSaved(w http.ResponseWriter, r *http.Request) {
+	org, ok := s.mustOrg(w, r)
+	if !ok {
+		return
+	}
+	c, ok := s.cameraRow(r.Context(), org, r.PathValue("id"))
+	if !ok {
+		writeErr(w, 404, "camera not found")
+		return
+	}
+	var in struct {
+		Unmasked bool   `json:"unmasked"`
+		At       string `json:"at"`
+	}
+	if err := decodeJSON(r, &in, 1024); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	masked := len(parseMasks(c.masks)) > 0
+	if !in.Unmasked || !masked {
+		writeJSON(w, 200, map[string]any{"masked": masked, "audited": false})
+		return
+	}
+	if !PrincipalFrom(r.Context()).Has("video.unmask") {
+		writeErr(w, 403, "this camera has privacy masks: saving its picture without them needs the permission video.unmask")
+		return
+	}
+	if len(in.At) > 40 {
+		in.At = in.At[:40]
+	}
+	s.audit(r, "video.unmask", "camera", c.id, nil, map[string]any{"camera": c.name, "path": r.URL.Path, "at": in.At, "saved": true}, "picture saved without privacy masks")
+	writeJSON(w, 200, map[string]any{"masked": false, "audited": true})
+}

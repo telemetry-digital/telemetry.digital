@@ -26,7 +26,7 @@ body:json {
 docs {
   Create an alarm rule (new version)
   
-  A rule of the same type on the same datastream is superseded (its `valid_to` is set); the new row carries the next version number. With the policy `four_eyes_limits` the call answers 202 with a pending change request instead.
+  A rule of the same type on the same datastream is superseded (its `valid_to` is set); the new row carries the next version number. With the policy `four_eyes_limits` the call answers 202 with a pending change request instead. Types: `high`/`low` (value at or above/below the limits), `low_battery` (battery level at or below the limits), `power_loss` (value 0 = power lost; no limits), `door_open` (value other than 0 = open; no limits), `comm_loss` (no new value for longer than the limits in seconds; without limits 1.5 × the expected interval). `sensor_fault` is refused (devices do not report sensor faults). The condition must hold for `delay_seconds` before the alarm is raised.
   
   Requires permission `config.write`.
 }

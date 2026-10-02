@@ -297,6 +297,7 @@ func runServer(ctx context.Context, cfg *config.Config, cfgPath string, logger *
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error { return br.Serve(gctx) })
 	g.Go(func() error { detector.Run(gctx); return nil })
+	g.Go(func() error { engine.Run(gctx); return nil }) // alarm delays and comm_loss rules
 	g.Go(func() error { con.Run(gctx); return nil })
 	g.Go(func() error { repl.Run(gctx, 10*time.Second); return nil })
 	g.Go(func() error { flowEngine.Start(gctx); return nil })
