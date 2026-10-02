@@ -884,7 +884,9 @@ func (f *flow) act(n *rnode, m *Message, do func(ctx context.Context) (map[strin
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		res, err := do(ctx)
-		f.enqueue(qitem{fn: func() {
+		// the result never goes through the bounded message queue: it must not be dropped, and the worker must never
+		// block on the flow goroutine (which may be waiting for a free slot of this node, below)
+		f.post(func() {
 			if err != nil {
 				f.fail(n, m, err)
 				return
@@ -894,12 +896,20 @@ func (f *flow) act(n *rnode, m *Message, do func(ctx context.Context) (map[strin
 				setField(m, "msg."+k, v)
 			}
 			f.emit(n, 0, m, false)
-		}})
+		})
+	}
+	// Backpressure instead of a drop: a message the flow accepted is not lost here when the action is slower than
+	// the flow (a burst of values towards a database write). While the flow goroutine waits, new messages collect in
+	// the flow's queue, which is the one place that drops and counts under overload (QueueSize).
+	select {
+	case n.work <- job:
+		return
+	default:
 	}
 	select {
 	case n.work <- job:
-	default:
-		f.fail(n, m, errors.New("too many actions waiting at this node; message dropped"))
+	case <-f.quit:
+		f.fail(n, m, errors.New("flow stopped; action not run"))
 	}
 }
 

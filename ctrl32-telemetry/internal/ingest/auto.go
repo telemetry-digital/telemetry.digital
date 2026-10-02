@@ -284,6 +284,7 @@ func (in *Ingest) StoreState(ctx context.Context, org, datastreamID, key string,
 		s := strconv.FormatFloat(*num, 'g', -1, 64)
 		numStr = &s
 	}
+	in.ensureMonths(ctx, "observation", o.MeasuredAt)
 	if err := in.pool.QueryRow(ctx, `
 		INSERT INTO core.observation (org_id, datastream_id, measured_at, value, value_json, quality, time_source, decoder_version)
 		VALUES ($1::uuid, $2::uuid, $3, $4::numeric, $5::jsonb, 'ok', 'server', 'ha-discovery-v1') RETURNING id::text, received_at`,

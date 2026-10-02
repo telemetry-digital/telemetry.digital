@@ -1,6 +1,7 @@
 package config
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -33,7 +34,8 @@ func TestPushListenerNeedsTLSOnInternet(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if c.Video.StorageDir != "/var/lib/x/video" || c.Video.MaxDiskGB != 50 {
+	// the default sits next to the reports directory, with the separators of the platform (\var\lib\x\video on Windows)
+	if c.Video.StorageDir != filepath.FromSlash("/var/lib/x/video") || c.Video.MaxDiskGB != 50 {
 		t.Fatalf("video defaults %+v", c.Video)
 	}
 }

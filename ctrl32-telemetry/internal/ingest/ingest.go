@@ -93,6 +93,7 @@ func (in *Ingest) StoreDerived(ctx context.Context, org, datastreamID, key strin
 	ctx = context.WithValue(ctx, derivedDepthKey{}, depth+1)
 	o := Observation{OrgID: org, DatastreamID: datastreamID, Key: key, MeasuredAt: at.UTC(), Quality: "ok", timeSource: "server"}
 	o.Value = &value
+	in.ensureMonths(ctx, "observation", o.MeasuredAt)
 	if err := in.pool.QueryRow(ctx, `
 		INSERT INTO core.observation (org_id, datastream_id, measured_at, value, quality, time_source, decoder_version)
 		VALUES ($1::uuid, $2::uuid, $3, $4::numeric, 'ok', 'server', 'rule-v1') RETURNING id::text, received_at`,
@@ -160,6 +161,9 @@ func (in *Ingest) Start() error {
 		if err != nil {
 			return fmt.Errorf("subscribe %s: %w", s.filter, err)
 		}
+	}
+	if in.pool != nil {
+		go in.partitionUpkeep()
 	}
 	return nil
 }
@@ -278,6 +282,16 @@ func (in *Ingest) IngestTelemetryResult(ctx context.Context, dev *broker.Device,
 			msg := "unknown keys: " + strings.Join(ks, ",")
 			decodeErr = &msg
 		}
+	}
+
+	// backdated readings need the partition of their month (outside the transaction: creating it is DDL)
+	in.ensureMonths(ctx, "raw_message", time.Now())
+	if len(rows) > 0 {
+		times := make([]time.Time, len(rows))
+		for i := range rows {
+			times[i] = rows[i].MeasuredAt
+		}
+		in.ensureMonths(ctx, "observation", times...)
 	}
 
 	tx, err := in.pool.Begin(ctx)
