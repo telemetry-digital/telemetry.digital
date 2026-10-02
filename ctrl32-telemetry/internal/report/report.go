@@ -358,6 +358,28 @@ func (e *Engine) Render(ctx context.Context, orgID string, d Data, assets map[st
 	return &Result{Record: rec, PDF: pdf, Template: t}, nil
 }
 
+// RenderBuiltin compiles the built-in template of d.Kind and stores nothing: for documents that must not stay on the
+// server (a camera inventory with passwords, spec 028) and for the command line. Organization overrides are not used,
+// so the marking of the built-in template cannot be edited away.
+func (e *Engine) RenderBuiltin(ctx context.Context, orgID string, d Data, assets map[string][]byte, generatedBy string) ([]byte, error) {
+	t, err := BuiltIn(d.Kind)
+	if err != nil {
+		return nil, err
+	}
+	if len(d.Rows) > MaxRows {
+		d.Rows = d.Rows[:MaxRows]
+	}
+	d.GeneratedAt = time.Now().UTC().Format(time.RFC3339)
+	d.GeneratedBy = generatedBy
+	d.Product = defaultProduct
+	if e.Product != nil && orgID != "" {
+		if p := e.Product(ctx, orgID); p != "" {
+			d.Product = p
+		}
+	}
+	return e.compile(ctx, t.Body, d, assets)
+}
+
 // Preview compiles arbitrary template source with sample data (nothing is stored). An optional logo asset is passed through.
 func (e *Engine) Preview(ctx context.Context, body, kind, locale string, logo []byte, logoName string) ([]byte, error) {
 	d := SampleData(kind, locale)

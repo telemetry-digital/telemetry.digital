@@ -404,6 +404,43 @@ For a phone that should show only the cameras, create an own app under *Settings
 preset (start page: live view, menu: Cameras) or the **Video wall** preset (start page: one wall) and install it from
 `/app/{address}` — see `docs/pwa.md`.
 
+## Camera list: export and import (spec 028)
+
+*Camera management → Camera list: Excel · CSV · PDF* writes every setting of the cameras the user may see into one
+file — name, location, group, connection, make (recognised from the addresses), IP address, stream, ONVIF and snapshot
+addresses (never with credentials), user name, recording, events, retention, motion detection, privacy masks and motion
+zones (JSON), sound, order, a free note per camera, the floor plans with a pin and the state. Excel has the sheets
+*Cameras* (with a header: organization, server, time, user, version) and *Read me*; CSV is UTF-8 with a byte-order
+mark and semicolons (Excel with a Slovak or Czech list separator opens it in columns; header lines start with `#`); the
+PDF has a card per camera and is stored as a report.
+
+**Passwords** (camera passwords and the secrets of relays) are only in *With passwords…*: permission
+`video.credentials_export` (built-in `org_admin` only) besides `video.manage`, the user's password (and authenticator
+code) again, a reason; at most 3 at once and then one a minute; never with an API token or an AI assistant. The file is
+marked *CONFIDENTIAL — contains passwords*; a PDF with passwords is not stored; the export is audited as
+`video.credentials_export`.
+
+**Import** (*Import…*, Excel or CSV with the same columns, at most 2 MB and 1000 rows; *Template* gives the columns with
+two example rows whose id starts with `#`): the server checks every row with the rules of the camera form and shows a
+preview — new, update (with the changed settings), restore (a removed camera by its id), unchanged, skipped, error.
+*Import* with a reason stores all rows in one transaction or none. Cameras are matched by id, else by name (and ip when
+several have the name); a free id from another server is kept (dashboards, walls and pins keep working). An empty cell
+keeps the stored value, `-` clears a text, an empty password keeps the stored one; `make` with `ip` fills in the
+addresses of a camera without a main stream, a different `ip` moves every address of the camera. A push camera keeps
+the relay secret of the file, or gets a new one (then *New secret* gives the relay configuration). Without a licence,
+cameras beyond 4 enabled are imported disabled. Changed cameras connect at once. Audited as `video.import` and per
+camera (`camera.create|update|restore`, reason "import: …").
+
+**Command line** (when the web interface is not available):
+
+```sh
+ctrl32-telemetry cameras export -org SLUG -file cameras.xlsx [-format xlsx|csv|pdf] [-passwords -reason "why"]
+ctrl32-telemetry cameras import -org SLUG -file cameras.xlsx -reason "why" [-dry-run] [-no-update] [-no-create]
+```
+
+The same checks and audit (actor `cli cameras … (OS user)`); a running server connects imported cameras within a
+minute, a stopped one when it starts.
+
 ## Permissions and audit
 
 | Permission | Allows | Built-in roles |
@@ -415,6 +452,7 @@ preset (start page: live view, menu: Cameras) or the **Video wall** preset (star
 | `video.evidence` | hold recordings as evidence, signed evidence packages | engineer, org_admin |
 | `video.unmask` | see and export pictures without privacy masks | org_admin |
 | `video.audio` | hear camera sound live and recorded, export it | org_admin |
+| `video.credentials_export` | export the camera list with passwords and relay secrets (spec 028) | org_admin |
 | `display.control` | send cameras and commands to displays | operator, engineer, org_admin |
 | `display.manage` | pair, change and disconnect displays | engineer, org_admin |
 

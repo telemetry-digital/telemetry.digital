@@ -24,6 +24,20 @@ func SampleData(kind, locale string) Data {
 	case "audit":
 		d.Columns = []Column{{"seq", "#", "right"}, {"ts", "Time", "left"}, {"actor_name", "Actor", "left"}, {"action", "Action", "left"}, {"entity_type", "Entity", "left"}, {"reason", "Reason", "left"}, {"hash", "Hash", "left"}}
 		d.Rows = []map[string]any{{"seq": "1", "ts": now.Format(time.RFC3339), "actor_name": "admin", "action": "alarm_rule.update", "entity_type": "alarm_rule", "reason": "limits per storage class", "hash": strings.Repeat("cd", 8) + "…"}}
+	case "cameras":
+		d.Title, d.Subtitle = "Camera inventory (preview)", "Sample organization · 2 cameras"
+		d.Scope = map[string]any{"cameras": 2, "confidential": false}
+		d.Summary = map[string]any{"cameras": 2, "enabled": 2}
+		for _, k := range []string{"id", "name", "location", "group", "enabled", "connection", "make", "ip", "main_stream_url", "sub_stream_url", "transport", "username", "onvif_url", "recording", "retention_days", "note", "state"} {
+			d.Columns = append(d.Columns, Column{k, k, "left"})
+		}
+		d.Rows = []map[string]any{
+			{"id": "0199a000-0000-7000-8000-000000000001", "name": "Gate", "location": "Main entrance", "group": "Yard", "enabled": "yes", "connection": "pull", "make": "hikvision", "ip": "192.168.1.64",
+				"main_stream_url": "rtsp://192.168.1.64:554/Streaming/Channels/101", "sub_stream_url": "rtsp://192.168.1.64:554/Streaming/Channels/102", "transport": "auto", "username": "admin",
+				"onvif_url": "http://192.168.1.64/onvif/device_service", "recording": "continuous", "retention_days": "14", "note": "Mast by the gate", "state": "online"},
+			{"id": "0199a000-0000-7000-8000-000000000002", "name": "Warehouse door", "location": "Hall B", "enabled": "yes", "connection": "pull", "make": "tapo", "ip": "192.168.1.70",
+				"main_stream_url": "rtsp://192.168.1.70:554/stream1", "transport": "auto", "username": "camera-account", "recording": "events", "retention_days": "7", "state": "online"},
+		}
 	default:
 		d.Columns = []Column{{"measured_at", "Measured", "left"}, {"received_at", "Received", "left"}, {"value", "Value", "right"}, {"quality", "Quality", "left"}}
 		for i := 0; i < 24; i++ {

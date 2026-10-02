@@ -1,7 +1,8 @@
-// Package xlsx writes a single-sheet Office Open XML workbook (.xlsx) without a third-party library: a zip of the few
-// XML parts Excel, LibreOffice and Google Sheets need. Cells are text (inline strings) or numbers; a row can be bold;
-// numbers carry a number format with a fixed count of decimals. Enough for tables exported from the application
-// (spec 023); not a general spreadsheet library.
+// Package xlsx writes Office Open XML workbooks (.xlsx) without a third-party library: a zip of the few XML parts
+// Excel, LibreOffice and Google Sheets need. Cells are text (inline strings) or numbers; a row can be bold; numbers
+// carry a number format with a fixed count of decimals. Read (read.go) takes the cell texts of the sheets of a
+// workbook back, for imports (spec 028). Enough for tables exported from the application (spec 023); not a general
+// spreadsheet library.
 package xlsx
 
 import (
@@ -36,23 +37,47 @@ type Sheet struct {
 	Widths []float64
 	// FreezeRows keeps the first rows visible when scrolling (the header).
 	FreezeRows int
+	// TextColumns formats the columns that have a width as text, so that what people type into them stays as typed
+	// (a password 0123 or an address is not turned into a number).
+	TextColumns bool
 }
 
-// Write writes the workbook.
-func Write(w io.Writer, sh Sheet) error {
+// Write writes a workbook with one sheet.
+func Write(w io.Writer, sh Sheet) error { return WriteBook(w, sh) }
+
+// WriteBook writes a workbook with the sheets in order (the first one is shown when the file is opened).
+func WriteBook(w io.Writer, sheets ...Sheet) error {
+	if len(sheets) == 0 {
+		sheets = []Sheet{{}}
+	}
 	zw := zip.NewWriter(w)
-	name := sheetName(sh.Name)
+	var types, list, rels strings.Builder
+	used := map[string]bool{}
+	for i, sh := range sheets {
+		n := i + 1
+		name := sheetName(sh.Name)
+		for k := 2; used[strings.ToLower(name)]; k++ {
+			name = sheetName(fmt.Sprintf("%s %d", trimRunes(sheetName(sh.Name), 27), k))
+		}
+		used[strings.ToLower(name)] = true
+		fmt.Fprintf(&types, `<Override PartName="/xl/worksheets/sheet%d.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`, n)
+		fmt.Fprintf(&list, `<sheet name="%s" sheetId="%d" r:id="rId%d"/>`, esc(name), n, n)
+		fmt.Fprintf(&rels, `<Relationship Id="rId%d" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet%d.xml"/>`, n, n)
+	}
+	fmt.Fprintf(&rels, `<Relationship Id="rId%d" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`, len(sheets)+1)
 	parts := []struct{ path, body string }{
 		{"[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`},
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>` + types.String() + `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`},
 		{"_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
 		{"xl/workbook.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="` + esc(name) + `" sheetId="1" r:id="rId1"/></sheets></workbook>`},
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>` + list.String() + `</sheets></workbook>`},
 		{"xl/_rels/workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`},
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` + rels.String() + `</Relationships>`},
 		{"xl/styles.xml", styles},
-		{"xl/worksheets/sheet1.xml", sheetXML(sh)},
+	}
+	for i, sh := range sheets {
+		parts = append(parts, struct{ path, body string }{fmt.Sprintf("xl/worksheets/sheet%d.xml", i+1), sheetXML(sh)})
 	}
 	for _, p := range parts {
 		f, err := zw.Create(p.path)
@@ -66,16 +91,16 @@ func Write(w io.Writer, sh Sheet) error {
 	return zw.Close()
 }
 
-// Bytes returns the workbook as bytes.
-func Bytes(sh Sheet) ([]byte, error) {
+// Bytes returns the workbook (one or more sheets) as bytes.
+func Bytes(sheets ...Sheet) ([]byte, error) {
 	var b bytes.Buffer
-	err := Write(&b, sh)
+	err := WriteBook(&b, sheets...)
 	return b.Bytes(), err
 }
 
-// Styles: 0 normal, 1 bold, 2..8 number with 0..6 decimals, 9..15 bold number with 0..6 decimals.
+// Styles: 0 normal, 1 bold, 2..8 number with 0..6 decimals, 9..15 bold number with 0..6 decimals, 16 text ("@").
 const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="6"><numFmt numFmtId="164" formatCode="0.0"/><numFmt numFmtId="165" formatCode="0.00"/><numFmt numFmtId="166" formatCode="0.000"/><numFmt numFmtId="167" formatCode="0.0000"/><numFmt numFmtId="168" formatCode="0.00000"/><numFmt numFmtId="169" formatCode="0.000000"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="16"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="1" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="167" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="168" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="169" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="1" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><xf numFmtId="164" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><xf numFmtId="165" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><xf numFmtId="166" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><xf numFmtId="167" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><xf numFmtId="168" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><xf numFmtId="169" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="6"><numFmt numFmtId="164" formatCode="0.0"/><numFmt numFmtId="165" formatCode="0.00"/><numFmt numFmtId="166" formatCode="0.000"/><numFmt numFmtId="167" formatCode="0.0000"/><numFmt numFmtId="168" formatCode="0.00000"/><numFmt numFmtId="169" formatCode="0.000000"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="17"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="1" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="167" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="168" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="169" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="1" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><xf numFmtId="164" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><xf numFmtId="165" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><xf numFmtId="166" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><xf numFmtId="167" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><xf numFmtId="168" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><xf numFmtId="169" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`
 
 func sheetXML(sh Sheet) string {
 	var b strings.Builder
@@ -89,7 +114,11 @@ func sheetXML(sh Sheet) string {
 			if w <= 0 {
 				continue
 			}
-			fmt.Fprintf(&b, `<col min="%d" max="%d" width="%s" customWidth="1"/>`, i+1, i+1, strconv.FormatFloat(math.Min(w, 120), 'f', 1, 64))
+			style := ""
+			if sh.TextColumns {
+				style = ` style="16"`
+			}
+			fmt.Fprintf(&b, `<col min="%d" max="%d" width="%s" customWidth="1"%s/>`, i+1, i+1, strconv.FormatFloat(math.Min(w, 120), 'f', 1, 64), style)
 		}
 		b.WriteString("</cols>")
 	}
@@ -140,11 +169,16 @@ func sheetName(s string) string {
 	if s == "" {
 		s = "Sheet1"
 	}
-	for utf8.RuneCountInString(s) > 31 {
-		_, n := utf8.DecodeLastRuneInString(s)
-		s = s[:len(s)-n]
+	return strings.TrimSpace(trimRunes(s, 31))
+}
+
+// trimRunes keeps at most n characters.
+func trimRunes(s string, n int) string {
+	for utf8.RuneCountInString(s) > n {
+		_, k := utf8.DecodeLastRuneInString(s)
+		s = s[:len(s)-k]
 	}
-	return strings.TrimSpace(s)
+	return s
 }
 
 // esc escapes text for XML and drops characters XML 1.0 does not allow.

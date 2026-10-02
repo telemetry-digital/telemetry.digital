@@ -74,6 +74,10 @@ var mcpExclusions = map[string]string{
 	"POST /api/v1/vpn/peers/{id}/grant":                 "opens network access into sites for a person; granted (and approved) by people in the browser",
 	"POST /api/v1/reports/{id}/signatures":              "an electronic signature is given by the person, with the password again, in the browser",
 	"POST /api/v1/audit/reviews":                        "a review of the audit trail is signed by the reviewer, with the password again, in the browser",
+	"POST /api/v1/video/inventory/credentials":          "exports camera passwords; needs the user's password (and authenticator code) again in the browser",
+	"GET /api/v1/video/inventory":                       "a file for people (Excel, CSV, PDF); assistants read the same settings with the camera list",
+	"GET /api/v1/video/inventory/template":              "an empty file for people to fill in",
+	"POST /api/v1/video/inventory/import":               "uploads a file from the user's computer; done in the browser or with the command line, after checking the preview",
 }
 
 // mcpExcluded gives the reason an operation is not offered to assistants ("" = offered).

@@ -1,0 +1,23 @@
+meta {
+  name: Camera inventory template
+  type: http
+  seq: 29
+}
+
+get {
+  url: {{baseUrl}}/api/v1/video/inventory/template
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~format: 
+}
+
+docs {
+  Camera inventory template
+  
+  The columns of the inventory with two example rows (their id starts with #, so they are not imported).
+  
+  Requires permission `video.manage`.
+}

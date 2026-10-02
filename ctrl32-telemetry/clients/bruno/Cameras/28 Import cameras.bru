@@ -1,0 +1,27 @@
+meta {
+  name: Import cameras
+  type: http
+  seq: 28
+}
+
+post {
+  url: {{baseUrl}}/api/v1/video/inventory/import
+  body: multipartForm
+  auth: inherit
+}
+
+body:multipart-form {
+  apply: 
+  create: 
+  file: @file()
+  reason: 
+  update: 
+}
+
+docs {
+  Import cameras
+  
+  multipart/form-data. An inventory (Excel or CSV, at most 2 MB and 1000 rows) is checked row by row: matched by id, else by name (and ip); create, update, restore (a removed camera by its id), unchanged, skip or error with the messages. Without apply the plan is returned and nothing changes; with apply=1 and a reason it is stored in one transaction, all rows or none (422 `rows_invalid` with the plan when a row has an error). Never deletes. An empty cell keeps the value, an empty password keeps the stored one; make and ip fill in the addresses; a different ip moves the addresses. Without a license the cameras beyond 4 enabled are imported disabled. Audited: video.import and camera.create/update/restore per camera.
+  
+  Requires permission `video.manage`.
+}

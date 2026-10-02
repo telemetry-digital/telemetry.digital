@@ -97,6 +97,8 @@ func main() {
 		err = cmdCameraRelay(args)
 	case "verify-evidence":
 		err = cmdVerifyEvidence(args)
+	case "cameras":
+		err = cmdCameras(args)
 	case "version":
 		// the server agent reads "released YYYY-MM-DD" before installing an update (licence updates_until)
 		if d := release.String(); d != "" {
@@ -119,7 +121,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: ctrl32-telemetry <serve|agent|migrate|audit verify|service <action>|admin bootstrap|admin reset-password|admin seed-dashboard|dev seed|replica attach|status|promote|camera-relay|verify-evidence|version> [-config path]")
+	fmt.Fprintln(os.Stderr, "usage: ctrl32-telemetry <serve|agent|migrate|audit verify|service <action>|admin bootstrap|admin reset-password|admin seed-dashboard|dev seed|replica attach|status|promote|camera-relay|cameras export|cameras import|verify-evidence|version> [-config path]")
 }
 
 func loadConfig(args []string) (*config.Config, string, error) {

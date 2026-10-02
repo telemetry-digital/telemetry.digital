@@ -323,6 +323,56 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   // (run with ONLY=video-manage-limit while no licence is installed; with a licence the count is not shown)
   await page("video-manage-limit", "/video/manage", { wait: 3500, clip: "js:(() => { const a = document.querySelector('.page-head'), b = document.querySelector('#cams'); if (!a || !b || document.querySelector('#camLimit').hidden) return null; return { scrollIntoView() {}, getBoundingClientRect() { const r1 = a.getBoundingClientRect(), r2 = b.getBoundingClientRect(); return { x: r1.x, y: r1.y, width: r2.right - r1.x, height: r2.bottom - r1.y }; } }; })()", pad: 8 });
 
+  // ---- camera list: export and import (spec 028). Nothing is imported: the preview only checks the file.
+  // the buttons above the camera table with the page head and the first rows
+  await page("video-camera-list", "/video/manage", { wait: 3500, pad: 8, clip: "js:(() => { const a = document.querySelector('.page-head'), b = document.querySelector('#cams tbody tr:nth-child(5)'); if (!a || !b) return null; return { scrollIntoView() {}, getBoundingClientRect() { const r1 = a.getBoundingClientRect(), r2 = b.getBoundingClientRect(), t = document.querySelector('#cams').closest('.table-wrap').getBoundingClientRect(); return { x: r1.x, y: r1.y, width: t.right - r1.x, height: r2.bottom - r1.y }; } }; })()" });
+  // the export with passwords: the dialog with the warning (the password field stays empty)
+  await page("video-camera-list-passwords", "/video/manage", { wait: 3000, click: "#invCred", clip: "#credDlg", pad: 0, allowErrors: true });
+  // an import file as people make it from an export: a new ip, a longer retention, a new camera by make and ip, one
+  // unchanged row; and the same with a row that has an error
+  const camId = (n) => (cams.find((c) => c.name === n) || {}).id || "";
+  const impCSV = (withError) => ["id;name;ip;make;username;retention_days;location",
+    `${camId("Hall 1")};Hall 1;10.20.0.31;;;;`, `${camId("Gate")};Gate;;;;30;`, `${camId("Gatehouse")};Gatehouse;;;;;`,
+    ";Warehouse door;192.168.1.70;tapo;camera-account;14;Hall B"].concat(withError ? [";Loading bay;;;;0;Dock"] : []).join("\n") + "\n";
+  const chooseFile = (csv) => `(() => { document.querySelector('#invImport').click(); const i = document.querySelector('#impForm').file; const dt = new DataTransfer(); dt.items.add(new File([${JSON.stringify(csv)}], 'cameras.csv', {type: 'text/csv'})); i.files = dt.files; i.dispatchEvent(new Event('change')); return true; })()`;
+  if (wanted("video-camera-import")) {
+    await go("/video/manage", 3000); await ev(chooseFile(impCSV(false))); await sleep(3000);
+    await ev("document.querySelector('#impForm').reason.value = 'cameras restored after the server was replaced'; true");
+    await shot("video-camera-import-preview", { clip: "#impDlg", pad: 0 });
+    await go("/video/manage", 3000); await ev(chooseFile(impCSV(true))); await sleep(3000);
+    await shot("video-camera-import-errors", { clip: "#impDlg", pad: 0, allowErrors: true });
+  }
+  // the exported Excel file, drawn as a spreadsheet grid from the same export (CSV has the same cells): the header
+  // block, the column names and the first cameras of the sheet Cameras
+  if (wanted("video-camera-list-excel")) {
+    await go("/video/manage", 2000);
+    const text = (await ev("fetch('/api/v1/video/inventory?format=csv').then(r => r.text())")) || "";
+    const split = (l) => { const o = []; let cur = "", q = false; for (const ch of l) { if (ch === '"') { q = !q; continue; } if (ch === ";" && !q) { o.push(cur); cur = ""; } else cur += ch; } o.push(cur); return o; };
+    const lines = text.replace(/^﻿/, "").split(/\r?\n/).filter(Boolean);
+    const meta = lines.filter((l) => /^"?#/.test(l)).map((l) => { const t = l.replace(/^"?# /, "").replace(/"$/, ""); const i = t.indexOf(": "); return [t.slice(0, i), t.slice(i + 2)]; });
+    const rows = lines.filter((l) => !/^"?#/.test(l)).map(split);
+    const widths = [270, 130, 120, 110, 64, 84, 80, 90, 300, 300, 70];
+    const grid = [...meta, [], ...rows.slice(0, 14)];
+    const head = meta.length + 2;
+    const esc = (v) => String(v || "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+    let t = '<table><colgroup><col style="width:42px">' + widths.map((w) => `<col style="width:${w}px">`).join("") + "</colgroup>";
+    t += '<tr class="hd"><th></th>' + widths.map((w, i) => `<th>${"ABCDEFGHIJK"[i]}</th>`).join("") + "</tr>";
+    grid.forEach((r, i) => { t += `<tr${i + 1 === head ? ' class="cols"' : ""}><th>${i + 1}</th>` + widths.map((w, c) => { const v = r[c] || ""; const b = (i < meta.length && c === 0) || i + 1 === head; const n = /^\d+$/.test(v) && i + 1 > head; return `<td class="${b ? "b" : ""}${n ? " n" : ""}">${esc(v)}</td>`; }).join("") + "</tr>"; });
+    t += "</table>";
+    const css = "body{margin:0;font:13px Calibri,Carlito,'Segoe UI',Arial,sans-serif;background:#fff;color:#000}" +
+      ".bar{display:flex;gap:10px;align-items:center;padding:7px 12px;border-bottom:1px solid #d4d4d4;background:#f3f3f3}.bar b{font-weight:600}" +
+      ".fx{padding:5px 12px;border-bottom:1px solid #d4d4d4;color:#333}.fx span{display:inline-block;width:60px;color:#666;border-right:1px solid #d4d4d4;margin-right:10px}" +
+      "table{border-collapse:collapse;table-layout:fixed}td,th{border:1px solid #e1e1e1;height:21px;padding:0 5px;white-space:nowrap;overflow:hidden;text-align:left}" +
+      "th{background:#f3f3f3;color:#555;font-weight:400;text-align:center}td.b{font-weight:700}td.n{text-align:right}tr.cols td{border-bottom:2px solid #9a9a9a}" +
+      ".tabs{position:fixed;bottom:0;left:0;right:0;display:flex;gap:2px;padding:0 12px;border-top:1px solid #d4d4d4;background:#f3f3f3}.tabs span{padding:6px 16px;color:#444}" +
+      ".tabs span.on{background:#fff;font-weight:600;border-bottom:2px solid #217346;color:#217346}";
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>cameras.xlsx</title><style>${css}</style></head><body>` +
+      `<div class="bar"><b>cameras_demo.xlsx</b><span>— the sheet Cameras of the exported file</span></div><div class="fx"><span>A${head}</span>id</div>${t}` +
+      '<div class="tabs"><span class="on">Cameras</span><span>Read me</span></div></body></html>';
+    await send("Page.navigate", { url: "data:text/html;charset=utf-8," + encodeURIComponent(html) }); await sleep(1000);
+    await shot("video-camera-list-excel");
+  }
+
   // ---- VPN (System → VPN). Needs the server agent; on a PC its VPN simulation ([agent] vpn_simulate) and, for the
   // site, a licence; the demo content comes from deploy/dev/demo/docs.py. The simulation's note and badge are hidden
   // on the pictures (they describe the development PC, not the product). Two peers are created through the dialog to

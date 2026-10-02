@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sync"
 	"time"
@@ -163,7 +164,49 @@ func (m *Manager) Run(ctx context.Context) error {
 		case <-t.C:
 			m.Retention(ctx)
 			m.checkHealth(ctx)
+			m.resync(ctx)
 		}
+	}
+}
+
+// resync applies cameras changed in the database by someone else than this server — the command line import of a
+// camera inventory (spec 028) while the server runs: new, changed, enabled, disabled or removed cameras.
+func (m *Manager) resync(ctx context.Context) {
+	rows, err := m.pool.Query(ctx, `SELECT id::text FROM core.camera WHERE removed_at IS NULL`)
+	if err != nil {
+		return
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	rows.Close()
+	live := map[string]bool{}
+	for _, id := range ids {
+		live[id] = true
+		cfg, ok := m.load(ctx, id)
+		m.mu.Lock()
+		c := m.cams[id]
+		m.mu.Unlock()
+		switch {
+		case !ok:
+		case c == nil && cfg.Enabled, c != nil && !reflect.DeepEqual(c.cfg, cfg):
+			m.Reload(ctx, id)
+		}
+	}
+	m.mu.Lock()
+	var gone []string
+	for id := range m.cams {
+		if !live[id] {
+			gone = append(gone, id)
+		}
+	}
+	m.mu.Unlock()
+	for _, id := range gone {
+		m.Reload(ctx, id)
 	}
 }
 

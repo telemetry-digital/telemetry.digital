@@ -1,0 +1,23 @@
+meta {
+  name: Camera inventory (export)
+  type: http
+  seq: 26
+}
+
+get {
+  url: {{baseUrl}}/api/v1/video/inventory
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~format: 
+}
+
+docs {
+  Camera inventory (export)
+  
+  Every setting of the cameras of the organization the caller may see, without passwords (spec 028): Excel (sheets Cameras and Read me), CSV (UTF-8 with BOM, semicolons) or PDF (a card per camera, stored as a report). The file imports back unchanged. Audited as export.read.
+  
+  Requires permission `video.manage`.
+}
