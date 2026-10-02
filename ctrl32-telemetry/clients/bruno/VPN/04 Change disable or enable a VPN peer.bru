@@ -1,0 +1,38 @@
+meta {
+  name: Change disable or enable a VPN peer
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/vpn/peers/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "device_id": "string",
+    "enabled": true,
+    "expires_at": "string",
+    "name": "string",
+    "note": "string",
+    "org_id": "string",
+    "reason": "string",
+    "subnets": [
+      "string"
+    ]
+  }
+}
+
+docs {
+  Change, disable or enable a VPN peer
+  
+  Fields that are present change. `expires_at` "" clears the expiry; enabling an expired peer needs a new expiry or none. New routed subnets and setting an expiry need the license; renaming, disabling, enabling and clearing never do.
+  
+  Requires permission `system.admin`.
+}

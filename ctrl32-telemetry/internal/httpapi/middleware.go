@@ -251,3 +251,14 @@ func (l *limiter) allow(key string) bool {
 	b.tokens--
 	return true
 }
+
+// peek reports whether key has a token left without taking it (limits that count failures only).
+func (l *limiter) peek(key string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	b, ok := l.bucket[key]
+	if !ok {
+		return true
+	}
+	return b.tokens+time.Since(b.last).Seconds()*l.rate >= 1
+}

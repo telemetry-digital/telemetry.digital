@@ -1,4 +1,4 @@
-# Stav práce (aktualizované 28. 9. 2026)
+# Stav práce (aktualizované 2. 10. 2026)
 
 ## Hotové (vo vetve `main`, otestované)
 
@@ -33,6 +33,7 @@
 | 0.62.0 | AI asistenti cez MCP: `/mcp` (Model Context Protocol) — celé API ako nástroje generované z OpenAPI (286 z 336 operácií v 55 nástrojoch, zvyšok vylúčený s dôvodom, test stráži každú novú operáciu), volania cez tie isté obslužné funkcie (oprávnenia, dôvod, audit „via MCP“); OAuth 2.1 pre vlastný konektor AI asistenta (registrácia, súhlas, PKCE, tokeny len pre /mcp, obnova, zrušenie) alebo API token (AI asistenti v termináli); predvolene vypnuté, *Nastavenia → AI asistenti*, *Môj účet → AI asistenti*; **čítanie cez AI zadarmo, zmeny cez AI s licenciou white labelingu** (bez nej len čítanie); migrácia 0043 (spec 022, ADR-0017, URS G-11, G-12) | unit, e2e `mcp` 87, headless `mcp`, skutočný AI asistent v termináli |
 | 0.63.0 | Tabuľka za obdobie (widget): hodnoty po miestnych hodinách/dňoch/týždňoch/mesiacoch/rokoch — min, max, priemer, začiatok, koniec, spotreba, vzorky, mimo limitov; riadky obdobia alebo datastreamy, súčet, limity, ◀ ▶; export do Excelu, CSV a PDF (audit, jazyk používateľa); napr. denný záznam teplôt liekov a mesačná spotreba elektromerov (spec 023, URS J-34, `docs/period-tables.md`) | unit, e2e `period_table` 40, headless `period_table` |
 | 0.63.1 | Inštalácia u zákazníka cez Cloudflare Tunnel (`install.ps1 -CloudflareToken`, `install.sh --cloudflare-token`: bez otvorených portov, profil internet; overené prihlásenie a živé video cez tunel), opravy `install.ps1` (náhodné heslá, UTF-8 BOM); Caddy importuje `caddy-sites/*.caddy`; MeshCentral na vzdialenú správu PC (`deploy/remote-management/meshcentral.sh`, `docs/remote-management.md`) | rýchly tunel s videom, suchý beh inštalátora, `caddy validate`, unit agent |
+| 0.64.0 | **Vlastná VPN (WireGuard, server ako hub), fáza 1 — vetva `feature/vpn`, nezlúčené, nenasadené.** *Systém → VPN*: účastníci troch druhov (technik, zariadenie, lokalita so smerovanými podsieťami), konfigurácia s QR kódom raz po opätovnom zadaní hesla (a TOTP), texty pre routery (Linux/RPi, OpenWrt, MikroTik), pravidlá prístupu „zdroje → cieľ : protokol/porty“ s predvoleným zákazom v tabuľke nftables `inet ctrl32_vpn` (atomická výmena, návrat pri chybe, preposielanie len keď ho pravidlo potrebuje), časovo obmedzený prístup s automatickým vypnutím, vypnutie a rotácia kľúča, audit každej zmeny; zadarmo 5 účastníkov (technici a zariadenia), s licenciou lokality, časové obmedzenie a viac účastníkov; fáza 0: kontrola, čo peer dosiahne (PostgreSQL v kontajneri cez preposielanie Dockera, SSH, UI) — uzavreté tabuľkou; migrácia 0044, ADR-0018, spec 024, `docs/vpn.md`; agent pre vývoj `vpn_simulate` | unit (`vpn` 10, `agent` 5 nových, `httpapi` 5 nových), e2e `vpn` 88 (proti simulácii agenta), headless `vpn` so snímkami; **neoverené na skutočnom Linuxe** (nft, `wg syncconf`, trasy) |
 | 0.63.2 | Úvodná stránka portálu = prihlásenie s krátkou ukážkou možností (Zariadenia a dáta, Dashboardy a SCADA, Video NVR, Energie a reporty, Automatizácia a AI; 19 jazykov), menu bez zaoblení | headless `front_page`, e2e `landing`, `i18n_auth` |
 
 Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (`tests/run-all.sh`) pre 0.54.0 (27. 9. 2026): všetko prešlo okrem 3 kontrol času NTP v `ops`, ktoré potrebujú internet (v tomto kontajneri nedostupný) — nesúvisí s kódom.
@@ -55,6 +56,7 @@ Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (
 
 ## Rozhodnutia
 
+- **2. 10. 2026: vlastná VPN (WireGuard), fáza 1** — server ako hub, pravidlá prístupu s predvoleným zákazom (nftables), len Linux (Windows fáza 2, cloudový hub fáza 3); zadarmo 5 účastníkov druhov technik a zariadenie, s licenciou (tá istá ako white labeling) neobmedzene, lokality so smerovanými podsieťami a časovo obmedzený prístup; bez licencie existujúci účastníci fungujú; správa len `system.admin` (správa po organizáciách až po oddelení správy servera a organizácie — rola `org_admin` dnes obsahuje `system.admin`) (ADR-0018).
 - **28. 9. 2026: AI asistenti cez MCP — čítanie zadarmo, zmeny platené** tou istou licenciou ako white labeling (99,- EUR
   jednorazovo, navždy; jeden nákup odomkne oboje); platia všetky zmeny cez MCP, webové rozhranie a REST API ostávajú
   zadarmo (ADR-0017, doplnok ADR-0016).

@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/exec"
 	"os/user"
@@ -25,6 +26,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/vpn"
 )
 
 // Unit and container names; paths are in paths.go (per operating system).
@@ -43,8 +46,6 @@ var (
 	domainRe  = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$`)
 	emailRe   = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 	versionRe = regexp.MustCompile(`^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$`)
-	nameRe    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9 ._-]{0,62}$`)
-	keyRe     = regexp.MustCompile(`^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$`)
 )
 
 // Server is the root-side process.
@@ -58,13 +59,20 @@ type Server struct {
 	pgDump      string     // Windows: path to pg_dump.exe (optional; found next to the binary or in Program Files)
 	pgContainer string     // Docker container of the bundled PostgreSQL
 	mu          sync.Mutex // one mutating operation at a time
+	// host access of the VPN operations (vpn.go): replaced by fakes in tests and by the simulation
+	exec          func(ctx context.Context, timeout time.Duration, name string, args ...string) (string, error)
+	simulate      bool
+	vpnHost       bool // the host can run the VPN (Linux); tests set it on any platform
+	localNets     func() []netip.Prefix
+	setForwarding func(on bool) error
 }
 
 func NewServer(socket, cfgPath, version, updateURL string, log *slog.Logger) *Server {
 	if updateURL == "" {
 		updateURL = "https://telemetry.digital/dl"
 	}
-	return &Server{socket: socket, cfgPath: cfgPath, version: version, updateURL: strings.TrimRight(updateURL, "/"), log: log, started: time.Now(), pgContainer: pgContainerDefault}
+	return &Server{socket: socket, cfgPath: cfgPath, version: version, updateURL: strings.TrimRight(updateURL, "/"), log: log, started: time.Now(), pgContainer: pgContainerDefault,
+		exec: run, localNets: vpn.LocalNets, setForwarding: setWGForwarding, vpnHost: !isWindows()}
 }
 
 // SetDBTools configures where the database tooling is (config [agent] pg_dump / pg_container).
@@ -90,28 +98,45 @@ func (a *Server) Serve(ctx context.Context) error {
 		}
 		_ = os.Chmod(a.socket, 0o660)
 	}
+	srv := &http.Server{Handler: a.routes(), ReadHeaderTimeout: 10 * time.Second}
+	go func() { <-ctx.Done(); _ = srv.Close(); _ = os.Remove(a.socket) }()
+	a.log.Info("agent listening", "socket", a.socket, "version", a.version)
+	if !a.simulate {
+		go a.runScheduler(ctx)
+	}
+	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
+}
+
+// routes is the closed list of operations (ADR-0012). The VPN simulation of development and tests (vpn_simulate)
+// serves only the VPN operations and refuses everything else, so it can never touch services, Caddy or updates.
+func (a *Server) routes() http.Handler {
 	mux := http.NewServeMux()
+	if a.simulate {
+		mux.HandleFunc("GET /status", a.hStatusSimulated)
+		mux.HandleFunc("GET /wireguard", a.hWireGuard)
+		mux.HandleFunc("PUT /wireguard", a.hSetWireGuard)
+		mux.HandleFunc("PUT /vpn", a.hApplyVPN)
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			writeErr(w, 501, "not available in the VPN simulation of the agent (vpn_simulate)")
+		})
+		return mux
+	}
 	mux.HandleFunc("GET /status", a.hStatus)
 	mux.HandleFunc("POST /restart", a.hRestart)
 	mux.HandleFunc("PUT /caddy", a.hCaddy)
 	mux.HandleFunc("GET /wireguard", a.hWireGuard)
 	mux.HandleFunc("PUT /wireguard", a.hSetWireGuard)
-	mux.HandleFunc("POST /wireguard/peers", a.hAddPeer)
-	mux.HandleFunc("DELETE /wireguard/peers/{id}", a.hRemovePeer)
+	mux.HandleFunc("PUT /vpn", a.hApplyVPN)
 	mux.HandleFunc("POST /update", a.hUpdate)
 	mux.HandleFunc("GET /backups", a.hBackups)
 	mux.HandleFunc("POST /backups", a.hCreateBackup)
 	mux.HandleFunc("DELETE /backups/{name}", a.hDeleteBackup)
 	mux.HandleFunc("PUT /backups/schedule", a.hBackupSchedule)
 	mux.HandleFunc("POST /replica/promote", a.hReplicaPromote)
-	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
-	go func() { <-ctx.Done(); _ = srv.Close(); _ = os.Remove(a.socket) }()
-	a.log.Info("agent listening", "socket", a.socket, "version", a.version)
-	go a.runScheduler(ctx)
-	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return err
-	}
-	return nil
+	return mux
 }
 
 // ---- helpers --------------------------------------------------------------------------------------
@@ -669,383 +694,6 @@ func (a *Server) hRestart(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "unknown unit")
 	}
 	a.log.Info("restart requested", "unit", in.Unit)
-}
-
-// ---- WireGuard ------------------------------------------------------------------------------------
-
-type wgStored struct {
-	Enabled    bool      `json:"enabled"`
-	ListenPort int       `json:"listen_port"`
-	Address    string    `json:"address"`
-	Endpoint   string    `json:"endpoint"`
-	DNS        string    `json:"dns"`
-	PublicKey  string    `json:"public_key"`
-	UpdatedAt  time.Time `json:"updated_at"`
-}
-
-type wgPeerStored struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	PublicKey    string    `json:"public_key"`
-	PresharedKey string    `json:"preshared_key"`
-	Address      string    `json:"address"`
-	CreatedAt    time.Time `json:"created_at"`
-	CreatedBy    string    `json:"created_by"`
-}
-
-func wgInstalled(ctx context.Context) bool {
-	_, err := run(ctx, 5*time.Second, "wg", "--version")
-	return err == nil
-}
-
-func (a *Server) wgLoad() (wgStored, []wgPeerStored) {
-	var st wgStored
-	_ = loadJSON(wgStateFile, &st)
-	peers := []wgPeerStored{}
-	_ = loadJSON(wgPeersFile, &peers)
-	return st, peers
-}
-
-func (a *Server) wgState(ctx context.Context) WireGuardState {
-	st, peers := a.wgLoad()
-	out := WireGuardState{Installed: wgInstalled(ctx), Enabled: st.Enabled, ListenPort: st.ListenPort, Address: st.Address, Endpoint: st.Endpoint, DNS: st.DNS, PublicKey: st.PublicKey, UpdatedAt: st.UpdatedAt, Peers: []WireGuardPeer{}}
-	if ip, _, err := net.ParseCIDR(st.Address); err == nil {
-		out.MQTT = ip.String() + ":1883"
-	}
-	live := map[string][]string{}
-	if out.Installed {
-		if dump, err := run(ctx, 5*time.Second, "wg", "show", "wg0", "dump"); err == nil {
-			out.Running = true
-			for i, l := range strings.Split(dump, "\n") {
-				f := strings.Split(l, "\t")
-				if i == 0 || len(f) < 8 {
-					continue
-				}
-				live[f[0]] = f
-			}
-		}
-	}
-	for _, p := range peers {
-		wp := WireGuardPeer{ID: p.ID, Name: p.Name, PublicKey: p.PublicKey, Address: p.Address, CreatedAt: p.CreatedAt, CreatedBy: p.CreatedBy}
-		if f, ok := live[p.PublicKey]; ok {
-			if f[2] != "(none)" {
-				wp.Endpoint = f[2]
-			}
-			if hs, _ := strconv.ParseInt(f[4], 10, 64); hs > 0 {
-				wp.LatestHandshake = time.Unix(hs, 0)
-				wp.Online = time.Since(wp.LatestHandshake) < 3*time.Minute
-			}
-			wp.RxBytes, _ = strconv.ParseInt(f[5], 10, 64)
-			wp.TxBytes, _ = strconv.ParseInt(f[6], 10, 64)
-		}
-		out.Peers = append(out.Peers, wp)
-	}
-	return out
-}
-
-func (a *Server) hWireGuard(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, a.wgState(r.Context()))
-}
-
-func wgConfFor(st wgStored, privateKey string, peers []wgPeerStored) string {
-	var b strings.Builder
-	b.WriteString("# ctrl32 telemetry — generated by the server agent; edit in the UI under System → WireGuard\n[Interface]\n")
-	b.WriteString("Address = " + st.Address + "\nListenPort = " + strconv.Itoa(st.ListenPort) + "\nPrivateKey = " + privateKey + "\n")
-	for _, p := range peers {
-		ip := p.Address
-		if !strings.Contains(ip, "/") {
-			ip += "/32"
-		}
-		b.WriteString("\n# " + strings.ReplaceAll(p.Name, "\n", " ") + "\n[Peer]\nPublicKey = " + p.PublicKey + "\nPresharedKey = " + p.PresharedKey + "\nAllowedIPs = " + ip + "\n")
-	}
-	return b.String()
-}
-
-func (a *Server) wgWriteConf(st wgStored, peers []wgPeerStored) error {
-	key := strings.TrimSpace(readFile(wgKeyFile))
-	if key == "" {
-		return errors.New("server key missing")
-	}
-	_ = os.MkdirAll(filepath.Dir(wgConfFile), 0o700)
-	return writeFileAtomic(wgConfFile, []byte(wgConfFor(st, key, peers)), 0o600)
-}
-
-// wgSync applies peer changes to the live interface without dropping tunnels.
-func (a *Server) wgSync(ctx context.Context) error {
-	stripped, err := run(ctx, 20*time.Second, "wg-quick", "strip", "wg0")
-	if err != nil {
-		return err
-	}
-	// Ubuntu confines wg with AppArmor: it may read files only under /etc/wireguard, never /tmp.
-	syncFile := filepath.Dir(wgConfFile) + "/wg0.sync.conf"
-	if err := writeFileAtomic(syncFile, []byte(stripped+"\n"), 0o600); err != nil {
-		return err
-	}
-	defer os.Remove(syncFile)
-	_, err = run(ctx, 20*time.Second, "wg", "syncconf", "wg0", syncFile)
-	return err
-}
-
-func (a *Server) hSetWireGuard(w http.ResponseWriter, r *http.Request) {
-	if isWindows() {
-		writeErr(w, 501, "WireGuard is not managed on Windows; set http.tls_cert and http.tls_key in config.toml")
-		return
-	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	var in WireGuardRequest
-	if err := decode(r, &in); err != nil {
-		writeErr(w, 400, "bad request: "+err.Error())
-		return
-	}
-	ctx := r.Context()
-	if in.ListenPort == 0 {
-		in.ListenPort = 51820
-	}
-	if in.ListenPort < 1 || in.ListenPort > 65535 {
-		writeErr(w, 400, "invalid port")
-		return
-	}
-	if in.Address == "" {
-		in.Address = "10.66.0.1/24"
-	}
-	ip, ipnet, err := net.ParseCIDR(strings.TrimSpace(in.Address))
-	if err != nil || ip.To4() == nil {
-		writeErr(w, 400, "address must be an IPv4 address with prefix, e.g. 10.66.0.1/24")
-		return
-	}
-	if ones, _ := ipnet.Mask.Size(); ones > 30 || ones < 8 {
-		writeErr(w, 400, "prefix must be between /8 and /30")
-		return
-	}
-	in.Endpoint = strings.TrimSpace(in.Endpoint)
-	if in.Endpoint != "" {
-		host, port, err := net.SplitHostPort(in.Endpoint)
-		if err != nil || host == "" {
-			writeErr(w, 400, "endpoint must be host:port")
-			return
-		}
-		if _, err := strconv.Atoi(port); err != nil {
-			writeErr(w, 400, "endpoint must be host:port")
-			return
-		}
-	} else {
-		cs := a.caddyState()
-		if cs.Domain != "" {
-			in.Endpoint = cs.Domain + ":" + strconv.Itoa(in.ListenPort)
-		}
-	}
-	in.DNS = strings.TrimSpace(in.DNS)
-	if in.DNS != "" && net.ParseIP(in.DNS) == nil {
-		writeErr(w, 400, "DNS must be an IP address")
-		return
-	}
-	if in.Enabled && !wgInstalled(ctx) {
-		a.log.Info("installing wireguard-tools")
-		if out, err := run(ctx, 4*time.Minute, "apt-get", "install", "-y", "-qq", "wireguard-tools"); err != nil {
-			writeErr(w, 500, "wireguard-tools could not be installed: "+firstLine(out))
-			return
-		}
-	}
-	st, peers := a.wgLoad()
-	if in.Enabled || st.PublicKey != "" {
-		if strings.TrimSpace(readFile(wgKeyFile)) == "" {
-			priv, err := run(ctx, 10*time.Second, "wg", "genkey")
-			if err != nil {
-				writeErr(w, 500, err.Error())
-				return
-			}
-			_ = os.MkdirAll(wgDir, 0o700)
-			if err := writeFileAtomic(wgKeyFile, []byte(priv+"\n"), 0o600); err != nil {
-				writeErr(w, 500, err.Error())
-				return
-			}
-		}
-		pub, err := runInput(ctx, strings.TrimSpace(readFile(wgKeyFile))+"\n", "wg", "pubkey")
-		if err != nil {
-			writeErr(w, 500, err.Error())
-			return
-		}
-		st.PublicKey = pub
-	}
-	st.Enabled, st.ListenPort, st.Address, st.Endpoint, st.DNS, st.UpdatedAt = in.Enabled, in.ListenPort, in.Address, in.Endpoint, in.DNS, time.Now()
-	if err := saveJSON(wgStateFile, st, 0o600); err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	if st.PublicKey != "" {
-		if err := a.wgWriteConf(st, peers); err != nil {
-			writeErr(w, 500, err.Error())
-			return
-		}
-	}
-	if in.Enabled {
-		if out, err := run(ctx, time.Minute, "systemctl", "enable", "--now", wgUnit); err != nil {
-			writeErr(w, 500, "WireGuard could not be started: "+firstLine(out))
-			return
-		}
-		if out, err := run(ctx, time.Minute, "systemctl", "restart", wgUnit); err != nil {
-			writeErr(w, 500, "WireGuard could not be restarted: "+firstLine(out))
-			return
-		}
-		if out, err := run(ctx, 5*time.Second, "ufw", "status"); err == nil && strings.Contains(out, "Status: active") {
-			_, _ = run(ctx, 10*time.Second, "ufw", "allow", strconv.Itoa(in.ListenPort)+"/udp", "comment", "ctrl32 WireGuard")
-		}
-	} else {
-		_, _ = run(ctx, time.Minute, "systemctl", "disable", "--now", wgUnit)
-	}
-	// the broker listens inside the VPN so devices reach MQTT without TLS/public exposure
-	vpnListen := ""
-	if in.Enabled {
-		vpnListen = ip.String() + ":1883"
-	}
-	if changed, err := a.setConfigValue("mqtt", "vpn_listen", vpnListen); err != nil {
-		writeErr(w, 500, "config update failed: "+err.Error())
-		return
-	} else if changed {
-		a.restartAppLater()
-	}
-	a.log.Info("wireguard configured", "enabled", in.Enabled, "port", in.ListenPort, "address", in.Address, "endpoint", in.Endpoint)
-	writeJSON(w, 200, a.wgState(ctx))
-}
-
-func (a *Server) hAddPeer(w http.ResponseWriter, r *http.Request) {
-	if isWindows() {
-		writeErr(w, 501, "WireGuard is not managed on Windows; set http.tls_cert and http.tls_key in config.toml")
-		return
-	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	var in PeerRequest
-	if err := decode(r, &in); err != nil {
-		writeErr(w, 400, "bad request")
-		return
-	}
-	in.Name = strings.TrimSpace(in.Name)
-	if !nameRe.MatchString(in.Name) {
-		writeErr(w, 400, "name: letters, digits, space, dot, dash or underscore (max 63)")
-		return
-	}
-	ctx := r.Context()
-	st, peers := a.wgLoad()
-	if st.PublicKey == "" || !wgInstalled(ctx) {
-		writeErr(w, 400, "configure and enable WireGuard first")
-		return
-	}
-	for _, p := range peers {
-		if strings.EqualFold(p.Name, in.Name) {
-			writeErr(w, 400, "a peer with that name exists")
-			return
-		}
-	}
-	serverIP, ipnet, err := net.ParseCIDR(st.Address)
-	if err != nil {
-		writeErr(w, 500, "server address invalid")
-		return
-	}
-	used := map[string]bool{serverIP.String(): true}
-	for _, p := range peers {
-		used[strings.TrimSuffix(p.Address, "/32")] = true
-	}
-	var addr string
-	first := ipnet.IP.To4()
-	ones, bits := ipnet.Mask.Size()
-	total := 1 << (bits - ones)
-	for i := 2; i < total-1; i++ {
-		c := net.IPv4(first[0], first[1], first[2], first[3]).To4()
-		n := (int(c[0])<<24 | int(c[1])<<16 | int(c[2])<<8 | int(c[3])) + i
-		cand := net.IPv4(byte(n>>24), byte(n>>16), byte(n>>8), byte(n)).String()
-		if !used[cand] {
-			addr = cand
-			break
-		}
-	}
-	if addr == "" {
-		writeErr(w, 400, "no free address in "+st.Address)
-		return
-	}
-	priv, err := run(ctx, 10*time.Second, "wg", "genkey")
-	if err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	pub, err := runInput(ctx, priv+"\n", "wg", "pubkey")
-	if err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	psk, err := run(ctx, 10*time.Second, "wg", "genpsk")
-	if err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	p := wgPeerStored{ID: randomID(), Name: in.Name, PublicKey: pub, PresharedKey: psk, Address: addr + "/32", CreatedAt: time.Now(), CreatedBy: in.CreatedBy}
-	peers = append(peers, p)
-	if err := saveJSON(wgPeersFile, peers, 0o600); err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	if err := a.wgWriteConf(st, peers); err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	if st.Enabled {
-		if err := a.wgSync(ctx); err != nil {
-			a.log.Warn("wg syncconf failed", "err", err)
-		}
-	}
-	var cfg strings.Builder
-	cfg.WriteString("[Interface]\nPrivateKey = " + priv + "\nAddress = " + addr + "/32\n")
-	if st.DNS != "" {
-		cfg.WriteString("DNS = " + st.DNS + "\n")
-	}
-	cfg.WriteString("\n[Peer]\nPublicKey = " + st.PublicKey + "\nPresharedKey = " + psk + "\nAllowedIPs = " + ipnet.String() + "\nPersistentKeepalive = 25\n")
-	if st.Endpoint != "" {
-		cfg.WriteString("Endpoint = " + st.Endpoint + "\n")
-	}
-	a.log.Info("wireguard peer added", "name", in.Name, "address", addr)
-	writeJSON(w, 200, PeerResult{Peer: WireGuardPeer{ID: p.ID, Name: p.Name, PublicKey: p.PublicKey, Address: p.Address, CreatedAt: p.CreatedAt, CreatedBy: p.CreatedBy}, Config: cfg.String()})
-}
-
-func (a *Server) hRemovePeer(w http.ResponseWriter, r *http.Request) {
-	if isWindows() {
-		writeErr(w, 501, "WireGuard is not managed on Windows; set http.tls_cert and http.tls_key in config.toml")
-		return
-	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	id := r.PathValue("id")
-	st, peers := a.wgLoad()
-	kept := peers[:0]
-	removed := ""
-	for _, p := range peers {
-		if p.ID == id {
-			removed = p.Name
-			continue
-		}
-		kept = append(kept, p)
-	}
-	if removed == "" {
-		writeErr(w, 404, "peer not found")
-		return
-	}
-	if err := saveJSON(wgPeersFile, kept, 0o600); err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	if st.PublicKey != "" {
-		if err := a.wgWriteConf(st, kept); err != nil {
-			writeErr(w, 500, err.Error())
-			return
-		}
-		if st.Enabled {
-			if err := a.wgSync(r.Context()); err != nil {
-				a.log.Warn("wg syncconf failed", "err", err)
-			}
-		}
-	}
-	a.log.Info("wireguard peer removed", "name", removed)
-	writeJSON(w, 200, Result{OK: true, Message: "peer removed"})
 }
 
 // ---- update ---------------------------------------------------------------------------------------

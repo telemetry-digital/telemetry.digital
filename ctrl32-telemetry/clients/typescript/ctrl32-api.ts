@@ -1231,6 +1231,78 @@ export type User = {
   username?: string;
 };
 
+export type VPNPeer = {
+  /** enabled and not expired: configured on the server */
+  active?: boolean;
+  /** VPN address */
+  address?: string;
+  created_at?: string;
+  created_by?: string;
+  device_id?: string;
+  device_name?: string;
+  enabled?: boolean;
+  /** the peer's public address */
+  endpoint?: string;
+  expired?: boolean;
+  expires_at?: string | null;
+  id?: string;
+  key_rotated_at?: string | null;
+  kind?: "device" | "user" | "site";
+  latest_handshake?: string;
+  name?: string;
+  note?: string;
+  /** handshake within 3 minutes */
+  online?: boolean;
+  org_id?: string;
+  org_name?: string;
+  public_key?: string;
+  rx_bytes?: number;
+  subnets?: string[];
+  tx_bytes?: number;
+  updated_at?: string;
+};
+
+export type VPNRule = {
+  created_at?: string;
+  created_by?: string;
+  dest_cidr?: string;
+  dest_peer_id?: string;
+  dest_type?: "server" | "peer" | "site";
+  enabled?: boolean;
+  id?: string;
+  name?: string;
+  ports?: string;
+  protocol?: "tcp" | "udp" | "icmp" | "any";
+  sources?: VPNSource[];
+  updated_at?: string;
+};
+
+export type VPNRuleInput = {
+  /** site: a host or subnet inside its routed subnets (empty = all of them) */
+  dest_cidr?: string;
+  /** peer or site */
+  dest_peer_id?: string;
+  dest_type: "server" | "peer" | "site";
+  /** default true */
+  enabled?: boolean;
+  /** 1–80 */
+  name: string;
+  /** tcp/udp: "102, 502, 8000-8100"; empty = all */
+  ports?: string;
+  protocol: "tcp" | "udp" | "icmp" | "any";
+  /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+  reason: string;
+  sources: VPNSource[];
+};
+
+export type VPNSource = {
+  /** peer or organization */
+  id?: string;
+  /** type kind */
+  kind?: "device" | "user" | "site";
+  type: "all" | "kind" | "peer" | "org";
+};
+
 export type VideoSettings = {
   camera_offline_minutes?: number;
   discovery_seconds?: number;
@@ -6130,43 +6202,6 @@ export class Ctrl32Client {
   }>('PUT', `/api/v1/server/wireguard`, undefined, body, false);
   }
 
-  /** Add a WireGuard peer
-   *
-   * Returns the peer's client configuration (private key shown once).
-   * 
-   * Requires permission `system.admin`. */
-  postServerWireguardPeers(body: {
-    name: string;
-    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
-    reason: string;
-  }): Promise<{
-    /** client configuration file */
-    config?: string;
-    peer?: Record<string, unknown>;
-  }> {
-    return this.request<{
-    /** client configuration file */
-    config?: string;
-    peer?: Record<string, unknown>;
-  }>('POST', `/api/v1/server/wireguard/peers`, undefined, body, false);
-  }
-
-  /** Remove a WireGuard peer
-   *
-   * Requires permission `system.admin`. */
-  postServerWireguardPeersIdRemove(id: string, body: {
-    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
-    reason: string;
-  }): Promise<{
-    /** true on success */
-    ok?: boolean;
-  }> {
-    return this.request<{
-    /** true on success */
-    ok?: boolean;
-  }>('POST', `/api/v1/server/wireguard/peers/${encodeURIComponent(id)}/remove`, undefined, body, false);
-  }
-
   /** Organization security policy
    *
    * Requires permission `config.write`. */
@@ -7131,5 +7166,242 @@ export class Ctrl32Client {
     /** true on success */
     ok?: boolean;
   }>('DELETE', `/api/v1/video/walls/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** VPN: interface, firewall, license, peers and access rules
+   *
+   * The interface and the nftables table from the agent (`interface.firewall.ruleset` is the generated table), whether the server is licensed for site peers, time-limited access and more than `free_limit` peers, every peer with its live state (handshake, traffic) and every access rule. `services` are the server's ports a rule can open to the VPN.
+   * 
+   * Requires permission `system.admin`. */
+  getVpn(): Promise<{
+    /** configured, connected, error */
+    agent?: Record<string, unknown>;
+    buy_url?: string;
+    /** peers allowed without the license */
+    free_limit?: number;
+    /** WireGuard state of the agent without peers, with firewall {applied, rules, forward, applied_at, error, ruleset} */
+    interface?: Record<string, unknown>;
+    licensed?: boolean;
+    peers?: VPNPeer[];
+    peers_used?: number;
+    rules?: VPNRule[];
+    services?: ({
+      key?: string;
+      name?: string;
+      ports?: string;
+      protocol?: string;
+    })[];
+    /** development agent: nothing is applied to a host */
+    simulated?: boolean;
+    /** the agent manages the VPN on this host (Linux) */
+    supported?: boolean;
+  }> {
+    return this.request<{
+    /** configured, connected, error */
+    agent?: Record<string, unknown>;
+    buy_url?: string;
+    /** peers allowed without the license */
+    free_limit?: number;
+    /** WireGuard state of the agent without peers, with firewall {applied, rules, forward, applied_at, error, ruleset} */
+    interface?: Record<string, unknown>;
+    licensed?: boolean;
+    peers?: VPNPeer[];
+    peers_used?: number;
+    rules?: VPNRule[];
+    services?: ({
+      key?: string;
+      name?: string;
+      ports?: string;
+      protocol?: string;
+    })[];
+    /** development agent: nothing is applied to a host */
+    simulated?: boolean;
+    /** the agent manages the VPN on this host (Linux) */
+    supported?: boolean;
+  }>('GET', `/api/v1/vpn`, undefined, undefined, false);
+  }
+
+  /** Apply the stored VPN state again
+   *
+   * Sends peers and rules to the agent again (it applies the interface and the firewall together and rolls back on failure). The server does this on its own every five minutes and whenever an access expires.
+   * 
+   * Requires permission `system.admin`. */
+  postVpnApply(body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    firewall?: Record<string, unknown>;
+    ok?: boolean;
+  }> {
+    return this.request<{
+    firewall?: Record<string, unknown>;
+    ok?: boolean;
+  }>('POST', `/api/v1/vpn/apply`, undefined, body, false);
+  }
+
+  /** Add a VPN peer (configuration shown once)
+   *
+   * Kinds: `device` (sends data through the tunnel), `user` (a technician's laptop or phone), `site` (a router that connects its LAN: `subnets`). Without the license up to 5 peers of kinds device and user without an expiry (402 `license_required` otherwise). The private key is generated, returned once in `config` (and as a QR code; for a site also router templates) and never stored. Needs the caller's `password` again, and `code` from the authenticator app with two-factor sign-in (403 `step_up_required` / `step_up_failed`). A new peer reaches nothing until an access rule allows it.
+   * 
+   * Requires permission `system.admin`. */
+  postVpnPeers(body: {
+    /** authenticator code when two-factor sign-in is on */
+    code?: string;
+    /** linked device (optional; implies its organization) */
+    device_id?: string;
+    /** time-limited access: disabled automatically (license) */
+    expires_at?: string;
+    kind: "device" | "user" | "site";
+    /** 1–63: letters, digits, space . _ - */
+    name: string;
+    /** ≤ 200 */
+    note?: string;
+    /** owner organization (optional; empty = the whole server) */
+    org_id?: string;
+    /** your password (step-up) */
+    password: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    subnets?: string[];
+  }): Promise<{
+    allowed_ips?: string[];
+    /** wg-quick configuration with the private key (shown once) */
+    config?: string;
+    peer?: VPNPeer;
+    /** data URL of a PNG QR code of the configuration */
+    qr?: string;
+    /** the server's VPN address */
+    server?: string;
+    templates?: {
+      mikrotik?: string;
+      openwrt?: string;
+      wg_quick?: string;
+    };
+  }> {
+    return this.request<{
+    allowed_ips?: string[];
+    /** wg-quick configuration with the private key (shown once) */
+    config?: string;
+    peer?: VPNPeer;
+    /** data URL of a PNG QR code of the configuration */
+    qr?: string;
+    /** the server's VPN address */
+    server?: string;
+    templates?: {
+      mikrotik?: string;
+      openwrt?: string;
+      wg_quick?: string;
+    };
+  }>('POST', `/api/v1/vpn/peers`, undefined, body, false);
+  }
+
+  /** Change, disable or enable a VPN peer
+   *
+   * Fields that are present change. `expires_at` "" clears the expiry; enabling an expired peer needs a new expiry or none. New routed subnets and setting an expiry need the license; renaming, disabling, enabling and clearing never do.
+   * 
+   * Requires permission `system.admin`. */
+  patchVpnPeersId(id: string, body: {
+    /** uuid or "" */
+    device_id?: string;
+    enabled?: boolean;
+    /** RFC 3339 or "" */
+    expires_at?: string;
+    name?: string;
+    note?: string;
+    /** uuid or "" */
+    org_id?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    subnets?: string[];
+  }): Promise<{
+    ok?: boolean;
+    peer?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    ok?: boolean;
+    peer?: Record<string, unknown>;
+  }>('PATCH', `/api/v1/vpn/peers/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Remove a VPN peer
+   *
+   * Access ends at once. Rules with the peer as destination are removed; the peer is dropped from the sources of other rules (a rule left without sources is removed).
+   * 
+   * Requires permission `system.admin`. */
+  postVpnPeersIdRemove(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    ok?: boolean;
+    rules_changed?: number;
+    rules_removed?: number;
+  }> {
+    return this.request<{
+    ok?: boolean;
+    rules_changed?: number;
+    rules_removed?: number;
+  }>('POST', `/api/v1/vpn/peers/${encodeURIComponent(id)}/remove`, undefined, body, false);
+  }
+
+  /** New key pair for a VPN peer (configuration shown once)
+   *
+   * The old key stops working at once. Needs the password (and authenticator code) again.
+   * 
+   * Requires permission `system.admin`. */
+  postVpnPeersIdRotate(id: string, body: {
+    code?: string;
+    password: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    allowed_ips?: string[];
+    config?: string;
+    peer?: Record<string, unknown>;
+    qr?: string;
+    server?: string;
+    /** site only */
+    templates?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    allowed_ips?: string[];
+    config?: string;
+    peer?: Record<string, unknown>;
+    qr?: string;
+    server?: string;
+    /** site only */
+    templates?: Record<string, unknown>;
+  }>('POST', `/api/v1/vpn/peers/${encodeURIComponent(id)}/rotate`, undefined, body, false);
+  }
+
+  /** Add a VPN access rule
+   *
+   * Default deny: peers reach only what a rule allows. Sources: `{type: all}`, `{type: kind, kind}`, `{type: peer, id}`, `{type: org, id}`. Destination: `server` (this server's VPN address, e.g. MQTT 1883), `peer` (a peer's VPN address) or `site` (the routed subnets of a site, or `dest_cidr` inside them, e.g. one PLC). Ports for tcp/udp: "102, 502, 8000-8100" (empty = all).
+   * 
+   * Requires permission `system.admin`. */
+  postVpnRules(body: VPNRuleInput): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/vpn/rules`, undefined, body, false);
+  }
+
+  /** Change a VPN access rule
+   *
+   * Requires permission `system.admin`. */
+  putVpnRulesId(id: string, body: VPNRuleInput): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('PUT', `/api/v1/vpn/rules/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Remove a VPN access rule
+   *
+   * Requires permission `system.admin`. */
+  postVpnRulesIdRemove(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/vpn/rules/${encodeURIComponent(id)}/remove`, undefined, body, false);
   }
 }

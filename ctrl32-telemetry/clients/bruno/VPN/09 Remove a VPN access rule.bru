@@ -1,11 +1,11 @@
 meta {
-  name: Remove a WireGuard peer
+  name: Remove a VPN access rule
   type: http
-  seq: 18
+  seq: 9
 }
 
 post {
-  url: {{baseUrl}}/api/v1/server/wireguard/peers/:id/remove
+  url: {{baseUrl}}/api/v1/vpn/rules/:id/remove
   body: json
   auth: inherit
 }
@@ -21,7 +21,7 @@ body:json {
 }
 
 docs {
-  Remove a WireGuard peer
+  Remove a VPN access rule
   
   Requires permission `system.admin`.
 }

@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -81,12 +82,14 @@ type Server struct {
 	notifier         *notify.Notifier
 	video            *video.Manager
 	lic              licenseCache
+	vpnMu            sync.Mutex // one VPN change at a time (vpn.go)
+	stepUpLimiter    *limiter
 }
 
 // New builds the handler tree.
 func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.Service, rep *report.Engine, ing *ingest.Ingest, con *console.Manager, ag *agent.Client, opc *opcua.Manager, log *slog.Logger, version string, hub *live.Hub, mbm *modbus.Manager, esc *escalate.Engine, eng *rules.Engine, pm *push.Manager, tc *timecheck.Checker, inc *incident.Manager, rp *replication.Primary, fl *flows.Engine, nt *notify.Notifier, sh *smarthome.Manager, vm *video.Manager) http.Handler {
 	s := &Server{cfg: cfg, pool: pool, br: br, iam: iamSvc, rep: rep, ing: ing, con: con, agent: ag, opc: opc, started: time.Now(), log: log.With("component", "http"), version: version, live: hub, mb: mbm, esc: esc, rules: eng, push: pm, tc: tc, incidents: inc, repl: rp, flows: fl, notifier: nt, smart: sh, video: vm,
-		loginLimiter: newLimiter(10, 10), provisionLimiter: newLimiter(20, 10), pairLimiter: newLimiter(5, 5), mcpLimiter: newLimiter(300, 60), oauthLimiter: newLimiter(30, 20)}
+		loginLimiter: newLimiter(10, 10), provisionLimiter: newLimiter(20, 10), pairLimiter: newLimiter(5, 5), mcpLimiter: newLimiter(300, 60), oauthLimiter: newLimiter(30, 20), stepUpLimiter: newLimiter(5, 5)}
 	if eng != nil {
 		eng.Commander = s
 	}
@@ -102,6 +105,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	s.tiles = openTiles(cfg.Map, s.log)
 	if pool != nil {
 		go s.licenseRenewLoop() // daily renewal of an activated license (license_activation.go)
+		go s.vpnLoop()          // VPN: expiry of time-limited access, synchronisation with the agent (vpn.go)
 	}
 	sub, _ := fs.Sub(static, "static")
 	files := http.FileServer(http.FS(sub))
@@ -389,8 +393,15 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("PUT /api/v1/server/caddy", s.require("system.admin", s.serverCaddy))
 	mux.Handle("GET /api/v1/server/wireguard", s.require("system.admin", s.serverWireGuard))
 	mux.Handle("PUT /api/v1/server/wireguard", s.require("system.admin", s.serverSetWireGuard))
-	mux.Handle("POST /api/v1/server/wireguard/peers", s.require("system.admin", s.serverAddPeer))
-	mux.Handle("POST /api/v1/server/wireguard/peers/{id}/remove", s.require("system.admin", s.serverRemovePeer))
+	mux.Handle("GET /api/v1/vpn", s.require("system.admin", s.getVPN))
+	mux.Handle("POST /api/v1/vpn/peers", s.require("system.admin", s.createVPNPeer))
+	mux.Handle("PATCH /api/v1/vpn/peers/{id}", s.require("system.admin", s.patchVPNPeer))
+	mux.Handle("POST /api/v1/vpn/peers/{id}/rotate", s.require("system.admin", s.rotateVPNPeer))
+	mux.Handle("POST /api/v1/vpn/peers/{id}/remove", s.require("system.admin", s.removeVPNPeer))
+	mux.Handle("POST /api/v1/vpn/rules", s.require("system.admin", s.createVPNRule))
+	mux.Handle("PUT /api/v1/vpn/rules/{id}", s.require("system.admin", s.putVPNRule))
+	mux.Handle("POST /api/v1/vpn/rules/{id}/remove", s.require("system.admin", s.removeVPNRule))
+	mux.Handle("POST /api/v1/vpn/apply", s.require("system.admin", s.applyVPN))
 	mux.Handle("POST /api/v1/server/update", s.require("system.admin", s.serverUpdate))
 	mux.Handle("GET /api/v1/server/backups", s.require("system.admin", s.serverBackups))
 	mux.Handle("POST /api/v1/server/backups", s.require("system.admin", s.serverBackupCreate))
@@ -533,6 +544,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.HandleFunc("GET /flows", page("flows.html"))
 	mux.HandleFunc("GET /flows/{slug}", page("flows.html"))
 	mux.HandleFunc("GET /server", page("server.html"))
+	mux.HandleFunc("GET /server/vpn", page("vpn.html"))
+	mux.Handle("GET /server/wireguard", http.RedirectHandler("/server/vpn", http.StatusMovedPermanently))
 	mux.HandleFunc("GET /server/{section}", page("server.html"))
 	mux.HandleFunc("GET /fota/{section}", page("fota.html"))
 	mux.HandleFunc("GET /account/{section}", page("account.html"))

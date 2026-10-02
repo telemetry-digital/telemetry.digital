@@ -1,0 +1,25 @@
+meta {
+  name: Apply the stored VPN state again
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/vpn/apply
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Apply the stored VPN state again
+  
+  Sends peers and rules to the agent again (it applies the interface and the firewall together and rolls back on failure). The server does this on its own every five minutes and whenever an access expires.
+  
+  Requires permission `system.admin`.
+}

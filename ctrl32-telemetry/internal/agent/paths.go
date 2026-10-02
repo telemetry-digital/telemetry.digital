@@ -20,8 +20,8 @@ var (
 	caddyStateFile, caddyEnvFile, caddyFile, caddyCompose, caddyDocker, certSyncScript, tlsChain string
 	// caddySites holds additional sites (*.caddy) the Caddyfile imports, e.g. remote management; kept when the
 	// Caddyfile is regenerated from the UI
-	caddySites                                                  string
-	wgDir, wgStateFile, wgPeersFile, wgKeyFile, backupStateFile string
+	caddySites                                                                        string
+	wgDir, wgStateFile, wgPeersFile, wgKeyFile, wgVPNFile, wgNftFile, backupStateFile string
 )
 
 func init() {
@@ -55,5 +55,7 @@ func derivePaths() {
 	wgStateFile = filepath.Join(wgDir, "state.json")
 	wgPeersFile = filepath.Join(wgDir, "peers.json")
 	wgKeyFile = filepath.Join(wgDir, "server.key")
+	wgVPNFile = filepath.Join(wgDir, "vpn.json")
+	wgNftFile = filepath.Join(wgDir, "vpn.nft")
 	backupStateFile = filepath.Join(etcDir, "backup.json")
 }

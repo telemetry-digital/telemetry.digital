@@ -5,7 +5,8 @@
 same day ("zostaneme pri free verzii, nič platené" — the implementation was reverted), reinstated on 27 Sep 2026 with
 the price and a perpetual license. Amends ADR-0002 (everything free) and ADR-0011 decision 5 (fixed product footer).
 The change of the `LICENSE` text (condition 2) is a draft for legal review. **Amended 28 Sep 2026 by ADR-0017**: the
-same license also unlocks changes through AI assistants (MCP); reading through assistants stays free.
+same license also unlocks changes through AI assistants (MCP); reading through assistants stays free. **Amended 2 Oct 2026 by ADR-0018**: the same license also unlocks VPN sites (routed subnets), time-limited
+access and more than five VPN peers.
 **Context:** Integrators want to deliver the system under their own brand. ADR-0011 made the product footer fixed and
 ADR-0002 made everything free; the `LICENSE` required the footer to stay unchanged.
 

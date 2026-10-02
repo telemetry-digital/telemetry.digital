@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VPN</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  .kv { display: grid; grid-template-columns: minmax(140px, 220px) 1fr; gap: 4px 16px; font-size: 14px; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; word-break: break-word; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .qr { display: block; width: 260px; max-width: 100%; height: auto; background: #fff; padding: 8px; border-radius: var(--radius); }
+  pre.conf { font-size: 12px; white-space: pre-wrap; word-break: break-all; margin: 0; max-height: 320px; overflow: auto; }
+  .note-bar { border-left: 3px solid var(--warn, #e0a800); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 10px; background: var(--bg2); font-size: 12px; white-space: nowrap; }
+  .small { font-size: 12px; }
+  .src-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 2px 12px; max-height: 220px; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; }
+  .src-list label { display: flex; flex-direction: row; gap: 6px; align-items: center; font-size: 14px; margin: 0; color: var(--fg); }
+  .src-list input { width: auto; margin: 0; }
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; }
+  dialog.wide { width: min(760px, calc(100vw - 32px)); }
+  td.acts { min-width: 200px; } td.acts .btn.small { margin: 2px; }
+  .lic-ok { color: var(--ok, #1a7f37); }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<nav class="subnav">
+  <a href="/server" data-section="overview">Overview</a>
+  <a href="/server/domain" data-section="domain">Domain and TLS</a>
+  <a href="/server/vpn" data-section="vpn" class="active">VPN</a>
+  <a href="/server/backups" data-section="backups">Backups</a>
+  <a href="/server/updates" data-section="updates">Updates</a>
+  <a href="/server/license" data-section="license">License</a>
+</nav>
+
+<div class="page-head"><h1>VPN</h1><span class="grow"></span>
+  <button class="btn" id="settingsBtn" type="button">Server settings</button>
+  <button class="btn primary" id="addPeerBtn" type="button">Add peer</button>
+</div>
+<p class="muted">Technicians reach PLCs and HMIs at sites, routers connect whole site networks, devices send data through the tunnel. The server is the hub; peers reach nothing until an access rule allows it.</p>
+<div class="card note-bar" id="note" hidden></div>
+
+<div class="grid">
+  <div class="card">
+    <h2>Server</h2>
+    <dl class="kv" id="kvServer"></dl>
+    <div class="actions" style="margin-top:12px"><button class="btn small" id="rulesetBtn" type="button">Firewall rules</button><button class="btn small" id="applyBtn" type="button">Apply again</button></div>
+  </div>
+  <div class="card">
+    <h2>License</h2>
+    <dl class="kv" id="kvLicense"></dl>
+    <p class="muted small">Free: up to 5 peers (devices and technicians). With the license: unlimited peers, sites with routed subnets (site-to-site) and time-limited access for technicians. Without the license existing peers keep working.</p>
+  </div>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <div class="page-head" style="margin:0 0 8px"><h2 style="margin:0">Peers</h2></div>
+  <div class="table-wrap"><table id="peers"><thead><tr><th>Name</th><th>Kind</th><th>Organization</th><th>VPN address</th><th>Expires</th><th>State</th><th>Last handshake</th><th>Traffic</th><th></th></tr></thead><tbody></tbody></table></div>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <div class="page-head" style="margin:0 0 8px"><h2 style="margin:0">Access rules</h2><span class="grow"></span><button class="btn" id="addRuleBtn" type="button">Add rule</button></div>
+  <p class="muted small">Default deny: everything that arrives from the VPN is dropped unless a rule allows it. The server itself may always reach the peers (for example to poll a PLC at a site).</p>
+  <div class="table-wrap"><table id="rules"><thead><tr><th>Name</th><th>Sources</th><th>Destination</th><th>Protocol and ports</th><th>State</th><th></th></tr></thead><tbody></tbody></table></div>
+</div>
+
+<!-- server settings -->
+<dialog id="setDlg">
+  <form id="setForm" class="form" method="dialog">
+    <h2 style="margin-top:0">VPN server settings</h2>
+    <label class="inline"><input type="checkbox" name="enabled"><span>Enabled</span></label>
+    <div class="two">
+      <label>Listen port (UDP) <input name="listen_port" type="number" min="1" max="65535" value="51820"></label>
+      <label>Server address <input name="address" value="10.66.0.1/24" placeholder="10.66.0.1/24"></label>
+    </div>
+    <label>Endpoint for peers (host:port) <input name="endpoint" placeholder="vpn.example.com:51820"></label>
+    <label>DNS for peers (optional) <input name="dns" placeholder="10.66.0.1"></label>
+    <p class="muted small">On enabling the server installs wireguard-tools and nftables if needed and opens the UDP port in ufw. The access rules are loaded before the interface comes up.</p>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="setErr"></div>
+    <div class="actions"><button class="btn primary" type="submit" id="setSubmit">Apply</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form>
+</dialog>
+
+<!-- add peer -->
+<dialog id="peerDlg" class="wide">
+  <form id="peerForm" class="form" method="dialog">
+    <h2 style="margin-top:0" id="peerTitle">Add peer</h2>
+    <div id="peerInputs">
+      <div class="seg" id="kindSeg" role="group" aria-label="Kind">
+        <button type="button" data-kind="user" class="on">Technician</button>
+        <button type="button" data-kind="device">Device</button>
+        <button type="button" data-kind="site">Site (router)</button>
+      </div>
+      <p class="muted small" id="kindHint"></p>
+      <label>Name <input name="name" required maxlength="63" placeholder="technician-laptop"></label>
+      <div class="two">
+        <label>Organization <select name="org_id"><option value="">(whole server)</option></select></label>
+        <label>Device (optional) <select name="device_id"><option value="">(none)</option></select></label>
+      </div>
+      <label id="subnetsRow" hidden>Routed subnets (the LAN behind the router, one per line) <textarea name="subnets" rows="3" placeholder="192.168.10.0/24"></textarea></label>
+      <label>Access expires (optional) <input name="expires_at" type="datetime-local"></label>
+      <div class="muted small" id="expiryHint">Time-limited access: the peer is disabled automatically. Requires the license.</div>
+      <label>Note (optional) <input name="note" maxlength="200"></label>
+      <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+      <p class="muted small">The configuration holds a private key and is shown only once. Confirm it is you.</p>
+      <div class="two">
+        <label>Your password <input name="password" type="password" required autocomplete="current-password"></label>
+        <label class="mfa-row">Authenticator code <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10"></label>
+      </div>
+    </div>
+    <div class="err" id="peerErr"></div>
+    <div id="peerResult" hidden></div>
+    <div class="actions"><button class="btn primary" type="submit" id="peerSubmit">Create</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form>
+</dialog>
+
+<!-- edit peer -->
+<dialog id="editDlg">
+  <form id="editForm" class="form" method="dialog">
+    <h2 style="margin-top:0">Edit peer</h2>
+    <label>Name <input name="name" required maxlength="63"></label>
+    <label>Organization <select name="org_id"><option value="">(whole server)</option></select></label>
+    <label id="editSubnetsRow">Routed subnets (the LAN behind the router, one per line) <textarea name="subnets" rows="3"></textarea></label>
+    <label>Access expires (optional) <input name="expires_at" type="datetime-local"></label>
+    <label>Note (optional) <input name="note" maxlength="200"></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="editErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form>
+</dialog>
+
+<!-- rotate key -->
+<dialog id="rotDlg" class="wide">
+  <form id="rotForm" class="form" method="dialog">
+    <h2 style="margin-top:0">New key pair</h2>
+    <div id="rotInputs">
+      <p class="muted">The old key stops working at once; the peer needs the new configuration.</p>
+      <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+      <div class="two">
+        <label>Your password <input name="password" type="password" required autocomplete="current-password"></label>
+        <label class="mfa-row">Authenticator code <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10"></label>
+      </div>
+    </div>
+    <div class="err" id="rotErr"></div>
+    <div id="rotResult" hidden></div>
+    <div class="actions"><button class="btn primary" type="submit" id="rotSubmit">Rotate key</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form>
+</dialog>
+
+<!-- access rule -->
+<dialog id="ruleDlg" class="wide">
+  <form id="ruleForm" class="form" method="dialog">
+    <h2 style="margin-top:0" id="ruleTitle">Access rule</h2>
+    <label>Name <input name="name" required maxlength="80" placeholder="PLC programming at plant 1"></label>
+    <div><b>Sources</b> <span class="muted small">who may connect</span></div>
+    <div class="src-list" id="srcList"></div>
+    <div class="two">
+      <label>Destination <select name="dest_type">
+        <option value="server">This server</option>
+        <option value="site">Site network</option>
+        <option value="peer">Peer</option>
+      </select></label>
+      <label id="destPeerRow" hidden>Peer or site <select name="dest_peer_id"></select></label>
+    </div>
+    <label id="destCidrRow" hidden>Host or subnet inside the site (empty = the whole routed network) <input name="dest_cidr" placeholder="192.168.10.20"></label>
+    <div id="presetRow"><div class="muted small">Services of this server</div><div class="presets" id="presets"></div></div>
+    <div class="two">
+      <label>Protocol <select name="protocol"><option value="tcp">TCP</option><option value="udp">UDP</option><option value="icmp">ICMP (ping)</option><option value="any">Any</option></select></label>
+      <label>Ports <input name="ports" placeholder="102, 502, 8000-8100"></label>
+    </div>
+    <div class="muted small">Empty ports = all ports. Siemens S7: 102, Modbus TCP: 502, VNC: 5900, HTTPS: 443.</div>
+    <label class="inline"><input type="checkbox" name="enabled" checked><span>Enabled</span></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="ruleErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form>
+</dialog>
+
+<!-- firewall ruleset -->
+<dialog id="fwDlg" class="wide">
+  <h2 style="margin-top:0">Firewall rules (nftables)</h2>
+  <p class="muted small">Generated by the server agent from the peers and access rules; table ctrl32_vpn, loaded atomically.</p>
+  <pre class="conf secret" id="fwText"></pre>
+  <div class="actions"><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+</dialog>
+
+<dialog id="reasonDlg">
+  <form id="reasonForm" class="form" method="dialog">
+    <h2 style="margin-top:0" id="reasonTitle"></h2>
+    <div class="muted" id="reasonHint"></div>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="reasonErr"></div>
+    <div class="actions"><button class="btn danger" type="submit">Confirm</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button></div>
+  </form>
+</dialog>
+</main>
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api, t = ctrl32.t;
+let V = null, ORGS = [], DEVICES = [], KIND = 'user', RULE_ID = '', EDIT_ID = '';
+const KINDS = {user: 'Technician', device: 'Device', site: 'Site'};
+const KIND_HINT = {user: 'A laptop or phone of a technician (WireGuard app). Reaches what the access rules allow, e.g. a PLC at a site.', device: 'A gateway or device that sends data through the tunnel, e.g. MQTT to this server without TLS.', site: 'A router or Raspberry Pi at a site that connects its whole LAN (site-to-site). Requires the license.'};
+
+function kv(el, rows){ el.innerHTML = rows.filter(r => r).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v == null || v === '' ? '<span class="muted">—</span>' : v}</dd>`).join(''); }
+function bytes(n){ if(!n) return '0 B'; const u = ['B','KB','MB','GB','TB']; let i = 0; while(n >= 1024 && i < u.length-1){ n /= 1024; i++; } return n.toFixed(i ? 1 : 0) + ' ' + u[i]; }
+function badge(cls, text){ return `<span class="badge ${cls}">${esc(text)}</span>`; }
+function localInput(iso){ if(!iso) return ''; const d = new Date(iso); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; }
+function isoFromLocal(v){ return v ? new Date(v).toISOString() : ''; }
+function peerName(id){ const p = (V.peers || []).find(x => x.id === id); return p ? p.name : id; }
+function orgName(id){ const o = ORGS.find(x => x.id === id); return o ? o.name : id; }
+function canChange(){ return V && V.supported && V.interface && V.interface.public_key; }
+
+function noteBar(){
+  const a = V.agent || {}; let msg = '';
+  if(!a.configured) msg = `<b>${esc(t('Server agent not configured.'))}</b> <span>${esc(t('The VPN is managed through the server agent on Linux servers.'))}</span>`;
+  else if(!a.connected) msg = `<b>${esc(t('Server agent not reachable:'))}</b> ${esc(a.error || '')}`;
+  else if(!V.supported) msg = `<b>${esc(t('The VPN is managed on Linux servers only.'))}</b>`;
+  else if(V.simulated) msg = `<b>${esc(t('Simulation:'))}</b> <span>${esc(t('the agent renders the configuration and the firewall rules but applies nothing to a host (development).'))}</span>`;
+  else if(!V.interface.public_key) msg = `<span>${esc(t('Configure and enable the VPN server first (Server settings).'))}</span>`;
+  $('#note').hidden = !msg; $('#note').innerHTML = msg;
+  for(const id of ['#addPeerBtn', '#addRuleBtn', '#applyBtn']) $(id).disabled = !canChange();
+  $('#settingsBtn').disabled = !(V.supported);
+}
+
+function renderServer(){
+  const i = V.interface;
+  if(!i){ kv($('#kvServer'), [['State', `<span class="muted">${esc(t('needs the server agent'))}</span>`]]); return; }
+  const fw = i.firewall || {};
+  const state = i.enabled ? (i.running ? badge('ok', t('running')) : badge('bad', t('enabled but not running'))) : badge('', t('disabled'));
+  const fwState = fw.error ? badge('bad', t('not applied')) + ` <span class="small">${esc(fw.error)}</span>` : (fw.applied ? badge('ok', t('default deny active')) : badge('warn', t('not loaded')));
+  kv($('#kvServer'), [['State', state + (V.simulated ? ' ' + badge('warn', t('simulation')) : '')], ['Listen port', i.listen_port ? i.listen_port + '/udp' : ''], ['Server address', esc(i.address)],
+    ['Endpoint for peers', esc(i.endpoint)], ['Server public key', i.public_key ? `<code>${esc(i.public_key)}</code>` : ''], ['MQTT inside VPN', i.mqtt ? `<code>mqtt://${esc(i.mqtt)}</code>` : ''],
+    ['Firewall', fwState + ` <span class="muted small">${fw.rules || 0}</span> <span class="muted small">${esc(t('access rules'))}</span>`], ['Forwarding to sites', fw.forward ? badge('ok', t('on')) : badge('', t('off'))]]);
+  const f = $('#setForm'); if(!f.dataset.filled){ f.enabled.checked = i.enabled; f.listen_port.value = i.listen_port || 51820; f.address.value = i.address || '10.66.0.1/24'; f.endpoint.value = i.endpoint || ''; f.dns.value = i.dns || ''; f.dataset.filled = '1'; }
+}
+
+function renderLicense(){
+  kv($('#kvLicense'), [['License', V.licensed ? badge('ok', t('licensed')) : badge('', t('free'))], ['Peers', V.licensed ? String(V.peers_used) : `${V.peers_used} / ${V.free_limit}`],
+    V.licensed ? null : ['More', `<a href="/server/license">${esc(t('Install or activate the license'))}</a>`]]);
+}
+
+function stateCell(p){
+  let s = !p.enabled ? badge('', t('disabled')) : (p.expired ? badge('bad', t('expired')) : (p.online ? badge('ok', t('online')) : badge('', t('offline'))));
+  return s;
+}
+function renderPeers(){
+  const rows = (V.peers || []).map(p => `<tr>
+    <td><b>${esc(p.name)}</b>${p.note ? `<div class="muted small">${esc(p.note)}</div>` : ''}${p.device_name ? `<div class="muted small">⌁ ${esc(p.device_name)}</div>` : ''}</td>
+    <td><span class="chip">${esc(t(KINDS[p.kind] || p.kind))}</span></td>
+    <td>${p.org_name ? esc(p.org_name) : `<span class="muted">${esc(t('(whole server)'))}</span>`}</td>
+    <td><code>${esc(p.address)}</code>${(p.subnets || []).map(s => `<div class="small"><code>${esc(s)}</code></div>`).join('')}</td>
+    <td>${p.expires_at ? esc(fmt(p.expires_at)) : '<span class="muted">—</span>'}</td>
+    <td>${stateCell(p)}</td>
+    <td>${p.latest_handshake ? esc(fmt(p.latest_handshake)) : `<span class="muted">${esc(t('never'))}</span>`}</td>
+    <td class="nowrap">${bytes(p.rx_bytes)} ↓ ${bytes(p.tx_bytes)} ↑</td>
+    <td class="acts"><button class="btn small" data-edit="${p.id}" type="button">Edit</button><button class="btn small" data-toggle="${p.id}" type="button">${p.enabled ? 'Disable' : 'Enable'}</button><button class="btn small" data-rotate="${p.id}" type="button">Rotate key</button><button class="btn small danger" data-remove="${p.id}" type="button">Remove</button></td></tr>`).join('');
+  $('#peers tbody').innerHTML = rows || `<tr><td colspan="9" class="muted">${esc(t('No peers yet.'))}</td></tr>`;
+  for(const b of document.querySelectorAll('[data-edit]')) b.onclick = () => openEdit(b.dataset.edit);
+  for(const b of document.querySelectorAll('[data-rotate]')) b.onclick = () => openRotate(b.dataset.rotate);
+  for(const b of document.querySelectorAll('[data-toggle]')) b.onclick = () => { const p = V.peers.find(x => x.id === b.dataset.toggle);
+    askReason(p.enabled ? 'Disable peer' : 'Enable peer', p.enabled ? 'The peer loses access at once; its key is kept.' : 'The peer may connect again.', async reason => { await api('PATCH', `/api/v1/vpn/peers/${p.id}`, {enabled: !p.enabled, reason}); ctrl32.toast(t('saved'), 'ok'); load(); }); };
+  for(const b of document.querySelectorAll('[data-remove]')) b.onclick = () => askReason('Remove peer', 'The peer loses access at once and its configuration becomes invalid. Rules towards it are removed.', async reason => { await api('POST', `/api/v1/vpn/peers/${b.dataset.remove}/remove`, {reason}); ctrl32.toast(t('removed'), 'ok'); load(); });
+  for(const b of document.querySelectorAll('#peers button')) b.disabled = !canChange();
+}
+
+function srcText(s){
+  if(s.type === 'all') return t('all peers');
+  if(s.type === 'kind') return t({user: 'all technicians', device: 'all devices', site: 'all sites'}[s.kind] || s.kind);
+  if(s.type === 'org') return orgName(s.id);
+  return peerName(s.id);
+}
+function destText(r){
+  if(r.dest_type === 'server') return `<span>${esc(t('this server'))}</span>`;
+  const n = esc(peerName(r.dest_peer_id));
+  if(r.dest_type === 'site') return `<b>${n}</b> <code>${esc(r.dest_cidr || '')}</code>${r.dest_cidr ? '' : ` <span class="muted small">${esc(t('whole network'))}</span>`}`;
+  return `<b>${n}</b>`;
+}
+function renderRules(){
+  const rows = (V.rules || []).map(r => `<tr>
+    <td><b>${esc(r.name)}</b></td>
+    <td><div class="chips">${(r.sources || []).map(s => `<span class="chip">${esc(srcText(s))}</span>`).join('')}</div></td>
+    <td>${destText(r)}</td>
+    <td><code>${esc(r.protocol)}</code> ${r.ports ? `<code>${esc(r.ports)}</code>` : (r.protocol === 'tcp' || r.protocol === 'udp' ? `<span class="muted small">${esc(t('all ports'))}</span>` : '')}</td>
+    <td>${r.enabled ? badge('ok', t('enabled')) : badge('', t('disabled'))}</td>
+    <td class="nowrap"><button class="btn small" data-redit="${r.id}" type="button">Edit</button><button class="btn small danger" data-rremove="${r.id}" type="button">Remove</button></td></tr>`).join('');
+  $('#rules tbody').innerHTML = rows || `<tr><td colspan="6" class="muted">${esc(t('No access rules: nothing is reachable from the VPN.'))}</td></tr>`;
+  for(const b of document.querySelectorAll('[data-redit]')) b.onclick = () => openRule(b.dataset.redit);
+  for(const b of document.querySelectorAll('[data-rremove]')) b.onclick = () => askReason('Remove access rule', 'The access it allowed ends at once.', async reason => { await api('POST', `/api/v1/vpn/rules/${b.dataset.rremove}/remove`, {reason}); ctrl32.toast(t('removed'), 'ok'); load(); });
+  for(const b of document.querySelectorAll('#rules button')) b.disabled = !canChange();
+}
+
+let reasonCb = null;
+function askReason(title, hint, cb){ reasonCb = cb; $('#reasonTitle').textContent = t(title); $('#reasonHint').textContent = t(hint); $('#reasonForm').reset(); $('#reasonErr').textContent = ''; $('#reasonDlg').showModal(); }
+$('#reasonForm').onsubmit = async e => { e.preventDefault(); $('#reasonErr').textContent = ''; try{ await reasonCb(e.target.reason.value); $('#reasonDlg').close(); }catch(x){ $('#reasonErr').textContent = x.message; } };
+
+function fillOrgs(sel, value){ sel.innerHTML = `<option value="">${esc(t('(whole server)'))}</option>` + ORGS.map(o => `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join(''); sel.value = value || ''; }
+function mfaRows(){ const on = !!(ctrl32.me && ctrl32.me.mfa_enabled); for(const el of document.querySelectorAll('.mfa-row')) el.hidden = !on; }
+
+function setKind(k){ KIND = k; for(const b of document.querySelectorAll('#kindSeg button')) b.classList.toggle('on', b.dataset.kind === k); $('#kindHint').textContent = t(KIND_HINT[k]); $('#subnetsRow').hidden = k !== 'site'; }
+for(const b of document.querySelectorAll('#kindSeg button')) b.onclick = () => setKind(b.dataset.kind);
+
+function resultHTML(r, kind){
+  const tpl = r.templates ? `<h3>${esc(t('Router configuration'))}</h3><div class="tabs" id="tplTabs">${['wg_quick', 'openwrt', 'mikrotik'].map((k, i) => `<button type="button" data-tpl="${k}" class="${i ? '' : 'active'}">${esc({wg_quick: 'Linux / Raspberry Pi', openwrt: 'OpenWrt', mikrotik: 'MikroTik RouterOS 7'}[k])}</button>`).join('')}</div><pre class="conf secret" id="tplText"></pre><p class="muted small">${esc(t('Text only: check it before use on the router.'))}</p>` : '';
+  return `<p class="muted">${esc(t('Configuration (shown once — the private key is not stored on the server). Scan the QR code with the WireGuard app or download the file.'))}</p>
+    ${r.qr ? `<img class="qr" src="${r.qr}" alt="WireGuard configuration QR code">` : ''}
+    <pre class="conf secret" id="confText"></pre>
+    <div class="actions"><button class="btn small" type="button" id="dlConf">Download .conf</button><button class="btn small" type="button" id="cpConf">Copy</button></div>
+    <p class="muted small">${esc(t('The peer reaches nothing until an access rule allows it.'))}</p>${tpl}`;
+}
+function wireResult(box, r, name){
+  box.querySelector('#confText').textContent = r.config;
+  box.querySelector('#dlConf').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([r.config], {type: 'text/plain'})); a.download = (name || 'ctrl32-vpn').replace(/[^A-Za-z0-9._-]+/g, '-') + '.conf'; a.click(); };
+  box.querySelector('#cpConf').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(r.config); ctrl32.toast(t('copied'), 'ok'); };
+  if(r.templates){ const show = k => { box.querySelector('#tplText').textContent = r.templates[k] || ''; for(const b of box.querySelectorAll('[data-tpl]')) b.classList.toggle('active', b.dataset.tpl === k); };
+    for(const b of box.querySelectorAll('[data-tpl]')) b.onclick = () => show(b.dataset.tpl); show('wg_quick'); }
+}
+
+$('#addPeerBtn').onclick = () => { const f = $('#peerForm'); f.reset(); fillOrgs(f.org_id, ''); f.device_id.innerHTML = `<option value="">${esc(t('(none)'))}</option>` + DEVICES.map(d => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('');
+  setKind('user'); mfaRows(); $('#peerErr').textContent = ''; $('#peerResult').hidden = true; $('#peerInputs').hidden = false; $('#peerSubmit').hidden = false; $('#peerDlg').showModal(); };
+$('#peerForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#peerErr').textContent = ''; $('#peerSubmit').disabled = true;
+  try{
+    const body = {name: f.name.value.trim(), kind: KIND, org_id: f.org_id.value, device_id: f.device_id.value, note: f.note.value, reason: f.reason.value, password: f.password.value, code: f.code.value.trim(),
+      subnets: KIND === 'site' ? f.subnets.value.split(/[\s,]+/).filter(Boolean) : [], expires_at: isoFromLocal(f.expires_at.value)};
+    const r = await api('POST', '/api/v1/vpn/peers', body);
+    f.password.value = ''; $('#peerInputs').hidden = true; $('#peerSubmit').hidden = true;
+    const box = $('#peerResult'); box.innerHTML = resultHTML(r, KIND); box.hidden = false; wireResult(box, r, body.name); ctrl32.toast(t('peer added'), 'ok'); load();
+  }catch(x){ $('#peerErr').textContent = x.message; } finally { $('#peerSubmit').disabled = false; } };
+
+function openEdit(id){ const p = V.peers.find(x => x.id === id); EDIT_ID = id; const f = $('#editForm'); f.reset(); f.name.value = p.name; fillOrgs(f.org_id, p.org_id); f.note.value = p.note || '';
+  $('#editSubnetsRow').hidden = p.kind !== 'site'; f.subnets.value = (p.subnets || []).join('\n'); f.expires_at.value = localInput(p.expires_at); $('#editErr').textContent = ''; $('#editDlg').showModal(); }
+$('#editForm').onsubmit = async e => { e.preventDefault(); const f = e.target; const p = V.peers.find(x => x.id === EDIT_ID); $('#editErr').textContent = '';
+  const body = {name: f.name.value.trim(), org_id: f.org_id.value, note: f.note.value, expires_at: isoFromLocal(f.expires_at.value), reason: f.reason.value};
+  if(p.kind === 'site') body.subnets = f.subnets.value.split(/[\s,]+/).filter(Boolean);
+  if(localInput(p.expires_at) === f.expires_at.value) delete body.expires_at;
+  try{ await api('PATCH', `/api/v1/vpn/peers/${EDIT_ID}`, body); $('#editDlg').close(); ctrl32.toast(t('saved'), 'ok'); load(); }catch(x){ $('#editErr').textContent = x.message; } };
+
+function openRotate(id){ EDIT_ID = id; const f = $('#rotForm'); f.reset(); mfaRows(); $('#rotErr').textContent = ''; $('#rotResult').hidden = true; $('#rotInputs').hidden = false; $('#rotSubmit').hidden = false; $('#rotDlg').showModal(); }
+$('#rotForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#rotErr').textContent = ''; const p = V.peers.find(x => x.id === EDIT_ID);
+  try{ const r = await api('POST', `/api/v1/vpn/peers/${EDIT_ID}/rotate`, {reason: f.reason.value, password: f.password.value, code: f.code.value.trim()}); f.password.value = '';
+    $('#rotInputs').hidden = true; $('#rotSubmit').hidden = true; const box = $('#rotResult'); box.innerHTML = resultHTML(r, p.kind); box.hidden = false; wireResult(box, r, p.name); ctrl32.toast(t('new key issued'), 'ok'); load(); }
+  catch(x){ $('#rotErr').textContent = x.message; } };
+
+function srcOptions(sel){
+  const has = (type, val) => sel.some(s => s.type === type && (s.kind === val || s.id === val || type === 'all'));
+  const box = (type, val, label) => `<label><input type="checkbox" data-st="${type}" data-sv="${esc(val)}"${has(type, val) ? ' checked' : ''}><span>${esc(label)}</span></label>`;
+  let h = box('all', '', t('all peers')) + box('kind', 'user', t('all technicians')) + box('kind', 'device', t('all devices')) + box('kind', 'site', t('all sites'));
+  h += ORGS.map(o => box('org', o.id, '▣ ' + o.name)).join('');
+  h += (V.peers || []).map(p => box('peer', p.id, p.name)).join('');
+  $('#srcList').innerHTML = h;
+}
+function readSources(){ return [...document.querySelectorAll('#srcList input:checked')].map(i => i.dataset.st === 'all' ? {type: 'all'} : (i.dataset.st === 'kind' ? {type: 'kind', kind: i.dataset.sv} : {type: i.dataset.st, id: i.dataset.sv})); }
+function destChanged(){ const f = $('#ruleForm'), d = f.dest_type.value;
+  $('#destPeerRow').hidden = d === 'server'; $('#destCidrRow').hidden = d !== 'site'; $('#presetRow').hidden = d !== 'server';
+  const list = (V.peers || []).filter(p => d === 'site' ? p.kind === 'site' : true);
+  const cur = f.dest_peer_id.value; f.dest_peer_id.innerHTML = list.map(p => `<option value="${esc(p.id)}">${esc(p.name)} (${esc(p.address)})</option>`).join(''); if(list.some(p => p.id === cur)) f.dest_peer_id.value = cur; }
+$('#ruleForm').dest_type.onchange = destChanged;
+function openRule(id){ RULE_ID = id || ''; const r = (V.rules || []).find(x => x.id === id) || {sources: [], dest_type: 'server', protocol: 'tcp', ports: '', enabled: true};
+  const f = $('#ruleForm'); f.reset(); f.name.value = r.name || ''; srcOptions(r.sources || []); f.dest_type.value = r.dest_type; destChanged(); if(r.dest_peer_id) f.dest_peer_id.value = r.dest_peer_id;
+  f.dest_cidr.value = r.dest_cidr || ''; f.protocol.value = r.protocol; f.ports.value = r.ports || ''; f.enabled.checked = r.enabled !== false;
+  $('#presets').innerHTML = (V.services || []).map((s, i) => `<button class="btn small" type="button" data-preset="${i}">${esc(t(s.name))} <span class="muted">${esc(s.ports)}</span></button>`).join('');
+  for(const b of document.querySelectorAll('[data-preset]')) b.onclick = () => { const s = V.services[+b.dataset.preset]; f.protocol.value = s.protocol; f.ports.value = s.ports; if(!f.name.value) f.name.value = t(s.name); };
+  $('#ruleTitle').textContent = t(id ? 'Edit access rule' : 'Add access rule'); $('#ruleErr').textContent = ''; $('#ruleDlg').showModal(); }
+$('#addRuleBtn').onclick = () => openRule('');
+$('#ruleForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#ruleErr').textContent = '';
+  const body = {name: f.name.value.trim(), sources: readSources(), dest_type: f.dest_type.value, dest_peer_id: f.dest_type.value === 'server' ? '' : f.dest_peer_id.value,
+    dest_cidr: f.dest_type.value === 'site' ? f.dest_cidr.value.trim() : '', protocol: f.protocol.value, ports: (f.protocol.value === 'tcp' || f.protocol.value === 'udp') ? f.ports.value.trim() : '', enabled: f.enabled.checked, reason: f.reason.value};
+  try{ await api(RULE_ID ? 'PUT' : 'POST', RULE_ID ? `/api/v1/vpn/rules/${RULE_ID}` : '/api/v1/vpn/rules', body); $('#ruleDlg').close(); ctrl32.toast(t('saved'), 'ok'); load(); }catch(x){ $('#ruleErr').textContent = x.message; } };
+
+$('#settingsBtn').onclick = () => { $('#setErr').textContent = ''; $('#setDlg').showModal(); };
+$('#setForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#setErr').textContent = ''; $('#setSubmit').disabled = true;
+  try{ await api('PUT', '/api/v1/server/wireguard', {enabled: f.enabled.checked, listen_port: parseInt(f.listen_port.value, 10) || 51820, address: f.address.value.trim(), endpoint: f.endpoint.value.trim(), dns: f.dns.value.trim(), reason: f.reason.value});
+    f.reason.value = ''; f.dataset.filled = ''; $('#setDlg').close(); ctrl32.toast(t('VPN server configured'), 'ok'); setTimeout(load, 1500); }
+  catch(x){ $('#setErr').textContent = x.message; } finally { $('#setSubmit').disabled = false; } };
+$('#rulesetBtn').onclick = () => { $('#fwText').textContent = (V.interface && V.interface.firewall && V.interface.firewall.ruleset) || t('No firewall rules loaded yet.'); $('#fwDlg').showModal(); };
+$('#applyBtn').onclick = () => askReason('Apply the VPN again', 'Peers and access rules are sent to the server agent again.', async reason => { await api('POST', '/api/v1/vpn/apply', {reason}); ctrl32.toast(t('applied'), 'ok'); load(); });
+
+async function load(){
+  V = await api('GET', '/api/v1/vpn');
+  noteBar(); renderServer(); renderLicense(); renderPeers(); renderRules();
+}
+ctrl32.ready({requireAuth: true, requirePerm: 'system.admin'}).then(async () => {
+  try{ ORGS = await api('GET', '/api/v1/organizations'); }catch(e){ ORGS = []; }
+  try{ DEVICES = await api('GET', '/api/v1/devices'); }catch(e){ DEVICES = []; }
+  load().catch(x => ctrl32.toast(x.message, 'bad'));
+});
+</script>
+</body>
+</html>

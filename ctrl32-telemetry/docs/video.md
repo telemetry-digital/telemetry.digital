@@ -333,8 +333,9 @@ away shows as not connected within a few seconds).
 
 The Home Assistant add-on (`deploy/homeassistant`) has the same options per camera: `onvif`, `audio`, and `web`.
 
-Alternatively connect the site with the server's WireGuard network (*System → WireGuard*) and add the cameras
-normally — useful when the site already has a router with WireGuard.
+Alternatively connect the site to the server's VPN as a site peer (*System → VPN*, `docs/vpn.md`) and add the
+cameras normally — useful when the site already has a router with WireGuard. The server reaches the site's cameras
+without an access rule (rules only limit traffic that comes from the VPN).
 
 ## Camera widget
 

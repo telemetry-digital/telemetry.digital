@@ -1,6 +1,6 @@
 // Package agent implements the privileged helper of ctrl32 telemetry (ADR-0012): a root process listening on a
 // Unix socket that performs a closed list of host operations for the unprivileged web service — status, service
-// restarts, Caddy (domain/TLS), WireGuard and binary updates. Nothing here builds shell commands from input.
+// restarts, Caddy (domain/TLS), WireGuard with its VPN firewall and binary updates. Nothing here builds shell commands from input.
 package agent
 
 import "time"
@@ -83,7 +83,7 @@ type CaddyRequest struct {
 	CloudflareToken string   `json:"cloudflare_token"` // empty keeps the stored token
 }
 
-// WireGuardState combines the stored configuration with the live interface.
+// WireGuardState combines the stored configuration with the live interface and the VPN firewall.
 type WireGuardState struct {
 	Installed  bool            `json:"installed"`
 	Enabled    bool            `json:"enabled"`
@@ -96,6 +96,21 @@ type WireGuardState struct {
 	MQTT       string          `json:"mqtt,omitempty"` // broker address inside the VPN
 	Peers      []WireGuardPeer `json:"peers"`
 	UpdatedAt  time.Time       `json:"updated_at,omitempty"`
+	// Supported is false where the agent does not manage WireGuard (Windows: a later phase).
+	Supported bool `json:"supported"`
+	// Simulated: development/test agent ([agent] vpn_simulate) — files are rendered, nothing is applied to the host.
+	Simulated bool        `json:"simulated,omitempty"`
+	Firewall  VPNFirewall `json:"firewall"`
+}
+
+// VPNFirewall is the state of the nftables table that filters traffic from the VPN (default deny).
+type VPNFirewall struct {
+	Applied   bool      `json:"applied"` // the table is loaded (in simulation: rendered)
+	Rules     int       `json:"rules"`   // access rules in the table
+	Forward   bool      `json:"forward"` // forwarding through wg0 is on (rules towards peers or sites)
+	AppliedAt time.Time `json:"applied_at,omitzero"`
+	Error     string    `json:"error,omitempty"`   // last failed apply (rolled back)
+	Ruleset   string    `json:"ruleset,omitempty"` // the generated table, for review
 }
 
 type WireGuardPeer struct {
@@ -103,6 +118,8 @@ type WireGuardPeer struct {
 	Name            string    `json:"name"`
 	PublicKey       string    `json:"public_key"`
 	Address         string    `json:"address"`
+	Subnets         []string  `json:"subnets,omitempty"`
+	Enabled         bool      `json:"enabled"`
 	CreatedAt       time.Time `json:"created_at"`
 	CreatedBy       string    `json:"created_by"`
 	LatestHandshake time.Time `json:"latest_handshake,omitempty"`
@@ -118,17 +135,6 @@ type WireGuardRequest struct {
 	Address    string `json:"address"`
 	Endpoint   string `json:"endpoint"`
 	DNS        string `json:"dns"`
-}
-
-type PeerRequest struct {
-	Name      string `json:"name"`
-	CreatedBy string `json:"created_by"`
-}
-
-// PeerResult carries the client configuration exactly once; the private key is not stored anywhere.
-type PeerResult struct {
-	Peer   WireGuardPeer `json:"peer"`
-	Config string        `json:"config"`
 }
 
 type RestartRequest struct {
