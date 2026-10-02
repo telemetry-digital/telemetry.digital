@@ -372,7 +372,7 @@ async function settingsAI(){
   $('#aiOn').innerHTML = st.enabled ? '<span class="badge ok">' + esc(ctrl32.t('AI access is on')) + '</span>' : '<span class="badge">' + esc(ctrl32.t('AI access is off')) + '</span>';
   for (const el of f.elements) el.disabled = !st.can_edit;
   $('#aiLic').innerHTML = st.write_licensed ? '<span class="badge ok">' + esc(ctrl32.t('Changes through AI are licensed')) + '</span>'
-    : esc(ctrl32.t('Reading is free. Changes through AI assistants need the license of this server (white labeling and AI changes, 99,- EUR once, forever) — System → License.')) + (st.buy_url ? ` <a href="${esc(st.buy_url)}" target="_blank" rel="noopener">${esc(ctrl32.t('Buy'))}</a>` : '');
+    : esc(ctrl32.t('Reading is free. Changes through AI assistants need the licence of this server (System → License).')) + (st.buy_url ? ` <a href="${esc(st.buy_url)}" target="_blank" rel="noopener">${esc(ctrl32.t('Buy'))}</a>` : '');
   $('#aiUrl').textContent = st.url;
   $('#aiCount').textContent = ctrl32.t('API operations offered') + ': ' + st.operations + ' · ' + ctrl32.t('MCP tools') + ': ' + st.tools;
   f.onsubmit = async e => { e.preventDefault(); $('#aiErr').textContent = '';

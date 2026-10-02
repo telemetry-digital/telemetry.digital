@@ -1,5 +1,6 @@
-// Package license verifies the paid licenses of ctrl32 telemetry (spec 007). The core product is free; paid features
-// (white labeling) need a license token issued by the licensor with tools/licgen and signed with Ed25519. The binary
+// Package license verifies the licenses of ctrl32 telemetry (spec 007, spec 026). The product is free, including up to
+// four cameras; a license (one per server) covers more cameras, white labeling, changes through AI assistants and the
+// VPN extras, and includes the updates released until its updates_until date. Licensed features need a license token issued by the licensor with tools/licgen and signed with Ed25519. The binary
 // carries only the public keys (trusted/*.pub); the private key never leaves the licensor. Tokens are verified offline.
 //
 // Token: "c32l1." + base64url(JSON payload) + "." + base64url(Ed25519 signature of "c32l1." + base64url(payload)).
@@ -31,12 +32,23 @@ type License struct {
 	Licensee string    `json:"licensee"`
 	Email    string    `json:"email,omitempty"`
 	Issued   time.Time `json:"issued"`
-	Expires  time.Time `json:"expires,omitzero"`  // zero = perpetual (never expires)
+	Expires  time.Time `json:"expires,omitzero"`  // zero = no expiry date (the license keeps working)
 	Features []string  `json:"features"`          // e.g. white_label
 	Domains  []string  `json:"domains,omitempty"` // server host names ("*.example.com" allowed); empty = any
-	Notes    string    `json:"notes,omitempty"`
-	KeyID    string    `json:"-"` // which trusted key verified it
+	// UpdatesUntil (YYYY-MM-DD, UTC) is the last release date the license includes updates for; empty = no limit
+	// (licenses issued before 0.66.0). After it the server keeps running with everything it has; only newer versions
+	// are not installed until the license is renewed.
+	UpdatesUntil string `json:"updates_until,omitempty"`
+	Notes        string `json:"notes,omitempty"`
+	KeyID        string `json:"-"` // which trusted key verified it
 }
+
+// DateLayout is the format of UpdatesUntil.
+const DateLayout = "2006-01-02"
+
+// OnlineMaxUpdateDays limits updates_until of a token signed by an online key: at most this many days after its issue
+// date, so a stolen online key cannot hand out updates for years.
+const OnlineMaxUpdateDays = 400
 
 var (
 	ErrFormat    = errors.New("not a ctrl32 license token")
@@ -59,7 +71,7 @@ const OnlineMaxDays = 31
 
 // KeyFile is one trusted key file: the base64 public key and optional "# max-days: N" line. A key with a max-days
 // limit is an ONLINE key (held by the licence worker): a token it signed is accepted only with an expiry at most N days
-// after its issue date, so a stolen online key can never issue a perpetual license. The master key has no limit.
+// after its issue date, so a stolen online key can never issue a license without expiry. The master key has no limit.
 type KeyFile struct {
 	Key     ed25519.PublicKey
 	MaxDays int // 0 = no limit
@@ -174,6 +186,11 @@ func Sign(l License, key ed25519.PrivateKey) (string, error) {
 	if l.ID == "" || l.Licensee == "" || len(l.Features) == 0 {
 		return "", errors.New("id, licensee and at least one feature are required")
 	}
+	if l.UpdatesUntil != "" {
+		if _, err := time.Parse(DateLayout, l.UpdatesUntil); err != nil {
+			return "", errors.New("updates_until must be a date YYYY-MM-DD")
+		}
+	}
 	b, err := json.Marshal(l)
 	if err != nil {
 		return "", err
@@ -199,6 +216,9 @@ func ParseLimited(token string, keys map[string]ed25519.PublicKey, limits map[st
 	if d := limits[l.KeyID]; d > 0 {
 		if l.Issued.IsZero() || l.Expires.IsZero() || l.Expires.Sub(l.Issued) > time.Duration(d)*24*time.Hour {
 			return nil, fmt.Errorf("%w (%d days)", ErrOnlineTerm, d)
+		}
+		if u, ok := l.UpdatesEnd(); ok && u.Sub(l.Issued) > OnlineMaxUpdateDays*24*time.Hour {
+			return nil, fmt.Errorf("%w (updates at most %d days)", ErrOnlineTerm, OnlineMaxUpdateDays)
 		}
 	}
 	return l, nil
@@ -236,6 +256,11 @@ func parse(token string, keys map[string]ed25519.PublicKey) (*License, error) {
 	if err := json.Unmarshal(raw, &l); err != nil {
 		return nil, ErrFormat
 	}
+	if l.UpdatesUntil != "" {
+		if _, err := time.Parse(DateLayout, l.UpdatesUntil); err != nil {
+			return nil, ErrFormat
+		}
+	}
 	l.KeyID = keyID
 	return &l, nil
 }
@@ -260,8 +285,27 @@ func (l *License) Check(host string, now time.Time) Status {
 	return Status{Valid: true}
 }
 
-// Perpetual reports whether the license never expires (no expiry date; the white-label license is sold this way).
-func (l *License) Perpetual() bool { return l != nil && l.Expires.IsZero() }
+// NoExpiry reports whether the license has no expiry date: it keeps working; only the updates it includes end
+// (UpdatesUntil). The licenses minted with the master key are issued this way.
+func (l *License) NoExpiry() bool { return l != nil && l.Expires.IsZero() }
+
+// UpdatesEnd returns the last release date the license includes updates for; false = no limit.
+func (l *License) UpdatesEnd() (time.Time, bool) {
+	if l == nil || l.UpdatesUntil == "" {
+		return time.Time{}, false
+	}
+	d, err := time.Parse(DateLayout, l.UpdatesUntil)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return d, true
+}
+
+// UpdatesEnded reports whether the updates included in the license ended before now (the whole last day counts).
+func (l *License) UpdatesEnded(now time.Time) bool {
+	d, ok := l.UpdatesEnd()
+	return ok && now.UTC().After(d.Add(24*time.Hour-time.Nanosecond))
+}
 
 // Has reports whether a usable license grants a feature.
 func (l *License) Has(feature, host string, now time.Time) bool {

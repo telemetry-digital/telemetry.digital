@@ -1,13 +1,14 @@
-// licgen creates the licensor's key pair and issues license tokens for paid features (spec 007).
+// licgen creates the licensor's key pair and issues license tokens (spec 007, spec 026).
 //
 //	licgen keygen -out ~/ctrl32-keys -name ctrl32-2026          writes ctrl32-2026.key (private, 0600) and
 //	                                                           ctrl32-2026.pub (commit it to internal/license/trusted/)
 //	licgen issue -key ~/ctrl32-keys/ctrl32-2026.key -licensee "Acme s.r.o." -email it@acme.sk \
 //	             -domains scada.acme.sk -notes "order 2026-001"
-//	                                                           perpetual white_label license (the default: 99,- EUR,
-//	                                                           one-time); -days N or -expires YYYY-MM-DD set an expiry
+//	                                                           white_label license without expiry, updates included
+//	                                                           for one year from today (-updates-until YYYY-MM-DD or
+//	                                                           none); -days N or -expires YYYY-MM-DD set an expiry
 //	licgen show -token c32l1.… [-pub file.pub]                 prints the payload (and verifies it with -pub)
-//	licgen batch [-apply] [-url https://lic.ctrl32.com]         mints the perpetual licenses the licence worker queued
+//	licgen batch [-apply] [-url https://lic.ctrl32.com]         mints the licenses without expiry the licence worker queued
 //	             [-token-file …worker-token.txt] [-key …]     for activated orders past the refund period (batch.go)
 //
 // Keep the private key offline; whoever has it can issue licenses.
@@ -99,8 +100,9 @@ func issue(args []string) error {
 	licensee := fs.String("licensee", "", "customer name")
 	email := fs.String("email", "", "customer contact")
 	features := fs.String("features", license.WhiteLabel, "comma-separated features")
-	days := fs.Int("days", 0, "validity in days; 0 = perpetual (never expires, the default)")
-	expires := fs.String("expires", "", "expiry date YYYY-MM-DD (UTC, end of day) instead of -days; empty = perpetual")
+	days := fs.Int("days", 0, "validity in days; 0 = no expiry (the default)")
+	expires := fs.String("expires", "", "expiry date YYYY-MM-DD (UTC, end of day) instead of -days; empty = no expiry")
+	updates := fs.String("updates-until", "", "last release date YYYY-MM-DD the license includes updates for; default: one year after today; none = no limit")
 	domains := fs.String("domains", "", "comma-separated server host names (*.example.com allowed); empty = any")
 	notes := fs.String("notes", "", "free text (order number …)")
 	_ = fs.Parse(args)
@@ -131,10 +133,15 @@ func issue(args []string) error {
 			return fmt.Errorf("-expires %s is in the past", *expires)
 		}
 	case *days < 0:
-		return fmt.Errorf("-days must be 0 (perpetual) or more")
+		return fmt.Errorf("-days must be 0 (no expiry) or more")
 	case *days > 0:
 		l.Expires = now.AddDate(0, 0, *days)
 	}
+	u, err := updatesUntil(*updates, now)
+	if err != nil {
+		return err
+	}
+	l.UpdatesUntil = u
 	tok, err := license.Sign(l, priv)
 	if err != nil {
 		return err
@@ -144,12 +151,34 @@ func issue(args []string) error {
 	return nil
 }
 
-// validity describes the expiry for people: a perpetual license never expires.
-func validity(l *license.License) string {
-	if l.Perpetual() {
-		return "perpetual (never expires)"
+// UpdateYears is the default period of updates a new license includes.
+const UpdateYears = 1
+
+// updatesUntil resolves the -updates-until flag: "" = one year after now, "none" = no limit, else a date.
+func updatesUntil(flagValue string, now time.Time) (string, error) {
+	switch v := strings.TrimSpace(flagValue); v {
+	case "":
+		return now.AddDate(UpdateYears, 0, 0).Format(license.DateLayout), nil
+	case "none":
+		return "", nil
+	default:
+		if _, err := time.Parse(license.DateLayout, v); err != nil {
+			return "", fmt.Errorf("-updates-until: %v", err)
+		}
+		return v, nil
 	}
-	return "valid until " + l.Expires.UTC().Format("2006-01-02 15:04 MST")
+}
+
+// validity describes the expiry and the included updates for people.
+func validity(l *license.License) string {
+	v := "no expiry"
+	if !l.NoExpiry() {
+		v = "valid until " + l.Expires.UTC().Format("2006-01-02 15:04 MST")
+	}
+	if l.UpdatesUntil != "" {
+		return v + ", updates included until " + l.UpdatesUntil
+	}
+	return v + ", updates without limit"
 }
 
 func show(args []string) error {

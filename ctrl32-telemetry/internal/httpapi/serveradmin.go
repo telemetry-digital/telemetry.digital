@@ -122,7 +122,11 @@ func (s *Server) serverInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	out["agent"] = ag
 	v, at, err := s.availableVersion(ctx)
-	out["update"] = map[string]any{"current": s.version, "available": v, "checked_at": at, "error": err, "url": s.updateURL()}
+	upd := map[string]any{"current": s.version, "available": v, "checked_at": at, "error": err, "url": s.updateURL()}
+	for k, x := range s.updatesJSON(ctx) {
+		upd[k] = x
+	}
+	out["update"] = upd
 	out["time"] = s.tc.State()
 	out["links"] = map[string]any{"metrics": "/metrics", "security_txt": "/.well-known/security.txt"}
 	writeJSON(w, 200, out)
@@ -229,8 +233,16 @@ func (s *Server) serverUpdate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "invalid version")
 		return
 	}
-	res, err := s.agent.Update(r.Context(), in.Version)
+	// a licensed server installs only the versions released while its licence includes updates; the agent checks the
+	// release date of the downloaded binary (servers without a licence always update)
+	until := s.updatesUntil(r.Context())
+	res, err := s.agent.Update(r.Context(), in.Version, until)
 	if err != nil {
+		var ce *agent.CodedError
+		if errors.As(err, &ce) && ce.Code == "updates_ended" {
+			writeJSON(w, http.StatusPaymentRequired, map[string]string{"error": ce.Msg, "code": ce.Code})
+			return
+		}
 		s.agentErr(w, err)
 		return
 	}

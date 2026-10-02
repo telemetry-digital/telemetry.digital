@@ -147,6 +147,9 @@ type RestartRequest struct {
 
 type UpdateRequest struct {
 	Version string `json:"version"`
+	// UpdatesUntil (YYYY-MM-DD) is the last release date the server's licence includes updates for; empty = no limit
+	// (no licence, or a licence issued without the limit). The agent refuses a binary released later.
+	UpdatesUntil string `json:"updates_until,omitempty"`
 }
 
 type UpdateResult struct {

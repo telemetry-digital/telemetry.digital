@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # End-to-end checks for spec 010: cameras (RTSP H.264 and MJPEG from the camera simulator), stream test, live video over
-# a WebSocket, continuous recording, playback, MP4 export, audit of playback, video walls and validation.
+# a WebSocket, continuous recording, playback, MP4 export, audit of playback, video walls and validation; the camera
+# limit without a license (spec 026: up to 4 enabled cameras, more refused with 402, existing ones keep working). The
+# suite runs many cameras at once, so it installs a test license (tests/keys) unless one is installed, and removes it.
 #   BASE=http://127.0.0.1:8080 USER=admin PASS=admin1234 bash tests/e2e/video.sh
 set -u
 cd "$(dirname "$0")/../.."
@@ -56,6 +58,13 @@ req POST /api/v1/auth/login "{\"username\":\"$USER\",\"password\":\"$PASS\"}"; c
 req GET /api/v1/auth/me; CSRF=$(jx j.csrf_token)
 check "admin has the video permissions" "$(jx '["video.view","video.playback","video.manage"].every(p => j.permissions.includes(p))')" true
 go build -o "$TMP/camsim" ./tools/camsim || { echo "camsim build failed"; exit 1; }
+go build -o "$TMP/licgen" ./tools/licgen || { echo "licgen build failed"; exit 1; }
+LIC_OURS=""
+req GET /api/v1/server/license
+if [[ "$(jx j.valid)" != true ]]; then
+  req PUT /api/v1/server/license "{\"token\":\"$("$TMP/licgen" issue -key tests/keys/license-test.key -licensee "E2E video $SUF" 2>/dev/null)\",\"reason\":\"e2e video\"}"
+  check "test license installed (many cameras at once)" "$(st)" 200; LIC_OURS=1
+fi
 [[ -n "${BIN:-}" ]] || go build -o "$TMP/c32" ./cmd/ctrl32-telemetry || { echo "build failed"; exit 1; }
 RP=$((20000 + RANDOM % 20000))
 HP=$((RP + 1)); DP=$((RP + 2))
@@ -364,4 +373,34 @@ req DELETE "/api/v1/video/cameras/$DOOR"; check "delete needs a reason" "$(st)" 
 for c in $CAM $DOOR; do req DELETE "/api/v1/video/cameras/$c?reason=e2e"; done; check "cameras removed" "$(st)" 200
 req GET /api/v1/video/cameras/$CAM; check "removed camera gone" "$(st)" 404
 req GET /api/v1/video/storage; check "recordings stay after removal" "$(jx "j.cameras.some(c => c.id === '$CAM' && c.removed && c.bytes > 0)")" true
+
+echo "== camera limit without a license (spec 026)"
+if [[ -z "$LIC_OURS" ]]; then
+  echo "  skipped: a license was installed before the suite (the limit needs a server without one)"
+else
+  lcam() { req POST /api/v1/video/cameras "{\"name\":\"$1 $SUF\",\"url\":\"$SIM/lim$1/mjpeg/160x96\",\"record\":\"off\",\"enabled\":${2:-true},\"reason\":\"e2e limit\"}"; }
+  req GET /api/v1/video/storage; E0=$(jx j.camera_limit.enabled)
+  LIM=()
+  for i in 1 2 3 4; do lcam L$i; LIM+=("$(jx j.id)"); done
+  check "with the license more cameras run" "$(st)" 201
+  req GET /api/v1/video/storage; check "count over all organizations, licensed" "$(jx 'j.camera_limit.enabled + " " + j.camera_limit.free_limit + " " + j.camera_limit.licensed')" "$((E0 + 4)) 4 true"
+  req DELETE "/api/v1/server/license?reason=e2e%20camera%20limit"; check "license removed" "$(st)" 200
+  req GET /api/v1/server/license; check "license page: cameras of 4 without a license" "$(jx 'j.cameras.enabled + " " + j.cameras.free_limit + " " + j.cameras.licensed')" "$((E0 + 4)) 4 false"
+  lcam L5; check "a fifth enabled camera is refused" "$(st) $(jx j.code)" "402 license_required"
+  [[ "$(jx j.error)" == *"up to 4 cameras"* && "$(jx j.error)" == *"keep working"* ]] && ok "the refusal explains the limit" || bad "error $(jx j.error)"
+  lcam L6 false; check "a disabled camera can be added" "$(st) $(jx j.enabled)" "201 false"; L6=$(jx j.id)
+  req PUT "/api/v1/video/cameras/$L6" '{"enabled":true,"reason":"e2e"}'; check "enabling it is refused" "$(st) $(jx j.code)" "402 license_required"
+  req PUT "/api/v1/video/cameras/${LIM[0]}" '{"location":"limit test","reason":"e2e"}'; check "existing cameras can still be changed" "$(st) $(jx 'j.enabled + " " + j.location')" "200 true limit test"
+  req GET /api/v1/video/cameras; check "nothing was switched off" "$(jx "j.filter(c => c.name.endsWith(' $SUF') && c.name.startsWith('L') && c.enabled).length")" 4
+  waitfor '(req GET /api/v1/video/cameras/${LIM[3]}; [[ "$(jx j.status.state)" != disabled && "$(jx j.status.state)" != "" ]])' 20 && ok "cameras beyond the limit keep running ($(jx j.status.state))" || bad "status $(jx j.status.state)"
+  req GET /api/v1/video/storage; check "storage reports the limit" "$(jx 'j.camera_limit.licensed + " " + (j.camera_limit.enabled >= 4)')" "false true"
+  for c in "${LIM[@]}"; do req DELETE "/api/v1/video/cameras/$c?reason=e2e"; done
+  if [[ $E0 -lt 4 ]]; then
+    req PUT "/api/v1/video/cameras/$L6" '{"enabled":true,"reason":"e2e"}'; check "below the limit a camera can be enabled again" "$(st) $(jx j.enabled)" "200 true"
+  else
+    echo "  skipped: other cameras keep $E0 enabled"
+  fi
+  req DELETE "/api/v1/video/cameras/$L6?reason=e2e"; check "limit test cameras removed" "$(st)" 200
+  req GET "/api/v1/export/audit?format=csv"; check "license removal audited" "$(grep -c 'license.remove' "$TMP/b" | awk '{print ($1 >= 1)}')" 1
+fi
 echo; echo "passed $pass, failed $fail"; [[ $fail -eq 0 ]]

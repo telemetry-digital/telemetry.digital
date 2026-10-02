@@ -37,6 +37,15 @@ func NewClient(socket string) *Client {
 
 func (c *Client) Configured() bool { return c != nil && c.socket != "" }
 
+// CodedError is a refusal of the agent with a machine-readable code (updates_ended, …) the server passes on.
+type CodedError struct {
+	Status int
+	Code   string
+	Msg    string
+}
+
+func (e *CodedError) Error() string { return e.Msg }
+
 func (c *Client) do(ctx context.Context, method, path string, in, out any, timeout time.Duration) error {
 	if !c.Configured() {
 		return ErrNoAgent
@@ -65,8 +74,11 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any, timeo
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if resp.StatusCode >= 300 {
-		var e struct{ Error string }
+		var e struct{ Error, Code string }
 		if json.Unmarshal(data, &e) == nil && e.Error != "" {
+			if e.Code != "" {
+				return &CodedError{Status: resp.StatusCode, Code: e.Code, Msg: e.Error}
+			}
 			return errors.New(e.Error)
 		}
 		return fmt.Errorf("agent returned %d", resp.StatusCode)
@@ -119,9 +131,9 @@ func (c *Client) ApplyVPN(ctx context.Context, d vpn.Desired) (*WireGuardState, 
 	return &st, err
 }
 
-func (c *Client) Update(ctx context.Context, version string) (*UpdateResult, error) {
+func (c *Client) Update(ctx context.Context, version, updatesUntil string) (*UpdateResult, error) {
 	var r UpdateResult
-	err := c.do(ctx, "POST", "/update", UpdateRequest{Version: version}, &r, 10*time.Minute)
+	err := c.do(ctx, "POST", "/update", UpdateRequest{Version: version, UpdatesUntil: updatesUntil}, &r, 10*time.Minute)
 	return &r, err
 }
 

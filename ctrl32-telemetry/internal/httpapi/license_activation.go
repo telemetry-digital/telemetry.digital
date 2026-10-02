@@ -1,11 +1,11 @@
 package httpapi
 
-// Online activation of the white-label license (0.59.0, ADR-0016). The ctrl32 licence bought on ctrl32.com (99,- EUR,
-// Paddle) unlocks either the ctrl32 editor or white labeling on one server. The administrator pastes the order number;
+// Online activation of the license (0.59.0, ADR-0016). The ctrl32 licence bought on ctrl32.com (Paddle) unlocks either the
+// ctrl32 editor or the licensed features of one server. The administrator pastes the order number;
 // the server sends it with its host name (http.base_url) to the licence worker (license.activation_url, default
 // https://lic.ctrl32.com/telemetry/activate) and installs the license token it returns, verified like a pasted one:
 // inside the 14-day refund window a 30-day license signed with the worker's ONLINE key (the binary accepts online-key
-// licenses of at most 31 days only), afterwards the perpetual license minted offline with the master key. The order
+// licenses of at most 31 days only), afterwards the license without expiry minted offline with the master key. The order
 // number is stored, and a background job re-activates daily while the installed license expires within 20 days; a
 // refusal (refunded, order used for the editor, host limit) stops it and is shown on the License page. A pasted token
 // (offline installation) keeps working next to this.
@@ -127,7 +127,7 @@ func fetchActivation(ctx context.Context, client *http.Client, endpoint, userAge
 		if msg, ok := activationRefusals[rep.Error]; ok && resp.StatusCode >= 400 && resp.StatusCode < 500 {
 			e.Refusal, e.Msg = true, msg
 		} else if rep.Error == "pending" {
-			e.Msg = "the perpetual license is being prepared; the server asks again tomorrow"
+			e.Msg = "the license without expiry is being prepared; the server asks again tomorrow"
 		} else {
 			e.Msg = fmt.Sprintf("the licence service answered HTTP %d %s", resp.StatusCode, rep.Error)
 		}
@@ -151,15 +151,15 @@ func (s *Server) requestActivation(ctx context.Context, order, host string) (*li
 }
 
 // betterLicense reports whether the new license should replace the installed one: the automatic renewal never
-// replaces a valid perpetual license and never shortens a license.
+// replaces a valid license without expiry and never shortens a license.
 func betterLicense(cur, next *license.License, host string, now time.Time) bool {
 	if cur == nil || !cur.Check(host, now).Valid || !cur.Has(license.WhiteLabel, host, now) {
 		return true
 	}
-	if cur.Perpetual() {
+	if cur.NoExpiry() {
 		return false
 	}
-	return next.Perpetual() || next.Expires.After(cur.Expires)
+	return next.NoExpiry() || next.Expires.After(cur.Expires)
 }
 
 // renewDue reports whether the daily job should ask the service now.
@@ -167,7 +167,7 @@ func renewDue(a *activation, cur *license.License, now time.Time) bool {
 	if a == nil || a.Refused {
 		return false
 	}
-	if cur != nil && (cur.Perpetual() || cur.Expires.Sub(now) > licenseRenewWithin) {
+	if cur != nil && (cur.NoExpiry() || cur.Expires.Sub(now) > licenseRenewWithin) {
 		return false
 	}
 	return a.LastAttempt == nil || now.Sub(*a.LastAttempt) >= licenseRenewEvery
@@ -258,10 +258,14 @@ func (s *Server) activateLicense(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, activationStatus(err), err.Error())
 		return
 	}
+	if ok, msg := licenseCoversRelease(l.UpdatesUntil); !ok {
+		writeJSON(w, 409, map[string]string{"error": msg, "code": "updates_ended"})
+		return
+	}
 	cur := s.currentLicense(r.Context()).lic
 	now := time.Now()
-	if cur != nil && cur.Perpetual() && cur.Has(license.WhiteLabel, host, now) && !l.Perpetual() {
-		writeErr(w, 409, "a perpetual license is already installed on this server; remove it first to use another order")
+	if cur != nil && cur.NoExpiry() && cur.Has(license.WhiteLabel, host, now) && !l.NoExpiry() {
+		writeErr(w, 409, "a license without expiry is already installed on this server; remove it first to use another order")
 		return
 	}
 	by := "system"
@@ -275,7 +279,7 @@ func (s *Server) activateLicense(w http.ResponseWriter, r *http.Request) {
 	}
 	if kind != "starter" && kind != "permanent" {
 		kind = "starter"
-		if l.Perpetual() {
+		if l.NoExpiry() {
 			kind = "permanent"
 		}
 	}
@@ -357,7 +361,7 @@ func (s *Server) renewLicenseNow(w http.ResponseWriter, r *http.Request) {
 }
 
 // licenseRenewLoop is the daily automatic renewal. It logs what it does; the audit trail gets an entry only when it
-// installs the perpetual license (the 30-day renewals would only add noise).
+// installs the license without expiry (the 30-day renewals would only add noise).
 func (s *Server) licenseRenewLoop() {
 	time.Sleep(time.Minute)
 	for {
@@ -388,10 +392,10 @@ func (s *Server) renewTick(now time.Time) {
 		}
 		return
 	}
-	s.log.Info("license auto-renew", "order", a.Order, "installed", installed, "id", l.ID, "perpetual", l.Perpetual())
-	if installed && l.Perpetual() {
+	s.log.Info("license auto-renew", "order", a.Order, "installed", installed, "id", l.ID, "no_expiry", l.NoExpiry())
+	if installed && l.NoExpiry() {
 		e := audit.Entry{ActorType: "system", ActorName: "auto-renew", Action: "license.renew", EntityType: "license:" + l.ID,
-			New: map[string]any{"id": l.ID, "licensee": l.Licensee, "order": a.Order, "perpetual": true}, Reason: "automatic renewal: the perpetual license was issued"}
+			New: map[string]any{"id": l.ID, "licensee": l.Licensee, "order": a.Order, "no_expiry": true, "updates_until": l.UpdatesUntil}, Reason: "automatic renewal: the license without expiry was issued"}
 		if _, _, err := audit.Append(ctx, s.pool, e); err != nil {
 			s.log.Error("audit append failed", "security", true, "action", "license.renew", "err", err)
 		}

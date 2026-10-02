@@ -33,6 +33,7 @@
   </section>
 
   <section data-section="manage">
+    <div class="row cam-limit" id="camLimit" hidden style="margin-bottom:10px"></div>
     <div class="table-wrap"><table id="cams"><thead><tr><th>Name</th><th>Location</th><th>Stream</th><th>State</th><th>Recording</th><th class="num">Stored</th><th></th></tr></thead><tbody></tbody></table></div>
     <div class="card" style="margin-top:12px"><h2 style="margin-top:0">Storage</h2><div id="storage" class="muted"></div></div>
   </section>
@@ -239,6 +240,10 @@ function renderManage() {
   api('GET', '/api/v1/video/storage').then(s => {
     for (const c of s.cameras) { const td = document.querySelector(`[data-bytes="${c.id}"]`); if (td) td.textContent = fmtBytes(c.bytes); }
     const pct = s.max_bytes ? Math.round(100 * s.used_bytes / s.max_bytes) : 0;
+    const cl = s.camera_limit;
+    $('#camLimit').hidden = !cl || cl.licensed;
+    if (cl && !cl.licensed) $('#camLimit').innerHTML = `<span class="badge ${cl.enabled >= cl.free_limit ? 'warn' : 'ok'}">${esc(t('Cameras'))}: ${esc(String(cl.enabled))} ${esc(t('of 4 without a licence'))}</span>`
+      + ` <span class="muted">${esc(t(cl.enabled >= cl.free_limit ? 'More cameras need a licence (System → License); the existing ones keep working.' : 'The cameras of all organizations on this server count.'))}</span>`;
     $('#storage').innerHTML = `${esc(t('Recordings use'))} <b>${fmtBytes(s.used_bytes)}</b> ${esc(t('of'))} ${fmtBytes(s.max_bytes)} (${pct} %). <span>${esc(t('Beyond the limit the oldest recordings are deleted first; each camera also keeps its recordings only for its number of days.'))}</span>`;
   }).catch(() => {});
 }

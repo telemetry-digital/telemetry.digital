@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/release"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/vpn"
 )
 
@@ -765,9 +766,16 @@ func (a *Server) hUpdate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, err.Error())
 		return
 	}
-	if out, err := run(ctx, 20*time.Second, tmp, "version"); err != nil || !bytes.Contains([]byte(out), []byte(in.Version)) {
+	out, err := run(ctx, 20*time.Second, tmp, "version")
+	if err != nil || !bytes.Contains([]byte(out), []byte(in.Version)) {
 		_ = os.Remove(tmp)
 		writeErr(w, 502, "downloaded binary does not report version "+in.Version)
+		return
+	}
+	if msg := updateEntitled(in.UpdatesUntil, out, time.Now()); msg != "" {
+		_ = os.Remove(tmp)
+		a.log.Warn("update refused: the licence does not include it", "version", in.Version, "updates_until", in.UpdatesUntil)
+		writeJSON(w, 402, map[string]string{"error": msg, "code": "updates_ended"})
 		return
 	}
 	if isWindows() {
@@ -802,6 +810,33 @@ func (a *Server) hUpdate(w http.ResponseWriter, r *http.Request) {
 		}()
 	}
 	writeJSON(w, 200, UpdateResult{Version: in.Version, SHA256: got, Message: "installed; service and agent are restarting"})
+}
+
+// updateEntitled checks a downloaded binary against the licence's updates_until (YYYY-MM-DD, empty = no limit) using
+// the release date the binary reports in `version` (internal/release). It returns "" when it may be installed. The
+// running system is never touched here: a refused update leaves the current binary as it is.
+func updateEntitled(updatesUntil, versionOut string, now time.Time) string {
+	if updatesUntil == "" {
+		return ""
+	}
+	until, err := time.Parse(release.Layout, updatesUntil)
+	if err != nil {
+		return "invalid updates_until"
+	}
+	released, ok := release.FromVersionOutput(versionOut)
+	if !ok {
+		// a binary without a release date (before 0.66.0, or a build without it): only while the updates have not
+		// ended — anything published up to now is then within them
+		if now.UTC().After(until.Add(24*time.Hour - time.Nanosecond)) {
+			return "the release date of this version is unknown and the updates included in the licence ended on " + updatesUntil + "; renew the licence to install it"
+		}
+		return ""
+	}
+	if !release.Covered(released, until) {
+		return "this version was released on " + released.Format(release.Layout) + ", after the updates included in the licence ended (" + updatesUntil +
+			"); the system keeps running — renew the licence to install newer versions"
+	}
+	return ""
 }
 
 func randomID() string {

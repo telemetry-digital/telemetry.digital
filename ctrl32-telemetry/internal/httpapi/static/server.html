@@ -181,6 +181,7 @@
       <label>Version to install <input name="version" required placeholder="0.10.0"></label>
       <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
       <div class="muted">The agent downloads the release from the distribution point, verifies its SHA-256 checksum, runs the schema migrations and restarts the service. Make a database backup first for major upgrades.</div>
+      <div class="muted">With a licence, versions released after the updates included in the licence ended are not installed; the running system is not changed. Without a licence every version can be installed.</div>
       <div class="err" id="updErr"></div>
       <div class="muted" id="updMsg"></div>
       <div><button class="btn primary" type="submit" id="updSubmit">Install update</button></div>
@@ -191,15 +192,16 @@
 <section data-section="license">
   <div class="page-head"><h1>License</h1></div>
   <div class="card">
-    <p class="muted no-rebrand">ctrl32 telemetry is free. Paid features — white labeling and changes through AI assistants — need a license issued for this server.</p>
+    <p class="muted no-rebrand">ctrl32 telemetry is free, including up to 4 cameras. A licence for this server covers more than 4 cameras, white labeling, changes through AI assistants and the VPN extras (more than 5 peers, sites, time-limited and approved access for technicians).</p>
+    <p class="muted no-rebrand">The licence includes updates for its period. After that the system keeps running with everything it has; only newer versions are not installed until the licence is renewed.</p>
     <dl class="kv" id="kvLic"></dl>
     <div class="err" id="licErr"></div>
     <div class="row" style="margin-top:12px"><button class="btn" type="button" id="licRenew" hidden>Renew now</button><button class="btn danger" type="button" id="licRemove" hidden>Remove license</button></div>
   </div>
   <div class="card">
     <h2 style="margin-top:0">Activate with the order number</h2>
-    <p class="muted no-rebrand">White labeling is unlocked by the ctrl32 licence: 99,- EUR, bought once, perpetual. One licence unlocks either the ctrl32 editor or white labeling on one server, not both.</p>
-    <p class="muted">Enter the order number from the purchase confirmation. This server sends it with its name to the licence service and installs the license it gets. For the first 14 days (the refund period) the license runs 30 days and renews itself; after that the perpetual license arrives on its own.</p>
+    <p class="muted no-rebrand">One ctrl32 licence unlocks either the ctrl32 editor or the licensed features of one server, not both.</p>
+    <p class="muted">Enter the order number from the purchase confirmation. This server sends it with its name to the licence service and installs the license it gets. For the first 14 days (the refund period) the license runs 30 days and renews itself; after that the license without an expiry date arrives on its own.</p>
     <p><a class="btn" id="licBuy" href="https://ctrl32.com/pricing/" target="_blank" rel="noopener">Buy the license (99,- EUR)</a></p>
     <form id="licActForm" class="form">
       <label>Order number <input name="order" required maxlength="128" autocomplete="off" class="notranslate" placeholder="txn_…"></label>
@@ -274,7 +276,7 @@ function renderDomain(){
 }
 function renderUpdates(){
   const u = INFO.update, newer = u.available && u.available !== u.current;
-  kv($('#kvUpd'), [['Installed', esc(u.current)], ['Available', u.available ? esc(u.available) + (newer ? ' <span class="badge primary">update available</span>' : ' <span class="badge ok">up to date</span>') : '<span class="muted">' + esc(u.error || 'unknown') + '</span>'], ['Distribution point', esc(u.url)], ['Checked', fmt(u.checked_at)]]);
+  kv($('#kvUpd'), [['Installed', esc(u.current) + (u.release_date ? ' · ' + esc(ctrl32.t('release date')) + ' ' + day(u.release_date) : '')], ['Updates', updatesText({valid: true, updates_until: u.updates_until, updates_ended: u.updates_ended})], ['Available', u.available ? esc(u.available) + (newer ? ' <span class="badge primary">update available</span>' : ' <span class="badge ok">up to date</span>') : '<span class="muted">' + esc(u.error || 'unknown') + '</span>'], ['Distribution point', esc(u.url)], ['Checked', fmt(u.checked_at)]]);
   if(newer && !$('#updForm').version.value) $('#updForm').version.value = u.available;
 }
 let reasonCb = null;
@@ -355,7 +357,9 @@ async function renderLicense(){
   const l = await api('GET','/api/v1/server/license');
   const status = !l.installed ? '<span class="badge">' + esc(ctrl32.t('none')) + '</span>' : (l.valid ? '<span class="badge ok">' + esc(ctrl32.t('valid')) + '</span>' : '<span class="badge bad">' + esc(ctrl32.t('not valid')) + '</span> ' + esc(l.problem || ''));
   kv($('#kvLic'), [['Status', status], l.licensee ? ['Licensee', esc(l.licensee) + (l.email ? ' · ' + esc(l.email) : '')] : null, l.id ? ['License', '<code>' + esc(l.id) + '</code>'] : null,
-    l.features ? ['Features', esc(l.features.join(', '))] : null, l.installed ? ['Valid until', l.expires ? fmt(l.expires) : esc(ctrl32.t('perpetual (never expires)'))] : null,
+    l.features ? ['Features', esc(l.features.join(', '))] : null, l.installed ? ['Valid until', l.expires ? fmt(l.expires) : esc(ctrl32.t('no expiry date'))] : null,
+    l.installed ? ['Updates', updatesText(l)] : null,
+    l.cameras ? ['Cameras', camerasText(l.cameras)] : null,
     l.domains && l.domains.length ? ['Server names', esc(l.domains.join(', ')) + ' · ' + esc(ctrl32.t('this server')) + ': <code>' + esc(l.server_host || '—') + '</code>'] : null,
     l.installed_at ? ['Installed', fmt(l.installed_at) + ' · ' + esc(l.installed_by || '')] : null,
     l.online ? ['Type', esc(ctrl32.t('30-day license from the online activation (refund period)'))] : null,
@@ -365,6 +369,18 @@ async function renderLicense(){
   $('#licRenew').hidden = !l.activation;
   if (l.buy_url) $('#licBuy').href = l.buy_url;
   $('#licActHost').innerHTML = esc(ctrl32.t('The license is issued for this server name')) + ': <code>' + esc(l.activation_host || '—') + '</code>';
+}
+function day(d){ return esc(new Date(d + 'T00:00:00').toLocaleDateString(document.documentElement.lang || undefined)); }
+// the updates the licence includes: until a date, ended (the system keeps running), or without a limit
+function updatesText(l){
+  if (!l.valid) return '<span class="muted">' + esc(ctrl32.t('all versions (no licence needed)')) + '</span>';
+  if (!l.updates_until) return esc(ctrl32.t('all versions'));
+  if (l.updates_ended) return '<span class="badge warn">' + esc(ctrl32.t('Updates ended on')) + ' ' + day(l.updates_until) + '</span> ' + esc(ctrl32.t('the system keeps running; renew the licence to install newer versions'));
+  return esc(ctrl32.t('Updates included until')) + ' ' + day(l.updates_until);
+}
+function camerasText(c){
+  if (c.licensed) return esc(String(c.enabled)) + ' · ' + esc(ctrl32.t('no limit with the licence'));
+  return `<span class="badge ${c.enabled >= c.free_limit ? 'warn' : 'ok'}">${esc(String(c.enabled))} ${esc(ctrl32.t('of 4 without a licence'))}</span>`;
 }
 function activationRows(a, auto){
   if (!a) return [];
