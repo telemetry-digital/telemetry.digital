@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ctrl32 camera relay — installer for a remote site (Linux with systemd: Debian, Ubuntu, Raspberry Pi OS).
 #
-#   curl -fsSL https://telemetry.digital/install-relay.sh -o install-relay.sh
+#   curl -fsSL https://portal.telemetry.digital/install-relay.sh -o install-relay.sh
 #   sudo bash install-relay.sh --config relay.toml
 #
 # relay.toml is the file shown once when the remote camera was created (Cameras -> Add camera -> "The camera sends its
@@ -19,7 +19,7 @@
 # Options:
 #   --config FILE   relay configuration to install (required on the first run)
 #   --binary PATH   use a local binary instead of downloading
-#   --url URL       download URL (default: https://telemetry.digital/dl/ctrl32-telemetry-linux-ARCH)
+#   --url URL       download URL (default: https://portal.telemetry.digital/dl/ctrl32-telemetry-linux-ARCH)
 #   --update        download the current program again (otherwise an installed one is kept)
 #   --force         install even when the test fails (e.g. a camera is switched off for now)
 #   --check         only test the installed configuration
@@ -88,7 +88,7 @@ if [[ -n "$BINARY" ]]; then
   install -m 0755 "$BINARY" "$BIN"
   log "installed program from $BINARY"
 elif [[ ! -x "$BIN" || -n "$URL" ]] || $UPDATE; then
-  URL=${URL:-"https://telemetry.digital/dl/ctrl32-telemetry-linux-$ARCH"}
+  URL=${URL:-"https://portal.telemetry.digital/dl/ctrl32-telemetry-linux-$ARCH"}
   TMPD=$(mktemp -d); trap 'rm -rf "$TMPD"' EXIT
   curl -fsSL "$URL" -o "$TMPD/bin" || die "download failed: $URL"
   if curl -fsSL "${URL%/*}/SHA256SUMS" -o "$TMPD/SUMS" 2>/dev/null; then
@@ -127,7 +127,7 @@ fi
 cat > "$UNIT" <<EOF
 [Unit]
 Description=ctrl32 camera relay (forwards local cameras to the ctrl32 telemetry server)
-Documentation=https://telemetry.digital/docs/video.md
+Documentation=https://telemetry.digital/docs/
 After=network-online.target
 Wants=network-online.target
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ctrl32 telemetry — one-command installer for Linux (Debian/Ubuntu tested; systemd required).
 #
-#   curl -fsSL https://telemetry.digital/install.sh | sudo bash -s -- --domain telemetry.digital --demo
+#   curl -fsSL https://portal.telemetry.digital/install.sh | sudo bash -s -- --domain portal.telemetry.digital --demo
 #
 # What it does (idempotent, re-run safe):
 #   1. creates the system user and directories
@@ -17,7 +17,7 @@
 # Options:
 #   --domain NAME        public hostname (enables profile "internet", Caddy, MQTT TLS on 8883)
 #   --binary PATH        use a local binary instead of downloading
-#   --url URL            download URL for the binary (default: https://telemetry.digital/dl/ctrl32-telemetry-linux-ARCH)
+#   --url URL            download URL for the binary (default: https://portal.telemetry.digital/dl/ctrl32-telemetry-linux-ARCH)
 #   --db docker|apt      database installation method (default: docker if available, else apt)
 #   --db-port N          host port for the Docker PostgreSQL (default 5432, or 5433 if 5432 is taken)
 #   --public-read        allow unauthenticated read-only API/UI (demo instances only)
@@ -82,7 +82,7 @@ if [[ -n "$BINARY" ]]; then
   install -m 0755 "$BINARY" "$BIN"
   log "installed binary from $BINARY"
 else
-  URL=${URL:-"https://telemetry.digital/dl/$APP-linux-$ARCH"}
+  URL=${URL:-"https://portal.telemetry.digital/dl/$APP-linux-$ARCH"}
   TMP=$(mktemp)
   curl -fsSL "$URL" -o "$TMP" || die "download failed: $URL"
   install -m 0755 "$TMP" "$BIN"; rm -f "$TMP"

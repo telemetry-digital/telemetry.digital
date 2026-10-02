@@ -77,7 +77,7 @@ type AgentConfig struct {
 	Socket      string `toml:"socket"`       // Unix socket of `ctrl32-telemetry agent`; empty = no agent (development)
 	PgDump      string `toml:"pg_dump"`      // Windows: path to pg_dump.exe (default: bundled PostgreSQL next to the binary)
 	PgContainer string `toml:"pg_container"` // Docker container of PostgreSQL for backups (default ctrl32-telemetry-postgres)
-	UpdateURL   string `toml:"update_url"`   // where the agent downloads releases; default https://telemetry.digital/dl
+	UpdateURL   string `toml:"update_url"`   // where the agent downloads releases; default https://portal.telemetry.digital/dl
 	// VPNSimulate (development and tests only): the agent renders the VPN files into this directory instead of applying
 	// them to the host and serves only the VPN operations (internal/agent/vpn.go). Never set on a server.
 	VPNSimulate string `toml:"vpn_simulate"`

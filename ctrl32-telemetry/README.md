@@ -36,17 +36,17 @@ Version **0.66.0** (2 Oct 2026; production runs 0.65.0). Development on a PC: `d
 Linux (Debian/Ubuntu with systemd; PostgreSQL 18 and Caddy run in Docker by default):
 
 ```bash
-curl -fsSL https://telemetry.digital/install.sh | sudo bash -s -- --domain telemetry.example.com --demo
+curl -fsSL https://portal.telemetry.digital/install.sh | sudo bash -s -- --domain telemetry.example.com --demo
 ```
 
 Windows Server / Windows 10+ (elevated PowerShell; bundled PostgreSQL 18, Typst, two services):
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass -Force
-irm https://telemetry.digital/install.ps1 -OutFile install.ps1; .\install.ps1
+irm https://portal.telemetry.digital/install.ps1 -OutFile install.ps1; .\install.ps1
 ```
 
-Both installers are idempotent. Binaries and `SHA256SUMS` are at `https://telemetry.digital/dl/`; the Server page offers updates from there. Without `--domain` the server runs in the `intranet` profile (TLS optional); with a public hostname it runs in `internet` (TLS everywhere, MFA for everyone).
+Both installers are idempotent. Binaries and `SHA256SUMS` are at `https://portal.telemetry.digital/dl/`; the Server page offers updates from there. Without `--domain` the server runs in the `intranet` profile (TLS optional); with a public hostname it runs in `internet` (TLS everywhere, MFA for everyone).
 
 ## Configuration
 

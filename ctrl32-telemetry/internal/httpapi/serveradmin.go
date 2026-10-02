@@ -40,7 +40,7 @@ func (s *Server) updateURL() string {
 	if u := strings.TrimRight(s.cfg.Agent.UpdateURL, "/"); u != "" {
 		return u
 	}
-	return "https://telemetry.digital/dl"
+	return "https://portal.telemetry.digital/dl"
 }
 
 func (s *Server) availableVersion(ctx context.Context) (string, time.Time, string) {

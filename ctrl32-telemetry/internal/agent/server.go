@@ -71,7 +71,7 @@ type Server struct {
 
 func NewServer(socket, cfgPath, version, updateURL string, log *slog.Logger) *Server {
 	if updateURL == "" {
-		updateURL = "https://telemetry.digital/dl"
+		updateURL = "https://portal.telemetry.digital/dl"
 	}
 	return &Server{socket: socket, cfgPath: cfgPath, version: version, updateURL: strings.TrimRight(updateURL, "/"), log: log, started: time.Now(), pgContainer: pgContainerDefault,
 		exec: run, localNets: vpn.LocalNets, setForwarding: setWGForwarding, vpnHost: !isWindows(), hub: newUserspaceHub(log)}

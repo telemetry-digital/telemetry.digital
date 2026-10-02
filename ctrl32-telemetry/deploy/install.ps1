@@ -5,7 +5,7 @@
 .DESCRIPTION
   Run in an elevated PowerShell:
     Set-ExecutionPolicy -Scope Process Bypass -Force
-    irm https://telemetry.digital/install.ps1 -OutFile install.ps1; .\install.ps1
+    irm https://portal.telemetry.digital/install.ps1 -OutFile install.ps1; .\install.ps1
   or with options:
     .\install.ps1 -OrgName "Acme s.r.o." -PgPort 5432 -HttpPort 8080
   Internet profile with your own certificate (no reverse proxy on Windows):
@@ -30,7 +30,7 @@ param(
   [string]$InstallDir = "$env:ProgramFiles\ctrl32-telemetry",
   [string]$DataDir = "$env:ProgramData\ctrl32-telemetry",
   [string]$Binary = "",
-  [string]$Url = "https://telemetry.digital/dl/ctrl32-telemetry-windows-amd64.exe",
+  [string]$Url = "https://portal.telemetry.digital/dl/ctrl32-telemetry-windows-amd64.exe",
   [string]$TypstVersion = "v0.15.1",
   [string]$PgVersion = "18.1-1",
   [string]$PgHost = "",

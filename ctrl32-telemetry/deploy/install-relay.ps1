@@ -6,7 +6,7 @@
   Run in an elevated PowerShell, next to relay.toml (the file shown once when the remote camera was created, with the
   local address of the camera filled in):
     Set-ExecutionPolicy -Scope Process Bypass -Force
-    irm https://telemetry.digital/install-relay.ps1 -OutFile install-relay.ps1; .\install-relay.ps1 -Config .\relay.toml
+    irm https://portal.telemetry.digital/install-relay.ps1 -OutFile install-relay.ps1; .\install-relay.ps1 -Config .\relay.toml
 
   What it does (idempotent, re-run to change the configuration or update the program):
     1. installs the program into C:\Program Files\ctrl32-camera-relay (downloaded and checked against SHA256SUMS,
@@ -23,7 +23,7 @@ param(
   [string]$InstallDir = "$env:ProgramFiles\ctrl32-camera-relay",
   [string]$DataDir = "$env:ProgramData\ctrl32-camera-relay",
   [string]$Binary = "",
-  [string]$Url = "https://telemetry.digital/dl/ctrl32-telemetry-windows-amd64.exe",
+  [string]$Url = "https://portal.telemetry.digital/dl/ctrl32-telemetry-windows-amd64.exe",
   [switch]$Update,
   [switch]$Force,
   [switch]$Check,

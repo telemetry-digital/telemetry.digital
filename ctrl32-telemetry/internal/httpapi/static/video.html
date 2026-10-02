@@ -149,9 +149,9 @@
     <p class="muted" style="margin:6px 0">1. Save this configuration as <code>relay.toml</code> and fill in the local address of the camera (and its password).</p>
     <textarea id="relayCfg" rows="14" readonly class="notranslate" style="width:100%;font-family:var(--mono);font-size:12px"></textarea>
     <p class="muted" style="margin:6px 0">2. On a computer at the site that reaches the camera, run the installer next to the file:</p>
-    <div style="font-size:12px"><b>Linux / Raspberry Pi</b><pre class="notranslate relay-cmd">curl -fsSL https://telemetry.digital/install-relay.sh -o install-relay.sh
+    <div style="font-size:12px"><b>Linux / Raspberry Pi</b><pre class="notranslate relay-cmd">curl -fsSL https://portal.telemetry.digital/install-relay.sh -o install-relay.sh
 sudo bash install-relay.sh --config relay.toml</pre>
-    <b>Windows (PowerShell as administrator)</b><pre class="notranslate relay-cmd">irm https://telemetry.digital/install-relay.ps1 -OutFile install-relay.ps1
+    <b>Windows (PowerShell as administrator)</b><pre class="notranslate relay-cmd">irm https://portal.telemetry.digital/install-relay.ps1 -OutFile install-relay.ps1
 .\install-relay.ps1 -Config .\relay.toml</pre></div>
     <p class="muted" style="margin:6px 0">The installer tests the connection to the server, the camera and the secret, then runs the relay as a service that starts with the computer. Delete the copied file afterwards.</p>
     <div class="actions"><button class="btn primary" type="button" id="dlCfg">Download relay.toml</button><button class="btn" type="button" id="copyCfg">Copy</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
