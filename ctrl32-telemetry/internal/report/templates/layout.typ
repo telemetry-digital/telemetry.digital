@@ -4,6 +4,9 @@
 
 #let load() = json("data.json")
 
+// accent colour of plain report figures (underlines)
+#let accent = rgb("#1f6feb")
+
 #let cell(v) = {
   if v == none { "" } else if type(v) == str { v } else if type(v) == bool { if v { "true" } else { "false" } } else if type(v) == int or type(v) == float { str(v) } else { repr(v) }
 }
@@ -62,9 +65,11 @@
 #let summary-block(d, keys: ()) = {
   let pairs = d.summary.pairs().filter(((k, v)) => keys.len() == 0 or k in keys)
   if pairs.len() > 0 {
-    let items = pairs.map(((k, v)) => box(inset: (x: 8pt, y: 5pt), stroke: 0.5pt + luma(200), radius: 3pt)[#text(size: 8pt, fill: luma(90))[#k] #linebreak() #text(size: 11pt, weight: "bold")[#cell(v)]])
-    stack(dir: ltr, spacing: 6pt, ..items)
-    v(8pt)
+    // plain figures across the full width, each underlined in the accent colour (no boxes)
+    let items = pairs.map(((k, v)) => block(width: 100%, inset: (bottom: 3pt), stroke: (bottom: 1.2pt + accent))[
+      #text(size: 7.5pt, fill: luma(100))[#upper(k)] #linebreak() #text(size: 11pt, weight: "bold")[#cell(v)]])
+    grid(columns: (1fr,) * pairs.len(), column-gutter: 10pt, ..items)
+    v(10pt)
   }
 }
 
@@ -80,9 +85,9 @@
   let paras = body.split("\n").filter(p => p.trim() != "").map(p => [#p])
   let content = paras.join(parbreak())
   if style == "note" {
-    block(inset: 8pt, fill: luma(245), stroke: 0.5pt + luma(200), radius: 3pt, width: 100%, text(size: 9pt)[#content])
+    block(inset: (left: 8pt, y: 2pt), stroke: (left: 2pt + luma(150)), width: 100%, text(size: 9pt)[#content])
   } else if style == "warning" {
-    block(inset: 8pt, fill: rgb("#fff4e5"), stroke: 0.5pt + rgb("#e0a800"), radius: 3pt, width: 100%, text(size: 9pt)[#content])
+    block(inset: (left: 8pt, y: 2pt), stroke: (left: 2pt + rgb("#e0a800")), width: 100%, text(size: 9pt)[#content])
   } else {
     text(size: 9.5pt)[#content]
   }
@@ -97,11 +102,10 @@
   let rows = d.rows.slice(0, calc.min(d.rows.len(), int(max-rows)))
   let cells = rows.map(r => cols.map(c => text(size: font-size)[#cell(r.at(c.key, default: none))])).flatten()
   table(
-    columns: cols.len(),
+    columns: (1fr,) * cols.len(), // the full width of the page
     align: aligns,
-    stroke: (x: none, y: 0.3pt + luma(200)),
+    stroke: (_, y) => (x: none, top: if y == 1 { 0.9pt + luma(60) } else { 0.3pt + luma(200) }, bottom: 0.3pt + luma(200)),
     inset: (x: 5pt, y: 3pt),
-    fill: (_, y) => if y == 0 { luma(235) } else { none },
     ..header, ..cells,
   )
   if d.rows.len() > int(max-rows) {
@@ -135,8 +139,8 @@
   } else {
     let header = ([*Day*], [*Samples*], [*Min*], [*Max*], [*Average*])
     let cells = days.pairs().map(((day, e)) => ([#day], [#e.n], [#fmt(e.min)], [#fmt(e.max)], [#fmt(e.sum / e.n)])).flatten()
-    table(columns: 5, align: (left, right, right, right, right), stroke: (x: none, y: 0.3pt + luma(200)), inset: (x: 5pt, y: 3pt),
-      fill: (_, y) => if y == 0 { luma(235) } else { none }, ..header, ..cells)
+    table(columns: (1fr,) * 5, align: (left, right, right, right, right), inset: (x: 5pt, y: 3pt),
+      stroke: (_, y) => (x: none, top: if y == 1 { 0.9pt + luma(60) } else { 0.3pt + luma(200) }, bottom: 0.3pt + luma(200)), ..header, ..cells)
   }
   v(6pt)
 }
