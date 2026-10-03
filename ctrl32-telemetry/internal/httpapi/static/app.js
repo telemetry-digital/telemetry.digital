@@ -198,9 +198,11 @@
       { href: '/dashboards', label: 'Dashboards', icon: ICON.dashboard, show: can('data.read'), sec: 'dashboards' },
       { href: '/home', label: 'Home', icon: ICON.home, show: can('data.read'), sec: 'home' },
       { href: '/energy', label: 'Energy', icon: ICON.bolt, show: can('data.read'), sec: 'energy' },
-      { href: '/counting', label: 'Object counting', icon: ICON.users, show: can('data.read'), sec: 'counting' },
+      { href: '/counting', label: 'Object counting', icon: ICON.users, show: can('data.read'), sec: 'counting', children: [
+        { href: '/counting', label: 'Overview' }, { href: '/counting/areas', label: 'Areas and entrances' },
+        { href: '/counting/cameras', label: 'Cameras' }, { href: '/counting/sensors', label: 'Sensors', show: can('config.write') }] },
       { href: '/video', label: 'Cameras', icon: ICON.camera, show: can('video.view'), sec: 'cameras', children: [
-        { href: '/video', label: 'Live view' }, { href: '/video/walls', label: 'Video walls' }, { href: '/video/manage', label: 'Camera management', show: can('video.manage') }] },
+        { href: '/video', label: 'Live view' }, { href: '/video/walls', label: 'Video walls' }, { href: '/video/manage', label: 'Camera management', show: can('video.manage') }, { href: '/counting/cameras', label: 'Object counting', show: can('data.read') }] },
       { href: '/displays', label: 'Displays', icon: ICON.display, show: can('display.control'), sec: 'displays' },
       { href: '/flows', label: 'Flows', icon: ICON.flow, show: can('data.read'), sec: 'flows' },
       { href: '/devices', label: 'Devices', icon: ICON.device, show: can('data.read'), sec: 'devices' },
