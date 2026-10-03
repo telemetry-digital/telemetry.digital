@@ -104,7 +104,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   const flows = (await api("/api/v1/flows")) || [];
   const short = { "site-cameras-on-the-floor-plan": "floor-plan", "line-1-process-screen": "scada-line-1", "production-line-overview": "production-lines",
     "cold-chain-medicine-store": "cold-chain", "energy-monthly-consumption": "energy-monthly", "overview": "overview", "showcase-all-widgets": "showcase",
-    "overview-of-all-sensors": "sensors-overview", "energy-overview": "energy-overview", "cold-chain-overview": "cold-chain-overview" };
+    "overview-of-all-sensors": "sensors-overview", "energy-overview": "energy-overview", "cold-chain-overview": "cold-chain-overview", "cold-chain-drill-down": "drilldown" };
   const slugName = (s) => short[s] || s;
   const prodDash = () => dashes.find((d) => d.slug === "production-line-overview") || dashes[0];
   const cam = (n) => (cams.find((c) => c.name === n) || cams[0] || {}).id;
@@ -123,7 +123,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await page("dashboards-new-dialog", "/dashboards", { click: "#newBtn" });
   for (const d of dashes) {
     const n = slugName(d.slug);
-    await page(`dashboards-${n}`, `/dashboards/${d.slug}`, { wait: 6000, full: ["showcase", "cold-chain", "energy-monthly", "sensors-overview", "energy-overview", "cold-chain-overview"].includes(n), maxH: 3200 });
+    await page(`dashboards-${n}`, `/dashboards/${d.slug}`, { wait: 6000, full: ["showcase", "cold-chain", "energy-monthly", "sensors-overview", "energy-overview", "cold-chain-overview", "drilldown"].includes(n), maxH: 3200 });
     await page(`dashboards-${n}-edit`, `/dashboards/${d.slug}/edit`, { wait: 5000 });
   }
   const cold = dashes.find((d) => d.slug === "cold-chain-medicine-store");
@@ -148,7 +148,8 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
     if (wanted("dashboards-filter-bar")) { await go(`/dashboards/${ccOv.slug}`, 6000); await ev("(() => { const d = document.querySelectorAll('#vFilters .df-pick')[2]; if (d) d.open = true; return !!d; })()"); await sleep(800);
       await shot("dashboards-filter-bar", { clip: "js:(() => { const b = document.querySelector('#vFilters'); const m = document.querySelector('#vFilters details[open] .df-menu'); if (!b) return null; return { getBoundingClientRect: () => { const r = b.getBoundingClientRect(), q = m ? m.getBoundingClientRect() : r; return { x: r.x, y: r.y, width: r.width, height: Math.max(r.bottom, q.bottom) - r.y + 4 }; }, scrollIntoView: () => {} }; })()" }); }
     await page("dashboards-edit-data-source", `/dashboards/${ccOv.slug}/edit`, { wait: 5000, before: "(() => { const w = document.querySelector('#eGrid .dash-widget[data-id=\"trend\"]'); if (w) w.click(); return !!w; })()", afterWait: 2500, clip: "#eProps", pad: 6 });
-    await page("dashboards-edit-filters", `/dashboards/${ccOv.slug}/edit`, { wait: 5000, click: "#eSettings", clip: "#setDlg", pad: -2 });
+    // the settings dialog has tabs since 0.73.0: the Filters tab
+    if (wanted("dashboards-edit-filters")) { await go(`/dashboards/${ccOv.slug}/edit`, 5000); await click("#eSettings", 800); await click('#setTabs [data-st="filters"]', 1200); await shot("dashboards-edit-filters", { clip: "#setDlg", pad: -2 }); }
   }
   if (sensOv && wanted("dashboards-overview-table")) {
     await go(`/dashboards/${sensOv.slug}?f.quantity=temperature`, 6000);
@@ -157,6 +158,33 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
     await shot("dashboards-overview-table", { clip: "[data-id=\"sensors\"]", pad: 4 });
   }
   if (enOv && wanted("dashboards-overview-group-totals")) { await go(`/dashboards/${enOv.slug}`, 7000); await shot("dashboards-overview-group-totals", { clip: "[data-id=\"meters\"]", pad: 4 }); }
+  // aliases, key filters and states (0.73.0; docs.py drilldown): the entities table, the key-filtered overview table and
+  // the entity selector of the main state, the detail state after a row click (breadcrumb), and the editor: the
+  // settings tabs for aliases, key filters and states, the alias on the Data tab, the actions, the state tabs
+  const drill = dashes.find((d) => d.slug === "cold-chain-drill-down");
+  if (drill) {
+    const main = async () => { await go(`/dashboards/${drill.slug}`, 6000); };
+    if (wanted("dashboards-entities-table")) { await main(); await shot("dashboards-entities-table", { clip: '[data-id="table"]', pad: 4 }); }
+    if (wanted("dashboards-key-filter-table")) { await main(); await shot("dashboards-key-filter-table", { clip: '[data-id="warm"]', pad: 4 }); }
+    if (wanted("dashboards-entity-selector")) { await main(); await shot("dashboards-entity-selector", { clip: "js:(() => { const a = document.querySelector('[data-id=\"pick\"]'), b = document.querySelector('[data-id=\"now\"]'); if (!a || !b) return null; return { getBoundingClientRect: () => { const r = a.getBoundingClientRect(), q = b.getBoundingClientRect(); return { x: r.x - 4, y: r.y - 4, width: q.right - r.x + 8, height: Math.max(r.bottom, q.bottom) - r.y + 8 }; }, scrollIntoView: () => {} }; })()" }); }
+    if (wanted("dashboards-drilldown-detail")) {
+      await main();
+      const ok = await ev(`(() => { const r = [...document.querySelectorAll('[data-id="table"] tr[data-ent]')].find((x) => x.textContent.includes('Medicine fridge 2')); if (!r) return false; r.querySelector('td').click(); return true; })()`);
+      await sleep(6000);
+      if (ok) await shot("dashboards-drilldown-detail", { full: true, maxH: 1800 }); else problems.push("dashboards-drilldown-detail: no row of Medicine fridge 2");
+    }
+    const editTab = async (name, tab) => { if (!wanted(name)) return; await go(`/dashboards/${drill.slug}/edit`, 5000); await click("#eSettings", 800); await click(`#setTabs [data-st="${tab}"]`, 2500); await shot(name, { clip: "#setDlg", pad: -2 }); };
+    await editTab("dashboards-edit-aliases", "aliases");
+    await editTab("dashboards-edit-key-filters", "keyfilters");
+    await editTab("dashboards-edit-states", "states");
+    if (wanted("dashboards-edit-widget-alias")) { await go(`/dashboards/${drill.slug}/edit`, 5000); await click('#eGrid .dash-widget[data-id="warm"]', 2500); await shot("dashboards-edit-widget-alias", { clip: "#eProps", pad: 6 }); }
+    if (wanted("dashboards-edit-actions")) { await go(`/dashboards/${drill.slug}/edit`, 5000); await click('#eGrid .dash-widget[data-id="table"]', 1500); await click('#eProps [data-tab="actions"]', 800); await shot("dashboards-edit-actions", { clip: "#eProps", pad: 6 }); }
+    if (wanted("dashboards-edit-state-tabs")) {
+      await go(`/dashboards/${drill.slug}/edit`, 5000); await click('#eStates [data-est="fridge"]', 1500);
+      await ev(`(() => { const s = document.querySelector('#ePrev'); const o = s && [...s.options].find((x) => x.textContent.includes('Medicine fridge 2')); if (!o) return false; s.value = o.value; s.dispatchEvent(new Event('change')); return true; })()`); await sleep(5000);
+      await shot("dashboards-edit-state-tabs");
+    }
+  }
   if (wanted("start-global-search")) {
     await go(ccOv ? `/dashboards/${ccOv.slug}` : "/", 5000);
     await ev("ctrl32.openSearch('fridge'); true"); await sleep(2500);

@@ -1,0 +1,19 @@
+meta {
+  name: Attributes of the organization
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/organization/attributes
+  body: none
+  auth: inherit
+}
+
+docs {
+  Attributes of the organization
+  
+  Free attributes of the organization (for example `max_temp`), used as dynamic values of the key filters of dashboards.
+  
+  Requires permission `data.read`.
+}

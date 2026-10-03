@@ -14,6 +14,7 @@
 <main class="container">
   <div class="page-head"><h1 id="pTitle">Public dashboard</h1><span class="badge ok" id="liveBadge" hidden title="Values update as they arrive">live</span><span class="grow"></span><label style="flex-direction:row;align-items:center;gap:6px">Range <select id="pRange"></select></label><button class="btn" id="pRefresh" type="button">Refresh</button></div>
   <p class="muted" id="pErr" hidden>This link is no longer valid.</p>
+  <div id="pStates" hidden></div>
   <div id="pFilters" hidden></div>
   <div id="pGrid"></div>
 </main>
@@ -36,7 +37,9 @@ ctrl32.ready({}).then(async () => {
     // dashboard filters: only those the owner marked public (the server applies the defaults of the others)
     const fc = ctrl32DashFilters.mount($('#pFilters'), d.spec, {public: true, key: 'p/' + token, onChange: () => run()});
     const rf = (d.spec.filters || []).some(x => x.kind === 'range' && x.public); $('#pRange').closest('label').hidden = rf;
-    const run = async () => { fn = await ctrl32Widgets.render($('#pGrid'), d.spec, {range: rf ? (fc.values.range || d.spec.range) : $('#pRange').value, filters: fc.values}); };
+    // dashboard states (drill-down): the view and its entity live in the address; the server keeps them in the scope
+    const nav = ctrl32DashStates.mount($('#pStates'), d.spec, {onChange: () => run()});
+    const run = async () => { fn = await ctrl32Widgets.render($('#pGrid'), d.spec, {range: rf ? (fc.values.range || d.spec.range) : $('#pRange').value, filters: fc.values, nav}); };
     $('#pRange').onchange = run; $('#pRefresh').onclick = () => fn && fn();
     await run();
     timer = setInterval(() => fn && fn(), Math.max(5, d.spec.refresh_s || 30) * 1000);

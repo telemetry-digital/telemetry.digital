@@ -289,6 +289,10 @@
     const rows = res.items; const st = el._ot || (el._ot = { q: '', sort: '', dir: 1, page: 0, vmin: '', vmax: '', quality: '', fresh: '', alarm: '', open: false });
     const dec = (r) => (p.decimals != null && p.decimals !== '' ? p.decimals : 2); const hl = p.highlight || 'both';
     const pageSize = clamp(Math.round(p.page_size || 25), 5, 200);
+    // drill-down (0.73.0): a row click and row buttons run the widget's actions with the row's datastream
+    const rowActs = ctx.actions ? ctx.actions('row') : [], btnActs = ctx.actions ? ctx.actions('row_button') : []; const acting = !ctx.edit && (rowActs.length || btnActs.length);
+    const rowEnt = (r) => ({ type: 'datastream', id: r.id, name: r.label || ((r.asset ? r.asset + ' / ' : '') + r.key), device_id: r.device_id, device: r.device, asset_id: r.asset_id, asset: r.asset });
+    const ncol = cols.length + (acting && btnActs.length ? 1 : 0);
     const filtered = () => rows.filter((r) => {
       if (st.q) { const t = st.q.toLowerCase(); if (![r.site, r.asset, r.asset_type, r.device, r.key, r.label, r.quantity].some((x) => x && String(x).toLowerCase().includes(t))) return false; }
       const v = rowVal(r);
@@ -328,16 +332,17 @@
       const counts = {}; if (p.group_by) for (const r of list) { const g = otGroup(r, p.group_by); counts[g] = (counts[g] || 0) + 1; }
       let body = '', last = null;
       for (const r of shown) {
-        if (p.group_by) { const g = otGroup(r, p.group_by); if (g !== last) { last = g; body += `<tr class="ot-group"><td colspan="${cols.length}"><b class="notranslate">${esc(g)}</b> <span class="muted">· ${counts[g]}${totals[g] != null ? ' · ' + esc(tr('change')) + ' ' + num(totals[g], dec(r)) + (r.unit ? ' ' + esc(r.unit) : '') : ''}</span></td></tr>`; } }
+        if (p.group_by) { const g = otGroup(r, p.group_by); if (g !== last) { last = g; body += `<tr class="ot-group"><td colspan="${ncol}"><b class="notranslate">${esc(g)}</b> <span class="muted">· ${counts[g]}${totals[g] != null ? ' · ' + esc(tr('change')) + ' ' + num(totals[g], dec(r)) + (r.unit ? ' ' + esc(r.unit) : '') : ''}</span></td></tr>`; } }
         const sev = r.alarm && (hl === 'both' || hl === 'alarms') ? (r.alarm.severity === 'warning' ? 'warn' : 'bad') : '';
-        body += `<tr class="${sev ? 'ot-' + sev : ''}" data-ds="${esc(r.id)}">${cols.map((c) => cell(r, c)).join('')}</tr>`;
+        const hlr = p.highlight_filter && r.match ? ' ot-hl' : '';
+        body += `<tr class="${sev ? 'ot-' + sev : ''}${hlr}${acting && rowActs.length ? ' dw-rowact' : ''}" data-ds="${esc(r.id)}">${cols.map((c) => cell(r, c)).join('')}${acting && btnActs.length ? `<td class="ot-acts">${btnActs.map((a, k) => `<button type="button" class="btn small ghost" data-rb="${k}">${esc(a.label)}</button>`).join('')}</td>` : ''}</tr>`;
       }
       const canExport = !WG.isPublic() && p.export !== false && !ctx.edit && (!window.ctrl32 || !ctrl32.can || ctrl32.can('data.export'));
       const sel = (k, opts) => `<select data-f="${k}">${opts.map(([v, l]) => `<option value="${v}" ${st[k] === v ? 'selected' : ''}>${esc(tr(l))}</option>`).join('')}</select>`;
       const active = st.vmin !== '' || st.vmax !== '' || st.quality || st.fresh || st.alarm;
       el.innerHTML = `<div class="ot-bar">${p.search !== false ? `<input class="dw-search ot-q" type="search" placeholder="${esc(tr('Search…'))}" value="${esc(st.q)}">` : ''}${p.column_filters !== false ? `<button type="button" class="btn small ghost ot-ftoggle${active ? ' on' : ''}" aria-expanded="${st.open}">${esc(tr('Column filters'))}${active ? ' •' : ''}</button>` : ''}<span class="muted ot-count">${list.length === rows.length ? rows.length : list.length + ' / ' + rows.length}${res.truncated ? ' · ' + esc(tr('first')) + ' ' + rows.length + ' / ' + res.total : ''}</span><span style="flex:1"></span>${canExport ? `<button type="button" class="btn small ghost" data-x="xlsx">Excel</button><button type="button" class="btn small ghost" data-x="csv">CSV</button>` : ''}</div>`
         + (p.column_filters !== false && st.open ? `<div class="ot-filters"><label>${esc(tr('Value'))} <input type="number" step="any" data-f="vmin" value="${esc(st.vmin)}" placeholder="${esc(tr('from'))}"> – <input type="number" step="any" data-f="vmax" value="${esc(st.vmax)}" placeholder="${esc(tr('to'))}"></label><label>${esc(tr('Quality'))} ${sel('quality', [['', 'all'], ['ok', 'good'], ['doubtful', 'doubtful']])}</label><label>${esc(tr('Age'))} ${sel('fresh', [['', 'all'], ['fresh', 'fresh'], ['stale', 'stale']])}</label><label>${esc(tr('Alarm'))} ${sel('alarm', [['', 'all'], ['alarm', 'in alarm'], ['none', 'no alarm']])}</label>${active ? `<button type="button" class="btn small ghost" data-freset>${esc(tr('Clear'))}</button>` : ''}</div>` : '')
-        + `<div class="table-wrap ot-wrap"><table class="ot-table"><thead><tr>${cols.map(th).join('')}</tr></thead><tbody>${body || `<tr><td colspan="${cols.length}" class="muted">${esc(tr(rows.length ? 'nothing found' : 'No datastreams match the query or the filters.'))}</td></tr>`}</tbody></table></div>`
+        + `<div class="table-wrap ot-wrap"><table class="ot-table"><thead><tr>${cols.map(th).join('')}${ncol > cols.length ? '<th></th>' : ''}</tr></thead><tbody>${body || `<tr><td colspan="${ncol}" class="muted">${esc(tr(rows.length ? 'nothing found' : 'No datastreams match the query or the filters.'))}</td></tr>`}</tbody></table></div>`
         + (pages > 1 ? `<div class="ot-pages"><button type="button" class="btn small ghost" data-pg="-1" ${st.page ? '' : 'disabled'}>◀</button><span class="muted">${st.page + 1} / ${pages}</span><button type="button" class="btn small ghost" data-pg="1" ${st.page < pages - 1 ? '' : 'disabled'}>▶</button></div>` : '');
       for (const h of el.querySelectorAll('th[data-k]')) h.onclick = (e) => { e.stopPropagation(); if (st.sort === h.dataset.k) st.dir = -st.dir; else { st.sort = h.dataset.k; st.dir = OT_NUM.has(h.dataset.k) || h.dataset.k === 'alarm' ? -1 : 1; } draw(); };
       const q = el.querySelector('.ot-q'); if (q) q.oninput = () => { st.q = q.value; st.page = 0; const pos = q.selectionStart; draw(); const q2 = el.querySelector('.ot-q'); q2.focus(); q2.setSelectionRange(pos, pos); };
@@ -350,9 +355,96 @@
           const blob = await api('POST', '/api/v1/datastreams/export', body); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (p.title || 'overview').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_') + '.' + b.dataset.x; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
         } catch (x) { if (window.ctrl32 && ctrl32.toast) ctrl32.toast(x.message, 'bad'); } b.disabled = false; };
       for (const tr0 of el.querySelectorAll('tr[data-ds]')) tr0.ondblclick = () => { if (window.ctrl32Scada && ctrl32Scada.openTag) ctrl32Scada.openTag(tr0.dataset.ds, { trendOnly: true }); };
+      if (acting) for (const tr0 of el.querySelectorAll('tr[data-ds]')) { const r = rows.find((x) => x.id === tr0.dataset.ds); if (!r) continue;
+        if (rowActs.length) tr0.onclick = (e) => { if (e.target.closest('button,a')) return; e.stopPropagation(); ctx.act('row', rowEnt(r), rowActs[0]); };
+        for (const b of tr0.querySelectorAll('[data-rb]')) b.onclick = (e) => { e.stopPropagation(); ctx.act('row_button', rowEnt(r), btnActs[+b.dataset.rb]); }; }
     };
     draw();
   }, { needsDs: true, label: 'Overview table' });
+
+  // Entities table (0.73.0): the entities of an alias (devices, assets, datastreams, sites) as rows, their latest
+  // values (t:<key>) and attributes (a:<name>) as columns, with search, sorting, pages, highlighting by a key filter
+  // (the server marks matching rows) and row actions (go to a dashboard state with the entity, open the device page).
+  const ET_LBL = { name: 'Name', type: 'Type', site: 'Site', asset: 'Asset', asset_type: 'Asset type', device: 'Device', profile: 'Device profile', alarm: 'Alarm', last_seen: 'Last seen', external_id: 'External id', key: 'Key', quantity: 'Quantity' };
+  const ET_TYPE = { device: 'Device', asset: 'Asset', datastream: 'Datastream', site: 'Site' };
+  function etCols(p) {
+    return (Array.isArray(p.columns) && p.columns.length ? p.columns : ['name', 'site', 'alarm', 'last_seen']).map((c0) => {
+      const parts = String(c0).split('='); const k = parts[0].trim(); const label = parts.slice(1).join('=').trim();
+      if (/^[ta]:/.test(k)) return { k, kind: k[0], key: k.slice(2), label: label || WG.codeLabel(k.slice(2)) };
+      return ET_LBL[k] ? { k, kind: 'f', key: k, label: label || tr(ET_LBL[k]) } : null;
+    }).filter(Boolean);
+  }
+  function etKey(r, c) {
+    if (c.kind === 't') { const v = (r.values || {})[c.key]; return v ? numVal(v) : null; }
+    if (c.kind === 'a') { const v = (r.attributes || {})[c.key]; return v == null ? null : (typeof v === 'number' ? v : String(v).toLowerCase()); }
+    if (c.key === 'alarm') return r.alarm ? SEV_RANK[r.alarm.severity] || 1 : 0;
+    if (c.key === 'last_seen') return r.last_seen ? Date.parse(r.last_seen) : null;
+    return r[c.key] == null ? null : String(r[c.key]).toLowerCase();
+  }
+  reg('entities_table', async (el, p, ctx) => {
+    const cols = etCols(p); const dec = p.decimals != null && p.decimals !== '' ? p.decimals : 2; const pageSize = clamp(Math.round(p.page_size || 25), 5, 200);
+    let res; try { res = await ctx.query(); } catch (x) { noData(el, x.message); return; }
+    const rows = res.items; const st = el._et || (el._et = { q: '', sort: '', dir: 1, page: 0 });
+    const rowActs = ctx.actions ? ctx.actions('row') : [], btnActs = ctx.actions ? ctx.actions('row_button') : []; const acting = !ctx.edit && (rowActs.length || btnActs.length);
+    const hl = p.highlight_color && /^#[0-9a-f]{6}$/i.test(p.highlight_color) ? p.highlight_color : '';
+    const filtered = () => rows.filter((r) => !st.q || [r.name, r.site, r.asset, r.device, r.profile, r.external_id, r.key, r.asset_type].some((x) => x && String(x).toLowerCase().includes(st.q.toLowerCase())));
+    const sorted = (list) => { if (!st.sort) return list; const c = cols.find((x) => x.k === st.sort); if (!c) return list; return list.slice().sort((a, b) => { const ka = etKey(a, c), kb = etKey(b, c); if (ka == null && kb == null) return 0; if (ka == null) return 1; if (kb == null) return -1; return (ka > kb ? 1 : ka < kb ? -1 : 0) * st.dir; }); };
+    const cell = (r, c) => {
+      if (c.kind === 't') { const v = (r.values || {})[c.key]; if (!v) return '<td class="muted" style="text-align:right">—</td>'; const x = numVal(v); const cf = WG.condFormat(null, p, x);
+        return `<td style="text-align:right;white-space:nowrap;font-weight:600${cf.value ? ';color:' + cf.value : ''}" title="${esc(fmt(v.measured_at))}">${x == null ? (v.value_json != null ? esc(JSON.stringify(v.value_json)) : '—') : num(x, dec)}${v.unit ? ` <span class="muted" style="font-weight:400">${esc(v.unit)}</span>` : ''}${v.stale ? ' <span class="badge warn">' + esc(tr('stale')) + '</span>' : ''}</td>`; }
+      if (c.kind === 'a') { const v = (r.attributes || {})[c.key]; return `<td class="notranslate">${v == null ? '<span class="muted">—</span>' : esc(typeof v === 'object' ? JSON.stringify(v) : String(v))}</td>`; }
+      switch (c.key) {
+        case 'name': return `<td class="notranslate"><b>${esc(r.name)}</b></td>`;
+        case 'type': return `<td>${esc(tr(ET_TYPE[r.type] || r.type))}</td>`;
+        case 'asset_type': case 'quantity': return `<td>${r[c.key] ? esc(WG.codeLabel(r[c.key])) : '—'}</td>`;
+        case 'alarm': return `<td>${r.alarm ? `<span class="badge ${r.alarm.severity === 'warning' ? 'warn' : 'bad'}">${esc(r.alarm.severity)}${r.alarm.acknowledged ? ' ✓' : ''}</span>` : '<span class="muted">—</span>'}</td>`;
+        case 'last_seen': return `<td style="white-space:nowrap">${r.last_seen ? fmt(r.last_seen) : '—'}</td>`;
+        case 'device': return `<td class="notranslate">${r.device ? (WG.isPublic() || !r.device_id ? esc(r.device) : `<a href="/devices/${esc(r.device_id)}">${esc(r.device)}</a>`) : '—'}</td>`;
+        default: return `<td class="notranslate">${esc(r[c.key] || '—')}</td>`;
+      }
+    };
+    const draw = () => {
+      const list = sorted(filtered()); const pages = Math.max(1, Math.ceil(list.length / pageSize)); if (st.page >= pages) st.page = pages - 1;
+      const shown = list.slice(st.page * pageSize, (st.page + 1) * pageSize); const ncol = cols.length + (acting && btnActs.length ? 1 : 0);
+      const th = (c) => `<th data-k="${esc(c.k)}" style="cursor:pointer;white-space:nowrap${c.kind === 't' ? ';text-align:right' : ''}">${esc(c.label)}${st.sort === c.k ? (st.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
+      const body = shown.map((r) => { const m = p.highlight_filter && r.match; const sev = r.alarm ? (r.alarm.severity === 'warning' ? 'warn' : 'bad') : '';
+        return `<tr data-ent="${esc(r.type + ':' + r.id)}" class="${m && !hl ? 'ot-hl' : sev ? 'ot-' + sev : ''}${acting && rowActs.length ? ' dw-rowact' : ''}"${m && hl ? ` style="background:${hl}33"` : ''}>${cols.map((c) => cell(r, c)).join('')}${acting && btnActs.length ? `<td class="ot-acts">${btnActs.map((a, k) => `<button type="button" class="btn small ghost" data-rb="${k}">${esc(a.label)}</button>`).join('')}</td>` : ''}</tr>`; }).join('');
+      const matches = p.highlight_filter ? rows.filter((r) => r.match).length : 0;
+      el.innerHTML = `<div class="ot-bar">${p.search !== false ? `<input class="dw-search ot-q" type="search" placeholder="${esc(tr('Search…'))}" value="${esc(st.q)}">` : ''}<span class="muted ot-count">${list.length === rows.length ? rows.length : list.length + ' / ' + rows.length}${res.truncated ? ' · ' + esc(tr('first')) + ' ' + rows.length + ' / ' + res.total : ''}${p.highlight_filter ? ' · <span class="et-hlcount">' + esc(tr('highlighted')) + ' ' + matches + '</span>' : ''}</span></div>`
+        + `<div class="table-wrap ot-wrap"><table class="ot-table et-table"><thead><tr>${cols.map(th).join('')}${ncol > cols.length ? '<th></th>' : ''}</tr></thead><tbody>${body || `<tr><td colspan="${ncol}" class="muted">${esc(tr(rows.length ? 'nothing found' : 'No entities match the alias or its key filter.'))}</td></tr>`}</tbody></table></div>`
+        + (pages > 1 ? `<div class="ot-pages"><button type="button" class="btn small ghost" data-pg="-1" ${st.page ? '' : 'disabled'}>◀</button><span class="muted">${st.page + 1} / ${pages}</span><button type="button" class="btn small ghost" data-pg="1" ${st.page < pages - 1 ? '' : 'disabled'}>▶</button></div>` : '');
+      for (const h of el.querySelectorAll('th[data-k]')) h.onclick = (e) => { e.stopPropagation(); if (st.sort === h.dataset.k) st.dir = -st.dir; else { st.sort = h.dataset.k; const c = cols.find((x) => x.k === h.dataset.k); st.dir = c && (c.kind === 't' || c.key === 'alarm' || c.key === 'last_seen') ? -1 : 1; } draw(); };
+      const q = el.querySelector('.ot-q'); if (q) q.oninput = () => { st.q = q.value; st.page = 0; const pos = q.selectionStart; draw(); const q2 = el.querySelector('.ot-q'); q2.focus(); q2.setSelectionRange(pos, pos); };
+      for (const b of el.querySelectorAll('[data-pg]')) b.onclick = (e) => { e.stopPropagation(); st.page += +b.dataset.pg; draw(); };
+      if (acting) for (const tr0 of el.querySelectorAll('tr[data-ent]')) { const r = rows.find((x) => x.type + ':' + x.id === tr0.dataset.ent); if (!r) continue;
+        if (rowActs.length) tr0.onclick = (e) => { if (e.target.closest('button,a')) return; e.stopPropagation(); ctx.act('row', r, rowActs[0]); };
+        for (const b of tr0.querySelectorAll('[data-rb]')) b.onclick = (e) => { e.stopPropagation(); ctx.act('row_button', r, btnActs[+b.dataset.rb]); }; }
+    };
+    draw();
+  }, { label: 'Entities table' });
+
+  // Entity selector (0.73.0): the entities of an alias as a drop-down or a searchable list; the choice becomes the
+  // current entity of the dashboard (its state in the address), so widgets of a "current entity" alias switch to it.
+  reg('entity_selector', async (el, p, ctx) => {
+    let res; try { res = await ctx.query({ limit: 500 }); } catch (x) { noData(el, x.message); return; }
+    const items = res.items; const cur = ctx.nav && ctx.nav.current; const curKey = cur ? cur.type + ':' + cur.id : '';
+    const pick = (it) => { if (ctx.setCurrent) ctx.setCurrent(it ? { type: it.type, id: it.id, name: it.name } : null); };
+    if (!items.length) { noData(el, tr('No entities match the alias or its key filter.')); return; }
+    if (!cur && p.select_first !== false && ctx.nav) { pick(items[0]); return; }
+    const sub = (it) => [it.site, it.asset && it.asset !== it.name ? it.asset : ''].filter(Boolean).join(' · ');
+    if (p.style === 'list') {
+      const st = el._es || (el._es = { q: '' });
+      const draw = () => {
+        const t = st.q.toLowerCase(); const list = items.filter((it) => !t || [it.name, it.site, it.asset].some((x) => x && String(x).toLowerCase().includes(t)));
+        el.innerHTML = `${p.search !== false ? `<input class="dw-search es-q" type="search" placeholder="${esc(tr('Search…'))}" value="${esc(st.q)}" style="margin-bottom:4px">` : ''}<div class="es-list" role="listbox">${list.map((it) => `<button type="button" role="option" class="es-item${it.type + ':' + it.id === curKey ? ' on' : ''}" aria-selected="${it.type + ':' + it.id === curKey}" data-k="${esc(it.type + ':' + it.id)}"><b class="notranslate">${esc(it.name)}</b>${sub(it) ? `<span class="muted notranslate">${esc(sub(it))}</span>` : ''}</button>`).join('') || `<span class="muted">${esc(tr('nothing found'))}</span>`}</div>`;
+        const q = el.querySelector('.es-q'); if (q) q.oninput = () => { st.q = q.value; const pos = q.selectionStart; draw(); const q2 = el.querySelector('.es-q'); q2.focus(); q2.setSelectionRange(pos, pos); };
+        for (const b of el.querySelectorAll('.es-item')) b.onclick = (e) => { e.stopPropagation(); pick(items.find((it) => it.type + ':' + it.id === b.dataset.k)); };
+      };
+      draw(); return;
+    }
+    el.innerHTML = `<select class="es-sel" aria-label="${esc(p.title || tr('Entity'))}">${cur ? '' : `<option value="">${esc(tr('Choose…'))}</option>`}${items.map((it, i) => `<option value="${i}" ${it.type + ':' + it.id === curKey ? 'selected' : ''}>${esc(it.name)}${sub(it) ? ' — ' + esc(sub(it)) : ''}</option>`).join('')}${cur && !items.some((it) => it.type + ':' + it.id === curKey) ? `<option selected value="">${esc(cur.name || cur.id)}</option>` : ''}</select>`;
+    const s = el.querySelector('.es-sel'); s.onclick = (e) => e.stopPropagation(); s.onchange = () => { if (s.value !== '') pick(items[+s.value]); };
+  }, { label: 'Entity selector' });
 
   // ---- other ----------------------------------------------------------------------------------------------------
   const clockFmt = (el) => { const tz = el.dataset.tz || undefined, h12 = el.dataset.f === '12h'; const now = new Date(); let t, d; try { t = now.toLocaleTimeString(document.documentElement.lang || [], { timeZone: tz, hour12: h12, hour: '2-digit', minute: '2-digit', second: '2-digit' }); d = now.toLocaleDateString(document.documentElement.lang || [], { timeZone: tz, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) { t = now.toLocaleTimeString(document.documentElement.lang || undefined); d = now.toLocaleDateString(document.documentElement.lang || undefined); } el.querySelector('.dw-time').textContent = t; const de = el.querySelector('.dw-date'); if (de) de.textContent = d; };

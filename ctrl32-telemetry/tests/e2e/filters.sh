@@ -102,7 +102,7 @@ req POST /api/v1/dashboards "{\"name\":\"Flt overview $SUF\",\"spec\":$SPEC,\"re
 FS=$(jget slug < "$TMP/b")
 check "filters canonical" "$(jx 'j.spec.filters.map(f=>f.kind+(f.public?"+":"")).join()')" "site+,attribute+,quantity,search,range+"
 check "source and follow stored" "$(jx '[j.spec.widgets[0].source.name, j.spec.widgets[0].source.limit, j.spec.widgets[0].follow, j.spec.widgets[1].source.limit, j.spec.widgets[2].follow].join()')" "Flt * $SUF,500,true,12,true"
-req GET /api/v1/dashboards/catalog >/dev/null; check "catalog announces format 1.1 and the filter kinds" "$(jx '[j.format, j.format_minor, j.filter_kinds.length, j.widgets.some(w=>w.type==="overview_table")].join()')" "screen/v1,1,7,true"
+req GET /api/v1/dashboards/catalog >/dev/null; check "catalog announces format 1.2 (0.73.0) and the filter kinds" "$(jx '[j.format, j.format_minor, j.filter_kinds.length, j.widgets.some(w=>w.type==="overview_table")].join()')" "screen/v1,2,8,true"
 for BADS in '"filters":[{"kind":"customer"}]' '"filters":[{"kind":"attribute"}]' '"filters":[{"kind":"site","default":["x"]}]' '"filters":[{"kind":"range","default":"2h"}]'; do
   req POST /api/v1/dashboards "{\"name\":\"Bad $SUF\",\"spec\":{\"version\":1,$BADS,\"widgets\":[]},\"reason\":\"e2e\"}" >/dev/null; check "refused: ${BADS:11:30}" "$(st)" 400; done
 req POST /api/v1/dashboards "{\"name\":\"Bad $SUF\",\"spec\":{\"version\":1,\"widgets\":[{\"type\":\"text\",\"params\":{},\"source\":{}}]},\"reason\":\"e2e\"}" >/dev/null; check "refused: a source on a text widget" "$(st)" 400

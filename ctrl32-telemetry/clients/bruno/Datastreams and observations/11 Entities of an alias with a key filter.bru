@@ -1,0 +1,37 @@
+meta {
+  name: Entities of an alias with a key filter
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/v1/entities/query
+  body: none
+  auth: inherit
+}
+
+params:query {
+  alias: 
+  ~filter: 
+  ~highlight: 
+  ~current: 
+  ~want: 
+  ~quantity: 
+  ~key: 
+  ~values: 
+  ~attrs: 
+  ~f_value: 
+  ~follow: 
+  ~limit: 
+  ~latest: 
+  ~from: 
+  ~to: 
+}
+
+docs {
+  Entities of an alias, with a key filter
+  
+  Resolves an entity alias of a dashboard (0.73.0) within the organization: `alias` is the JSON of one alias — `{kind: single, entity: {type, id}}`, `{kind: list, entity_type, ids}`, `{kind: type, entity_type: device|asset|datastream, types}` (device profiles, asset types or quantities; `energy*` matches a prefix), `{kind: name, entity_type, match: starts|contains|ends, text}`, `{kind: hierarchy, root: {type: asset|site, id} or root_current: true, depth: 1–10, entity_type: device|asset|datastream, asset_type}`, `{kind: current, entity_type, default}` (the entity of the dashboard state given in `current`) or `{kind: query, source}` (a query source of 0.68.0). `filter` (JSON of a key filter `{match: all|any, rules: [{source: value|attribute|quality|stale|alarm, key, type: number|string|boolean, op: eq|ne|gt|ge|lt|le|between|contains|starts|ends|in, value, value2, dynamic: {from: filter|self|current|org, key}} or a group {match, rules}]}`) keeps only the matching entities; `highlight` (a key filter too) marks them with `match`. `want` answers with the entities, their datastreams (narrowed by `quantity` and `key`) or their devices. At most 2000 candidates, 500 rows.
+  
+  Requires permission `data.read`.
+}

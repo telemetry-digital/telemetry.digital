@@ -10,19 +10,22 @@ package httpapi
 //   - widget.source: the widget's datastreams are selected by a query instead of a fixed list — sites, asset types,
 //     quantities, devices, attributes and a name pattern — so new devices appear on their own. Resolved on the server
 //     within the organization and limited (500 rows for tables, 24 for other widgets).
+//   - a "value" filter (0.73.0) narrows nothing by itself: it is a value the viewer types (a limit such as 8) that key
+//     filters use as a dynamic value (dashboard_aliases.go).
 //   - widget.follow: the widget follows the dashboard filters (its datastreams, devices or alarms are narrowed by the
 //     selected values). Filters only ever narrow what a widget shows, never widen it.
 
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
 )
 
 var (
-	filterKinds = []string{"site", "asset_type", "device", "quantity", "attribute", "search", "range"}
+	filterKinds = []string{"site", "asset_type", "device", "quantity", "attribute", "search", "range", "value"}
 	attrKeyRe   = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,40}$`)
 	// widgets that list many datastreams in one request may resolve up to 500 of them; the others 24 (one request each)
 	manyRowWidgets = setOf("table", "entity_table", "overview_table")
@@ -50,6 +53,8 @@ func filterID(kind, key string) string {
 		return "q"
 	case "attribute":
 		return "a." + key
+	case "value":
+		return "v." + key
 	}
 	return kind
 }
@@ -135,13 +140,13 @@ func validateFilters(raw []map[string]any) ([]map[string]any, error) {
 		e := map[string]any{"kind": kind}
 		key, _ := f["key"].(string)
 		key = strings.TrimSpace(key)
-		if kind == "attribute" {
+		if kind == "attribute" || kind == "value" {
 			if !attrKeyRe.MatchString(key) {
-				return nil, fmt.Errorf("filter %d: an attribute filter needs a key of letters, digits, . _ -", i+1)
+				return nil, fmt.Errorf("filter %d: an %s filter needs a key of letters, digits, . _ -", i+1, kind)
 			}
 			e["key"] = key
 		} else if key != "" {
-			return nil, fmt.Errorf("filter %d: only an attribute filter has a key", i+1)
+			return nil, fmt.Errorf("filter %d: only an attribute or a value filter has a key", i+1)
 		}
 		id := filterID(kind, key)
 		if ids[id] {
@@ -168,12 +173,12 @@ func validateFilters(raw []map[string]any) ([]map[string]any, error) {
 				}
 			}
 		}
-		if e["multi"] == true && (kind == "search" || kind == "range") {
+		if e["multi"] == true && (kind == "search" || kind == "range" || kind == "value") {
 			return nil, fmt.Errorf("filter %d: %s takes one value", i+1, kind)
 		}
 		if d, ok := f["default"]; ok && d != nil && d != "" {
 			switch kind {
-			case "search":
+			case "search", "value":
 				s, err := textOf(d, 80)
 				if err != nil {
 					return nil, fmt.Errorf("filter %d: default %v", i+1, err)
@@ -303,5 +308,46 @@ func sortedKeys[V any](m map[string]V) []string {
 		out = append(out, k)
 	}
 	sort.Strings(out)
+	return out
+}
+
+// valueFilters reads the values of the dashboard's value filters from f_value=key=value parameters.
+func valueFilters(v url.Values) (map[string]string, error) {
+	out := map[string]string{}
+	for _, kv := range v["f_value"] {
+		k, val, ok := strings.Cut(kv, "=")
+		k = strings.TrimSpace(k)
+		if !ok || !attrKeyRe.MatchString(k) {
+			return nil, errors.New("f_value must be key=value")
+		}
+		if len(val) > 80 {
+			return nil, errors.New("f_value: at most 80 characters")
+		}
+		if len(out) >= maxDashFilters {
+			return nil, errors.New("f_value: too many values")
+		}
+		out[k] = strings.TrimSpace(val)
+	}
+	return out, nil
+}
+
+// publicValueFilters: a value filter marked public takes the viewer's value, any other its default; parameters of
+// filters the dashboard does not have are ignored.
+func publicValueFilters(spec map[string]any, v url.Values) map[string]string {
+	mine, _ := valueFilters(v)
+	out := map[string]string{}
+	for _, f := range specFilters(spec) {
+		if f["kind"] != "value" {
+			continue
+		}
+		key, _ := f["key"].(string)
+		val, _ := f["default"].(string)
+		if x, ok := mine[key]; ok && f["public"] == true {
+			val = x
+		}
+		if val != "" {
+			out[key] = val
+		}
+	}
 	return out
 }

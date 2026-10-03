@@ -5,7 +5,8 @@
                        incidents, notification channels and escalation, automation rules, flows, smart-home accounts,
                        a display, firmware and a campaign, users and a custom role, an API token, a report template and
                        stored reports, a PWA app, the "overview" and "showcase" starter dashboards, the overviews with
-                       filters (all sensors, energy, cold chain; 0.68.0), and the VPN (a site,
+                       filters (all sensors, energy, cold chain; 0.68.0), a cold chain drill-down with entity aliases,
+                       key filters and dashboard states (0.73.0), and the VPN (a site,
                        a technician, a gateway and access rules; needs the agent's VPN simulation and a licence)
                        ; 0.67.0: keys without a datastream and status of a logger, a sensor fault, annotations, a
                        signed report and a signed audit review (records)
@@ -304,6 +305,56 @@ def overviews():
         out[kind] = dash(s["name"], spec)
     call("POST", f"/api/v1/dashboards/{out['sensors']}/share", {"reason": R})
     return out
+
+
+@once("drilldown")
+def drilldown():
+    """Entity aliases, key filters and dashboard states (0.73.0): the cold chain with drill-down. Every fridge and the
+    freezer gets its own limit (attribute max_temp); the dashboard has an entities table of the fridges with their
+    temperature, limit and storage class (rows above their own limit highlighted), an overview table of the fridges
+    above 8 °C (a value filter "Limit" the viewer may change), an entity selector and a map of the loggers; a row,
+    a marker or the selector opens the state "Fridge detail" with the fridge's trend, daily log, logger and alarms. The
+    dashboard gets a public link (drill-down works there too)."""
+    c = st["cold"]
+    limits = {"Medicine fridge 1": 8, "Medicine fridge 2": 8, "Vaccine freezer": -15}
+    for a in call("GET", "/api/v1/assets"):
+        if a["name"] in limits:
+            attrs = dict(a.get("attributes") or {}, max_temp=limits[a["name"]])
+            call("PATCH", f"/api/v1/assets/{a['id']}", {"attributes": attrs, "reason": R})
+    call("PUT", "/api/v1/organization/attributes", {"attributes": {"max_temp_default": 8}, "reason": R})
+    g = lambda x, y, ww, hh: {"x": x, "y": y, "w": ww, "h": hh}
+    spec = {"version": 1, "kind": "dashboard", "layout": {"type": "grid", "row_height": 90}, "range": "24h", "refresh_s": 60,
+        "filters": [{"kind": "value", "key": "limit", "label": "Limit °C", "default": "8", "public": True}],
+        "aliases": [
+            {"id": "cold", "name": "Fridges and freezers of the pharmacy", "kind": "hierarchy", "root": {"type": "site", "id": c["site"]}, "depth": 10, "entity_type": "asset", "asset_type": ["fridge", "freezer"]},
+            {"id": "temps", "name": "Temperatures of the selected fridge", "kind": "current", "entity_type": "datastream"},
+            {"id": "loggers", "name": "Loggers of the selected fridge", "kind": "current", "entity_type": "device"}],
+        "key_filters": [
+            {"id": "above_limit", "name": "Above the limit (8 °C)", "match": "all", "rules": [{"source": "value", "key": "temp", "type": "number", "op": "gt", "dynamic": {"from": "filter", "key": "limit"}, "value": 8}]},
+            {"id": "own_limit", "name": "Above its own limit", "match": "all", "rules": [{"source": "value", "key": "temp", "type": "number", "op": "gt", "dynamic": {"from": "self", "key": "max_temp"}}]}],
+        "states": [{"id": "overview", "name": "Cold chain"}, {"id": "fridge", "name": "Fridge detail"}],
+        "widgets": [
+            {"id": "pick", "type": "entity_selector", "geometry": g(0, 0, 3, 3), "alias": {"id": "cold"}, "params": {"title": "Fridge", "style": "list"}},
+            {"id": "now", "type": "value", "geometry": g(3, 0, 3, 3), "alias": {"id": "temps", "quantity": ["temperature"]}, "bindings": {"datastreams": []}, "params": {"title": "Selected fridge", "decimals": 1, "sparkline": True},
+             "actions": [{"event": "button", "action": "state", "target": "fridge", "pass": "asset", "label": "Details"}]},
+            {"id": "table", "type": "entities_table", "geometry": g(6, 0, 6, 3), "alias": {"id": "cold"},
+             "params": {"title": "Fridges and freezers", "columns": ["name", "t:temp=Temperature", "a:max_temp=Limit", "a:storage_class=Storage class", "alarm"], "highlight_filter": "own_limit", "decimals": 1, "page_size": 10},
+             "actions": [{"event": "row", "action": "state", "target": "fridge"}, {"event": "row_button", "action": "device", "pass": "device", "label": "Logger"}]},
+            {"id": "warm", "type": "overview_table", "geometry": g(0, 3, 7, 3), "alias": {"id": "cold", "filter": "above_limit", "quantity": ["temperature"]}, "bindings": {"datastreams": []},
+             "params": {"title": "Fridges above the limit", "columns": ["asset", "device", "value", "limits", "age", "alarm"], "decimals": 1, "export": False},
+             "actions": [{"event": "row", "action": "state", "target": "fridge", "pass": "asset"}]},
+            {"id": "map", "type": "map", "geometry": g(7, 3, 5, 3), "alias": {"id": "cold"}, "bindings": {"devices": []}, "params": {"title": "Loggers"},
+             "actions": [{"event": "marker", "action": "state", "target": "fridge"}]},
+            {"id": "trend", "type": "chart", "state": "fridge", "geometry": g(0, 0, 8, 3), "alias": {"id": "temps", "quantity": ["temperature"]}, "bindings": {"datastreams": []},
+             "params": {"title": "Temperature", "range": "24h", "decimals": 1, "warn": 7.5, "action": 8}},
+            {"id": "logger", "type": "devices", "state": "fridge", "geometry": g(8, 0, 4, 2), "alias": {"id": "loggers"}, "bindings": {"devices": []}, "params": {"title": "Logger"},
+             "actions": [{"event": "row", "action": "device"}]},
+            {"id": "alarms", "type": "alarms", "state": "fridge", "geometry": g(8, 2, 4, 4), "alias": {"id": "temps"}, "params": {"title": "Alarms", "limit": 10}},
+            {"id": "log", "type": "period_table", "state": "fridge", "geometry": g(0, 3, 8, 5), "alias": {"id": "temps", "quantity": ["temperature"]}, "bindings": {"datastreams": []},
+             "params": {"title": "Daily log (min / max)", "interval": "day", "values": "min,max", "period": "last_7d", "low": 2, "high": 8, "decimals": 1, "export": False}}]}
+    slug = dash("Cold chain – drill-down", spec)
+    tok = call("POST", f"/api/v1/dashboards/{slug}/share", {"reason": R})["token"]
+    return {"slug": slug, "token": tok}
 
 
 # ---------------------------------------------------------------------------------------------- alarms and incidents
@@ -879,7 +930,7 @@ def counting_views():
 def setup():
     login()
     partitions()
-    cold_chain(); energy(); dashboards(); overviews(); rules(); flows(); mqtt_accounts(); home(); display(); firmware(); people(); settings(); incidents(); records()
+    cold_chain(); energy(); dashboards(); overviews(); drilldown(); rules(); flows(); mqtt_accounts(); home(); display(); firmware(); people(); settings(); incidents(); records()
     counting(); counting_views()
     st["vpn"] = vpn(); st["vpn2"] = vpn2(); st["vpn3"] = vpn3(); save()
     print("docs demo ready:", ", ".join(st))

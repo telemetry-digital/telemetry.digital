@@ -157,7 +157,7 @@ func TestShowcaseMoreValid(t *testing.T) {
 	dsb := func(ids []string) map[string][]string { return map[string][]string{"datastreams": ids} }
 	ds := []string{tagA, tagA, tagA}
 	widgets := showcaseMore(w, dsb, ds, ds[:1])
-	raw, _ := json.Marshal(map[string]any{"version": 1, "widgets": widgets})
+	raw, _ := json.Marshal(map[string]any{"version": 1, "widgets": widgets, "aliases": showcaseAliases()})
 	_, warn, err := validateScreenSpecW(raw)
 	if err != nil || len(warn) > 0 {
 		t.Fatalf("err %v warnings %v", err, warn)

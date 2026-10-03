@@ -39,7 +39,7 @@ var (
 type ScreenParam struct {
 	Name    string   `json:"name"`
 	Label   string   `json:"label"`
-	Kind    string   `json:"kind"` // text, multiline, number, bool, select, list, multi, color, icon, datetime, series, ranges
+	Kind    string   `json:"kind"` // text, multiline, number, bool, select, list, multi, color, icon, datetime, series, ranges, keyfilter
 	Default any      `json:"default,omitempty"`
 	Options []string `json:"options,omitempty"`
 	Help    string   `json:"help,omitempty"`
@@ -55,7 +55,8 @@ type WidgetDef struct {
 	Help     string        `json:"help"`
 	Binds    []string      `json:"binds"` // datastreams, devices
 	MinBinds int           `json:"min_binds"`
-	Default  [2]int        `json:"default_size"` // w, h in grid units
+	Entities bool          `json:"entities,omitempty"` // shows entities of an alias (entity table, entity selector; 0.73.0)
+	Default  [2]int        `json:"default_size"`       // w, h in grid units
 	Params   []ScreenParam `json:"params"`
 }
 
@@ -143,11 +144,18 @@ type screenSpec struct {
 		Geometry struct{ X, Y, W, H int } `json:"geometry"`
 		Bindings map[string][]string      `json:"bindings"`
 		Params   map[string]any           `json:"params"`
-		Source   map[string]any           `json:"source"` // dynamic data source (dashboard_filters.go)
-		Follow   bool                     `json:"follow"` // follows the dashboard filters
+		Source   map[string]any           `json:"source"`  // dynamic data source (dashboard_filters.go)
+		Follow   bool                     `json:"follow"`  // follows the dashboard filters
+		State    string                   `json:"state"`   // dashboard state the widget belongs to (dashboard_aliases.go)
+		Alias    map[string]any           `json:"alias"`   // entities from an alias, optionally a key filter
+		Actions  []map[string]any         `json:"actions"` // row/marker/chart/widget click and buttons
 	} `json:"widgets"`
 	Elements []any            `json:"elements"` // drawing layer of process pictures (screen_elements.go)
 	Filters  []map[string]any `json:"filters"`  // dashboard filter bar (dashboard_filters.go)
+	// entity aliases, key filters and states (dashboard_aliases.go, 0.73.0)
+	Aliases    []map[string]any `json:"aliases"`
+	KeyFilters []map[string]any `json:"key_filters"`
+	States     []map[string]any `json:"states"`
 	// PublicAnnotations lets viewers of a public link (and displays) see the annotations of the charts; off by default
 	// because annotation texts are internal notes (0.72.0).
 	PublicAnnotations bool `json:"public_annotations"`
@@ -231,6 +239,13 @@ func validateScreenSpecW(raw json.RawMessage) (map[string]any, []string, error) 
 	if len(sp.Elements) > 0 && !canvas {
 		return nil, nil, errors.New("drawing elements need the canvas layout (kind mimic)")
 	}
+	aliases, keyFilters, states, aIDs, fIDs, sIDs, err := validateDashModel(sp.Aliases, sp.KeyFilters, sp.States)
+	if err != nil {
+		return nil, nil, err
+	}
+	if canvas && len(states) > 0 {
+		return nil, nil, errNoStates
+	}
 	// an empty dashboard is allowed: "Dashboard — empty" starts with no widgets, and removing the last widget saves
 	if len(sp.Widgets) > 60 {
 		return nil, nil, errors.New("at most 60 widgets")
@@ -293,6 +308,11 @@ func validateScreenSpecW(raw json.RawMessage) (map[string]any, []string, error) 
 		if err != nil {
 			return nil, nil, err
 		}
+		for _, d := range def.Params {
+			if f, _ := params[d.Name].(string); d.Kind == "keyfilter" && f != "" && !fIDs[f] {
+				return nil, nil, fmt.Errorf("widget %d: %s: the dashboard has no key filter %q", i+1, d.Name, f)
+			}
+		}
 		wm := map[string]any{"id": id, "type": w.Type, "geometry": map[string]int{"x": g.X, "y": g.Y, "w": g.W, "h": g.H}, "bindings": binds, "params": params}
 		if w.Source != nil {
 			if !hasBind(def, "datastreams") {
@@ -307,6 +327,31 @@ func validateScreenSpecW(raw json.RawMessage) (map[string]any, []string, error) 
 		if w.Follow {
 			wm["follow"] = true
 		}
+		if w.Alias != nil {
+			if w.Source != nil {
+				return nil, nil, fmt.Errorf("widget %d: either a query source or an alias, not both", i+1)
+			}
+			al, err := validateWidgetAlias(i, def, w.Alias, aIDs, fIDs)
+			if err != nil {
+				return nil, nil, err
+			}
+			wm["alias"] = al // an entity table or selector without an alias stays empty while it is being set up
+		}
+		if w.State != "" {
+			if !sIDs[w.State] {
+				return nil, nil, fmt.Errorf("widget %d: the dashboard has no state %q", i+1, w.State)
+			}
+			if w.State != states[0]["id"] { // absent = the root state
+				wm["state"] = w.State
+			}
+		}
+		if len(w.Actions) > 0 {
+			acts, err := validateActions(i, w.Actions, sIDs)
+			if err != nil {
+				return nil, nil, err
+			}
+			wm["actions"] = acts
+		}
 		widgets = append(widgets, wm)
 	}
 	layout := map[string]any{"type": "grid", "columns": 12, "row_height": sp.Layout.RowHeight}
@@ -320,6 +365,15 @@ func validateScreenSpecW(raw json.RawMessage) (map[string]any, []string, error) 
 			return nil, nil, err
 		}
 		out["filters"] = fs
+	}
+	if len(aliases) > 0 {
+		out["aliases"] = aliases
+	}
+	if len(keyFilters) > 0 {
+		out["key_filters"] = keyFilters
+	}
+	if len(states) > 0 {
+		out["states"] = states
 	}
 	if canvas {
 		lay := map[string]any{"type": "canvas", "width": sp.Layout.Width, "height": sp.Layout.Height}
@@ -420,6 +474,12 @@ func validateParams(i int, def *WidgetDef, src map[string]any) (map[string]any, 
 				return nil, fmt.Errorf("widget %d: %s must be one of %s", i+1, d.Name, strings.Join(d.Options, ", "))
 			}
 			p[d.Name] = s
+		case "keyfilter":
+			s, _ := v.(string)
+			if !widgetIDRe.MatchString(s) {
+				return nil, fmt.Errorf("widget %d: %s must be the id of a key filter", i+1, d.Name)
+			}
+			p[d.Name] = s
 		case "color", "icon", "datetime", "series", "ranges", "multi":
 			val, err := validateRichParam(d, v)
 			if err != nil {
@@ -511,8 +571,9 @@ func (s *Server) listDashboards(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) dashboardCatalog(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, map[string]any{"widgets": widgetCatalog, "ranges": []string{"1h", "6h", "8h", "12h", "today", "24h", "7d", "30d", "90d"}, "format": "screen/v1", "format_minor": 1, "layouts": []string{"grid"},
-		"filter_kinds": filterKinds, "source_limits": map[string]int{"tables": maxSourceRows, "other": maxSourceSeries}})
+	writeJSON(w, 200, map[string]any{"widgets": widgetCatalog, "ranges": []string{"1h", "6h", "8h", "12h", "today", "24h", "7d", "30d", "90d"}, "format": "screen/v1", "format_minor": 2, "layouts": []string{"grid"},
+		"filter_kinds": filterKinds, "source_limits": map[string]int{"tables": maxSourceRows, "other": maxSourceSeries},
+		"alias_kinds": aliasKinds, "action_events": sortedKeys(actionEvents), "limits": map[string]int{"aliases": maxAliases, "key_filters": maxKeyFilters, "states": maxStates, "actions": maxActions, "entities": maxSourceRows, "depth": maxTreeDepth}})
 }
 
 func (s *Server) getDashboard(w http.ResponseWriter, r *http.Request) {

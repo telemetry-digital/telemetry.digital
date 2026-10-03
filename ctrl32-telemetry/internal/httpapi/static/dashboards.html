@@ -34,6 +34,18 @@
   .flt-row input, .flt-row select { min-height: 0; padding: 3px 6px; font-size: 13px; }
   .flt-row input[type=checkbox] { width: auto; padding: 0; }
   .flt-row label { display: inline-flex; flex-direction: row; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
+  #setDlg { width: min(900px, 96vw); }
+  .flt-row select[data-af="kind"] { width: auto; max-width: 320px; }
+  .ed-states .tab.active { border-color: var(--primary); color: var(--primary); font-weight: 600; background: color-mix(in srgb, var(--primary) 10%, transparent); }
+  .set-sec { display: flex; flex-direction: column; gap: 8px; min-height: 120px; }
+  .set-sec .src-box label { display: inline-flex; flex-direction: column; gap: 2px; font-size: 12px; }
+  .set-sec .src-box .flt-row label { flex-direction: row; }
+  .kf-rule { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 3px 0; }
+  .kf-rule select, .kf-rule input { width: auto; min-height: 0; padding: 3px 6px; font-size: 13px; }
+  .kf-rule input[data-k="value"], .kf-rule input[data-k="value2"], .kf-rule input[data-k="dkey"], .kf-rule input[data-k="key"] { width: 110px; }
+  .kf-group { border: 1px dashed var(--line); border-radius: var(--radius); padding: 4px 8px; margin: 4px 0; }
+  .act-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 6px; }
+  .act-row select, .act-row input { width: auto; min-height: 0; padding: 3px 6px; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -69,6 +81,7 @@
     <button class="btn" id="vRefresh" type="button" title="Refresh now">Refresh</button>
     <a class="btn" id="vEdit" hidden>Edit</a>
   </div>
+  <div id="vStates" hidden></div>
   <div id="vFilters" hidden></div>
   <div id="vGrid"></div>
 </section>
@@ -81,6 +94,7 @@
     <a class="btn" id="eCancel">Cancel</a>
   </div>
   <p class="muted" id="eHintGrid">Drag a widget by its title to move it on the grid, drag the corner to resize, click it to edit its properties on the right. Widgets show live data while you edit.</p>
+  <div id="eStates" class="ed-states" hidden></div>
   <div id="eFilters" hidden></div>
   <p class="muted" id="eHintCanvas" hidden>Drag a symbol to move it on the canvas (10 px grid), drag the corner to resize, click it to edit its properties on the right. Values update live while you edit.</p>
   <div class="dash-editor">
@@ -93,17 +107,38 @@
   <dialog id="setDlg">
     <form id="setForm" class="form" method="dialog">
       <h2 style="margin-top:0">Dashboard settings</h2>
+      <div class="tabs" role="tablist" id="setTabs"><button type="button" role="tab" class="tab active" data-st="general">General</button><button type="button" role="tab" class="tab" data-st="filters">Filters</button><button type="button" role="tab" class="tab" data-st="aliases">Entity aliases</button><button type="button" role="tab" class="tab" data-st="keyfilters">Key filters</button><button type="button" role="tab" class="tab" data-st="states">States</button><button type="button" role="tab" class="tab" data-st="share">Public link</button></div>
+      <div data-sts="general" class="set-sec">
       <label>Name <input name="name" required maxlength="128"></label>
       <div class="row"><label>Default range <select name="range"></select></label><label>Refresh (s) <input name="refresh_s" type="number" min="5" max="3600" value="30"></label><label id="setRowH">Row height (px) <input name="row_height" type="number" min="60" max="240" value="96"></label><label id="setW" hidden>Canvas width (px) <input name="width" type="number" min="600" max="4000" value="1600"></label><label id="setH" hidden>Canvas height (px) <input name="height" type="number" min="300" max="3000" value="900"></label></div>
       <label class="inline"><input type="checkbox" name="is_default"><span>Show on the home page (default)</span></label>
-      <h3 style="margin:8px 0 0">Filters</h3>
-      <div class="muted" style="font-size:12px">A bar on top of the dashboard: widgets that follow the dashboard filters show only what matches the chosen values. The values chosen in the filter bar of the editor are saved as the defaults. Public: viewers of the public link may change the filter; otherwise its default applies there.</div>
+      </div>
+      <div data-sts="filters" class="set-sec" hidden>
+      <div class="muted" style="font-size:12px">A bar on top of the dashboard: widgets that follow the dashboard filters show only what matches the chosen values. The values chosen in the filter bar of the editor are saved as the defaults. Public: viewers of the public link may change the filter; otherwise its default applies there. A value filter is a number or a text viewers type, such as a temperature limit, which key filters compare with.</div>
       <div id="fltList"></div>
       <div><button class="btn small" type="button" id="fltAdd">Add filter</button></div>
-      <h3 style="margin:8px 0 0">Public link</h3>
-      <div class="muted" style="font-size:12px">Anyone with the link sees this dashboard read-only, without signing in — only the data its widgets bind. Regenerating invalidates the old link.</div>
+      </div>
+      <div data-sts="aliases" class="set-sec" hidden>
+      <div class="muted" style="font-size:12px">An entity alias is a named set of devices, assets, datastreams or sites that many widgets share — for example all fridges, everything under one building, or the entity chosen by a click (the current entity of a dashboard state). Widgets take their data from an alias on their Data tab; new devices appear on their own.</div>
+      <div id="alList"></div>
+      <div class="row" style="align-items:center"><select id="alPreset" style="width:auto"><option value="">Add an alias…</option><option value="site_sensors">All sensors of a site</option><option value="current_devices">Devices of the selected asset</option><option value="current">The selected entity (drill-down)</option><option value="type_assets">Assets of a type (e.g. fridges)</option><option value="all_devices">All devices</option><option value="empty">Empty alias</option></select></div>
+      </div>
+      <div data-sts="keyfilters" class="set-sec" hidden>
+      <div class="muted" style="font-size:12px">A key filter keeps the entities whose latest values, attributes, quality, age or alarm state meet its conditions — for example temperature above 8 °C, or above the limit stored in an attribute of each fridge. Attach it to the alias of a widget (Data tab) to show only the matching entities, or highlight the matching rows of a table.</div>
+      <div id="kfList"></div>
+      <div class="row" style="align-items:center"><select id="kfPreset" style="width:auto"><option value="">Add a key filter…</option><option value="above">Values above a limit</option><option value="above_attr">Above the entity's own limit (attribute)</option><option value="above_viewer">Above a limit the viewer types</option><option value="alarm">In alarm</option><option value="stale">No recent value</option><option value="empty">Empty key filter</option></select></div>
+      <details id="orgAttrBox"><summary>Organization attributes</summary><div class="muted" style="font-size:12px">Values every key filter can compare with (attribute of the organization), one per line as name = value.</div><textarea id="orgAttrs" rows="3" placeholder="limit = 8" style="width:100%;font-family:var(--mono)"></textarea><div class="row" style="gap:6px"><input id="orgAttrReason" placeholder="Reason (audit trail)" maxlength="200" style="flex:1;min-width:160px"><button class="btn small" type="button" id="orgAttrSave">Save attributes</button></div></details>
+      </div>
+      <div data-sts="states" class="set-sec" hidden>
+      <div class="muted" style="font-size:12px">States are views of one dashboard, such as Overview and Device detail. The first state is the main view; widget actions (a click on a table row, a map marker or a chart) open another state with the clicked entity, which the aliases of kind Current entity show. The editor shows one state at a time (tabs above the grid).</div>
+      <div id="stList"></div>
+      <div class="row"><button class="btn small" type="button" id="stAdd">Add state</button></div>
+      </div>
+      <div data-sts="share" class="set-sec" hidden>
+      <div class="muted" style="font-size:12px">Anyone with the link sees this dashboard read-only, without signing in — only the data its widgets bind and its aliases select. Regenerating invalidates the old link.</div>
       <div id="shareBox" class="muted">…</div>
       <label class="inline"><input type="checkbox" name="public_annotations"><span>Show annotations in the charts of the public link and on displays (their texts are internal notes; off by default)</span></label>
+      </div>
       <div class="actions"><button class="btn primary" type="submit">Apply</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
     </form>
   </dialog>
@@ -165,9 +200,11 @@ async function loadView(){
   // dashboard filters (0.68.0): values in the URL and remembered per viewer; a range filter replaces the Range select,
   // which otherwise keeps its value in the URL too (f.range)
   const me = ctrl32.me || {}; const fc = ctrl32DashFilters.mount($('#vFilters'), SPEC, {key: (me.id || me.username || '') + '/' + SLUG, onChange: () => run()});
+  // dashboard states (0.73.0): the view and its current entity live in the address; the breadcrumb goes back
+  const nav = ctrl32DashStates.mount($('#vStates'), SPEC, {onChange: () => run()});
   const rf = (SPEC.filters || []).some(d => d.kind === 'range'); $('#vRangeL').hidden = rf;
   const ur = new URLSearchParams(location.search).get('f.range'); if(!rf && ur && ctrl32DashFilters.RANGES.includes(ur)) $('#vRange').value = ur;
-  const run = async () => { refreshFn = await WG.render($('#vGrid'), SPEC, {range: rf ? (fc.values.range || SPEC.range) : $('#vRange').value, filters: fc.values}); };
+  const run = async () => { refreshFn = await WG.render($('#vGrid'), SPEC, {range: rf ? (fc.values.range || SPEC.range) : $('#vRange').value, filters: fc.values, nav}); };
   $('#vRange').onchange = () => { const u = new URLSearchParams(location.search); if($('#vRange').value === SPEC.range) u.delete('f.range'); else u.set('f.range', $('#vRange').value); history.replaceState(null, '', location.pathname + (u.toString() ? '?' + u : '')); run(); };
   $('#vRefresh').onclick = () => refreshFn && refreshFn();
   await run(); clearInterval(timer); timer = setInterval(() => refreshFn && refreshFn(), (SPEC.refresh_s || 30) * 1000);
@@ -179,7 +216,7 @@ function canvas(){ return WG.isCanvas(SPEC); }
 const snap = v => Math.round(v / 10) * 10;
 function gridMetrics(){ if(canvas()){ const m = $('#eGrid .mimic'); const r = m.getBoundingClientRect(); return {scale: r.width / (SPEC.layout.width || 1600), W: SPEC.layout.width || 1600, H: SPEC.layout.height || 900}; } const g = $('#eGrid .dash-grid'); if(!g) return null; const r = g.getBoundingClientRect(); const rowH = SPEC.layout.row_height || 96, gap = 12; return {left: r.left, top: r.top, colW: (r.width - gap * 11) / 12, gap, rowH}; }
 function overlaps(a, b){ return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h; }
-function settle(i){ const g = SPEC.widgets[i].geometry; let guard = 0; while(guard++ < 200 && SPEC.widgets.some((w, k) => k !== i && overlaps(g, w.geometry))) g.y++; }
+function settle(i){ const g = SPEC.widgets[i].geometry; const st = WG.stateOf(SPEC, SPEC.widgets[i]); let guard = 0; while(guard++ < 200 && SPEC.widgets.some((w, k) => k !== i && WG.stateOf(SPEC, w) === st && overlaps(g, w.geometry))) g.y++; }
 // Small illustrations for the Add widget dialog (theme colours through CSS variables).
 const THUMBS = {
   chart: '<svg viewBox="0 0 120 64"><g stroke="var(--line)"><line x1="14" y1="10" x2="14" y2="52"/><line x1="14" y1="52" x2="112" y2="52"/><line x1="14" y1="24" x2="112" y2="24" stroke-dasharray="2 3"/><line x1="14" y1="38" x2="112" y2="38" stroke-dasharray="2 3"/></g><path d="M14,44 L30,36 L46,40 L62,22 L78,28 L94,14 L112,18 L112,52 L14,52 Z" fill="var(--primary)" opacity=".15"/><polyline points="14,44 30,36 46,40 62,22 78,28 94,14 112,18" fill="none" stroke="var(--primary)" stroke-width="2"/><line x1="14" y1="20" x2="112" y2="20" stroke="#d97706" stroke-dasharray="3 3"/></svg>',
@@ -206,9 +243,10 @@ window.addEventListener('beforeunload', e => { if(DIRTY){ e.preventDefault(); e.
 let EDITOR = null;
 function redraw(){ return EDITOR ? EDITOR.reload() : drawEdit(); }
 async function drawEdit(){
-  refreshFn = await WG.render($('#eGrid'), SPEC, {range: (EFC && EFC.values.range) || SPEC.range, filters: EFC ? EFC.values : undefined, header: (w, i) => `<button class="btn small ghost" type="button" data-del="${i}" title="Remove">✕</button>`});
+  drawEditStates();
+  refreshFn = await WG.render($('#eGrid'), SPEC, {range: (EFC && EFC.values.range) || SPEC.range, filters: EFC ? EFC.values : undefined, nav: EDNAV, header: (w, i) => `<button class="btn small ghost" type="button" data-del="${i}" title="Remove">✕</button>`});
   const cards = [...document.querySelectorAll('#eGrid .dash-widget')];
-  cards.forEach((card, i) => {
+  cards.forEach((card) => { const i = +card.dataset.i;
     card.classList.add('editing'); if(i === SEL) card.classList.add('selected');
     const h = document.createElement('div'); h.className = 'dash-resize'; card.appendChild(h);
     card.onclick = e => { if(e.target.closest('[data-del]')) return; select(i); };
@@ -223,7 +261,7 @@ async function drawEdit(){
   });
   $('#eHintGrid').hidden = canvas(); $('#eHintCanvas').hidden = !canvas();
 }
-function select(i){ SEL = i; document.querySelectorAll('#eGrid .dash-widget').forEach((c, k) => c.classList.toggle('selected', k === i)); renderProps(); }
+function select(i){ SEL = i; document.querySelectorAll('#eGrid .dash-widget').forEach((c) => c.classList.toggle('selected', +c.dataset.i === i)); renderProps(); }
 // readable names of option codes (period table, spec 023); the page translates them like any text
 const OPT_LABEL = { periods: 'a row per period', datastreams: 'a row per datastream', this_week: 'this week', last_week: 'last week', this_month: 'this month', last_month: 'last month', this_year: 'this year', last_year: 'last year', last_7d: 'last 7 days', last_30d: 'last 30 days', last_12m: 'last 12 months',
   'min,max': 'min and max', 'min,max,avg': 'min, max and average', avg: 'average', last: 'last value', delta: 'consumption', 'first,last,delta': 'start, end and consumption', 'min,max,out': 'min, max and out of limits', count: 'samples', sum: 'total', 'sum,max': 'total and max',
@@ -249,6 +287,7 @@ function paramHTML(p, v){
   case 'icon': return `<label>${lab} <span class="row" style="gap:6px;align-items:center;flex-wrap:nowrap"><select data-p="${p.name}" style="flex:1">${iconOpts(v)}</select><span class="icon-prev">${v && window.ctrl32Widgets ? ctrl32Widgets.icon(v, 20) : ''}</span></span></label>`;
   case 'camera': return `<label>${lab} <select data-p="${p.name}"><option value="">—</option>${(window.CAM_LIST || []).map(c => `<option value="${esc(c.id)}" ${c.id === v ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}${v && !(window.CAM_LIST || []).some(c => c.id === v) ? `<option value="${esc(v)}" selected>${esc(v)}</option>` : ''}</select></label>`;
   case 'datetime': return `<label>${lab} <input type="datetime-local" data-p="${p.name}" value="${toLocalDT(v)}"></label>`;
+  case 'keyfilter': return `<label>${lab} <select data-p="${p.name}"><option value="">(none)</option>${(SPEC.key_filters || []).map(f => `<option value="${esc(f.id)}" ${f.id === v ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label>`;
   case 'multi': return `<fieldset style="border:none;padding:0;margin:0"><span style="font-size:13px">${lab}</span><div class="row" style="gap:10px;flex-wrap:wrap">${(p.options || []).map(o => `<label class="inline"><input type="checkbox" data-pm="${p.name}" value="${esc(o)}" ${(Array.isArray(v) ? v : []).includes(o) ? 'checked' : ''}><span>${esc(OPT_LABEL[o] || o)}</span></label>`).join('')}</div></fieldset>`;
   case 'series': return seriesHTML(p, Array.isArray(v) ? v : []);
   case 'ranges': return rangesHTML(p, Array.isArray(v) ? v : []);
@@ -278,11 +317,15 @@ function renderProps(target){
   html += `<div class="tabs ptabs" role="tablist" style="margin-bottom:8px">${TABS.filter(([k]) => groups.has(k)).map(([k, l]) => `<button type="button" role="tab" class="tab${k === PTAB ? ' active' : ''}" data-tab="${k}" aria-selected="${k === PTAB}">${l}</button>`).join('')}</div>`;
   const sec = {data: '', appearance: '', series: '', time: '', actions: ''};
   if(canvas()) sec.data += `<div class="row">${['x', 'y', 'w', 'h'].map(k => `<label style="max-width:70px">${k} <input type="number" data-g="${k}" value="${w.geometry[k]}" min="0" step="10"></label>`).join('')}</div>`;
-  if((d.binds || []).includes('datastreams')){ sec.data += sourceHTML(w);
-    if(!w.source){ sec.data += pickHTML('datastreams', DS.map(x => ({id: x.id, label: `${x.asset} / ${x.key} [${x.unit}]`})), w.bindings.datastreams || [], 'Datastreams'); if(!(w.bindings.datastreams || []).length) sec.data += '<div style="color:#d97706;font-size:12px">No datastream selected yet — pick one above; the widget stays empty until then.</div>'; } }
-  if((d.binds || []).length || ['alarms', 'alarm_count'].includes(w.type)) sec.data += `<label class="inline" title="Narrowed by the values chosen in the filter bar of the dashboard"><input type="checkbox" data-follow ${w.follow ? 'checked' : ''}><span>Follow the dashboard filters</span></label>${w.follow && !(SPEC.filters || []).length ? '<div class="muted" style="font-size:12px">The dashboard has no filters yet — add them under Dashboard settings.</div>' : ''}`;
-  if((d.binds || []).includes('devices')) sec.data += pickHTML('devices', DEVS.map(x => ({id: x.id, label: `${x.name || x.external_id} (${x.external_id})`})), w.bindings.devices || [], 'Devices (empty = all)');
+  if(d.entities) sec.data += `<fieldset class="src-box"><legend>Entities</legend><input type="hidden" data-srcmode value="alias" checked>${aliasFields(w, d)}</fieldset>`;
+  if((d.binds || []).includes('datastreams')){ sec.data += sourceHTML(w, d);
+    if(!w.source && !w.alias){ sec.data += pickHTML('datastreams', DS.map(x => ({id: x.id, label: `${x.asset} / ${x.key} [${x.unit}]`})), w.bindings.datastreams || [], 'Datastreams'); if(!(w.bindings.datastreams || []).length) sec.data += '<div style="color:#d97706;font-size:12px">No datastream selected yet — pick one above; the widget stays empty until then.</div>'; } }
+  else if(['devices', 'map', 'alarms', 'alarm_count'].includes(w.type)) sec.data += sourceHTML(w, d);
+  if((d.binds || []).length || ['alarms', 'alarm_count'].includes(w.type) || d.entities) sec.data += `<label class="inline" title="Narrowed by the values chosen in the filter bar of the dashboard"><input type="checkbox" data-follow ${w.follow ? 'checked' : ''}><span>Follow the dashboard filters</span></label>${w.follow && !(SPEC.filters || []).length ? '<div class="muted" style="font-size:12px">The dashboard has no filters yet — add them under Dashboard settings.</div>' : ''}`;
+  if((d.binds || []).includes('devices') && !w.alias) sec.data += pickHTML('devices', DEVS.map(x => ({id: x.id, label: `${x.name || x.external_id} (${x.external_id})`})), w.bindings.devices || [], 'Devices (empty = all)');
+  if(!canvas()) sec.actions = actionsHTML(w);
   for(const p of d.params || []){ const v = w.params[p.name] ?? p.default ?? ''; sec[p.group || 'data'] = (sec[p.group || 'data'] || '') + paramHTML(p, v); }
+  if(!canvas() && !sec.actions.includes('data-acts')) sec.actions = actionsHTML(w) + sec.actions;
   html += Object.entries(sec).map(([k, s]) => `<div class="props" data-sec="${k}" ${k === PTAB ? '' : 'hidden'} style="display:flex;flex-direction:column;gap:8px">${s}${k !== 'data' && s ? `<button class="btn small ghost" type="button" data-treset="${k}" style="align-self:flex-start">Reset this tab to defaults</button>` : ''}</div>`).join('');
   html += `<div class="row" style="margin-top:8px"><button class="btn small" type="button" id="pApply">Apply to widget</button><button class="btn small danger" type="button" id="pRemove">Remove widget</button></div>`;
   box.innerHTML = html;
@@ -293,7 +336,7 @@ function renderProps(target){
   for(const b of box.querySelectorAll('[data-cclear]')) b.onclick = () => { const t = b.previousElementSibling; t.value = ''; t.dispatchEvent(new Event('change', {bubbles: true})); };
   const numOrNull = (x) => x === '' ? null : parseFloat(x);
   const applyProps = () => { for(const sel of box.querySelectorAll('[data-pick]')) w.bindings[sel.dataset.pick] = [...sel.selectedOptions].map(o => o.value);
-    applySource(box, w); const fl = box.querySelector('[data-follow]'); if(fl){ if(fl.checked) w.follow = true; else delete w.follow; }
+    applySource(box, w); applyActions(box, w); const fl = box.querySelector('[data-follow]'); if(fl){ if(fl.checked) w.follow = true; else delete w.follow; }
     for(const el of box.querySelectorAll('[data-g]')){ const v = parseInt(el.value, 10); if(!isNaN(v)) w.geometry[el.dataset.g] = Math.max(el.dataset.g === 'w' || el.dataset.g === 'h' ? 20 : 0, v); }
     for(const el of box.querySelectorAll('[data-p]')){ const p = (d.params || []).find(x => x.name === el.dataset.p); if(!p) continue;
       if(p.kind === 'bool') w.params[p.name] = el.checked; else if(p.kind === 'number') w.params[p.name] = numOrNull(el.value); else if(p.kind === 'list') w.params[p.name] = el.value.split(',').map(s => s.trim()).filter(Boolean);
@@ -309,7 +352,10 @@ function renderProps(target){
   box.querySelector('#pApply').onclick = applyProps;
   box.onchange = e => { if(e.target.matches('[data-p][data-p]') && e.target.tagName === 'SELECT' && e.target.closest('label') && e.target.closest('label').querySelector('.icon-prev')) e.target.closest('label').querySelector('.icon-prev').innerHTML = e.target.value ? ctrl32Widgets.icon(e.target.value, 20) : '';
     if(e.target.matches('[data-r="op"]')){ const v2 = e.target.closest('[data-rng]').querySelector('[data-r="v2"]'); v2.hidden = e.target.value !== 'between'; }
-    if(e.target.matches('[data-pick],[data-p],[data-g],[data-pm],[data-s],[data-r],[data-src],[data-srcmode],[data-follow]')){ if(e.target.matches('[data-pick],[data-srcmode],[data-follow]')) reopen(); else { applyProps(); if(e.target.matches('[data-src]')) srcPreview(box, w); } } };
+    if(e.target.matches('[data-pick],[data-p],[data-g],[data-pm],[data-s],[data-r],[data-src],[data-srcmode],[data-follow],[data-al],[data-ak]')){ if(e.target.matches('[data-pick],[data-srcmode],[data-follow],[data-ak="action"],[data-ak="event"]')) reopen(); else { applyProps(); if(e.target.matches('[data-src],[data-al]')) srcPreview(box, w); } } };
+  for(const b of box.querySelectorAll('[data-manage]')) b.onclick = () => openSettings(b.dataset.manage);
+  const aa = box.querySelector('[data-actadd]'); if(aa) aa.onclick = () => { applyProps(); const ev = actionEventsFor(w.type)[0]; w.actions = (w.actions || []).concat([{event: ev, action: (SPEC.states || []).length > 1 ? 'state' : 'device', ...((SPEC.states || []).length > 1 ? {target: SPEC.states[1].id} : {}), ...(ev === 'button' || ev === 'row_button' ? {label: 'Open'} : {})}]); dirty(); renderProps(target); };
+  for(const b of box.querySelectorAll('[data-actdel]')) b.onclick = () => { b.closest('[data-act]').remove(); reopen(); };
   srcPreview(box, w);
   box.querySelector('#pRemove').onclick = () => { SPEC.widgets.splice(SEL, 1); SEL = -1; dirty(); if(EDITOR){ EDITOR.commit(); EDITOR.select([]); redraw(); } else { drawEdit(); renderProps(); } };
 }
@@ -318,9 +364,11 @@ function renderProps(target){
 // asset types and quantities are codes: offered as words in the user's language (the value stays the code)
 const codeOpts = (list) => (list || []).map(o => Object.assign({}, o, {label: WG.codeLabel(o.value)}));
 function srcPick(name, options, chosen, label){ return `<label>${esc(label)} <select multiple data-src="${name}">${options.map(o => `<option value="${esc(o.value)}" ${chosen.includes(o.value) ? 'selected' : ''}>${esc(o.label)}${o.n ? ' (' + o.n + ')' : ''}</option>`).join('')}${chosen.filter(c => !options.some(o => o.value === c)).map(c => `<option value="${esc(c)}" selected>${esc(c)}</option>`).join('')}</select></label>`; }
-function sourceHTML(w){
-  const s = w.source; const many = ['table', 'entity_table', 'overview_table'].includes(w.type); const max = many ? 500 : 24;
-  let h = `<fieldset class="src-box"><legend>Data source</legend><label class="inline"><input type="radio" name="srcmode" data-srcmode value="fixed" ${s ? '' : 'checked'}><span>Fixed list of datastreams</span></label><label class="inline"><input type="radio" name="srcmode" data-srcmode value="query" ${s ? 'checked' : ''}><span>Query — matching datastreams, new devices appear automatically</span></label>`;
+function sourceHTML(w, d){
+  const s = w.source; const many = ['table', 'entity_table', 'overview_table'].includes(w.type); const max = many ? 500 : 24; const dsw = (d.binds || []).includes('datastreams');
+  const fixedLbl = dsw ? 'Fixed list of datastreams' : w.type === 'devices' || w.type === 'map' ? 'Devices chosen below (empty = all)' : 'All (or following the dashboard filters)';
+  let h = `<fieldset class="src-box"><legend>Data source</legend><label class="inline"><input type="radio" name="srcmode" data-srcmode value="fixed" ${s || w.alias ? '' : 'checked'}><span>${esc(fixedLbl)}</span></label>${dsw ? `<label class="inline"><input type="radio" name="srcmode" data-srcmode value="query" ${s ? 'checked' : ''}><span>Query — matching datastreams, new devices appear automatically</span></label>` : ''}<label class="inline"><input type="radio" name="srcmode" data-srcmode value="alias" ${w.alias ? 'checked' : ''}><span>Entity alias — shared with other widgets, follows drill-down</span></label>`;
+  if(w.alias) h += aliasFields(w, d);
   if(s){ const f = FACETS || {}; const attrs = Object.entries(s.attr || {}).map(([k, v]) => [].concat(v).map(x => k + '=' + x).join(', ')).join(', ');
     h += `<div class="muted" style="font-size:12px">Empty fields select everything; several values of one field match any of them. Ctrl/Cmd+click for several.</div>`
       + srcPick('site', f.site || [], s.site || [], 'Sites') + srcPick('asset_type', codeOpts(f.asset_type), s.asset_type || [], 'Asset types')
@@ -333,7 +381,11 @@ function sourceHTML(w){
   return h + '</fieldset>';
 }
 function applySource(box, w){
-  const mode = box.querySelector('[data-srcmode]:checked'); if(!mode) return;
+  const mode = box.querySelector('[data-srcmode]:checked') || box.querySelector('input[type=hidden][data-srcmode]'); if(!mode) return;
+  if(mode.value === 'alias'){ delete w.source; const id = box.querySelector('[data-al="id"]'); const a = {id: id ? id.value : ((SPEC.aliases || [])[0] || {}).id || ''}; const f = box.querySelector('[data-al="filter"]'); if(f && f.value) a.filter = f.value;
+    for(const k of ['quantity', 'key']){ const el = box.querySelector(`[data-al="${k}"]`); const l = el ? el.value.split(',').map(x => x.trim()).filter(Boolean) : []; if(l.length) a[k] = l; }
+    if(a.id) w.alias = a; else delete w.alias; if(w.bindings.datastreams) w.bindings.datastreams = []; if(w.bindings.devices && ['devices', 'map'].includes(w.type)) w.bindings.devices = []; return; }
+  delete w.alias;
   if(mode.value === 'fixed'){ delete w.source; return; }
   const s = w.source || {}; const val = (k) => { const el = box.querySelector(`[data-src="${k}"]`); return el ? (el.multiple ? [...el.selectedOptions].map(o => o.value) : el.value.trim()) : undefined; };
   if(!box.querySelector('[data-src]')){ w.source = {limit: ['table', 'entity_table', 'overview_table'].includes(w.type) ? 500 : 12}; w.bindings.datastreams = []; return; }
@@ -343,28 +395,34 @@ function applySource(box, w){
   const nm = val('name'); if(nm) out.name = nm; const lim = parseInt(val('limit'), 10); out.limit = isNaN(lim) ? s.limit : lim;
   w.source = out;
 }
-async function srcPreview(box, w){ const el = box.querySelector('.src-prev'); if(!el || !w.source) return; el.textContent = '…';
+async function srcPreview(box, w){ const el = box.querySelector('.src-prev'); if(!el) return;
+  if(w.alias){ if(!WG.aliasOf(SPEC, w)){ el.textContent = ctrl32.t('Add an alias under Dashboard settings → Entity aliases.'); return; } el.textContent = '…';
+    try{ const r = await WG.aliasQuery(SPEC, w, EFC ? EFC.values : null, {limit: 1}, EDNAV); el.textContent = ctrl32.t('Matches') + ' ' + r.total + ' ' + ctrl32.t({device: 'devices', asset: 'assets', site: 'sites'}[r.type] || 'datastreams') + (EDNAV && EDNAV.current ? ' · ' + ctrl32.t('preview with') + ' ' + (EDNAV.current.name || EDNAV.current.id) : ''); }catch(x){ el.textContent = x.message; } return; }
+  if(!w.source) return; el.textContent = '…';
   try{ const r = await WG.queryDS(Object.assign({}, w, {follow: false}), null, {limit: 1}); el.textContent = ctrl32.t('Matches') + ' ' + r.total + ' ' + ctrl32.t('datastreams') + (r.total > (w.source.limit || 0) ? ' · ' + ctrl32.t('the widget shows the first') + ' ' + w.source.limit : ''); }catch(x){ el.textContent = x.message; } }
 // Filters of the dashboard (Dashboard settings): kind, attribute key, label, several values, public.
-const FKIND = [['site', 'Site'], ['asset_type', 'Asset type'], ['device', 'Device'], ['quantity', 'Quantity'], ['attribute', 'Attribute (tag)'], ['search', 'Search'], ['range', 'Time range']];
+const FKIND = [['site', 'Site'], ['asset_type', 'Asset type'], ['device', 'Device'], ['quantity', 'Quantity'], ['attribute', 'Attribute (tag)'], ['search', 'Search'], ['range', 'Time range'], ['value', 'Value (for key filters)']];
 function fltRows(list){
   const keys = (FACETS.attr_keys || []);
   $('#fltList').innerHTML = (list.length ? '' : '<div class="muted" style="font-size:12px">No filters.</div>') + list.map((f, i) => `<div class="flt-row" data-fi="${i}"><select data-fk>${FKIND.map(([k, l]) => `<option value="${k}" ${k === f.kind ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
-    <input data-fkey list="fltKeys" placeholder="attribute, e.g. storage_class" value="${esc(f.key || '')}" ${f.kind === 'attribute' ? '' : 'hidden'}><input data-flabel placeholder="Label (optional)" maxlength="40" value="${esc(f.label || '')}">
-    <label ${['search', 'range'].includes(f.kind) ? 'style="visibility:hidden"' : ''}><input type="checkbox" data-fmulti ${f.multi ? 'checked' : ''}>several</label><label><input type="checkbox" data-fpub ${f.public ? 'checked' : ''}>public</label><button class="btn small ghost" type="button" data-fdel title="Remove">✕</button></div>`).join('') + `<datalist id="fltKeys">${keys.map(k => `<option value="${esc(k)}">`).join('')}</datalist>`;
-  const read = () => [...document.querySelectorAll('#fltList [data-fi]')].map(r => { const f = {kind: r.querySelector('[data-fk]').value}; const old = list[+r.dataset.fi] || {}; if(f.kind === 'attribute') f.key = r.querySelector('[data-fkey]').value.trim(); const l = r.querySelector('[data-flabel]').value.trim(); if(l) f.label = l; if(r.querySelector('[data-fmulti]').checked && !['search', 'range'].includes(f.kind)) f.multi = true; if(r.querySelector('[data-fpub]').checked) f.public = true; if(old.kind === f.kind && old.key === f.key && old.default !== undefined) f.default = old.default; return f; });
+    <input data-fkey list="fltKeys" placeholder="${f.kind === 'value' ? 'name, e.g. limit' : 'attribute, e.g. storage_class'}" value="${esc(f.key || '')}" ${['attribute', 'value'].includes(f.kind) ? '' : 'hidden'}><input data-flabel placeholder="Label (optional)" maxlength="40" value="${esc(f.label || '')}">
+    <label ${['search', 'range', 'value'].includes(f.kind) ? 'style="visibility:hidden"' : ''}><input type="checkbox" data-fmulti ${f.multi ? 'checked' : ''}>several</label><label><input type="checkbox" data-fpub ${f.public ? 'checked' : ''}>public</label><button class="btn small ghost" type="button" data-fdel title="Remove">✕</button></div>`).join('') + `<datalist id="fltKeys">${keys.map(k => `<option value="${esc(k)}">`).join('')}</datalist>`;
+  const read = () => [...document.querySelectorAll('#fltList [data-fi]')].map(r => { const f = {kind: r.querySelector('[data-fk]').value}; const old = list[+r.dataset.fi] || {}; if(f.kind === 'attribute' || f.kind === 'value') f.key = r.querySelector('[data-fkey]').value.trim(); const l = r.querySelector('[data-flabel]').value.trim(); if(l) f.label = l; if(r.querySelector('[data-fmulti]').checked && !['search', 'range', 'value'].includes(f.kind)) f.multi = true; if(r.querySelector('[data-fpub]').checked) f.public = true; if(old.kind === f.kind && old.key === f.key && old.default !== undefined) f.default = old.default; return f; });
   for(const r of document.querySelectorAll('#fltList [data-fi]')){ r.querySelector('[data-fk]').onchange = () => fltRows(read()); r.querySelector('[data-fdel]').onclick = () => { const l = read(); l.splice(+r.dataset.fi, 1); fltRows(l); }; }
-  $('#fltAdd').onclick = () => { const l = read(); const have = new Set(l.map(f => f.kind)); const k = (FKIND.find(([x]) => !have.has(x) && x !== 'attribute') || ['attribute'])[0]; l.push({kind: k, multi: !['search', 'range'].includes(k), public: true}); fltRows(l); };
+  $('#fltAdd').onclick = () => { const l = read(); const have = new Set(l.map(f => f.kind)); const k = (FKIND.find(([x]) => !have.has(x) && x !== 'attribute' && x !== 'value') || ['attribute'])[0]; l.push({kind: k, multi: !['search', 'range', 'value'].includes(k), public: true}); fltRows(l); };
   $('#fltList')._read = read;
 }
 // the editor's filter bar: a live preview, and its values become the defaults when saving
 function mountEditorFilters(){ EFC = ctrl32DashFilters.mount($('#eFilters'), SPEC, {editor: true, onChange: () => { if(!EDITOR) drawEdit(); }}); }
 function filterDefaults(){ if(!EFC || !(SPEC.filters || []).length) return; const v = EFC.values;
-  for(const f of SPEC.filters){ const cur = f.kind === 'search' ? v.q : f.kind === 'range' ? v.range : f.kind === 'attribute' ? (v.attr[f.key] || []) : (v[f.kind] || []); if(cur && (!Array.isArray(cur) || cur.length)) f.default = Array.isArray(cur) && !f.multi ? cur.slice(0, 1) : cur; else delete f.default; } }
+  for(const f of SPEC.filters){ const cur = f.kind === 'search' ? v.q : f.kind === 'range' ? v.range : f.kind === 'value' ? ((v.values || {})[f.key] || '') : f.kind === 'attribute' ? (v.attr[f.key] || []) : (v[f.kind] || []); if(cur && (!Array.isArray(cur) || cur.length)) f.default = Array.isArray(cur) && !f.multi ? cur.slice(0, 1) : cur; else delete f.default; } }
 function addWidget(type){ const d = defOf(type); const params = {}; for(const p of d.params || []) if(p.default !== undefined && (!p.group || p.group === 'data')) params[p.name] = p.default; if((d.params || []).some(p => p.name === 'title')) params.title = d.label; // only widgets that have a title (not pipe, instrument)
-  const maxY = SPEC.widgets.reduce((m, w) => Math.max(m, w.geometry.y + w.geometry.h), 0);
+  const est = EDNAV ? EDNAV.state : ''; const same = (w) => !(SPEC.states || []).length || WG.stateOf(SPEC, w) === est;
+  const maxY = SPEC.widgets.filter(same).reduce((m, w) => Math.max(m, w.geometry.y + w.geometry.h), 0);
   const n = SPEC.widgets.length; const geometry = canvas() ? {x: 40 + (n % 6) * 60, y: 40 + (n % 6) * 40, w: d.default_size[0] * 100, h: d.default_size[1] * 100} : {x: 0, y: maxY, w: d.default_size[0], h: d.default_size[1]};
-  SPEC.widgets.push({id: uid(), type, geometry, bindings: Object.fromEntries((d.binds || []).map(b => [b, []])), params});
+  const nw = {id: uid(), type, geometry, bindings: Object.fromEntries((d.binds || []).map(b => [b, []])), params}; if((SPEC.states || []).length && est && est !== SPEC.states[0].id) nw.state = est;
+  if(d.entities && (SPEC.aliases || []).length) nw.alias = {id: SPEC.aliases[0].id};
+  SPEC.widgets.push(nw);
   SEL = SPEC.widgets.length - 1; $('#addDlg').close(); dirty();
   if(EDITOR){ const i = SEL; EDITOR.commit(); EDITOR.reload().then(() => EDITOR.select(['w:' + i])); return; }
   drawEdit().then(() => select(SEL)); }
@@ -380,19 +438,228 @@ function renderShare(sh){ const box = $('#shareBox'); box.className = '';
   for(const [id, m, msg] of [['shareOn', 'POST', 'public link created'], ['shareRegen', 'POST', 'public link created'], ['shareOff', 'DELETE', 'public link disabled']]){ const el = $('#' + id); if(!el) continue;
     el.onclick = async () => { const r = needReason(); if(r === null) return; try{ const res = m === 'POST' ? await api('POST', `/api/v1/dashboards/${encodeURIComponent(SLUG)}/share`, {reason: r}) : await api('DELETE', `/api/v1/dashboards/${encodeURIComponent(SLUG)}/share?reason=${encodeURIComponent(r)}`); ctrl32.toast(msg, 'ok'); renderShare(res); }catch(x){ ctrl32.toast(x.message, 'bad'); } }; }
 }
+// ---- entity aliases, key filters, states and actions (0.73.0) ----
+// The settings dialog edits copies (AL, KF, ST) and applies them with Apply; the editor shows one state at a time
+// (EDNAV) and can preview widgets of a "current entity" alias with an entity chosen above the grid.
+let ASSETS = [], SITES = [], EDNAV = null, AL = [], KF = [], ST = [];
+const T = (s) => ctrl32.t(s);
+const clone = (v) => JSON.parse(JSON.stringify(v));
+const csv = (v) => String(v || '').split(',').map(x => x.trim()).filter(Boolean);
+const ETYPES = [['device', 'Devices'], ['asset', 'Assets'], ['datastream', 'Datastreams'], ['site', 'Sites']];
+const AKINDS = [['current', 'Current entity (drill-down, entity selector)'], ['hierarchy', 'Everything under an asset or a site'], ['type', 'By type'], ['name', 'By name'], ['list', 'Chosen entities'], ['single', 'One entity'], ['query', 'Datastreams by query']];
+function newID(name, used){ const b = String(name || 'x').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 24) || 'x'; let id = b, n = 2; while(used.has(id)) id = b + '_' + n++; return id; }
+function entList(type){ if(type === 'device') return DEVS.filter(x => !x.revoked_at).map(x => ({id: x.id, label: x.name || x.external_id})); if(type === 'asset') return ASSETS.map(x => ({id: x.id, label: (x.site ? x.site + ' / ' : '') + x.name})); if(type === 'site') return SITES.map(x => ({id: x.id, label: x.name})); return DS.map(x => ({id: x.id, label: `${x.asset} / ${x.key}`})); }
+const optList = (list, chosen) => list.map(o => `<option value="${esc(o.id)}" ${chosen.includes(o.id) ? 'selected' : ''}>${esc(o.label)}</option>`).join('');
+const selOf = (attr, opts, v) => `<select ${attr}>${opts.map(([k, l]) => `<option value="${esc(k)}" ${k === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+const lab = (t, html) => `<label>${esc(t)} ${html}</label>`;
+const entGroups = (sel) => ['device', 'asset', 'datastream'].map(t => `<optgroup label="${esc(ETYPES.find(x => x[0] === t)[1])}">${entList(t).map(o => `<option value="${t}:${esc(o.id)}" ${sel && sel.type === t && sel.id === o.id ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</optgroup>`).join('');
+
+function aliasRowHTML(a, i){
+  let h = `<fieldset class="src-box" data-ai="${i}"><legend class="notranslate">${esc(a.name || a.id)}</legend><div class="flt-row"><input data-af="name" value="${esc(a.name || '')}" placeholder="Name" maxlength="60" style="flex:1 1 160px;width:auto">${selOf('data-af="kind"', AKINDS, a.kind)}<button class="btn small ghost" type="button" data-adel title="Remove">✕</button></div><div class="row" style="flex-wrap:wrap;gap:8px;align-items:flex-end">`;
+  switch(a.kind){
+  case 'single': { const t = (a.entity || {}).type || 'device'; h += lab('Entity type', selOf('data-af="etype"', ETYPES, t)) + lab('Entity', `<select data-af="entity"><option value="">—</option>${optList(entList(t), [(a.entity || {}).id])}</select>`); break; }
+  case 'list': { const t = a.entity_type || 'device'; h += lab('Entity type', selOf('data-af="etype"', ETYPES, t)) + lab('Entities (Ctrl/Cmd+click for several)', `<select multiple data-af="ids" style="min-height:90px;min-width:240px">${optList(entList(t), a.ids || [])}</select>`); break; }
+  case 'type': { const t = a.entity_type || 'asset'; h += lab('Entity type', selOf('data-af="etype"', ETYPES.slice(0, 3), t)) + lab(t === 'device' ? 'Device profiles (comma separated, * = all)' : t === 'asset' ? 'Asset types (comma separated, * = all)' : 'Quantities (comma separated, energy* for a prefix)', `<input data-af="types" ${t === 'asset' ? 'list="alAtypes"' : t === 'datastream' ? 'list="alQty"' : ''} value="${esc((a.types || []).join(', '))}" style="min-width:220px">`); break; }
+  case 'name': h += lab('Entity type', selOf('data-af="etype"', ETYPES, a.entity_type || 'device')) + lab('Name', selOf('data-af="match"', [['starts', 'starts with'], ['contains', 'contains'], ['ends', 'ends with']], a.match || 'contains')) + lab('Text', `<input data-af="text" value="${esc(a.text || '')}" maxlength="80">`); break;
+  case 'hierarchy': { const root = a.root_current ? 'current' : a.root ? a.root.type + ':' + a.root.id : '';
+    h += lab('Under', `<select data-af="root"><option value="current" ${root === 'current' ? 'selected' : ''}>the current entity (drill-down)</option><optgroup label="Sites">${SITES.map(s => `<option value="site:${esc(s.id)}" ${root === 'site:' + s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</optgroup><optgroup label="Assets">${ASSETS.map(x => `<option value="asset:${esc(x.id)}" ${root === 'asset:' + x.id ? 'selected' : ''}>${esc((x.site ? x.site + ' / ' : '') + x.name)}</option>`).join('')}</optgroup></select>`)
+      + lab('Levels deep', `<input type="number" data-af="depth" min="1" max="10" value="${a.depth || 10}" style="width:70px">`) + lab('Show', selOf('data-af="etype"', [['datastream', 'Datastreams'], ['device', 'Devices'], ['asset', 'Assets']], a.entity_type || 'datastream')) + lab('Only assets of types (optional)', `<input data-af="asset_type" list="alAtypes" value="${esc((a.asset_type || []).join(', '))}">`); break; }
+  case 'current': h += lab('Entity type', selOf('data-af="etype"', [['', 'as passed'], ...ETYPES], a.entity_type || '')) + lab('Default (when none is chosen)', `<select data-af="default"><option value="">—</option>${entGroups(a.default)}</select>`); break;
+  case 'query': { const s = a.source || {}; h += lab('Sites', `<select multiple data-af="q_site" style="min-height:60px">${optList(SITES.map(x => ({id: x.id, label: x.name})), s.site || [])}</select>`) + lab('Asset types', `<input data-af="q_asset_type" list="alAtypes" value="${esc((s.asset_type || []).join(', '))}">`) + lab('Quantities', `<input data-af="q_quantity" list="alQty" value="${esc((s.quantity || []).join(', '))}" placeholder="temperature">`) + lab('Name (* and ?)', `<input data-af="q_name" value="${esc(s.name || '')}">`); break; }
+  }
+  return h + '</div><div class="muted al-prev" style="font-size:12px"></div></fieldset>';
+}
+function aliasDefaults(kind){ return ({single: {entity: {type: 'device', id: ''}}, list: {entity_type: 'device', ids: []}, type: {entity_type: 'asset', types: ['fridge']}, name: {entity_type: 'device', match: 'contains', text: ''}, hierarchy: {root_current: true, depth: 10, entity_type: 'datastream'}, current: {}, query: {source: {}}})[kind] || {}; }
+function readAliasRow(fs, old){
+  const g = (k) => fs.querySelector(`[data-af="${k}"]`); const val = (k) => (g(k) ? g(k).value.trim() : '');
+  const kind = val('kind'); const a = {id: old.id, name: val('name') || old.name, kind};
+  if(kind !== old.kind) return Object.assign(a, aliasDefaults(kind));
+  const et = val('etype');
+  switch(kind){
+  case 'single': a.entity = {type: et || 'device', id: et === (old.entity || {}).type ? val('entity') : ''}; break;
+  case 'list': a.entity_type = et || 'device'; a.ids = et === old.entity_type && g('ids') ? [...g('ids').selectedOptions].map(o => o.value) : []; break;
+  case 'type': a.entity_type = et || 'asset'; a.types = csv(val('types')); break;
+  case 'name': a.entity_type = et || 'device'; a.match = val('match') || 'contains'; a.text = val('text'); break;
+  case 'hierarchy': { const r = val('root'); if(r === 'current') a.root_current = true; else if(r){ const [t, id] = r.split(':'); a.root = {type: t, id}; } a.depth = Math.max(1, Math.min(10, parseInt(val('depth'), 10) || 10)); a.entity_type = et || 'datastream'; const at = csv(val('asset_type')); if(at.length) a.asset_type = at; break; }
+  case 'current': { if(et) a.entity_type = et; const d = val('default'); if(d){ const [t, id] = d.split(':'); a.default = {type: t, id}; } break; }
+  case 'query': { const s = {}; const st = g('q_site') ? [...g('q_site').selectedOptions].map(o => o.value) : []; if(st.length) s.site = st; const at = csv(val('q_asset_type')); if(at.length) s.asset_type = at; const q = csv(val('q_quantity')); if(q.length) s.quantity = q; if(val('q_name')) s.name = val('q_name'); a.source = s; break; }
+  }
+  return a;
+}
+function alRows(){
+  $('#alList').innerHTML = (AL.length ? '' : '<div class="muted" style="font-size:12px">No aliases.</div>') + AL.map(aliasRowHTML).join('') + `<datalist id="alAtypes">${(FACETS.asset_type || []).map(o => `<option value="${esc(o.value)}">`).join('')}</datalist><datalist id="alQty">${(FACETS.quantity || []).map(o => `<option value="${esc(o.value)}">`).join('')}</datalist>`;
+  for(const fs of document.querySelectorAll('#alList [data-ai]')){ const i = +fs.dataset.ai;
+    fs.onchange = (e) => { AL[i] = readAliasRow(fs, AL[i]); if(e.target.matches('[data-af="kind"],[data-af="etype"]')) alRows(); else { fs.querySelector('legend').textContent = AL[i].name; aliasPreview(fs, AL[i]); } };
+    fs.querySelector('[data-adel]').onclick = () => { AL.splice(i, 1); alRows(); };
+    aliasPreview(fs, AL[i]); }
+}
+async function aliasPreview(fs, a){ const el = fs.querySelector('.al-prev'); if(!el) return;
+  if(a.kind === 'current' || a.root_current){ el.textContent = T('Resolved when the dashboard runs: the entity passed by a click or chosen in an entity selector.'); return; }
+  el.textContent = '…'; try{ const r = await api('GET', '/api/v1/entities/query?' + new URLSearchParams({alias: JSON.stringify(a), limit: '5'})); el.textContent = T('Matches') + ' ' + r.total + (r.items.length ? ': ' + r.items.map(x => x.name).join(', ') + (r.total > r.items.length ? ', …' : '') : ''); }catch(x){ el.textContent = x.message; } }
+function addAlias(preset){
+  if(AL.length >= 20) return; const site = SITES[0];
+  const p = {site_sensors: {name: T('All sensors of a site'), kind: 'hierarchy', root: site ? {type: 'site', id: site.id} : undefined, root_current: site ? undefined : true, depth: 10, entity_type: 'datastream'},
+    current_devices: {name: T('Devices of the selected asset'), kind: 'hierarchy', root_current: true, depth: 10, entity_type: 'device'},
+    current: {name: T('Selected entity'), kind: 'current'}, type_assets: {name: T('Fridges'), kind: 'type', entity_type: 'asset', types: ['fridge']},
+    all_devices: {name: T('All devices'), kind: 'type', entity_type: 'device', types: ['*']}, empty: {name: T('Alias') + ' ' + (AL.length + 1), kind: 'current'}}[preset];
+  if(!p) return; const a = clone(p); a.id = newID(a.name, new Set(AL.map(x => x.id))); AL.push(a); alRows();
+}
+// key filters: conditions on the latest value of a key, an attribute, quality, age and alarm state; all/any; groups
+const KSRC = [['value', 'Value'], ['attribute', 'Attribute'], ['quality', 'Quality'], ['stale', 'No recent value'], ['alarm', 'Alarm']];
+const KOPS = {number: [['gt', '>'], ['ge', '≥'], ['lt', '<'], ['le', '≤'], ['eq', '='], ['ne', '≠'], ['between', 'between']], string: [['eq', 'equals'], ['ne', 'does not equal'], ['contains', 'contains'], ['starts', 'starts with'], ['ends', 'ends with'], ['in', 'one of']], boolean: [['eq', 'is'], ['ne', 'is not']]};
+const KDYN = [['', 'constant'], ['filter', 'value filter of the dashboard'], ['self', 'attribute of the entity'], ['current', 'attribute of the current entity'], ['org', 'attribute of the organization']];
+const ISNOT = [['eq', 'is'], ['ne', 'is not']];
+function ruleHTML(r, path){
+  const s = r.source || 'value'; const typ = r.type || 'number'; let h = `<div class="kf-rule" data-path="${path}">${selOf('data-k="source"', KSRC, s)}`;
+  if(s !== 'alarm') h += `<input data-k="key" value="${esc(r.key || '')}" placeholder="${s === 'attribute' ? 'attribute, e.g. max_temp' : 'key, e.g. temp'}" list="${s === 'attribute' ? 'kfAttrs' : 'kfKeys'}" title="${s === 'attribute' ? '' : 'the datastream key of a device or an asset; empty = the value of the datastream itself'}">`;
+  if(s === 'value' || s === 'attribute'){ const d = r.dynamic || {};
+    h += selOf('data-k="type"', [['number', 'number'], ['string', 'text'], ['boolean', 'yes/no']], typ) + selOf('data-k="op"', KOPS[typ], r.op || KOPS[typ][0][0]) + selOf('data-k="dfrom"', KDYN, d.from || '');
+    if(d.from) h += `<input data-k="dkey" value="${esc(d.key || '')}" placeholder="name" list="${d.from === 'filter' ? 'kfVals' : 'kfAttrs'}">`;
+    if(typ === 'boolean') h += selOf('data-k="value"', [['true', 'true'], ['false', 'false']], String(r.value ?? true));
+    else h += `<input data-k="value" value="${esc(Array.isArray(r.value) ? r.value.join(', ') : (r.value ?? ''))}" placeholder="${d.from ? 'fallback (optional)' : 'value'}">`;
+    if(r.op === 'between') h += `<span>and</span><input data-k="value2" value="${esc(r.value2 ?? '')}">`; }
+  else if(s === 'quality') h += selOf('data-k="op"', ISNOT, r.op || 'eq') + selOf('data-k="value"', [['good', 'good'], ['doubtful', 'doubtful'], ['stale', 'stale'], ['sensor_fault', 'sensor fault']], r.value || 'good');
+  else if(s === 'stale') h += selOf('data-k="op"', ISNOT, r.op || 'eq') + selOf('data-k="value"', [['true', 'true'], ['false', 'false']], String(r.value ?? true));
+  else h += selOf('data-k="op"', ISNOT, r.op || 'eq') + selOf('data-k="value"', [['any', 'in alarm'], ['warning', 'warning'], ['action', 'action'], ['critical', 'critical']], r.value || 'any');
+  return h + '<button class="btn small ghost" type="button" data-kdel title="Remove">✕</button></div>';
+}
+function readRule(el){
+  const g = (k) => { const x = el.querySelector(`[data-k="${k}"]`); return x ? x.value.trim() : ''; };
+  const r = {source: g('source')}; if(g('key')) r.key = g('key');
+  if(r.source === 'alarm') delete r.key;
+  if(r.source === 'value' || r.source === 'attribute'){ r.type = g('type') || 'number'; r.op = g('op'); if(!KOPS[r.type].some(o => o[0] === r.op)) r.op = KOPS[r.type][0][0];
+    if(g('dfrom')) r.dynamic = {from: g('dfrom'), key: g('dkey')}; const v = g('value');
+    if(r.type === 'boolean') r.value = v !== 'false'; else if(r.op === 'in') r.value = csv(v); else if(v !== '') r.value = r.type === 'number' ? Number(v.replace(',', '.')) : v;
+    if(r.op === 'between') r.value2 = Number(g('value2').replace(',', '.')); }
+  else if(r.source === 'stale'){ r.op = g('op') || 'eq'; r.value = g('value') !== 'false'; }
+  else { r.op = g('op') || 'eq'; r.value = g('value'); }
+  return r;
+}
+function kfHTML(f, i){
+  const rules = (f.rules || []).map((r, j) => r.rules ? `<div class="kf-group" data-g="${j}"><div class="kf-rule"><span>Group:</span>${selOf('data-k="gmatch"', [['all', 'all of'], ['any', 'any of']], r.match || 'all')}<button class="btn small ghost" type="button" data-gadd>Add condition</button><button class="btn small ghost" type="button" data-kdel title="Remove">✕</button></div>${r.rules.map((x, k) => ruleHTML(x, j + '.' + k)).join('')}</div>` : ruleHTML(r, String(j))).join('');
+  return `<fieldset class="src-box" data-ki="${i}"><legend class="notranslate">${esc(f.name || f.id)}</legend><div class="flt-row"><input data-kf="name" value="${esc(f.name || '')}" maxlength="60" style="flex:1 1 160px;width:auto"><label>Match ${selOf('data-kf="match"', [['all', 'all conditions'], ['any', 'any condition']], f.match || 'all')}</label><button class="btn small ghost" type="button" data-kfdel title="Remove">✕</button></div>${rules}<div class="row"><button class="btn small" type="button" data-kadd>Add condition</button><button class="btn small" type="button" data-kgadd>Add group</button></div></fieldset>`;
+}
+function readKF(fs, old){
+  const f = {id: old.id, name: fs.querySelector('[data-kf="name"]').value.trim() || old.name, match: fs.querySelector('[data-kf="match"]').value, rules: []};
+  for(const el of fs.children){ if(el.matches('.kf-rule[data-path]')) f.rules.push(readRule(el)); else if(el.matches('.kf-group')){ const sub = [...el.querySelectorAll('.kf-rule[data-path]')].map(readRule); if(sub.length) f.rules.push({match: el.querySelector('[data-k="gmatch"]').value, rules: sub}); } }
+  return f;
+}
+function kfRows(){
+  const fl = $('#fltList')._read ? $('#fltList')._read() : (SPEC.filters || []);
+  $('#kfList').innerHTML = (KF.length ? '' : '<div class="muted" style="font-size:12px">No key filters.</div>') + KF.map(kfHTML).join('')
+    + `<datalist id="kfKeys">${[...new Set(DS.map(d => d.key))].map(k => `<option value="${esc(k)}">`).join('')}</datalist><datalist id="kfAttrs">${(FACETS.attr_keys || []).map(k => `<option value="${esc(k)}">`).join('')}</datalist><datalist id="kfVals">${fl.filter(f => f.kind === 'value').map(f => `<option value="${esc(f.key)}">`).join('')}</datalist>`;
+  for(const fs of document.querySelectorAll('#kfList [data-ki]')){ const i = +fs.dataset.ki; const re = () => { KF[i] = readKF(fs, KF[i]); };
+    fs.onchange = (e) => { re(); if(e.target.matches('[data-k="source"],[data-k="type"],[data-k="op"],[data-k="dfrom"]')) kfRows(); else fs.querySelector('legend').textContent = KF[i].name; };
+    fs.querySelector('[data-kfdel]').onclick = () => { KF.splice(i, 1); kfRows(); };
+    fs.querySelector('[data-kadd]').onclick = () => { re(); KF[i].rules.push({source: 'value', type: 'number', op: 'gt', value: 0}); kfRows(); };
+    fs.querySelector('[data-kgadd]').onclick = () => { re(); KF[i].rules.push({match: 'any', rules: [{source: 'value', type: 'number', op: 'gt', value: 0}]}); kfRows(); };
+    for(const b of fs.querySelectorAll('[data-gadd]')) b.onclick = () => { re(); const g = KF[i].rules[+b.closest('.kf-group').dataset.g]; if(g && g.rules) g.rules.push({source: 'value', type: 'number', op: 'gt', value: 0}); kfRows(); };
+    for(const b of fs.querySelectorAll('[data-kdel]')) b.onclick = () => { const r = b.closest('.kf-rule'); (r.dataset.path ? r : b.closest('.kf-group')).remove(); re(); kfRows(); }; }
+}
+function addKeyFilter(preset){
+  if(KF.length >= 20) return;
+  const p = {above: {name: T('Values above a limit'), match: 'all', rules: [{source: 'value', type: 'number', op: 'gt', value: 8}]},
+    above_attr: {name: T('Above its own limit'), match: 'all', rules: [{source: 'value', key: 'temp', type: 'number', op: 'gt', dynamic: {from: 'self', key: 'max_temp'}}]},
+    above_viewer: {name: T('Above the limit the viewer types'), match: 'all', rules: [{source: 'value', type: 'number', op: 'gt', dynamic: {from: 'filter', key: 'limit'}, value: 8}]},
+    alarm: {name: T('In alarm'), match: 'all', rules: [{source: 'alarm', op: 'eq', value: 'any'}]},
+    stale: {name: T('No recent value'), match: 'all', rules: [{source: 'stale', op: 'eq', value: true}]},
+    empty: {name: T('Key filter') + ' ' + (KF.length + 1), match: 'all', rules: [{source: 'value', type: 'number', op: 'gt', value: 0}]}}[preset];
+  if(!p) return; const f = clone(p); f.id = newID(f.name, new Set(KF.map(x => x.id))); KF.push(f);
+  if(preset === 'above_viewer'){ const fl = $('#fltList')._read ? $('#fltList')._read() : []; if(!fl.some(x => x.kind === 'value' && x.key === 'limit')){ fl.push({kind: 'value', key: 'limit', label: T('Limit'), default: '8', public: true}); fltRows(fl); } }
+  kfRows();
+}
+// states: the first is the main view; widgets of a removed state go back to it
+function stRows(){
+  $('#stList').innerHTML = (ST.length ? '' : '<div class="muted" style="font-size:12px">One view only. Add a state for a detail view.</div>') + ST.map((s, i) => `<div class="flt-row" data-si="${i}"><span class="muted" style="width:90px;font-size:12px">${i ? esc(T('State')) + ' ' + (i + 1) : esc(T('Main view'))}</span><input data-sn value="${esc(s.name)}" maxlength="60" style="flex:1 1 160px;width:auto"><code class="muted" style="font-size:11px">${esc(s.id)}</code><span class="muted" style="font-size:12px">${SPEC.widgets.filter(w => WG.stateOf({states: ST}, w) === s.id).length} ${esc(T('widgets'))}</span>${i || ST.length === 1 ? '<button class="btn small ghost" type="button" data-sdel title="Remove">✕</button>' : ''}</div>`).join('');
+  for(const r of document.querySelectorAll('#stList [data-si]')){ const i = +r.dataset.si; r.querySelector('[data-sn]').onchange = (e) => { ST[i].name = e.target.value.trim() || ST[i].id; }; const d = r.querySelector('[data-sdel]'); if(d) d.onclick = () => { ST.splice(i, 1); stRows(); }; }
+}
+function setTab(t){ for(const b of document.querySelectorAll('#setTabs [data-st]')){ b.classList.toggle('active', b.dataset.st === t); b.setAttribute('aria-selected', b.dataset.st === t); } for(const s of document.querySelectorAll('#setForm [data-sts]')) s.hidden = s.dataset.sts !== t; }
+function openSettings(tab){
+  const f = $('#setForm'); f.name.value = DASH.name; f.range.value = SPEC.range; f.refresh_s.value = SPEC.refresh_s; f.row_height.value = SPEC.layout.row_height || 96; f.width.value = SPEC.layout.width || 1600; f.height.value = SPEC.layout.height || 900;
+  $('#setRowH').hidden = canvas(); $('#setW').hidden = !canvas(); $('#setH').hidden = !canvas(); f.is_default.checked = !!DASH.is_default; f.public_annotations.checked = !!SPEC.public_annotations;
+  document.querySelector('#setTabs [data-st="states"]').hidden = canvas();
+  fltRows(clone(SPEC.filters || [])); AL = clone(SPEC.aliases || []); KF = clone(SPEC.key_filters || []); ST = clone(SPEC.states || []); alRows(); kfRows(); stRows();
+  setTab(tab || 'general'); if(!$('#setDlg').open) $('#setDlg').showModal(); loadShare(); loadOrgAttrs();
+}
+// attributes of the organization: dynamic values of key filters ("attribute of the organization")
+async function loadOrgAttrs(){ try{ const r = await api('GET', '/api/v1/organization/attributes'); $('#orgAttrs').value = Object.entries(r.attributes || {}).map(([k, v]) => k + ' = ' + v).join('\n'); }catch(_){ } }
+$('#orgAttrSave').onclick = async () => { const attrs = {}; for(const line of $('#orgAttrs').value.split('\n')){ const i = line.indexOf('='); if(i < 1) continue; const k = line.slice(0, i).trim(), v = line.slice(i + 1).trim(); attrs[k] = v === 'true' ? true : v === 'false' ? false : (v !== '' && !isNaN(Number(v)) ? Number(v) : v); }
+  const reason = $('#orgAttrReason').value.trim(); if(!reason){ ctrl32.toast('reason is required', 'bad'); return; }
+  try{ await api('PUT', '/api/v1/organization/attributes', {attributes: attrs, reason}); ctrl32.toast('attributes saved', 'ok'); $('#orgAttrReason').value = ''; }catch(x){ ctrl32.toast(x.message, 'bad'); } };
+// applyModel puts the edited aliases, key filters and states into the spec; widgets lose references to removed ones
+function applyModel(){
+  for(const a of AL){ if(a.kind === 'hierarchy' && !a.root && !a.root_current){ ctrl32.toast(T('choose what the alias is under') + ': ' + a.name, 'bad'); setTab('aliases'); return false; }
+    if((a.kind === 'single' && !(a.entity || {}).id) || (a.kind === 'list' && !(a.ids || []).length)){ ctrl32.toast(T('choose the entities of the alias') + ': ' + a.name, 'bad'); setTab('aliases'); return false; } }
+  const aIDs = new Set(AL.map(a => a.id)), fIDs = new Set(KF.map(f => f.id)), sIDs = new Set(ST.map(s => s.id)); const root = ST.length ? ST[0].id : '';
+  for(const w of SPEC.widgets){
+    if(w.alias && !aIDs.has(w.alias.id)) delete w.alias;
+    if(w.alias && w.alias.filter && !fIDs.has(w.alias.filter)) delete w.alias.filter;
+    if(w.params && w.params.highlight_filter && !fIDs.has(w.params.highlight_filter)) delete w.params.highlight_filter;
+    if(w.state && (!sIDs.has(w.state) || w.state === root)) delete w.state;
+    if(w.actions){ w.actions = w.actions.filter(a => a.action !== 'state' || sIDs.has(a.target)); if(!w.actions.length) delete w.actions; }
+  }
+  if(AL.length) SPEC.aliases = AL; else delete SPEC.aliases;
+  if(KF.length) SPEC.key_filters = KF; else delete SPEC.key_filters;
+  if(ST.length && !canvas()) SPEC.states = ST; else delete SPEC.states;
+  mountEditorNav(true);
+  return true;
+}
+// the editor's view: one state at a time, optionally previewed with an entity (aliases of the current entity)
+function mountEditorNav(keep){
+  const old = keep && EDNAV ? {state: EDNAV.state, current: EDNAV.current} : null;
+  EDNAV = ctrl32DashStates.mount(null, SPEC, {editor: true, onChange: () => { if(SEL >= 0 && SPEC.widgets[SEL] && !WG.inState(SPEC, SPEC.widgets[SEL], EDNAV.state)){ SEL = -1; renderProps(); } if(!EDITOR) drawEdit(); }});
+  if(old){ const ok = (SPEC.states || []).some(s => s.id === old.state); EDNAV.stack = [{state: ok ? old.state : EDNAV.root, entity: old.current}]; }
+}
+function drawEditStates(){
+  const box = $('#eStates'); if(!box || !EDNAV) return; const st = SPEC.states || []; const prev = (SPEC.aliases || []).some(a => a.kind === 'current' || a.root_current);
+  box.hidden = canvas() || (!st.length && !prev); if(box.hidden){ box.innerHTML = ''; return; }
+  const cur = EDNAV.current;
+  box.innerHTML = (st.length ? '<span class="muted" style="font-size:12px">State:</span>' + st.map(s => `<button type="button" class="tab${s.id === EDNAV.state ? ' active' : ''}" data-est="${esc(s.id)}"><span class="notranslate">${esc(s.name)}</span></button>`).join('') : '')
+    + (prev ? `<span class="grow"></span><label style="flex-direction:row;align-items:center;gap:6px;font-size:12px">Preview with <select id="ePrev" style="width:auto;max-width:300px"><option value="">(no entity)</option>${entGroups(cur)}${cur && !entList(cur.type).some(o => o.id === cur.id) ? `<option value="${esc(cur.type + ':' + cur.id)}" selected>${esc(cur.name || cur.id)}</option>` : ''}</select></label>` : '');
+  for(const b of box.querySelectorAll('[data-est]')) b.onclick = () => EDNAV.setState(b.dataset.est);
+  const p = $('#ePrev'); if(p) p.onchange = () => { const [t, id] = p.value.split(':'); const o = p.value ? entList(t).find(x => x.id === id) : null; EDNAV.setEntity(p.value ? {type: t, id, name: o ? o.label : ''} : null); };
+}
+// widget Data tab: an alias, its key filter and (datastream widgets) quantities or keys
+function aliasFields(w, d){
+  const a = w.alias || {}; const al = SPEC.aliases || []; const kf = SPEC.key_filters || []; const dsw = (d.binds || []).includes('datastreams');
+  return `<label>Alias <select data-al="id">${al.length ? '' : '<option value="">(no aliases yet)</option>'}${al.map(x => `<option value="${esc(x.id)}" ${x.id === a.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>`
+    + `<label>Key filter <select data-al="filter"><option value="">(none)</option>${kf.map(x => `<option value="${esc(x.id)}" ${x.id === a.filter ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>`
+    + (dsw ? `<label>Only quantities (comma separated, optional) <input data-al="quantity" list="alQtyW" value="${esc((a.quantity || []).join(', '))}" placeholder="temperature"></label><label>Only keys (comma separated, optional) <input data-al="key" value="${esc((a.key || []).join(', '))}" placeholder="temp"></label><datalist id="alQtyW">${(FACETS.quantity || []).map(o => `<option value="${esc(o.value)}">`).join('')}</datalist>` : '')
+    + '<div class="row" style="gap:6px"><button class="btn small ghost" type="button" data-manage="aliases">Manage aliases…</button><button class="btn small ghost" type="button" data-manage="keyfilters">Manage key filters…</button></div><div class="muted src-prev" style="font-size:12px"></div>';
+}
+// widget Actions tab: drill-down to a state, the device page or another dashboard
+const EVENT_LBL = {row: 'Row click', row_button: 'Button in each row', marker: 'Marker click', chart: 'Chart click', click: 'Widget click', button: 'Button on the widget'};
+function actionEventsFor(t){ const ev = []; if(['overview_table', 'entities_table'].includes(t)) ev.push('row', 'row_button'); if(t === 'devices') ev.push('row'); if(t === 'map') ev.push('marker'); if(t === 'chart') ev.push('chart'); return ev.concat(['click', 'button']); }
+function actionsHTML(w){
+  const st = SPEC.states || []; const evs = actionEventsFor(w.type);
+  const rows = (w.actions || []).map((a, i) => `<div class="act-row" data-act="${i}">${selOf('data-ak="event"', evs.map(e => [e, EVENT_LBL[e]]), a.event)}<span>→</span>${selOf('data-ak="action"', [['state', 'Go to a state'], ['device', 'Open the device page'], ['dashboard', 'Open another dashboard']], a.action)}${a.action === 'state' ? selOf('data-ak="target"', st.length ? st.map(s => [s.id, s.name]) : [['', '(no states)']], a.target || '') : a.action === 'dashboard' ? `<input data-ak="target" value="${esc(a.target || '')}" placeholder="dashboard (slug)" style="width:140px">` : ''}${a.action !== 'device' ? selOf('data-ak="pass"', [['self', 'with the clicked entity'], ['device', 'with its device'], ['asset', 'with its asset']], a.pass || 'self') : ''}${a.event === 'button' || a.event === 'row_button' ? `<input data-ak="label" value="${esc(a.label || '')}" placeholder="Label" maxlength="40" style="width:110px">` : ''}<button class="btn small ghost" type="button" data-actdel title="Remove">✕</button></div>`).join('');
+  return `<div data-acts style="display:flex;flex-direction:column;gap:6px"><div style="font-size:13px">Actions <span class="muted" style="font-size:11px">(drill-down: open a state with the clicked entity, the device page or another dashboard)</span></div>${rows}<div><button class="btn small" type="button" data-actadd>Add action</button>${st.length ? '' : ' <span class="muted" style="font-size:12px">Add states under Dashboard settings → States to drill down.</span>'}</div></div>`;
+}
+function applyActions(box, w){
+  if(!box.querySelector('[data-acts]')) return;
+  const out = [...box.querySelectorAll('[data-act]')].map(r => { const g = (k) => { const x = r.querySelector(`[data-ak="${k}"]`); return x ? x.value.trim() : ''; };
+    const a = {event: g('event'), action: g('action')}; if(a.action !== 'device' && g('target')) a.target = g('target'); if(a.action === 'state' && !a.target && (SPEC.states || []).length) a.target = SPEC.states[0].id;
+    if(a.action !== 'device' && g('pass') && g('pass') !== 'self') a.pass = g('pass'); if(a.event === 'button' || a.event === 'row_button') a.label = g('label') || 'Open'; return a; });
+  if(out.length) w.actions = out; else delete w.actions;
+}
 async function loadEdit(){
-  [CAT, DS, DEVS, DASH, FACETS] = await Promise.all([api('GET','/api/v1/dashboards/catalog'), api('GET','/api/v1/datastreams'), api('GET','/api/v1/devices'), api('GET', `/api/v1/dashboards/${encodeURIComponent(SLUG)}`), api('GET', '/api/v1/datastreams/facets?kinds=site,asset_type,quantity,device,attr_keys').catch(() => ({}))]);
-  SPEC = DASH.spec; mountEditorFilters(); $('#eTitle').textContent = 'Edit: ' + DASH.name; document.title = 'Edit ' + DASH.name; $('#eCancel').href = `/dashboards/${SLUG}`;
+  [CAT, DS, DEVS, DASH, FACETS, ASSETS, SITES] = await Promise.all([api('GET','/api/v1/dashboards/catalog'), api('GET','/api/v1/datastreams'), api('GET','/api/v1/devices'), api('GET', `/api/v1/dashboards/${encodeURIComponent(SLUG)}`), api('GET', '/api/v1/datastreams/facets?kinds=site,asset_type,quantity,device,attr_keys').catch(() => ({})), api('GET', '/api/v1/assets').catch(() => []), api('GET', '/api/v1/sites').catch(() => [])]);
+  SPEC = DASH.spec; mountEditorFilters(); mountEditorNav(); $('#eTitle').textContent = 'Edit: ' + DASH.name; document.title = 'Edit ' + DASH.name; $('#eCancel').href = `/dashboards/${SLUG}`;
   const groups = {mimic: 'Process symbols', charts: 'Charts', values: 'Values', lists: 'Lists', control: 'Control', other: 'Other'};
   $('#catalog').innerHTML = Object.keys(groups).map(g => `<h3>${esc(groups[g])}</h3>` + CAT.widgets.filter(w => w.group === g).map(w => `<button class="wcard" type="button" data-add="${w.type}">${THUMBS[w.type] || THUMBS.text}<span><b>${esc(w.label)}</b><span class="muted">${esc(w.help)}</span></span></button>`).join('')).join('');
   for(const b of document.querySelectorAll('[data-add]')) b.onclick = () => addWidget(b.dataset.add);
   $('#eAdd').onclick = () => $('#addDlg').showModal();
   $('#setForm').range.innerHTML = CAT.ranges.map(r => `<option>${r}</option>`).join('');
-  $('#eSettings').onclick = () => { const f = $('#setForm'); f.name.value = DASH.name; f.range.value = SPEC.range; f.refresh_s.value = SPEC.refresh_s; f.row_height.value = SPEC.layout.row_height || 96; f.width.value = SPEC.layout.width || 1600; f.height.value = SPEC.layout.height || 900; $('#setRowH').hidden = canvas(); $('#setW').hidden = !canvas(); $('#setH').hidden = !canvas(); f.is_default.checked = !!DASH.is_default; f.public_annotations.checked = !!SPEC.public_annotations; fltRows(JSON.parse(JSON.stringify(SPEC.filters || []))); $('#setDlg').showModal(); loadShare(); };
+  $('#eSettings').onclick = () => openSettings('general');
+  for(const t of document.querySelectorAll('#setTabs [data-st]')) t.onclick = () => setTab(t.dataset.st);
+  $('#alPreset').onchange = () => { const v = $('#alPreset').value; $('#alPreset').value = ''; if(v) addAlias(v); };
+  $('#kfPreset').onchange = () => { const v = $('#kfPreset').value; $('#kfPreset').value = ''; if(v) addKeyFilter(v); };
+  $('#stAdd').onclick = () => { if(!ST.length) ST.push({id: 'main', name: ctrl32.t('Overview')}); if(ST.length >= 10) return; const n = ctrl32.t('Detail') + (ST.length > 1 ? ' ' + ST.length : ''); ST.push({id: newID(n, new Set(ST.map(s => s.id))), name: n}); stRows(); };
   $('#setForm').onsubmit = e => { e.preventDefault(); const f = e.target; DASH.name = f.name.value; SPEC.range = f.range.value; SPEC.refresh_s = parseInt(f.refresh_s.value, 10) || 30; if(canvas()){ SPEC.layout.width = parseInt(f.width.value, 10) || 1600; SPEC.layout.height = parseInt(f.height.value, 10) || 900; } SPEC.layout.row_height = parseInt(f.row_height.value, 10) || 96; DASH.is_default = f.is_default.checked; if(f.public_annotations.checked) SPEC.public_annotations = true; else delete SPEC.public_annotations;
     const fl = $('#fltList')._read ? $('#fltList')._read() : []; const bad = fl.find(x => x.kind === 'attribute' && !/^[A-Za-z0-9_.-]{1,40}$/.test(x.key || '')); if(bad){ ctrl32.toast('an attribute filter needs the attribute name', 'bad'); return; }
     if(fl.length) SPEC.filters = fl; else delete SPEC.filters; mountEditorFilters();
-    $('#eTitle').textContent = 'Edit: ' + DASH.name; $('#setDlg').close(); dirty(); if(EDITOR) EDITOR.commit(); redraw(); };
+    if(!applyModel()) return;
+    $('#eTitle').textContent = 'Edit: ' + DASH.name; $('#setDlg').close(); dirty(); if(EDITOR) EDITOR.commit(); redraw(); if(!EDITOR) renderProps(); };
   $('#eSave').onclick = () => { $('#saveErr').textContent=''; $('#saveForm').reset(); $('#saveDlg').showModal(); };
   $('#saveForm').onsubmit = async e => { e.preventDefault(); $('#saveErr').textContent=''; filterDefaults();
     try{ const res = await api('PUT', `/api/v1/dashboards/${encodeURIComponent(SLUG)}`, {name: DASH.name, spec: SPEC, is_default: DASH.is_default, reason: e.target.reason.value}); DIRTY = false; const warn = (res && res.warnings) || []; if(warn.length){ ctrl32.toast('dashboard saved · ' + warn.join('; '), 'warn'); $('#saveDlg').close(); setTimeout(() => { location.href = `/dashboards/${SLUG}`; }, 4000); return; } ctrl32.toast('dashboard saved','ok'); location.href = `/dashboards/${SLUG}`; }catch(x){ $('#saveErr').textContent = x.message; if(EDITOR) EDITOR.showError(x.message); } };

@@ -1,0 +1,37 @@
+meta {
+  name: Entities of a widget of the shared dashboard
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public/:token/entities/query
+  body: none
+  auth: inherit
+}
+
+params:path {
+  token: 
+}
+
+params:query {
+  widget: 
+  ~current: 
+  ~f_site: 
+  ~f_asset_type: 
+  ~f_quantity: 
+  ~f_device: 
+  ~f_attr: 
+  ~f_q: 
+  ~f_value: 
+  ~limit: 
+  ~latest: 
+  ~from: 
+  ~to: 
+}
+
+docs {
+  Entities of a widget of the shared dashboard
+  
+  The alias, key filter, highlight and columns of the widget `widget` come from the stored dashboard, never from the request. Everything stays within the dashboard's scope (what its aliases select without key filters, its bound and query datastreams); `current` (the entity of the viewer's dashboard state) is ignored outside it. Value filters marked public take the viewer's `f_value`, others their default. Answer as `GET /api/v1/entities/query`.
+}
