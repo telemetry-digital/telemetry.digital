@@ -13,6 +13,10 @@
 #   7. with --demo: seeds a demo organization and prints the device token
 #   8. with --cloudflare-token: installs cloudflared (systemd service) connected to your Cloudflare Tunnel instead of Caddy;
 #      the server listens on 127.0.0.1 only, no port is opened (docs/cloudflare-tunnel.md)
+#   9. with --analytics: object counting on camera pictures (docs/object-counting.md, ADR-0022) — downloads an unmodified
+#      LGPL build of ffmpeg, ONNX Runtime (MIT) and the YOLOX nano/tiny models (Apache-2.0) from their official
+#      releases (pinned versions, SHA-256 verified; never part of our release files), writes [analytics] and runs the
+#      self-check. On an existing installation --analytics adds only these parts (with --binary/--url it also updates).
 #
 # Options:
 #   --domain NAME        public hostname (enables profile "internet", Caddy, MQTT TLS on 8883)
@@ -24,6 +28,9 @@
 #   --demo               seed demo data and print the device token
 #   --cloudflare-token T reach the server through a Cloudflare Tunnel (needs --domain = the tunnel's public hostname)
 #   --no-start           install everything but do not start the service
+#   --analytics          object counting on cameras: ffmpeg, ONNX Runtime, YOLOX models, [analytics] (off by default)
+#   --ffmpeg lgpl|apt    ffmpeg for --analytics: lgpl = pinned upstream LGPL build (default); apt = the distribution's
+#                        package (Debian/Ubuntu build it with --enable-gpl; the self-check then warns, see ADR-0022)
 set -euo pipefail
 
 APP=ctrl32-telemetry
@@ -42,6 +49,22 @@ PUBLIC_READ=false
 DEMO=false
 START=true
 CF_TOKEN=""
+ANALYTICS=false
+FFMPEG_SOURCE=lgpl
+
+# Object counting (--analytics, ADR-0022): third-party parts downloaded from their official releases at install time,
+# pinned and SHA-256 verified. Never bundled into our release files.
+ORT_VERSION=1.30.0                                   # ONNX Runtime (MIT), github.com/microsoft/onnxruntime releases
+ORT_SHA256_amd64=a5ed5a3cac51fbb2e90da632ae43d19212faaa20e76484e62bcb7c23ddb3b3fd   # onnxruntime-linux-x64-1.30.0.tgz
+ORT_SHA256_arm64=e16a27a8ed330bbc698df7330b0cf56e722f354e3bcc92118682c74ef3c3e3da   # onnxruntime-linux-aarch64-1.30.0.tgz
+FFMPEG_RELEASE=autobuild-2026-08-31-13-27             # github.com/BtbN/FFmpeg-Builds (month-end builds are kept)
+FFMPEG_BUILD=ffmpeg-n8.1.2-50-g1a748fe2cd             # FFmpeg 8.1.2, LGPL v3 ("lgpl-shared": no --enable-gpl)
+FFMPEG_SHA256_amd64=5634d61d98fd647acb3b2d8f08f20e7ab858c5f5341f1cea36069d8ef45c48c4  # …-linux64-lgpl-shared-8.1.tar.xz
+FFMPEG_SHA256_arm64=ba53bfc17b496a07c432c8a06644195cbf2a38e7820844c377e489ee84354077  # …-linuxarm64-lgpl-shared-8.1.tar.xz
+YOLOX_RELEASE=0.1.1rc0                                # github.com/Megvii-BaseDetection/YOLOX releases (Apache-2.0)
+YOLOX_NANO_SHA256=c789161ed43c8269fcd4e67c67eeeb4e80c622da2eb296a20bc6007bd18a0b7d
+YOLOX_TINY_SHA256=427cc366d34e27ff7a03e2899b5e3671425c262ea2291f88bb942bc1cc70b0f7
+YOLOX_LICENSE_SHA256=577c03d505ec80f667ebf96ebd0cc4f6825c817ca1088ee348c48aaabd51bd92
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -54,7 +77,9 @@ while [[ $# -gt 0 ]]; do
     --demo) DEMO=true; shift;;
     --no-start) START=false; shift;;
     --cloudflare-token) CF_TOKEN="$2"; shift 2;;
-    -h|--help) sed -n '2,25p' "$0"; exit 0;;
+    --analytics) ANALYTICS=true; shift;;
+    --ffmpeg) FFMPEG_SOURCE="$2"; shift 2;;
+    -h|--help) sed -n '2,35p' "$0"; exit 0;;
     *) echo "unknown option: $1" >&2; exit 2;;
   esac
 done
@@ -63,9 +88,149 @@ log()  { printf '\033[1;34m[ctrl32]\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m[ctrl32] error:\033[0m %s\n' "$*" >&2; exit 1; }
 rand() { head -c 32 /dev/urandom | base64 | tr -d '/+=\n' | head -c 32; }
 
+FFMPEG_BRANCH=8.1
+AN_DIR=$OPT/analytics
+MODELS=$LIB/models
+CONFIG="$ETC/config.toml"
+
+# --- object counting (--analytics) ------------------------------------------------------------------------------
+need_tools() { # curl, sha256sum and xz for the downloads (missing in slim images)
+  local miss=()
+  command -v curl >/dev/null 2>&1 || miss+=(curl ca-certificates)
+  command -v xz >/dev/null 2>&1 || miss+=(xz-utils)
+  command -v sha256sum >/dev/null 2>&1 || miss+=(coreutils)
+  if ((${#miss[@]})); then
+    command -v apt-get >/dev/null 2>&1 || die "missing tools: ${miss[*]}"
+    apt-get update -qq && apt-get install -y -qq --no-install-recommends "${miss[@]}" >/dev/null
+  fi
+}
+
+# fetch URL SHA256 DEST: download over HTTPS only and keep the file only when its SHA-256 matches the pin
+fetch() {
+  local url=$1 sum=$2 dest=$3
+  if [[ -f "$dest" ]] && echo "$sum  $dest" | sha256sum -c --status - 2>/dev/null; then return 0; fi
+  curl -fsSL --proto '=https' --proto-redir '=https' --retry 3 -o "$dest.part" "$url" || { rm -f "$dest.part"; die "download failed: $url"; }
+  if ! echo "$sum  $dest.part" | sha256sum -c --status -; then
+    rm -f "$dest.part"; die "SHA-256 of $url does not match the pinned $sum - nothing installed from it"
+  fi
+  mv -f "$dest.part" "$dest"
+}
+
+# write_analytics_config: replace the [analytics] section of config.toml (keeps threads and max_cameras)
+write_analytics_config() {
+  local threads max new
+  threads=$(awk '/^\[analytics\][[:space:]]*$/{f=1;next} /^\[/{f=0} f && /^[[:space:]]*threads[[:space:]]*=/{print; exit}' "$CONFIG")
+  max=$(awk '/^\[analytics\][[:space:]]*$/{f=1;next} /^\[/{f=0} f && /^[[:space:]]*max_cameras[[:space:]]*=/{print; exit}' "$CONFIG")
+  new=$(mktemp)
+  awk '/^\[analytics\][[:space:]]*$/{f=1;next} /^\[/{f=0} !f' "$CONFIG" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "$new"
+  cat >> "$new" <<EOF
+
+[analytics]
+# Object counting on camera pictures - written by install.sh --analytics on $(date -Is) (docs/object-counting.md).
+# ffmpeg ($FFMPEG_SOURCE), ONNX Runtime $ORT_VERSION and YOLOX $YOLOX_RELEASE downloaded from their official releases.
+ffmpeg = "$FFMPEG_BIN"
+onnxruntime = "$ORT_LIB"
+model_nano = "$MODELS/yolox_nano.onnx"
+model_tiny = "$MODELS/yolox_tiny.onnx"
+nano_sha256 = "$YOLOX_NANO_SHA256"
+tiny_sha256 = "$YOLOX_TINY_SHA256"
+${threads:-threads = 1          # inference threads per camera}
+${max:-max_cameras = 4      # cameras analysed at the same time}
+EOF
+  cat "$new" > "$CONFIG"   # keeps owner and mode of config.toml
+  rm -f "$new"
+}
+
+install_analytics() {
+  log "object counting: installing ffmpeg ($FFMPEG_SOURCE), ONNX Runtime $ORT_VERSION and the YOLOX models (ADR-0022)"
+  need_tools
+  install -d -m 0755 "$AN_DIR"
+  install -d -m 0750 -o "$USER_NAME" -g "$USER_NAME" "$MODELS"
+  local tmp oarch osum odir farch fsum fdir fname
+  tmp=$(mktemp -d)
+  # ONNX Runtime (MIT), CPU package; LICENSE and ThirdPartyNotices.txt stay in its directory
+  case "$ARCH" in amd64) oarch=x64; osum=$ORT_SHA256_amd64;; arm64) oarch=aarch64; osum=$ORT_SHA256_arm64;; esac
+  odir="$AN_DIR/onnxruntime-$ORT_VERSION"
+  ORT_LIB="$odir/lib/libonnxruntime.so"
+  if [[ -f "$odir/VERSION_NUMBER" && "$(cat "$odir/VERSION_NUMBER")" == "$ORT_VERSION" && -e "$ORT_LIB" ]]; then
+    log "ONNX Runtime $ORT_VERSION already installed in $odir"
+  else
+    fetch "https://github.com/microsoft/onnxruntime/releases/download/v$ORT_VERSION/onnxruntime-linux-$oarch-$ORT_VERSION.tgz" "$osum" "$tmp/ort.tgz"
+    rm -rf "$odir.new"; mkdir -p "$odir.new"
+    tar -xzf "$tmp/ort.tgz" -C "$odir.new" --strip-components=1 --no-same-owner --exclude='*/include/*' --exclude='*/cmake/*' --exclude='*/pkgconfig/*'
+    rm -rf "$odir"; mv "$odir.new" "$odir"
+    log "installed ONNX Runtime $ORT_VERSION (MIT) in $odir"
+  fi
+  # ffmpeg: an unmodified LGPL build as a separate program (ADR-0009 addendum), or the distribution's package
+  if [[ "$FFMPEG_SOURCE" == apt ]]; then
+    command -v apt-get >/dev/null 2>&1 || die "--ffmpeg apt needs apt-get"
+    command -v ffmpeg >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq --no-install-recommends ffmpeg >/dev/null; }
+    FFMPEG_BIN=$(command -v ffmpeg)
+    if "$FFMPEG_BIN" -hide_banner -version | grep -q -- '--enable-gpl'; then
+      log "WARNING: the distribution's ffmpeg is a GPL build; ADR-0022 asks for an LGPL build (re-run with --ffmpeg lgpl)"
+    fi
+  else
+    case "$ARCH" in amd64) farch=linux64; fsum=$FFMPEG_SHA256_amd64;; arm64) farch=linuxarm64; fsum=$FFMPEG_SHA256_arm64;; esac
+    fname="$FFMPEG_BUILD-$farch-lgpl-shared-$FFMPEG_BRANCH"
+    fdir="$AN_DIR/$FFMPEG_BUILD-lgpl"
+    FFMPEG_BIN="$fdir/bin/ffmpeg"
+    if [[ -x "$FFMPEG_BIN" ]] && "$FFMPEG_BIN" -hide_banner -version >/dev/null 2>&1; then
+      log "ffmpeg ${FFMPEG_BUILD#ffmpeg-} (LGPL) already installed in $fdir"
+    else
+      fetch "https://github.com/BtbN/FFmpeg-Builds/releases/download/$FFMPEG_RELEASE/$fname.tar.xz" "$fsum" "$tmp/ffmpeg.tar.xz"
+      rm -rf "$fdir.new"; mkdir -p "$fdir.new"
+      tar -xJf "$tmp/ffmpeg.tar.xz" -C "$fdir.new" --strip-components=1 --no-same-owner --wildcards '*/bin/ffmpeg' '*/bin/ffprobe' '*/lib/*.so*' '*/LICENSE.txt'
+      if "$fdir.new/bin/ffmpeg" -hide_banner -version | grep -q -e '--enable-gpl' -e '--enable-nonfree'; then
+        rm -rf "$fdir.new"; die "the downloaded ffmpeg is not an LGPL build - not installed"
+      fi
+      rm -rf "$fdir"; mv "$fdir.new" "$fdir"
+      log "installed ffmpeg ${FFMPEG_BUILD#ffmpeg-} (LGPL v3, unmodified upstream build) in $fdir"
+    fi
+  fi
+  # YOLOX nano and tiny (Apache-2.0) with the licence next to them
+  local yb="https://github.com/Megvii-BaseDetection/YOLOX/releases/download/$YOLOX_RELEASE"
+  fetch "$yb/yolox_nano.onnx" "$YOLOX_NANO_SHA256" "$MODELS/yolox_nano.onnx"
+  fetch "$yb/yolox_tiny.onnx" "$YOLOX_TINY_SHA256" "$MODELS/yolox_tiny.onnx"
+  fetch "https://raw.githubusercontent.com/Megvii-BaseDetection/YOLOX/$YOLOX_RELEASE/LICENSE" "$YOLOX_LICENSE_SHA256" "$MODELS/LICENSE-YOLOX.txt"
+  cat > "$MODELS/SOURCES.txt" <<EOF
+Object counting models (installed by install.sh --analytics; not part of ctrl32 telemetry)
+yolox_nano.onnx  sha256 $YOLOX_NANO_SHA256  $yb/yolox_nano.onnx
+yolox_tiny.onnx  sha256 $YOLOX_TINY_SHA256  $yb/yolox_tiny.onnx
+Licence: Apache-2.0 (LICENSE-YOLOX.txt), Megvii-BaseDetection/YOLOX $YOLOX_RELEASE
+EOF
+  cat > "$AN_DIR/SOURCES.txt" <<EOF
+Third-party programs for object counting (installed by install.sh --analytics; not part of ctrl32 telemetry)
+ONNX Runtime $ORT_VERSION (MIT): https://github.com/microsoft/onnxruntime/releases/tag/v$ORT_VERSION - licence in onnxruntime-$ORT_VERSION/LICENSE
+ffmpeg: $( [[ "$FFMPEG_SOURCE" == apt ]] && echo "the distribution's package ($FFMPEG_BIN)" || echo "${FFMPEG_BUILD#ffmpeg-} LGPL v3 build from https://github.com/BtbN/FFmpeg-Builds/releases/tag/$FFMPEG_RELEASE - licence in $FFMPEG_BUILD-lgpl/LICENSE.txt; source: https://github.com/FFmpeg/FFmpeg (release/$FFMPEG_BRANCH) and https://github.com/BtbN/FFmpeg-Builds" )
+ffmpeg runs as a separate, unmodified program; it is not linked into ctrl32-telemetry.
+EOF
+  chown -R "$USER_NAME:$USER_NAME" "$MODELS"; chmod 0644 "$MODELS"/*
+  rm -rf "$tmp"
+  write_analytics_config
+  log "wrote [analytics] in $CONFIG"
+  # self-check as the service user: ffmpeg version and licence, ONNX Runtime version, models (SHA-256, one inference)
+  local sc=("$BIN" analytics-worker -selfcheck -config "$CONFIG")
+  if command -v runuser >/dev/null 2>&1; then sc=(runuser -u "$USER_NAME" -- "${sc[@]}"); fi
+  if "${sc[@]}"; then
+    log "object counting is installed. Switch it on per camera: Object counting -> add an area with its entrances -> Cameras -> Configure: draw a line, choose the entrance and the classes, enable (with a reason)."
+  else
+    log "WARNING: the analytics self-check failed (see above); counting with sensors works, cameras stay 'not installed'"
+  fi
+}
+
 [[ $EUID -eq 0 ]] || die "run as root (sudo)"
-command -v systemctl >/dev/null || die "systemd is required"
 ARCH=$(uname -m); case "$ARCH" in x86_64) ARCH=amd64;; aarch64|arm64) ARCH=arm64;; *) die "unsupported architecture $ARCH";; esac
+[[ "$FFMPEG_SOURCE" == lgpl || "$FFMPEG_SOURCE" == apt ]] || die "--ffmpeg must be lgpl or apt"
+# --analytics on an existing installation: only the object counting parts, then restart the service
+if $ANALYTICS && [[ -f "$CONFIG" && -x "$BIN" && -z "$BINARY" && -z "$URL" ]]; then
+  log "existing installation found ($CONFIG): adding object counting only"
+  install_analytics
+  if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet "$APP" 2>/dev/null; then
+    systemctl restart "$APP"; log "restarted $APP"
+  fi
+  exit 0
+fi
+command -v systemctl >/dev/null || die "systemd is required"
 [[ -z "$CF_TOKEN" || -n "$DOMAIN" ]] || die "--cloudflare-token needs --domain: the public hostname of the tunnel"
 
 # 1. user and directories --------------------------------------------------------------------------
@@ -94,6 +259,7 @@ fi
 TYPST_VERSION=${TYPST_VERSION:-v0.15.1}
 TYPST_BIN=/usr/local/bin/typst
 if ! [[ -x "$TYPST_BIN" ]] || ! "$TYPST_BIN" --version 2>/dev/null | grep -q "${TYPST_VERSION#v}"; then
+  need_tools   # xz for the archive (missing on minimal images)
   case "$ARCH" in amd64) TARCH=x86_64;; arm64) TARCH=aarch64;; esac
   TURL="https://github.com/typst/typst/releases/download/$TYPST_VERSION/typst-$TARCH-unknown-linux-musl.tar.xz"
   TMPD=$(mktemp -d)
@@ -175,6 +341,9 @@ EOF
       apt-get update -qq && apt-get install -y -qq postgresql-18 >/dev/null
     fi
     DB_PORT=${DB_PORT:-5432}
+    # the package may leave the cluster stopped (policy-rc.d on minimal images): start it and wait for it
+    systemctl enable --now postgresql >/dev/null 2>&1 || true
+    for i in $(seq 1 30); do sudo -u postgres psql -tAc "select 1" >/dev/null 2>&1 && break; sleep 1; done
     sudo -u postgres psql -v ON_ERROR_STOP=1 -tAc "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='$DB_ADMIN') THEN CREATE ROLE $DB_ADMIN LOGIN SUPERUSER PASSWORD '$DB_ADMIN_PASSWORD'; END IF; END \$\$;" >/dev/null
     sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1 || sudo -u postgres createdb -O "$DB_ADMIN" "$DB_NAME"
     ;;
@@ -250,6 +419,9 @@ else
     log "added [agent] section to existing config"
   fi
 fi
+
+# 4b. object counting (optional) -------------------------------------------------------------------
+if $ANALYTICS; then install_analytics; fi
 
 # 5. migrations + service --------------------------------------------------------------------------
 "$BIN" migrate -config "$CONFIG"

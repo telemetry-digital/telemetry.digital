@@ -251,6 +251,41 @@ func (s *Server) publicAlarms(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, out)
 }
 
+// publicAnnotations serves the annotations of a bound datastream to a public link or a display. Annotation texts are
+// internal notes ("probe replaced", "door open for loading"), so nothing is shown unless the dashboard owner enabled
+// "Show annotations on the public link" (spec public_annotations): without it the answer is an empty list — no
+// markers at all, since even a marker without text tells that something happened. With it the viewer gets the time,
+// category and text, never the name of the author.
+func (s *Server) publicAnnotations(w http.ResponseWriter, r *http.Request) {
+	si, ok := s.publicShare(w, r)
+	if !ok {
+		return
+	}
+	dsID := r.URL.Query().Get("datastream_id")
+	if !si.DS[dsID] {
+		writeErr(w, 403, "datastream is not part of this dashboard")
+		return
+	}
+	if on, _ := si.Spec["public_annotations"].(bool); !on {
+		writeJSON(w, 200, []annotation{})
+		return
+	}
+	from, to, ok := timeRange(w, r, 30*24*time.Hour)
+	if !ok {
+		return
+	}
+	list, err := s.queryAnnotations(r, si.Org, dsID, from, to, false)
+	if err != nil {
+		writeErr(w, 500, "query failed")
+		return
+	}
+	out := make([]map[string]any, 0, len(list))
+	for _, a := range list {
+		out = append(out, map[string]any{"id": a.ID, "datastream_id": a.DatastreamID, "from": a.From, "to": a.To, "category": a.Category, "text": a.Text})
+	}
+	writeJSON(w, 200, out)
+}
+
 // ---- share management (content.write) ------------------------------------------------------------
 
 func (s *Server) shareURL(token string) string {

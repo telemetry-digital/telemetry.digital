@@ -23,6 +23,11 @@
     6. creates the first administrator; the one-time password is saved in admin-bootstrap.txt (delete after first login)
   7. with -CloudflareToken: installs cloudflared as the Windows service "Cloudflared" connected to your tunnel; the server
      listens on 127.0.0.1 only and no firewall port is opened (profile internet: TLS by Cloudflare, MFA for everyone)
+  8. with -Analytics: object counting on camera pictures (docs/object-counting.md, ADR-0022): downloads an unmodified
+     LGPL build of ffmpeg, ONNX Runtime (MIT) and the YOLOX nano/tiny models (Apache-2.0) from their official releases
+     (pinned versions, SHA-256 verified; never part of our release files), writes [analytics] and runs the self-check.
+     On an existing installation -Analytics adds only these parts (with -Binary or -Url it also updates the binary):
+       .\install.ps1 -Analytics
   -Uninstall removes the services and firewall rules (data stays unless -Purge). -DryRun prints the plan only.
 #>
 [CmdletBinding()]
@@ -45,6 +50,7 @@ param(
   [string]$CloudflareToken = "",
   [string]$CloudflaredUrl = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe",
   [string]$OrgName = "My organization",
+  [switch]$Analytics,
   [switch]$NoStart,
   [switch]$DryRun,
   [switch]$Uninstall,
@@ -59,6 +65,152 @@ function Die($msg) { Write-Host "[ctrl32] error: $msg" -ForegroundColor Red; exi
 function Rand32 { $b = New-Object byte[] 48; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); ([Convert]::ToBase64String($b) -replace '[/+=]', '').Substring(0, 30) }
 function Step($desc, [scriptblock]$action) { if ($DryRun) { Write-Host "[dry-run] $desc" -ForegroundColor DarkGray } else { Log $desc; & $action } }
 function TomlPath($p) { return ($p -replace '\\', '/') }
+
+# ---- object counting (-Analytics, ADR-0022) ---------------------------------------------------------------
+# Third-party parts downloaded from their official releases at install time, pinned and SHA-256 verified.
+# They are never bundled into our release files.
+$OrtVersion = "1.30.0"                                   # ONNX Runtime (MIT), github.com/microsoft/onnxruntime
+$OrtSha256 = "c6ba983baf5681af108599675d2a89c2d145512d02de28aed0bff177cd0ba949"     # onnxruntime-win-x64-1.30.0.zip
+$FfmpegRelease = "autobuild-2026-08-31-13-27"            # github.com/BtbN/FFmpeg-Builds (month-end builds are kept)
+$FfmpegBuild = "ffmpeg-n8.1.2-50-g1a748fe2cd"            # FFmpeg 8.1.2, LGPL v3 build (no --enable-gpl)
+$FfmpegBranch = "8.1"
+$FfmpegSha256 = "e9712ffbdb03ef71bbab660c75b835bfe698ef6fad0247c76d8d394a39a3db63"  # ...-win64-lgpl-shared-8.1.zip
+$YoloxRelease = "0.1.1rc0"                               # github.com/Megvii-BaseDetection/YOLOX (Apache-2.0)
+$YoloxNanoSha256 = "c789161ed43c8269fcd4e67c67eeeb4e80c622da2eb296a20bc6007bd18a0b7d"
+$YoloxTinySha256 = "427cc366d34e27ff7a03e2899b5e3671425c262ea2291f88bb942bc1cc70b0f7"
+$YoloxLicenseSha256 = "577c03d505ec80f667ebf96ebd0cc4f6825c817ca1088ee348c48aaabd51bd92"
+
+# Fetch: download over HTTPS only and keep the file only when its SHA-256 matches the pin
+function Fetch($url, $sha, $dest) {
+  if ((Test-Path $dest) -and ((Get-FileHash -Algorithm SHA256 -Path $dest).Hash -eq $sha.ToUpperInvariant())) { return }
+  if (-not $url.StartsWith("https://")) { Die "only HTTPS downloads are allowed: $url" }
+  $part = "$dest.part"
+  $old = $ProgressPreference; $ProgressPreference = "SilentlyContinue"   # the progress bar makes PowerShell 5.1 very slow
+  try { Invoke-WebRequest -Uri $url -OutFile $part -UseBasicParsing } catch { Remove-Item -Force $part -ErrorAction SilentlyContinue; Die "download failed: $url ($($_.Exception.Message))" } finally { $ProgressPreference = $old }
+  if ((Get-FileHash -Algorithm SHA256 -Path $part).Hash -ne $sha.ToUpperInvariant()) {
+    Remove-Item -Force $part; Die "SHA-256 of $url does not match the pinned $sha - nothing installed from it"
+  }
+  Move-Item -Force $part $dest
+}
+
+# Expand-Selected: extract the entries of a ZIP (without its top directory) that $want accepts
+function Expand-Selected($zip, $dest, [scriptblock]$want) {
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $z = [IO.Compression.ZipFile]::OpenRead($zip)
+  try {
+    foreach ($e in $z.Entries) {
+      if ($e.Name -eq "") { continue }
+      $i = $e.FullName.IndexOf('/'); $rel = $e.FullName.Substring($i + 1)
+      if (-not (& $want $rel)) { continue }
+      $out = Join-Path $dest ($rel -replace '/', '\')
+      New-Item -ItemType Directory -Force -Path (Split-Path $out) | Out-Null
+      [IO.Compression.ZipFileExtensions]::ExtractToFile($e, $out, $true)
+    }
+  } finally { $z.Dispose() }
+}
+
+# Write-AnalyticsConfig: replace the [analytics] section of config.toml (keeps threads and max_cameras)
+function Write-AnalyticsConfig($ffmpeg, $ortLib, $models) {
+  $bytes = [IO.File]::ReadAllBytes($Config)
+  $bom = ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)
+  $lines = [IO.File]::ReadAllText($Config) -split "`r?`n"
+  $out = New-Object System.Collections.Generic.List[string]
+  $in = $false; $threads = $null; $max = $null
+  foreach ($l in $lines) {
+    if ($l -match '^\[analytics\]\s*$') { $in = $true; continue }
+    if ($in -and $l -match '^\[') { $in = $false }
+    if ($in) {
+      if ($l -match '^\s*threads\s*=') { $threads = $l }
+      if ($l -match '^\s*max_cameras\s*=') { $max = $l }
+      continue
+    }
+    $out.Add($l)
+  }
+  while ($out.Count -gt 0 -and $out[$out.Count - 1].Trim() -eq "") { $out.RemoveAt($out.Count - 1) }
+  if (-not $threads) { $threads = "threads = 1          # inference threads per camera" }
+  if (-not $max) { $max = "max_cameras = 4      # cameras analysed at the same time" }
+  $out.Add("")
+  $out.Add("[analytics]")
+  $out.Add("# Object counting on camera pictures - written by install.ps1 -Analytics on $(Get-Date -Format s) (docs/object-counting.md).")
+  $out.Add("# ffmpeg (LGPL build), ONNX Runtime $OrtVersion and YOLOX $YoloxRelease downloaded from their official releases.")
+  $out.Add("ffmpeg = `"$(TomlPath $ffmpeg)`"")
+  $out.Add("onnxruntime = `"$(TomlPath $ortLib)`"")
+  $out.Add("model_nano = `"$(TomlPath (Join-Path $models 'yolox_nano.onnx'))`"")
+  $out.Add("model_tiny = `"$(TomlPath (Join-Path $models 'yolox_tiny.onnx'))`"")
+  $out.Add("nano_sha256 = `"$YoloxNanoSha256`"")
+  $out.Add("tiny_sha256 = `"$YoloxTinySha256`"")
+  $out.Add($threads)
+  $out.Add($max)
+  [IO.File]::WriteAllText($Config, (($out -join "`r`n") + "`r`n"), (New-Object Text.UTF8Encoding($bom)))
+}
+
+function Install-Analytics {
+  $an = Join-Path $InstallDir "analytics"
+  $models = Join-Path $DataDir "models"
+  $tmp = Join-Path $env:TEMP "ctrl32-analytics"
+  foreach ($d in @($an, $models, $tmp)) { if (-not (Test-Path $d)) { New-Item -ItemType Directory -Force -Path $d | Out-Null } }
+  # ONNX Runtime (MIT), CPU package; LICENSE and ThirdPartyNotices.txt stay in its directory
+  $odir = Join-Path $an "onnxruntime-$OrtVersion"
+  $ortLib = Join-Path $odir "lib\onnxruntime.dll"
+  $verFile = Join-Path $odir "VERSION_NUMBER"
+  if ((Test-Path $ortLib) -and (Test-Path $verFile) -and ((Get-Content -Raw $verFile).Trim() -eq $OrtVersion)) {
+    Log "ONNX Runtime $OrtVersion already installed in $odir"
+  } else {
+    $zip = Join-Path $tmp "onnxruntime-win-x64-$OrtVersion.zip"
+    Fetch "https://github.com/microsoft/onnxruntime/releases/download/v$OrtVersion/onnxruntime-win-x64-$OrtVersion.zip" $OrtSha256 $zip
+    $new = "$odir.new"; if (Test-Path $new) { Remove-Item -Recurse -Force $new }
+    Expand-Selected $zip $new { param($p) ($p -like 'lib/*.dll') -or (@('LICENSE', 'ThirdPartyNotices.txt', 'VERSION_NUMBER', 'Privacy.md', 'README.md') -contains $p) }
+    if (Test-Path $odir) { Remove-Item -Recurse -Force $odir }
+    Move-Item $new $odir
+    Remove-Item -Force $zip
+    Log "installed ONNX Runtime $OrtVersion (MIT) in $odir"
+  }
+  # ffmpeg: an unmodified LGPL build as a separate program (ADR-0009 addendum)
+  $fdir = Join-Path $an "$FfmpegBuild-lgpl"
+  $ffmpeg = Join-Path $fdir "bin\ffmpeg.exe"
+  $have = $false
+  if (Test-Path $ffmpeg) { try { $have = ((& $ffmpeg -hide_banner -version | Out-String) -match 'ffmpeg version') } catch { $have = $false } }
+  if ($have) {
+    Log "ffmpeg $($FfmpegBuild.Substring(7)) (LGPL) already installed in $fdir"
+  } else {
+    $zip = Join-Path $tmp "$FfmpegBuild-win64-lgpl-shared-$FfmpegBranch.zip"
+    Fetch "https://github.com/BtbN/FFmpeg-Builds/releases/download/$FfmpegRelease/$FfmpegBuild-win64-lgpl-shared-$FfmpegBranch.zip" $FfmpegSha256 $zip
+    $new = "$fdir.new"; if (Test-Path $new) { Remove-Item -Recurse -Force $new }
+    Expand-Selected $zip $new { param($p) ($p -like 'bin/*.dll') -or (@('bin/ffmpeg.exe', 'bin/ffprobe.exe', 'LICENSE.txt') -contains $p) }
+    $v = (& (Join-Path $new "bin\ffmpeg.exe") -hide_banner -version | Out-String)
+    if ($v -match '--enable-gpl' -or $v -match '--enable-nonfree') { Remove-Item -Recurse -Force $new; Die "the downloaded ffmpeg is not an LGPL build - not installed" }
+    if (Test-Path $fdir) { Remove-Item -Recurse -Force $fdir }
+    Move-Item $new $fdir
+    Remove-Item -Force $zip
+    Log "installed ffmpeg $($FfmpegBuild.Substring(7)) (LGPL v3, unmodified upstream build) in $fdir"
+  }
+  # YOLOX nano and tiny (Apache-2.0) with the licence next to them
+  $yb = "https://github.com/Megvii-BaseDetection/YOLOX/releases/download/$YoloxRelease"
+  Fetch "$yb/yolox_nano.onnx" $YoloxNanoSha256 (Join-Path $models "yolox_nano.onnx")
+  Fetch "$yb/yolox_tiny.onnx" $YoloxTinySha256 (Join-Path $models "yolox_tiny.onnx")
+  Fetch "https://raw.githubusercontent.com/Megvii-BaseDetection/YOLOX/$YoloxRelease/LICENSE" $YoloxLicenseSha256 (Join-Path $models "LICENSE-YOLOX.txt")
+  Set-Content -Encoding ASCII -Path (Join-Path $models "SOURCES.txt") -Value @(
+    "Object counting models (installed by install.ps1 -Analytics; not part of ctrl32 telemetry)",
+    "yolox_nano.onnx  sha256 $YoloxNanoSha256  $yb/yolox_nano.onnx",
+    "yolox_tiny.onnx  sha256 $YoloxTinySha256  $yb/yolox_tiny.onnx",
+    "Licence: Apache-2.0 (LICENSE-YOLOX.txt), Megvii-BaseDetection/YOLOX $YoloxRelease")
+  Set-Content -Encoding ASCII -Path (Join-Path $an "SOURCES.txt") -Value @(
+    "Third-party programs for object counting (installed by install.ps1 -Analytics; not part of ctrl32 telemetry)",
+    "ONNX Runtime $OrtVersion (MIT): https://github.com/microsoft/onnxruntime/releases/tag/v$OrtVersion - licence in onnxruntime-$OrtVersion\LICENSE",
+    "ffmpeg $($FfmpegBuild.Substring(7)) LGPL v3 build: https://github.com/BtbN/FFmpeg-Builds/releases/tag/$FfmpegRelease - licence in $FfmpegBuild-lgpl\LICENSE.txt",
+    "ffmpeg source: https://github.com/FFmpeg/FFmpeg (release/$FfmpegBranch) and https://github.com/BtbN/FFmpeg-Builds",
+    "ffmpeg runs as a separate, unmodified program; it is not linked into ctrl32-telemetry.")
+  Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+  Write-AnalyticsConfig $ffmpeg $ortLib $models
+  Log "wrote [analytics] in $Config"
+  # self-check: ffmpeg version and licence, ONNX Runtime version, models (SHA-256, one test inference)
+  & $Exe analytics-worker -selfcheck -config $Config
+  if ($LASTEXITCODE -eq 0) {
+    Log "object counting is installed. Switch it on per camera: Object counting -> add an area with its entrances -> Cameras -> Configure: draw a line, choose the entrance and the classes, enable (with a reason)."
+  } else {
+    Warn "the analytics self-check failed (see above); counting with sensors works, cameras stay 'not installed'"
+  }
+}
 
 $Exe = Join-Path $InstallDir "ctrl32-telemetry.exe"
 $Cloudflared = Join-Path $InstallDir "cloudflared.exe"
@@ -77,8 +229,20 @@ $LocalPg = [string]::IsNullOrEmpty($PgHost)
 if ($LocalPg) { $PgHost = "127.0.0.1" }
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $isAdmin -and -not $DryRun) { Die "run this script in an elevated PowerShell (Run as administrator)" }
+# -Analytics on an existing installation adds only the object counting parts (unless -Binary or -Url updates it too)
+$AnalyticsOnly = $Analytics -and -not $Uninstall -and (Test-Path $Config) -and (Test-Path $Exe) -and ($Binary -eq "") -and -not $PSBoundParameters.ContainsKey('Url')
+function Test-Writable($dir) { try { $f = Join-Path $dir ".ctrl32-write-test"; [IO.File]::WriteAllText($f, "x"); Remove-Item -Force $f; return $true } catch { return $false } }
+$writable = $AnalyticsOnly -and (Test-Writable $InstallDir) -and (Test-Writable $DataDir)
+if (-not $isAdmin -and -not $DryRun -and -not $writable) { Die "run this script in an elevated PowerShell (Run as administrator)" }
 if ([Environment]::Is64BitOperatingSystem -eq $false) { Die "64-bit Windows is required" }
+if ($AnalyticsOnly) {
+  Log "existing installation found ($Config): adding object counting only"
+  Step "installing object counting (ffmpeg LGPL build, ONNX Runtime $OrtVersion, YOLOX models)" { Install-Analytics }
+  if (-not $NoStart -and -not $DryRun -and (Get-Service -Name $AppService -ErrorAction SilentlyContinue)) {
+    Step "restarting service $AppService" { & $Exe service restart -config $Config }
+  }
+  exit 0
+}
 
 # ---- uninstall ------------------------------------------------------------------------------------------
 if ($Uninstall) {
@@ -262,6 +426,9 @@ pg_dump = "$(TomlPath (Join-Path $PgBin 'pg_dump.exe'))"
   Log "keeping existing $Config"
   if ($Tunnel) { Warn "for the tunnel the existing config needs: profile = `"internet`", [http] listen = `"127.0.0.1:$HttpPort`", base_url = `"https://$Domain`", [mqtt] listen on 127.0.0.1 - edit $Config and restart the service" }
 }
+
+# ---- 4b. object counting (optional) ---------------------------------------------------------------------
+if ($Analytics) { Step "installing object counting (ffmpeg LGPL build, ONNX Runtime $OrtVersion, YOLOX models)" { Install-Analytics } }
 
 # ---- 5. migrations, service, firewall -------------------------------------------------------------------
 Step "applying schema migrations" { & $Exe migrate -config $Config }

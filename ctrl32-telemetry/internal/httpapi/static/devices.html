@@ -267,7 +267,7 @@ function relTime(t){ if(!t) return '—'; const s = (new Date(t).getTime() - Dat
   return a < 60 ? rtf.format(Math.round(s), 'second') : a < 3600 ? rtf.format(Math.round(s / 60), 'minute') : a < 86400 ? rtf.format(Math.round(s / 3600), 'hour') : rtf.format(Math.round(s / 86400), 'day'); }
 function numFmt(v){ if(v == null || !isFinite(v)) return '—'; const a = Math.abs(v); return Number(v).toLocaleString(lang(), {maximumFractionDigits: a >= 100 ? 1 : a >= 1 ? 2 : 4}); }
 function valText(l){ if(!l) return '—'; if(l.value != null) return numFmt(l.value); if(l.value_json != null) return typeof l.value_json === 'string' ? l.value_json : JSON.stringify(l.value_json); return '—'; }
-function qualBadge(q){ if(!q) return ''; if(q === 'ok') return '<span class="badge ok">ok</span>'; if(q === 'sensor_fault') return '<span class="badge bad">sensor fault</span>'; return `<span class="badge warn">${esc(q.replace(/_/g, ' '))}</span>`; }
+function qualBadge(q){ if(!q) return ''; if(q === 'ok') return '<span class="badge ok">ok</span>'; if(q === 'sensor_fault') return `<span class="badge bad">${esc(ctrl32.t('sensor fault'))}</span>`; return `<span class="badge warn">${esc(ctrl32.t(q.replace(/_/g, ' ')))}</span>`; }
 function telSpan(){ if(TEL.range === 'custom' && TEL.from && TEL.to) return [TEL.from, TEL.to]; const now = Date.now(); return [now - TEL_MS[TEL.range === 'custom' ? '24h' : TEL.range], now + 60e3]; }
 function rowId(k){ return k.source + ':' + k.key; }
 async function initTelemetry(id, dev){

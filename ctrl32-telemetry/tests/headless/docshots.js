@@ -131,6 +131,12 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
     await page("dashboards-edit-add-widget", `/dashboards/${cold.slug}/edit`, { wait: 4000, click: "#eAdd" });
     await page("dashboards-edit-widget-properties", `/dashboards/${cold.slug}/edit`, { wait: 4000, before: "(() => { const r = document.querySelectorAll('.dash-resize')[1]; if (r) r.parentElement.click(); return !!r; })()", afterWait: 1500 });
     await page("dashboards-edit-settings", `/dashboards/${cold.slug}/edit`, { wait: 4000, click: "#eSettings" });
+    // annotations in a chart widget (0.72.0; docs.py records: fridge 2): the pointer over the annotated period
+    if (wanted("dashboards-chart-annotations")) {
+      await go(`/dashboards/${cold.slug}`, 6000);
+      const hov = await ev(`(() => { const a = document.querySelector('[data-id="ch"] svg .ann'); if (!a) return false; const svg = a.closest('svg'); const r = a.getBoundingClientRect(); svg.dispatchEvent(new MouseEvent('mousemove', {clientX: r.left + Math.max(2, r.width / 2), clientY: r.top + 30, bubbles: true})); return true; })()`);
+      if (hov) await shot("dashboards-chart-annotations", { clip: '[data-id="ch"]' }); else problems.push("dashboards-chart-annotations: no annotation in the chart (docs.py records)");
+    }
     await page("dashboards-period-table-widget", `/dashboards/${cold.slug}`, { wait: 6000, clip: "js:document.querySelector('.pt-bar').parentElement.parentElement" });
     // the toolbar alone: the period, ◀ ▶ and the Excel / CSV / PDF export buttons
     if (wanted("dashboards-period-table-toolbar")) { await go(`/dashboards/${cold.slug}`, 6000); await shot("dashboards-period-table-toolbar", { clip: ".pt-bar", pad: 12 }); }
@@ -545,6 +551,8 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
     await page("counting-sensors", "/counting/sensors", { wait: 3000 });
     await page("counting-sensor-dialog", "/counting/sensors", { wait: 3000, click: "[data-in]", clickWait: 2000 });
     await page("counting-cameras", "/counting/cameras", { wait: 3500 });
+    // the self-check of the detector installation (0.72.0; ready when [analytics] points at an installed detector)
+    await page("counting-detector-check", "/counting/cameras", { wait: 6000, clip: "#acCard" });
     if (entCam && wanted("counting-camera-editor")) { await go(`/counting/cameras?camera=${entCam.camera_id}`, 16000); await shot("counting-camera-editor", { full: true, maxH: 2600 }); }
     if (entCam && wanted("counting-camera-picture")) { await go(`/counting/cameras?camera=${entCam.camera_id}`, 16000); await shot("counting-camera-picture", { clip: "#ocEd" }); }
     if (roadCam && wanted("counting-speed-editor")) { await go(`/counting/cameras?camera=${roadCam.camera_id}`, 14000); await shot("counting-speed-editor", { full: true, maxH: 2600 }); }

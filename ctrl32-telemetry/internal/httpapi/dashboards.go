@@ -76,7 +76,8 @@ var (
 var widgetCatalog = []WidgetDef{
 	{Type: "chart", Label: "Trend chart", Group: "charts", Help: "One or more datastreams over time. Long ranges are aggregated on the server (average with a min–max band).", Binds: []string{"datastreams"}, MinBinds: 1, Default: [2]int{6, 3}, Params: []ScreenParam{pTitle,
 		{Name: "chart", Label: "Style", Kind: "select", Default: "line", Options: []string{"line", "area", "step", "bar", "scatter"}}, pRange, pDecimals, pYMin, pYMax, pWarn, pAction,
-		{Name: "band", Label: "Show min–max band", Kind: "bool", Default: true}, {Name: "legend", Label: "Show legend", Kind: "bool", Default: true}}},
+		{Name: "band", Label: "Show min–max band", Kind: "bool", Default: true}, {Name: "legend", Label: "Show legend", Kind: "bool", Default: true},
+		{Name: "annotations", Label: "Show annotations", Kind: "bool", Default: true}}},
 	{Type: "bars", Label: "Compare values", Group: "charts", Help: "Horizontal bars with the latest value of each datastream.", Binds: []string{"datastreams"}, MinBinds: 1, Default: [2]int{4, 3}, Params: []ScreenParam{pTitle, pDecimals, pYMin, pYMax, pWarn, pAction}},
 	{Type: "donut", Label: "Share (donut)", Group: "charts", Help: "Latest values as shares of their sum.", Binds: []string{"datastreams"}, MinBinds: 1, Default: [2]int{4, 3}, Params: []ScreenParam{pTitle, pDecimals}},
 	{Type: "heatmap", Label: "Heatmap (hour × day)", Group: "charts", Help: "Hourly averages of one datastream laid out by day — patterns at a glance.", Binds: []string{"datastreams"}, MinBinds: 1, Default: [2]int{6, 3}, Params: []ScreenParam{pTitle, {Name: "range", Label: "Range", Kind: "select", Default: "7d", Options: []string{"7d", "30d"}}, pDecimals, pYMin, pYMax}},
@@ -147,6 +148,9 @@ type screenSpec struct {
 	} `json:"widgets"`
 	Elements []any            `json:"elements"` // drawing layer of process pictures (screen_elements.go)
 	Filters  []map[string]any `json:"filters"`  // dashboard filter bar (dashboard_filters.go)
+	// PublicAnnotations lets viewers of a public link (and displays) see the annotations of the charts; off by default
+	// because annotation texts are internal notes (0.72.0).
+	PublicAnnotations bool `json:"public_annotations"`
 }
 
 // validateScreenSpec normalizes a screen (dashboard) spec and returns the canonical document.
@@ -307,6 +311,9 @@ func validateScreenSpecW(raw json.RawMessage) (map[string]any, []string, error) 
 	}
 	layout := map[string]any{"type": "grid", "columns": 12, "row_height": sp.Layout.RowHeight}
 	out := map[string]any{"version": 1, "kind": sp.Kind, "layout": layout, "range": sp.Range, "refresh_s": sp.RefreshS, "widgets": widgets}
+	if sp.PublicAnnotations {
+		out["public_annotations"] = true
+	}
 	if len(sp.Filters) > 0 {
 		fs, err := validateFilters(sp.Filters)
 		if err != nil {
@@ -697,7 +704,8 @@ func (s *Server) latestValues(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := s.pool.Query(r.Context(), `
-		SELECT DISTINCT ON (o.datastream_id) o.datastream_id::text, o.measured_at, o.value::float8, o.value_json, o.quality, ds.unit, ds.key, a.name
+		SELECT DISTINCT ON (o.datastream_id) o.datastream_id::text, o.measured_at, o.value::float8, o.value_json, o.quality, ds.unit, ds.key, a.name,
+		       COALESCE(EXTRACT(EPOCH FROM ds.expected_interval), 0)::float8
 		FROM core.observation o JOIN core.datastream ds ON ds.id = o.datastream_id JOIN core.asset a ON a.id = ds.asset_id
 		WHERE o.datastream_id = ANY($1::uuid[]) AND ($2 = '' OR o.org_id = $2::uuid) AND o.measured_at > now() - interval '400 days'
 		ORDER BY o.datastream_id, o.measured_at DESC`, ids, orgOf(p))
@@ -707,13 +715,17 @@ func (s *Server) latestValues(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 	out := map[string]any{}
+	now := time.Now()
 	for rows.Next() {
 		var id, quality, unit, key, asset string
 		var at time.Time
 		var val *float64
 		var vj json.RawMessage
-		if rows.Scan(&id, &at, &val, &vj, &quality, &unit, &key, &asset) == nil {
-			out[id] = map[string]any{"measured_at": at, "value": val, "value_json": vj, "quality": quality, "unit": unit, "key": key, "asset": asset}
+		var expected float64
+		if rows.Scan(&id, &at, &val, &vj, &quality, &unit, &key, &asset, &expected) == nil {
+			l := map[string]any{"measured_at": at, "value": val, "value_json": vj, "unit": unit, "key": key, "asset": asset}
+			applyLive(l, quality, at, expected, now) // "stale" is computed, never stored (quality.go)
+			out[id] = l
 		}
 	}
 	writeJSON(w, 200, out)

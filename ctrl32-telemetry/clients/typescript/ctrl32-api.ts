@@ -343,6 +343,8 @@ export type DashboardSpec = {
   format?: string;
   /** {type: grid, columns: 12, row_height} */
   layout?: Record<string, unknown>;
+  /** viewers of a public link and displays see the annotations of the charts (default false) */
+  public_annotations?: boolean;
   widgets?: (Record<string, unknown>)[];
 };
 
@@ -636,7 +638,12 @@ export type LatestValue = {
   asset?: string;
   key?: string;
   measured_at?: string;
+  /** stored quality, or stale (computed, never stored) when a good value is older than 1.5 × the datastream's expected interval */
   quality?: string;
+  /** older than 1.5 × the expected interval */
+  stale?: boolean;
+  /** the stored quality when quality shows stale */
+  stored_quality?: string;
   unit?: string;
   value?: number | null;
   value_json?: unknown;
@@ -1264,8 +1271,11 @@ export type TelemetryKey = {
   kind?: string;
   last?: {
     at?: string;
+    /** stored quality, or stale (computed) for a good value older than 1.5 × the expected interval */
     quality?: string;
     received_at?: string;
+    stale?: boolean;
+    stored_quality?: string;
     value?: number | null;
     value_json?: unknown;
   } | null;
@@ -2646,6 +2656,57 @@ export class Ctrl32Client {
   })[]>('GET', `/api/v1/counting/log`, query, undefined, false);
   }
 
+  /** Detector installation check
+   *
+   * Whether object counting on cameras can run on this server: ffmpeg (version, LGPL/GPL build), ONNX Runtime (version) and the YOLOX models (SHA-256 against the pins, one test inference). Checked in a separate process and cached for 5 minutes; refresh=1 checks again. Paths and technical details only for server administrators (system.admin). Installed with `install.sh --analytics` or `install.ps1 -Analytics`.
+   * 
+   * Requires permission `data.read`. */
+  getCountingSelfcheck(query?: { refresh?: string; /** 1 = check again now */ }): Promise<{
+    checked?: string;
+    components?: ({
+      /** system.admin only */
+      detail?: string;
+      /** advice code */
+      hint?: "install" | "gpl_build" | "sha_mismatch" | "platform" | "ort_version" | "model_broken";
+      /** ffmpeg: LGPL, GPL or non-free */
+      licence?: string;
+      /** models: test inference time */
+      ms?: number;
+      name?: "ffmpeg" | "onnxruntime" | "model_nano" | "model_tiny" | "worker";
+      /** system.admin only */
+      path?: string;
+      state?: "ok" | "warning" | "error" | "missing" | "not_configured";
+      version?: string;
+    })[];
+    /** os/arch */
+    platform?: string;
+    /** cameras can count: ffmpeg, ONNX Runtime and at least one model work */
+    ready?: boolean;
+  }> {
+    return this.request<{
+    checked?: string;
+    components?: ({
+      /** system.admin only */
+      detail?: string;
+      /** advice code */
+      hint?: "install" | "gpl_build" | "sha_mismatch" | "platform" | "ort_version" | "model_broken";
+      /** ffmpeg: LGPL, GPL or non-free */
+      licence?: string;
+      /** models: test inference time */
+      ms?: number;
+      name?: "ffmpeg" | "onnxruntime" | "model_nano" | "model_tiny" | "worker";
+      /** system.admin only */
+      path?: string;
+      state?: "ok" | "warning" | "error" | "missing" | "not_configured";
+      version?: string;
+    })[];
+    /** os/arch */
+    platform?: string;
+    /** cameras can count: ffmpeg, ONNX Runtime and at least one model work */
+    ready?: boolean;
+  }>('GET', `/api/v1/counting/selfcheck`, query, undefined, false);
+  }
+
   /** Summary of an area
    *
    * One local day of an area: occupancy now, passages per group, per entrance with shares, per hour (with the occupancy at the end of each hour), the days before for comparison, the peak occupancy and the speed sections (count, average, maximum, over the limit, last vehicles, histogram per 10 km/h). The area is given directly or by one of its datastreams (widgets).
@@ -2972,7 +3033,7 @@ export class Ctrl32Client {
       kind?: string;
       /** display name (attribute name) */
       label?: string;
-      /** {measured_at, value, value_json, quality} */
+      /** {measured_at, value, value_json, quality, stale, stored_quality}; quality stale is computed (older than 1.5 × interval_s), never stored */
       latest?: Record<string, unknown> | null;
       /** alarm-rule limits {high_warn, high_action, low_warn, low_action} */
       limits?: Record<string, unknown>;
@@ -3006,7 +3067,7 @@ export class Ctrl32Client {
       kind?: string;
       /** display name (attribute name) */
       label?: string;
-      /** {measured_at, value, value_json, quality} */
+      /** {measured_at, value, value_json, quality, stale, stored_quality}; quality stale is computed (older than 1.5 × interval_s), never stored */
       latest?: Record<string, unknown> | null;
       /** alarm-rule limits {high_warn, high_action, low_warn, low_action} */
       limits?: Record<string, unknown>;
@@ -5810,6 +5871,27 @@ export class Ctrl32Client {
     return this.request<Alarm[]>('GET', `/api/v1/public/${encodeURIComponent(token)}/alarms`, undefined, undefined, false);
   }
 
+  /** Annotations of a bound datastream
+   *
+   * Only when the dashboard owner enabled `public_annotations` in the spec; otherwise an empty list. Time, category and text, without the author. */
+  getPublicTokenAnnotations(token: string, query: { datastream_id: string; from?: string; /** RFC 3339 */ to?: string; /** RFC 3339 */ }): Promise<({
+    category?: string;
+    datastream_id?: string;
+    from?: string;
+    id?: string;
+    text?: string;
+    to?: string;
+  })[]> {
+    return this.request<({
+    category?: string;
+    datastream_id?: string;
+    from?: string;
+    id?: string;
+    text?: string;
+    to?: string;
+  })[]>('GET', `/api/v1/public/${encodeURIComponent(token)}/annotations`, query, undefined, false);
+  }
+
   /** Datastreams bound in the shared dashboard */
   getPublicTokenDatastreams(token: string): Promise<Datastream[]> {
     return this.request<Datastream[]>('GET', `/api/v1/public/${encodeURIComponent(token)}/datastreams`, undefined, undefined, false);
@@ -5855,7 +5937,7 @@ export class Ctrl32Client {
       kind?: string;
       /** display name (attribute name) */
       label?: string;
-      /** {measured_at, value, value_json, quality} */
+      /** {measured_at, value, value_json, quality, stale, stored_quality}; quality stale is computed (older than 1.5 × interval_s), never stored */
       latest?: Record<string, unknown> | null;
       /** alarm-rule limits {high_warn, high_action, low_warn, low_action} */
       limits?: Record<string, unknown>;
@@ -5889,7 +5971,7 @@ export class Ctrl32Client {
       kind?: string;
       /** display name (attribute name) */
       label?: string;
-      /** {measured_at, value, value_json, quality} */
+      /** {measured_at, value, value_json, quality, stale, stored_quality}; quality stale is computed (older than 1.5 × interval_s), never stored */
       latest?: Record<string, unknown> | null;
       /** alarm-rule limits {high_warn, high_action, low_warn, low_action} */
       limits?: Record<string, unknown>;

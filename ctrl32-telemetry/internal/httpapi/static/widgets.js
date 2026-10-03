@@ -38,6 +38,11 @@
     const rows = await api('GET', P(`/api/v1/observations?datastream_id=${id}&from=${encodeURIComponent(from)}&limit=10000`));
     return rows.filter((r) => r.value != null).map((r) => ({ t: new Date(r.measured_at).getTime(), v: r.value, flagged: suspect(r.quality) }));
   }
+  // Annotations of a datastream in the window (data.read; on a public link only when the owner enabled them — the
+  // server answers an empty list otherwise). Errors never break the chart.
+  async function annotationsOf(id, t0, t1) {
+    try { const r = await api('GET', P(`/api/v1/annotations?datastream_id=${id}&from=${encodeURIComponent(new Date(t0).toISOString())}&to=${encodeURIComponent(new Date(t1).toISOString())}`)); return Array.isArray(r) ? r : []; } catch (_) { return []; }
+  }
   async function hourly(id, range) {
     const ms = RANGE_MS[range] || RANGE_MS['7d']; const from = new Date(Date.now() - ms).toISOString();
     const r = await api('GET', P(`/api/v1/observations?datastream_id=${id}&from=${encodeURIComponent(from)}&bucket=3600`));
@@ -71,6 +76,10 @@
   }
   // short texts inside widgets follow the user's (or the display's) language
   const TR = (s) => (window.ctrl32 && typeof ctrl32.t === 'function' ? ctrl32.t(s) : s);
+  // Codes shown to people (asset types, quantities, qualities: cold_room, energy_active_import, sensor_fault) read as
+  // words in the user's language; the codes themselves stay in URLs, filters and the API (0.72.0).
+  const codeLabel = (c) => TR(String(c ?? '').replace(/_+/g, ' ').trim());
+  const qualBadge = (q) => `<span class="badge ${q === 'ok' || q === 'backfilled' ? 'ok' : q === 'sensor_fault' ? 'bad' : 'warn'}">${esc(codeLabel(q))}</span>`;
   const rangeLabel = (r) => r === 'today' ? TR('today') : String(r || '').replace(/^(\d+)([hd])$/, '$1 $2');
   const aggLabel = (f) => TR({ avg: 'average', min: 'minimum', max: 'maximum', sum: 'sum', count: 'count', delta: 'change', none: 'raw' }[f] || f);
   function winOf(p, ctx) {
@@ -106,11 +115,19 @@
       if (s.showPoints) g += pts.map((p) => `<circle cx="${px(p.t).toFixed(1)}" cy="${yp(p.v).toFixed(1)}" r="2.2" fill="${c}"/>`).join('');
       g += pts.filter((p) => p.flagged).map((p) => `<circle cx="${px(p.t).toFixed(1)}" cy="${yp(p.v).toFixed(1)}" r="2.5" fill="#d97706"/>`).join('');
     });
+    // annotations (0.72.0): a band for a period, a dashed line with a flag for one moment; text in the tooltip
+    const anns = (o.annotations || []).map((a) => ({ a, t0: Date.parse(a.from), t1: Date.parse(a.to) })).filter((x) => x.t1 >= t0 && x.t0 <= t1);
+    const annTxt = (x) => `${TR(String(x.a.category || 'note').replace(/_/g, ' '))}: ${x.a.text}${x.a.series ? ' (' + x.a.series + ')' : ''}`;
+    for (const x of anns) { const x1 = Math.max(L, px(x.t0)), x2 = Math.min(W - R, px(x.t1)); const title = `<title>${esc(new Date(x.t0).toLocaleString(document.documentElement.lang || undefined) + ' · ' + annTxt(x))}</title>`;
+      g += x2 - x1 >= 3 ? `<rect class="ann" x="${x1.toFixed(1)}" y="${T}" width="${(x2 - x1).toFixed(1)}" height="${H - T - B}" fill="#d97706" opacity="0.14">${title}</rect>`
+        : `<g class="ann"><line x1="${x1.toFixed(1)}" x2="${x1.toFixed(1)}" y1="${T}" y2="${H - B}" stroke="#d97706" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/><path d="M${x1.toFixed(1)},${T} l7,0 l-7,9 Z" fill="#d97706">${title}</path></g>`; }
     g += `<line class="cursor" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-dasharray="2 3" visibility="hidden"/>`;
     el.style.display = 'flex'; el.style.flexDirection = 'column'; el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;flex:1;min-height:60px;display:block">${g}</svg><div class="chart-tip muted" style="font-size:12px;height:16px;line-height:16px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>`;
     const svg = el.querySelector('svg'), tip = el.querySelector('.chart-tip'), cursor = svg.querySelector('.cursor');
     svg.onmousemove = (e) => { const rect = svg.getBoundingClientRect(); const x = (e.clientX - rect.left) / rect.width * W; const t = t0 + (x - L) / (W - L - R) * (t1 - t0); cursor.setAttribute('x1', x.toFixed(1)); cursor.setAttribute('x2', x.toFixed(1)); cursor.setAttribute('visibility', 'visible');
-      tip.textContent = new Date(t).toLocaleString(document.documentElement.lang || undefined) + ' · ' + vis.map((s) => { const dd = s.decimals ?? o.decimals; let best = null; for (const p of s.points) if (!best || Math.abs(p.t - t) < Math.abs(best.t - t)) best = p; return best ? `${s.label}: ${num(best.v, dd)}${s.unit ? ' ' + s.unit : ''}${best.min != null ? ` (${num(best.min, dd)}–${num(best.max, dd)})` : ''}` : s.label + ': —'; }).join(' · '); };
+      tip.textContent = new Date(t).toLocaleString(document.documentElement.lang || undefined) + ' · ' + vis.map((s) => { const dd = s.decimals ?? o.decimals; let best = null; for (const p of s.points) if (!best || Math.abs(p.t - t) < Math.abs(best.t - t)) best = p; return best ? `${s.label}: ${num(best.v, dd)}${s.unit ? ' ' + s.unit : ''}${best.min != null ? ` (${num(best.min, dd)}–${num(best.max, dd)})` : ''}` : s.label + ': —'; }).join(' · ');
+      const near = (W - L - R) ? 6 / (W - L - R) * (t1 - t0) : 0; const hit = anns.filter((a) => t >= a.t0 - near && t <= a.t1 + near);
+      if (hit.length) tip.textContent += ' · ✎ ' + hit.map(annTxt).join(' | '); };
     svg.onmouseleave = () => { cursor.setAttribute('visibility', 'hidden'); tip.textContent = ''; };
   }
   function sparkline(points, c) { if (points.length < 2) return ''; const t0 = points[0].t, t1 = points[points.length - 1].t, vs = points.map((p) => p.v), lo = Math.min(...vs), hi = Math.max(...vs); return `<svg viewBox="0 0 120 30" style="width:120px;height:30px;display:block;flex:none"><path d="${points.map((p, k) => (k ? 'L' : 'M') + ((p.t - t0) / ((t1 - t0) || 1) * 120).toFixed(1) + ',' + (28 - ((p.v - lo) / ((hi - lo) || 1)) * 26).toFixed(1)).join(' ')}" fill="none" stroke="${c}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`; }
@@ -161,6 +178,7 @@
     const all = await datastreams(); const win = winOf(p, ctx); const cfg = Array.isArray(p.series) ? p.series : []; let raised = false, bucket = 0;
     const list = await Promise.all(ids(ctx).map(async (id, i) => { const d = dsInfo(all, id), c = cfg[i] || {}; const r = await seriesWin(id, win.t0, win.t1, p.agg, p.agg_interval); raised = raised || r.plan.raised; bucket = r.plan.bucket;
       return { label: c.label || dsLabel(d), unit: c.unit != null && c.unit !== '' ? c.unit : d.unit, color: c.color || color(i), style: c.style || '', axis: c.axis || 'left', showPoints: !!c.points, fill: !!c.fill, hidden: !!c.hidden, decimals: c.decimals, points: r.points }; }));
+    const anns = p.annotations === false ? [] : (await Promise.all(ids(ctx).map((id, i) => annotationsOf(id, win.t0, win.t1).then((r) => r.map((a) => Object.assign({}, a, { series: ids(ctx).length > 1 ? list[i].label : '' })))))).flat();
     const pos = p.legend === false ? 'none' : (p.legend_pos || 'top'); const lv = Array.isArray(p.legend_values) ? p.legend_values : [];
     const aggTxt = aggLabel(p.agg && p.agg !== 'auto' ? p.agg : 'avg') + (bucket ? '/' + (bucket >= 3600 ? bucket / 3600 + ' h' : Math.round(bucket / 60) + ' min') : '');
     const info = `<span class="dw-win">${esc(win.label)}${bucket ? ' · ' + esc(aggTxt) : ''}${raised ? ' · <span title="interval raised to keep at most 2000 points">interval raised</span>' : ''}</span>`;
@@ -169,7 +187,7 @@
       const side = pos === 'right';
       el.innerHTML = `<div style="display:flex;flex-direction:${side ? 'row' : 'column'};flex:1;min-height:0;gap:6px">${pos === 'bottom' || side ? '' : `<div class="muted dw-legend" style="font-size:12px;margin-bottom:2px;display:flex;justify-content:space-between;flex-wrap:wrap"><span>${legend}</span>${info}</div>`}<div class="chart-box" style="flex:1;min-height:0;min-width:0"></div>${pos === 'bottom' ? `<div class="muted dw-legend" style="font-size:12px;display:flex;justify-content:space-between;flex-wrap:wrap"><span>${legend}</span>${info}</div>` : ''}${side ? `<div class="muted dw-legend" style="font-size:12px;display:flex;flex-direction:column;gap:4px;max-width:40%;overflow:auto">${legend}${info}</div>` : ''}${pos === 'none' ? `<div class="muted" style="font-size:11px;text-align:right">${info}</div>` : ''}</div>`;
       el.style.display = 'flex'; el.style.flexDirection = 'column';
-      renderChart(el.querySelector('.chart-box'), list, { t0: win.t0, t1: win.t1, yMin: p.y_min, yMax: p.y_max, decimals: p.decimals, warn: p.warn, action: p.action, style: p.chart, band: p.band, height: Math.max(160, ctx.px_h - 60) });
+      renderChart(el.querySelector('.chart-box'), list, { t0: win.t0, t1: win.t1, yMin: p.y_min, yMax: p.y_max, decimals: p.decimals, warn: p.warn, action: p.action, style: p.chart, band: p.band, annotations: anns.filter((a) => !list[ids(ctx).indexOf(a.datastream_id)] || !list[ids(ctx).indexOf(a.datastream_id)].hidden), height: Math.max(160, ctx.px_h - 60) });
       for (const x of el.querySelectorAll('.dw-leg')) x.onclick = (e) => { e.stopPropagation(); const s = list[+x.dataset.s]; s.hidden = !s.hidden; draw(); };
     };
     draw();
@@ -195,7 +213,7 @@
   W.value = async (el, p, ctx) => {
     const all = await datastreams(); const list = ids(ctx); const lv = await latest(list);
     const cards = await Promise.all(list.map(async (id, i) => { const d = sInfo(all, id, i, p), v = lv[id]; if (d.hidden) return ''; const pts = (p.sparkline === false || ctx.w < 3) ? [] : await series(id, '6h').catch(() => []); const cf = i === 0 && ctx.cond ? ctx.cond(v && v.value) : condFormat(null, p, v && v.value); const c = cf.value || lvlColor(level(v && v.value, p), p.value_color || p.text_color || d.color, p);
-      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:2px 0;${i ? 'border-top:1px solid var(--line)' : ''}"><div style="min-width:0;flex:1"><div style="font-size:var(--dw-value,1.6em);font-weight:600;color:${c};line-height:1.1;white-space:nowrap">${v ? num(v.value, d.dec) : '—'} <span style="font-size:0.5em;font-weight:400;color:var(--muted)">${esc(d.unit)}</span></div><div class="muted dw-lbl" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(dsLabel(d))}">${esc(dsLabel(d))}${v ? ' · ' + fmt(v.measured_at) + (v.quality !== 'ok' ? ' · ' + esc(v.quality) : '') : ' · no value yet'}</div></div>${sparkline(pts, c)}</div>`; }));
+      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:2px 0;${i ? 'border-top:1px solid var(--line)' : ''}"><div style="min-width:0;flex:1"><div style="font-size:var(--dw-value,1.6em);font-weight:600;color:${c};line-height:1.1;white-space:nowrap">${v ? num(v.value, d.dec) : '—'} <span style="font-size:0.5em;font-weight:400;color:var(--muted)">${esc(d.unit)}</span></div><div class="muted dw-lbl" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(dsLabel(d))}">${esc(dsLabel(d))}${v ? ' · ' + fmt(v.measured_at) + (v.quality !== 'ok' ? ' · ' + esc(codeLabel(v.quality)) : '') : ' · no value yet'}</div></div>${sparkline(pts, c)}</div>`; }));
     el.style.justifyContent = list.length === 1 ? 'center' : 'flex-start'; el.innerHTML = cards.join('');
   };
   W.gauge = async (el, p, ctx) => {
@@ -213,7 +231,7 @@
   };
   W.table = async (el, p, ctx) => {
     const all = await datastreams(); const list = ids(ctx); const lv = await latest(list);
-    el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Asset</th><th>Datastream</th><th style="text-align:right">Value</th><th>Unit</th><th>Measured</th><th>Quality</th></tr></thead><tbody>${list.map((id, i) => { const d = sInfo(all, id, i, p), v = lv[id]; if (d.hidden) return ''; const lvl = level(v && v.value, p); return `<tr><td>${esc(d.asset)}</td><td>${esc(d.label || d.key)}</td><td style="text-align:right;font-weight:600;color:${lvlColor(lvl, 'inherit', p)}">${v ? num(v.value, d.dec) : '—'}</td><td>${esc(d.unit)}</td><td>${v ? fmt(v.measured_at) : '—'}</td><td>${v ? (v.quality !== 'ok' ? `<span class="badge warn">${esc(v.quality)}</span>` : '<span class="badge ok">ok</span>') : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
+    el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Asset</th><th>Datastream</th><th style="text-align:right">Value</th><th>Unit</th><th>Measured</th><th>Quality</th></tr></thead><tbody>${list.map((id, i) => { const d = sInfo(all, id, i, p), v = lv[id]; if (d.hidden) return ''; const lvl = level(v && v.value, p); return `<tr><td>${esc(d.asset)}</td><td>${esc(d.label || d.key)}</td><td style="text-align:right;font-weight:600;color:${lvlColor(lvl, 'inherit', p)}">${v ? num(v.value, d.dec) : '—'}</td><td>${esc(d.unit)}</td><td>${v ? fmt(v.measured_at) : '—'}</td><td>${v ? qualBadge(v.quality) : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
   };
   W.alarms = async (el, p, ctx) => {
     const al = inScope(await api('GET', P('/api/v1/alarms')), ctx); const lim = p.limit || 10; const active = al.filter((a) => !a.cleared_at); const rows = active.concat(al.filter((a) => a.cleared_at)).slice(0, lim);
@@ -489,7 +507,7 @@
     live();
     return refresh;
   }
-  window.ctrl32Widgets = { tr: TR, aggLabel, rangeLabel, isPublic: () => !!PUBLIC, isDisplay: () => PUBLIC.startsWith('~'), apiPath: P, render, renderChart, setPublic, series, datastreams, latest, devices, loadLeaflet, makeMap, mapConfig, RANGE_MS, labelOf, isCanvas, fitMimic, placeCanvas, MIMIC_TYPES, register, condFormat, icon: ICON, get types() { return Object.keys(W); },
+  window.ctrl32Widgets = { tr: TR, aggLabel, rangeLabel, codeLabel, qualBadge, isPublic: () => !!PUBLIC, isDisplay: () => PUBLIC.startsWith('~'), apiPath: P, render, renderChart, setPublic, series, datastreams, latest, devices, loadLeaflet, makeMap, mapConfig, RANGE_MS, labelOf, isCanvas, fitMimic, placeCanvas, MIMIC_TYPES, register, condFormat, icon: ICON, get types() { return Object.keys(W); },
     defaultFilters, filtersActive, queryDS, queryParams, maxRows, inScope, devScope,
     // helpers for renderers registered from other files (widgets-more.js)
     util: { esc, api, fmt, num, color, COLORS, dsInfo, sInfo, dsLabel, ids, level, lvlColor, niceTicks, timeTicks, sparkline, seriesWin, winOf, statsOf, hourly, ctlHead, ctlSend, ctlCurrent, reasonInput, canCmd, P } };

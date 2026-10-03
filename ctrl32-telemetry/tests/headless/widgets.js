@@ -46,7 +46,8 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
     for (const k of Object.keys(ds)) await post('/api/v1/devices/' + dev.id + '/datastreams', {datastream_id: ds[k]});
     const cat = await (await fetch('/api/v1/dashboards/catalog',{credentials:'same-origin'})).json();
     const all = [ds.temp, ds.rh, ds.state];
-    const widgets = cat.widgets.map((d, i) => ({id: 't' + i, type: d.type, geometry: {x: (i % 3) * 4, y: 20 + Math.floor(i / 3) * 3, w: 4, h: 3},
+    // a dashboard holds at most 60 widgets: the object counting widgets (0.71.0) are covered by tests/headless/counting.js
+    const widgets = cat.widgets.filter((d) => !/^counting_|^vehicle_speeds$/.test(d.type)).map((d, i) => ({id: 't' + i, type: d.type, geometry: {x: (i % 3) * 4, y: 20 + Math.floor(i / 3) * 3, w: 4, h: 3},
       bindings: Object.fromEntries((d.binds || []).map((b) => [b, b === 'devices' ? (['map','devices'].includes(d.type) ? [] : [dev.id]) : (d.type === 'radar' ? all : d.type === 'compass' ? [ds.dir, ds.rh] : [ds.temp])])),
       params: Object.assign({title: 'T ' + d.type}, d.type === 'setpoint' || d.type === 'switch' || d.type === 'button' || d.type === 'knob' || d.type === 'slider' || d.type === 'round_switch' ? {key: 'temp'} : {})}));
     widgets.push(

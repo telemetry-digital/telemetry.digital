@@ -111,7 +111,7 @@
 
 <section data-section="cameras">
   <div class="page-head"><h1>Counting with cameras</h1></div>
-  <div class="card muted" id="camNote" hidden></div>
+  <div class="card" id="acCard"><h2 style="margin-top:0">Detector installation</h2><div id="acBody"></div></div>
   <p class="muted">The server finds people and vehicles in the camera's picture and counts them when they cross a line you draw. The picture is analysed on this server and never stored; only the numbers are. Off until you switch it on for a camera.</p>
   <div class="table-wrap card"><table id="camTable"><thead><tr><th>Camera</th><th>Counting</th><th>Lines</th><th>Speed sections</th><th>State</th><th class="num">Pictures/s</th><th class="num">CPU</th><th></th></tr></thead><tbody></tbody></table></div>
   <div id="editorCard" class="card" hidden></div>
@@ -181,6 +181,7 @@
 </main>
 <script src="/app.js"></script>
 <script src="/videoplayer.js"></script>
+<script src="/analytics-check.js"></script>
 <script src="/counting-editor.js"></script>
 <script src="/counting.js"></script>
 </body>

@@ -98,6 +98,52 @@ func (e *Engine) Installed() (bool, string) {
 	return true, ""
 }
 
+// selfCheckTTL is how long a self-check result is reused (the pages ask on every load).
+const selfCheckTTL = 5 * time.Minute
+
+// SelfCheck examines the detector installation in a separate process (`analytics-worker -selfcheck`), so ONNX Runtime
+// is never loaded into the server; the result is cached for selfCheckTTL unless refresh is set.
+func (e *Engine) SelfCheck(ctx context.Context, refresh bool) analytics.CheckResult {
+	e.checkMu.Lock()
+	defer e.checkMu.Unlock()
+	if !refresh && e.check != nil && time.Since(e.checkAt) < selfCheckTTL {
+		return *e.check
+	}
+	p := analytics.CheckPaths{FFmpeg: e.cfg.FFmpeg, ONNXRuntime: e.cfg.ONNXRuntime, ModelNano: e.cfg.ModelNano, ModelTiny: e.cfg.ModelTiny,
+		NanoSHA256: e.cfg.NanoSHA256, TinySHA256: e.cfg.TinySHA256}
+	res, err := runSelfCheck(ctx, p)
+	if err != nil {
+		res = analytics.CheckResult{Checked: time.Now().UTC(), Components: []analytics.Component{{Name: "worker", State: analytics.StateError, Detail: err.Error()}}}
+	}
+	e.check, e.checkAt = &res, time.Now()
+	return res
+}
+
+func runSelfCheck(ctx context.Context, p analytics.CheckPaths) (analytics.CheckResult, error) {
+	var res analytics.CheckResult
+	exe, err := os.Executable()
+	if err != nil {
+		return res, err
+	}
+	raw, _ := json.Marshal(p)
+	cctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(cctx, exe, "analytics-worker", "-selfcheck", "-json", "-paths", string(raw))
+	var stderr strings.Builder
+	cmd.Stderr = &capped{b: &stderr, n: 4096}
+	out, err := cmd.Output() // exit code 1 = not ready: still a valid answer on stdout
+	if jerr := json.Unmarshal(out, &res); jerr != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" && err != nil {
+			msg = err.Error()
+		} else if msg == "" {
+			msg = jerr.Error()
+		}
+		return res, fmt.Errorf("analytics self-check: %s", msg)
+	}
+	return res, nil
+}
+
 func (e *Engine) setStatus(id string, f func(*CameraStatus)) {
 	e.mu.Lock()
 	defer e.mu.Unlock()

@@ -57,13 +57,15 @@
         for (const [k, list] of Object.entries(v.attr || {})) for (const x of list || []) q.append('f_attr', k + '=' + x);
         if (v.q) q.set('f_q', v.q);
         try { facets = await ctrl32.api('GET', WG().apiPath('/api/v1/datastreams/facets') + '?' + q); } catch (e) { facets = {}; }
+        // asset types and quantities are codes: shown as words in the user's language, the value (URL) stays the code
+        for (const k of ['asset_type', 'quantity']) for (const o of facets[k] || []) o.label = WG().codeLabel(o.value);
       }
       draw();
     }
     function summary(d, v) {
       if (!v.length) return T('All');
       const opts2 = facets[facetKind(d)] || [];
-      const names = v.map((x) => { const o = opts2.find((o) => o.value === x); return o ? o.label : (d.kind === 'site' || d.kind === 'device' ? '…' : x); });
+      const names = v.map((x) => { const o = opts2.find((o) => o.value === x); return o ? o.label : (d.kind === 'site' || d.kind === 'device' ? '…' : d.kind === 'asset_type' || d.kind === 'quantity' ? WG().codeLabel(x) : x); });
       return names.length > 2 ? names.length + ' ' + T('selected') : names.join(', ');
     }
     function draw() {

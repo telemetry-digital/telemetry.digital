@@ -53,6 +53,10 @@ type telValue struct {
 	Value      *float64        `json:"value"`
 	ValueJSON  json.RawMessage `json:"value_json,omitempty"`
 	Quality    string          `json:"quality"`
+	// latest value only: older than the expected interval allows (computed, quality.go); Quality then reads "stale"
+	// for a good value and StoredQuality keeps the stored one
+	Stale         bool   `json:"stale,omitempty"`
+	StoredQuality string `json:"stored_quality,omitempty"`
 }
 
 type telStats struct {
@@ -299,7 +303,8 @@ func (s *Server) deviceTelemetry(w http.ResponseWriter, r *http.Request) {
 	if len(ids) > 0 {
 		// latest value of each datastream: one index probe per datastream
 		rows, err := s.pool.Query(ctx, `
-			SELECT d.id::text, l.measured_at, l.received_at, l.value::float8, l.value_json, l.quality
+			SELECT d.id::text, l.measured_at, l.received_at, l.value::float8, l.value_json, l.quality,
+			       COALESCE((SELECT EXTRACT(EPOCH FROM ds.expected_interval) FROM core.datastream ds WHERE ds.id = d.id), 0)::float8
 			FROM unnest($1::uuid[]) AS d(id)
 			JOIN LATERAL (SELECT measured_at, received_at, value, value_json, quality FROM core.observation o
 			              WHERE o.datastream_id = d.id ORDER BY o.measured_at DESC LIMIT 1) l ON true`, ids)
@@ -311,12 +316,19 @@ func (s *Server) deviceTelemetry(w http.ResponseWriter, r *http.Request) {
 			var id string
 			var v telValue
 			var rAt time.Time
-			if err := rows.Scan(&id, &v.At, &rAt, &v.Value, &v.ValueJSON, &v.Quality); err != nil {
+			var expected float64
+			if err := rows.Scan(&id, &v.At, &rAt, &v.Value, &v.ValueJSON, &v.Quality, &expected); err != nil {
 				rows.Close()
 				writeErr(w, 500, "scan failed")
 				return
 			}
 			v.ReceivedAt = &rAt
+			if q, st := liveQuality(v.Quality, v.At, expected, time.Now()); st {
+				v.Stale = true
+				if q != v.Quality {
+					v.StoredQuality, v.Quality = v.Quality, q
+				}
+			}
 			if k := byDS[id]; k != nil {
 				k.Last = &v
 			}
