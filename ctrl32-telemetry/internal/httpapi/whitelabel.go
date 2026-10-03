@@ -389,3 +389,17 @@ func (s *Server) getWhiteLabel(w http.ResponseWriter, r *http.Request) {
 	out["active"] = s.activeWhiteLabel(r, orgOf(p), b) != nil
 	writeJSON(w, 200, out)
 }
+
+// reportAccent is the primary colour of the organization's theme for report underlines (the same red as the web by
+// default).
+func (s *Server) reportAccent(ctx context.Context, orgID string) string {
+	var raw []byte
+	if err := s.pool.QueryRow(ctx, `SELECT branding FROM core.organization WHERE id = $1::uuid`, orgID).Scan(&raw); err != nil {
+		return ""
+	}
+	var b branding
+	if json.Unmarshal(raw, &b) != nil || !hexColor.MatchString(b.Theme.Primary) {
+		return ""
+	}
+	return b.Theme.Primary
+}
