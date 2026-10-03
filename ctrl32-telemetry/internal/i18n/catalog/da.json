@@ -2370,6 +2370,8 @@
  "min": "min",
  "max": "maks",
  "samples": "målinger",
+ "total": "sum",
+ "total and max": "sum og maks",
  "out of limits": "uden for grænser",
  "Total": "I alt",
  "Previous": "Forrige",

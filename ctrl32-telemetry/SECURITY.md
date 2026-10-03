@@ -10,10 +10,10 @@ or a re-run of the installer); every release lists its changes in `JOURNAL.md`.
 
 ## Reporting a vulnerability
 
-- **Preferred:** a private security advisory on GitHub once the repository is public
-  (`https://github.com/telemetry-digital/ctrl32-telemetry/security/advisories/new`).
-- **Until then:** the contact published by each installation in `/.well-known/security.txt`
-  (the operator sets it with `[security] contact` in `config.toml`; the product's advisory link is always listed).
+- **The product:** e-mail `info@telemetry.digital` (subject starting with "security"). Every installation lists it
+  in `/.well-known/security.txt` and serves this policy at `/security-policy`.
+- **One installation:** the operator's own contact, listed first in its `/.well-known/security.txt` (set with
+  `[security] contact` in `config.toml`), for problems of that installation rather than of the product.
 - Please include the version (`/healthz` reports it), the steps to reproduce, and the impact you see. Do not include
   data from a production installation that is not yours.
 

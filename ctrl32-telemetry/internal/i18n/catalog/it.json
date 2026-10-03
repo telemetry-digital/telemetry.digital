@@ -2370,6 +2370,8 @@
  "min": "min",
  "max": "max",
  "samples": "campioni",
+ "total": "totale",
+ "total and max": "totale e max",
  "out of limits": "fuori limiti",
  "Total": "Totale",
  "Previous": "Precedente",

@@ -1,8 +1,9 @@
 // Headless Chrome: fixes found while writing the reference documentation (0.63.8).
 //   - the video player's "Save picture" burns the privacy masks into the picture (a stand-in WebSocket feeds the
 //     player a masks message and a white JPEG; the left half must come out black)
-//   - New alarm rule: the escalation policy list is real options, sensor_fault is not offered; the datastream's
-//     "New rule version" keeps the current escalation policy
+//   - New alarm rule: the escalation policy list is real options, every evaluated type is offered
+//     (sensor_fault since 0.67.0); the datastream's "New rule version" keeps the
+//     current escalation policy
 //   - the dashboard editor gives a Pipe no title setting; Setpoint refuses a typed value outside min–max; Knob and
 //     Slider show the datastream's unit when their unit is empty; the Alarms widget has an Acknowledge column
 // Screenshots fixes-*.png go to OUT.
@@ -69,7 +70,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await ev(`document.querySelector('#newRuleBtn').click()`);
   expect("new rule dialog open", await until(`document.querySelector('#ruleDlg').open`), true);
   const dlg = await ev(`(() => { const f = document.querySelector('#ruleNew'); return { types: [...f.type.options].map(o => o.value).join(), pol: [...f.policy.options].map(o => o.textContent).join('|'), html: f.innerHTML.includes('\${POLS') }; })()`);
-  expect("types offered (no sensor_fault)", dlg && dlg.types, "high,low,low_battery,power_loss,door_open,comm_loss");
+  expect("types offered (the evaluated ones, sensor_fault since 0.67)", dlg && dlg.types, "high,low,low_battery,power_loss,door_open,comm_loss,sensor_fault");
   expect("escalation policy: real options, no template text", dlg && !dlg.html && !dlg.pol.includes("POLS") && dlg.pol.length > 0, true);
   await ev(`(() => { const f = document.querySelector('#ruleNew'); f.type.value = 'door_open'; f.type.dispatchEvent(new Event('change')); })()`);
   expect("door_open: limits off, hint shown", await ev(`(() => { const f = document.querySelector('#ruleNew'); return f.warning.disabled && f.action.disabled && f.querySelector('.rule-hint').textContent.length > 10; })()`), true);

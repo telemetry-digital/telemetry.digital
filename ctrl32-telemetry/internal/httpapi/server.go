@@ -160,6 +160,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.HandleFunc("GET /tiles/{z}/{x}/{y}", s.tile)
 	mux.HandleFunc("GET /.well-known/security.txt", s.securityTxt)
 	mux.HandleFunc("GET /security.txt", s.securityTxtRedirect)
+	mux.HandleFunc("GET /security-policy", s.securityPolicy)
 	mux.Handle("GET /metrics", s.require("data.read", s.metricsHandler))
 	mux.HandleFunc("GET /api/v1/i18n/languages", s.getLanguages)
 	mux.HandleFunc("GET /api/v1/i18n/{locale}", s.getCatalog)

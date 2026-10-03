@@ -2370,6 +2370,8 @@
  "min": "мин",
  "max": "макс",
  "samples": "проби",
+ "total": "сума",
+ "total and max": "сума и макс",
  "out of limits": "извън границите",
  "Total": "Общо",
  "Previous": "Предишен",

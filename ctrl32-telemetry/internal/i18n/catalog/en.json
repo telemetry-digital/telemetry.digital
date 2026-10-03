@@ -2370,6 +2370,8 @@
  "min": "min",
  "max": "max",
  "samples": "samples",
+ "total": "total",
+ "total and max": "total and max",
  "out of limits": "out of limits",
  "Total": "Total",
  "Previous": "Previous",

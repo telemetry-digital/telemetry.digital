@@ -2370,6 +2370,8 @@
  "min": "min",
  "max": "max",
  "samples": "eșantioane",
+ "total": "total",
+ "total and max": "total și max",
  "out of limits": "în afara limitelor",
  "Total": "Total",
  "Previous": "Anterior",

@@ -2370,6 +2370,8 @@
  "min": "мін",
  "max": "макс",
  "samples": "вибірки",
+ "total": "сума",
+ "total and max": "сума і макс",
  "out of limits": "поза межами",
  "Total": "Разом",
  "Previous": "Попередній",

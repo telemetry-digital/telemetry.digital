@@ -11,26 +11,38 @@ import (
 	"strings"
 	"time"
 
+	ctrl32telemetry "github.com/telemetry-digital/ctrl32-telemetry"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/metrics"
 )
 
+// productSecurityContact is where vulnerabilities of the product are reported (public, unlike the source repository).
+const productSecurityContact = "mailto:info@telemetry.digital"
+
 // securityTxt serves RFC 9116 security.txt (URS H-17): where to report a vulnerability in this installation.
-// The operator's own contact comes from `[security] contact`; the product's advisory page is always listed.
+// The operator's own contact comes from `[security] contact`; the product's contact is always listed, and the policy
+// is the product's SECURITY.md served by the installation itself (/security-policy), so every link is reachable.
 func (s *Server) securityTxt(w http.ResponseWriter, r *http.Request) {
 	var b strings.Builder
 	if c := strings.TrimSpace(s.cfg.Security.Contact); c != "" {
 		fmt.Fprintf(&b, "Contact: %s\n", c)
 	}
-	fmt.Fprintf(&b, "Contact: %s/security/advisories/new\n", productGitHub)
+	fmt.Fprintf(&b, "Contact: %s\n", productSecurityContact)
 	fmt.Fprintf(&b, "Expires: %s\n", time.Now().UTC().AddDate(1, 0, 0).Format(time.RFC3339))
 	b.WriteString("Preferred-Languages: en, sk\n")
 	if base := strings.TrimRight(s.cfg.HTTP.BaseURL, "/"); base != "" {
 		fmt.Fprintf(&b, "Canonical: %s/.well-known/security.txt\n", base)
 	}
-	fmt.Fprintf(&b, "Policy: %s/blob/main/SECURITY.md\n", productGitHub)
+	fmt.Fprintf(&b, "Policy: %s/security-policy\n", s.publicBase(r))
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	_, _ = w.Write([]byte(b.String()))
+}
+
+// securityPolicy serves the product's security policy (SECURITY.md) as plain text.
+func (s *Server) securityPolicy(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	_, _ = w.Write([]byte(ctrl32telemetry.SecurityPolicy))
 }
 
 func (s *Server) securityTxtRedirect(w http.ResponseWriter, r *http.Request) {
