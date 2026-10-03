@@ -90,7 +90,8 @@ func ValidEndpoint(s string) error {
 	return nil
 }
 
-// ValidTunnelURL checks the hub's WebSocket URL: https, or http only towards the loopback address (tests).
+// ValidTunnelURL checks the hub's WebSocket URL: https, or http only towards the loopback (tests and development on one
+// machine): a loopback IP address or the name "localhost", which resolves only to the loopback (RFC 6761).
 func ValidTunnelURL(s string) error {
 	u, err := url.Parse(s)
 	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
@@ -99,13 +100,22 @@ func ValidTunnelURL(s string) error {
 	switch u.Scheme {
 	case "https":
 	case "http":
-		if ip, err := netip.ParseAddr(u.Hostname()); err != nil || !ip.IsLoopback() {
+		if !isLoopbackHost(u.Hostname()) {
 			return errors.New("tunnel URL must use https")
 		}
 	default:
 		return errors.New("tunnel URL must use https")
 	}
 	return nil
+}
+
+// isLoopbackHost reports whether host is a loopback IP address or exactly "localhost" (any case, optional trailing dot).
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(strings.TrimSuffix(host, "."), "localhost") {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	return err == nil && ip.IsLoopback()
 }
 
 // ParseUplinkToken decodes and checks a token pasted on the customer server. Nothing in it is trusted.
