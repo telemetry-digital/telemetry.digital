@@ -4,8 +4,11 @@
 
 #let load() = json("data.json")
 
-// accent colour of plain report figures (underlines)
-#let accent = rgb("#1f6feb")
+// accent colour of plain report figures: the primary colour of the organization's theme (red by default, as on the web)
+#let accent-of(d) = {
+  let a = d.at("accent", default: "")
+  if type(a) == str and a.len() == 7 and a.starts-with("#") { rgb(a) } else { rgb("#e30613") }
+}
 
 #let cell(v) = {
   if v == none { "" } else if type(v) == str { v } else if type(v) == bool { if v { "true" } else { "false" } } else if type(v) == int or type(v) == float { str(v) } else { repr(v) }
@@ -66,7 +69,7 @@
   let pairs = d.summary.pairs().filter(((k, v)) => keys.len() == 0 or k in keys)
   if pairs.len() > 0 {
     // plain figures across the full width, each underlined in the accent colour (no boxes)
-    let items = pairs.map(((k, v)) => block(width: 100%, inset: (bottom: 3pt), stroke: (bottom: 1.2pt + accent))[
+    let items = pairs.map(((k, v)) => block(width: 100%, inset: (bottom: 3pt), stroke: (bottom: 1.2pt + accent-of(d)))[
       #text(size: 7.5pt, fill: luma(100))[#upper(k)] #linebreak() #text(size: 11pt, weight: "bold")[#cell(v)]])
     grid(columns: (1fr,) * pairs.len(), column-gutter: 10pt, ..items)
     v(10pt)

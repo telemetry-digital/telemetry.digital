@@ -125,6 +125,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	files := http.FileServer(http.FS(sub))
 	if rep != nil {
 		rep.Product = s.reportProduct
+		rep.Accent = s.reportAccent
 	}
 
 	// public

@@ -50,6 +50,7 @@ type Data struct {
 	Title       string           `json:"title"`
 	Subtitle    string           `json:"subtitle"`
 	Org         string           `json:"org"`
+	Accent      string           `json:"accent"`  // primary colour of the organization's theme (#rrggbb); underlines in reports
 	Product     string           `json:"product"` // footer product name; "ctrl32 · telemetry" unless white-labelled
 	Logo        string           `json:"logo"`    // asset file name ("logo.png"/"logo.svg") or ""
 	Locale      string           `json:"locale"`
@@ -132,6 +133,8 @@ type Engine struct {
 
 	// Product names the product in report footers for an organization (white labeling, spec 007); nil = default.
 	Product func(ctx context.Context, orgID string) string
+	// Accent gives the primary colour of an organization's theme (#rrggbb) for report underlines; nil or "" = default.
+	Accent func(ctx context.Context, orgID string) string
 }
 
 const defaultProduct = "ctrl32 · telemetry"
@@ -324,6 +327,9 @@ func (e *Engine) Render(ctx context.Context, orgID string, d Data, assets map[st
 			d.Product = p
 		}
 	}
+	if e.Accent != nil && orgID != "" {
+		d.Accent = e.Accent(ctx, orgID)
+	}
 	dataJSON, err := json.Marshal(d)
 	if err != nil {
 		return nil, err
@@ -385,6 +391,9 @@ func (e *Engine) RenderBuiltin(ctx context.Context, orgID string, d Data, assets
 		if p := e.Product(ctx, orgID); p != "" {
 			d.Product = p
 		}
+	}
+	if e.Accent != nil && orgID != "" {
+		d.Accent = e.Accent(ctx, orgID)
 	}
 	return e.compile(ctx, t.Body, d, assets)
 }
