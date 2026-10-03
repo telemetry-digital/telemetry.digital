@@ -338,13 +338,16 @@ export type Dashboard = {
 };
 
 export type DashboardSpec = {
+  aliases?: (Record<string, unknown>)[];
   filters?: (Record<string, unknown>)[];
   /** screen-v1 */
   format?: string;
+  key_filters?: (Record<string, unknown>)[];
   /** {type: grid, columns: 12, row_height} */
   layout?: Record<string, unknown>;
   /** viewers of a public link and displays see the annotations of the charts (default false) */
   public_annotations?: boolean;
+  states?: (Record<string, unknown>)[];
   widgets?: (Record<string, unknown>)[];
 };
 
@@ -4082,6 +4085,33 @@ export class Ctrl32Client {
   })[]>('GET', `/api/v1/entities`, query, undefined, false);
   }
 
+  /** Entities of an alias, with a key filter
+   *
+   * Resolves an entity alias of a dashboard (0.73.0) within the organization: `alias` is the JSON of one alias — `{kind: single, entity: {type, id}}`, `{kind: list, entity_type, ids}`, `{kind: type, entity_type: device|asset|datastream, types}` (device profiles, asset types or quantities; `energy*` matches a prefix), `{kind: name, entity_type, match: starts|contains|ends, text}`, `{kind: hierarchy, root: {type: asset|site, id} or root_current: true, depth: 1–10, entity_type: device|asset|datastream, asset_type}`, `{kind: current, entity_type, default}` (the entity of the dashboard state given in `current`) or `{kind: query, source}` (a query source of 0.68.0). `filter` (JSON of a key filter `{match: all|any, rules: [{source: value|attribute|quality|stale|alarm, key, type: number|string|boolean, op: eq|ne|gt|ge|lt|le|between|contains|starts|ends|in, value, value2, dynamic: {from: filter|self|current|org, key}} or a group {match, rules}]}`) keeps only the matching entities; `highlight` (a key filter too) marks them with `match`. `want` answers with the entities, their datastreams (narrowed by `quantity` and `key`) or their devices. At most 2000 candidates, 500 rows.
+   * 
+   * Requires permission `data.read`. */
+  getEntitiesQuery(query: { alias: string; /** JSON of the alias */ filter?: string; /** JSON of a key filter: only matching entities */ highlight?: string; /** JSON of a key filter: mark matching rows */ current?: string; /** type:id — the current entity of the dashboard state */ want?: string; /** entities (default), datastreams or devices */ quantity?: string; /** comma-separated quantities of the datastreams (want=datastreams|devices) */ key?: string; /** comma-separated datastream keys (want=datastreams|devices) */ values?: string; /** comma-separated datastream keys whose latest value each entity carries */ attrs?: string; /** comma-separated attribute names each entity carries (the entity's, else its asset's, else its site's) */ f_value?: string; /** key=value of a value filter of the dashboard (dynamic values of key filters), repeatable */ follow?: string; /** 1: narrow by the dashboard filters (f_site, f_asset_type, f_quantity, f_device, f_attr, f_q as in GET /api/v1/datastreams/query) */ limit?: number; /** 1–500, default 100 */ latest?: string; /** 1 (want=datastreams): latest value, alarm, limits */ from?: string; /** window start (want=datastreams) */ to?: string; /** window end */ }): Promise<{
+    items?: (Record<string, unknown>)[];
+    limit?: number;
+    /** all matches */
+    total?: number;
+    /** more matches than limit */
+    truncated?: boolean;
+    /** entity type of the items: device, asset, datastream or site */
+    type?: string;
+  }> {
+    return this.request<{
+    items?: (Record<string, unknown>)[];
+    limit?: number;
+    /** all matches */
+    total?: number;
+    /** more matches than limit */
+    truncated?: boolean;
+    /** entity type of the items: device, asset, datastream or site */
+    type?: string;
+  }>('GET', `/api/v1/entities/query`, query, undefined, false);
+  }
+
   /** Entity with its discovery config
    *
    * Requires permission `data.read`. */
@@ -5534,6 +5564,39 @@ export class Ctrl32Client {
     return this.request<Record<string, unknown>>('GET', `/api/v1/openapi.json`, undefined, undefined, false);
   }
 
+  /** Attributes of the organization
+   *
+   * Free attributes of the organization (for example `max_temp`), used as dynamic values of the key filters of dashboards.
+   * 
+   * Requires permission `data.read`. */
+  getOrganizationAttributes(): Promise<{
+    /** name → text, number or boolean */
+    attributes?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    /** name → text, number or boolean */
+    attributes?: Record<string, unknown>;
+  }>('GET', `/api/v1/organization/attributes`, undefined, undefined, false);
+  }
+
+  /** Set the attributes of the organization
+   *
+   * Replaces all attributes (at most 50; names of letters, digits, . _ -; values text up to 200 characters, numbers or true/false). Audited.
+   * 
+   * Requires permission `config.write`. */
+  putOrganizationAttributes(body: {
+    /** name → text, number or boolean */
+    attributes: Record<string, unknown>;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    attributes?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    attributes?: Record<string, unknown>;
+  }>('PUT', `/api/v1/organization/attributes`, undefined, body, false);
+  }
+
   /** List organizations
    *
    * Requires permission `system.admin`. */
@@ -5993,6 +6056,31 @@ export class Ctrl32Client {
   /** Devices shown in the shared dashboard */
   getPublicTokenDevices(token: string): Promise<Device[]> {
     return this.request<Device[]>('GET', `/api/v1/public/${encodeURIComponent(token)}/devices`, undefined, undefined, false);
+  }
+
+  /** Entities of a widget of the shared dashboard
+   *
+   * The alias, key filter, highlight and columns of the widget `widget` come from the stored dashboard, never from the request. Everything stays within the dashboard's scope (what its aliases select without key filters, its bound and query datastreams); `current` (the entity of the viewer's dashboard state) is ignored outside it. Value filters marked public take the viewer's `f_value`, others their default. Answer as `GET /api/v1/entities/query`. */
+  getPublicTokenEntitiesQuery(token: string, query: { widget: string; /** widget id */ current?: string; /** type:id */ f_site?: string; f_asset_type?: string; f_quantity?: string; f_device?: string; f_attr?: string; /** key=value, repeatable */ f_q?: string; f_value?: string; /** key=value, repeatable */ limit?: number; latest?: string; /** 1 */ from?: string; to?: string; }): Promise<{
+    items?: (Record<string, unknown>)[];
+    limit?: number;
+    /** all matches */
+    total?: number;
+    /** more matches than limit */
+    truncated?: boolean;
+    /** entity type of the items: device, asset, datastream or site */
+    type?: string;
+  }> {
+    return this.request<{
+    items?: (Record<string, unknown>)[];
+    limit?: number;
+    /** all matches */
+    total?: number;
+    /** more matches than limit */
+    truncated?: boolean;
+    /** entity type of the items: device, asset, datastream or site */
+    type?: string;
+  }>('GET', `/api/v1/public/${encodeURIComponent(token)}/entities/query`, query, undefined, false);
   }
 
   /** A library graphic shown by the shared picture

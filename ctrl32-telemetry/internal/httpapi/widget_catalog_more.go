@@ -16,6 +16,8 @@ var (
 	pRangeAll  = ScreenParam{Name: "range", Label: "Range (empty = dashboard range)", Kind: "select", Options: []string{"", "1h", "6h", "8h", "12h", "today", "24h", "7d", "30d", "90d"}}
 	pStates    = ScreenParam{Name: "states", Label: "States (value=Label:#colour, comma separated)", Kind: "list", Default: []string{"0=Stopped:#94a3b8", "1=Running:#16a34a", "2=Fault:#dc2626"}}
 	pColorBar  = ScreenParam{Name: "bar_color", Label: "Bar colour (empty = series colour)", Kind: "color"}
+	// key filter whose matching rows are highlighted (0.73.0)
+	pHighlightFilter = ScreenParam{Name: "highlight_filter", Label: "Highlight rows matching the key filter", Kind: "keyfilter", Help: "rows matching it are highlighted; the key filters are defined in the dashboard settings"}
 )
 
 var dsBind = []string{"datastreams"}
@@ -63,12 +65,24 @@ var moreWidgets = []WidgetDef{
 		{Name: "stale_after", Label: "Stale after", Kind: "select", Default: "auto", Options: []string{"auto", "15m", "1h", "6h", "24h"}, Help: "auto = twice the expected interval of the datastream, or 1 hour"},
 		{Name: "highlight", Label: "Highlight rows", Kind: "select", Default: "both", Options: []string{"both", "alarms", "limits", "none"}, Help: "alarms = rows with an active alarm; limits = values outside the limits of the alarm rules"},
 		pRangeAll, pDecimals,
-		{Name: "export", Label: "Export buttons", Kind: "bool", Default: true}}},
+		{Name: "export", Label: "Export buttons", Kind: "bool", Default: true},
+		pHighlightFilter}},
+	{Type: "entities_table", Label: "Entities table", Group: "lists", Entities: true, Help: "Devices, assets, datastreams or sites of an alias as rows, with their latest values and attributes as columns — search, sorting, pages, highlighting by a key filter and row actions (open a dashboard state with the entity, open the device page).", Default: [2]int{12, 5}, Params: []ScreenParam{pTitle,
+		{Name: "columns", Label: "Columns", Kind: "list", Default: []string{"name", "site", "alarm", "last_seen"}, Help: "name, type, site, asset, asset_type, device, profile, alarm, last_seen, t:<key> (latest value of the datastream with that key), a:<attribute>; a label after =, e.g. t:temp=Temperature"},
+		{Name: "page_size", Label: "Rows per page", Kind: "number", Default: 25, Min: fptr(5), Max: fptr(200)},
+		{Name: "search", Label: "Search box", Kind: "bool", Default: true},
+		pHighlightFilter,
+		{Name: "highlight_color", Label: "Highlight colour (empty = warning colour)", Kind: "color", Group: "appearance"},
+		pDecimals}},
 	// other
 	{Type: "clock", Label: "Clock", Group: "other", Help: "Current time and date, optionally in another time zone.", Default: [2]int{3, 2}, Params: []ScreenParam{pTitle, {Name: "format", Label: "Format", Kind: "select", Default: "24h", Options: []string{"24h", "12h"}}, {Name: "show_date", Label: "Show date", Kind: "bool", Default: true}, {Name: "tz", Label: "Time zone (IANA, empty = browser)", Kind: "text"}}},
 	{Type: "markdown", Label: "Markdown card", Group: "other", Help: "Formatted text (headings, bold, italic, lists, links to screens) with {value:N} for the N-th bound datastream.", Binds: dsBind, Default: [2]int{4, 2}, Params: []ScreenParam{pTitle, {Name: "text", Label: "Text (Markdown subset)", Kind: "multiline"}, pDecimals}},
 	{Type: "image", Label: "Image", Group: "other", Help: "A graphic from the organization library.", Default: [2]int{3, 2}, Params: []ScreenParam{pTitle, {Name: "src", Label: "Library graphic (slug)", Kind: "text"}, {Name: "fit", Label: "Fit", Kind: "select", Default: "contain", Options: []string{"contain", "cover"}}}},
 	{Type: "qr", Label: "QR code", Group: "other", Help: "QR code of a text or address, e.g. the public link of this dashboard.", Default: [2]int{2, 2}, Params: []ScreenParam{pTitle, {Name: "text", Label: "Text or address (empty = this page)", Kind: "text"}}},
+	{Type: "entity_selector", Label: "Entity selector", Group: "other", Entities: true, Help: "A drop-down (or a searchable list) of the entities of an alias; the chosen entity becomes the current entity of the dashboard, so every widget bound to a \"current entity\" alias switches to it.", Default: [2]int{4, 1}, Params: []ScreenParam{pTitle,
+		{Name: "style", Label: "Style", Kind: "select", Default: "dropdown", Options: []string{"dropdown", "list"}},
+		{Name: "search", Label: "Search box (list)", Kind: "bool", Default: true},
+		{Name: "select_first", Label: "Choose the first entity when none is chosen", Kind: "bool", Default: true}}},
 	{Type: "nav_card", Label: "Navigation card", Group: "other", Help: "A card that opens another screen.", Default: [2]int{3, 1}, Params: []ScreenParam{pTitle, pIcon, {Name: "target", Label: "Screen (slug)", Kind: "text"}, {Name: "description", Label: "Description", Kind: "text"}}},
 	{Type: "camera_pin", Label: "Camera on a plan", Group: "mimic", Help: "A camera on a floor plan or site map (put an image of the plan underneath): its field of view, state and events; a click shows the live picture (spec 017).", Default: [2]int{1, 1}, Params: []ScreenParam{pTitle, {Name: "camera", Label: "Camera", Kind: "camera"}, {Name: "direction", Label: "Looks towards (degrees, 0 = up, clockwise)", Kind: "number", Default: 90}, {Name: "fov", Label: "Field of view (degrees)", Kind: "number", Default: 70}, {Name: "reach", Label: "Length of the view cone (0–100 %)", Kind: "number", Default: 80}, {Name: "show_name", Label: "Show camera name", Kind: "bool", Default: true}}},
 	{Type: "camera", Label: "Camera", Group: "other", Help: "Live picture of a camera (spec 010); a click opens the camera with its recordings. Needs video.view; never shown on public dashboards.", Default: [2]int{4, 3}, Params: []ScreenParam{pTitle, {Name: "camera", Label: "Camera", Kind: "camera"}, {Name: "quality", Label: "Stream", Kind: "select", Default: "sub", Options: []string{"sub", "main"}}, {Name: "show_name", Label: "Show camera name", Kind: "bool", Default: true}, {Name: "open_on_click", Label: "Open the camera on click", Kind: "bool", Default: true}, {Name: "show_stats", Label: "Show stream information (codec, size, fps, kbit/s)", Kind: "bool", Default: false}}},

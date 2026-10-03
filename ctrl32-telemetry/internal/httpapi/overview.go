@@ -36,6 +36,7 @@ import (
 type dsSel struct {
 	Sites, Devices, IDs    []string
 	AssetTypes, Quantities []string
+	Keys                   []string // datastream keys (aliases narrowed to some keys, 0.73.0)
 	Attrs                  map[string][]string
 	Text, Name             string
 }
@@ -77,6 +78,9 @@ func (d dsSel) where(a *sqlArgs, skip string) []string {
 	}
 	if len(d.Quantities) > 0 && skip != "quantity" {
 		w = append(w, inList("ds.quantity", d.Quantities, a))
+	}
+	if len(d.Keys) > 0 {
+		w = append(w, "ds.key = ANY("+a.add(d.Keys)+"::text[])")
 	}
 	if len(d.Devices) > 0 && skip != "device" {
 		w = append(w, "dv.id = ANY("+a.add(d.Devices)+"::uuid[])")

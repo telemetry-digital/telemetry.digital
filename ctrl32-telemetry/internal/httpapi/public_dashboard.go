@@ -32,6 +32,7 @@ type shareInfo struct {
 	Devs            map[string]bool
 	AllDevs         bool
 	HasAlarms       bool
+	Ents            map[string]bool // entities of the dashboard's aliases, "type:id" (entities.go)
 	Cams            map[string]bool // camera widgets; only a paired display ever plays them
 }
 
@@ -48,7 +49,7 @@ func (s *Server) resolveShare(ctx context.Context, token string) (*shareInfo, bo
 
 // shareOf reads the current version of a dashboard and what its widgets may read (public links and displays).
 func (s *Server) shareOf(ctx context.Context, org, slug string) (*shareInfo, bool) {
-	si := &shareInfo{DS: map[string]bool{}, Devs: map[string]bool{}, Cams: map[string]bool{}}
+	si := &shareInfo{DS: map[string]bool{}, Devs: map[string]bool{}, Cams: map[string]bool{}, Ents: map[string]bool{}}
 	var raw []byte
 	err := s.pool.QueryRow(ctx, `SELECT org_id::text, slug, name, spec FROM core.dashboard WHERE org_id = $1::uuid AND slug = $2 AND valid_to IS NULL`, org, slug).
 		Scan(&si.Org, &si.Slug, &si.Name, &raw)
@@ -60,6 +61,7 @@ func (s *Server) shareOf(ctx context.Context, org, slug string) (*shareInfo, boo
 	}
 	si.collect()
 	s.resolveSources(ctx, si)
+	s.resolveAliases(ctx, si)
 	return si, true
 }
 
@@ -78,7 +80,8 @@ func (si *shareInfo) collect() {
 			}
 		}
 		if dv, ok := binds["devices"].([]any); ok {
-			if len(dv) == 0 && (typ == "map" || typ == "devices") {
+			// a map or a device list without devices shows all of them — unless it takes its devices from an alias
+			if _, aliased := w["alias"]; len(dv) == 0 && (typ == "map" || typ == "devices") && !aliased {
 				si.AllDevs = true
 			}
 			for _, id := range dv {

@@ -103,6 +103,9 @@ func StarterSpec(ctx context.Context, pool *pgxpool.Pool, org, kind string) (str
 		return "", nil, errors.New("kind must be overview, sensors, energy, coldchain, showcase, mimic or plant")
 	}
 	spec := map[string]any{"version": 1, "kind": "dashboard", "layout": map[string]any{"type": "grid", "columns": 12, "row_height": 96}, "range": "24h", "refresh_s": 30, "widgets": widgets}
+	if kind == "showcase" {
+		spec["aliases"] = showcaseAliases()
+	}
 	if kind == "mimic" {
 		spec["kind"] = "mimic"
 		spec["layout"] = map[string]any{"type": "canvas", "width": 1600, "height": 900}
@@ -343,7 +346,20 @@ func showcaseMore(w func(id, typ string, x, y, wd, h int, binds map[string][]str
 		w("styled", "value", 10, y+16, 2, 3, dsb(first), map[string]any{"title": "Styled", "bg_color": "#0f172a", "text_color": "#f8fafc", "border_width": 0, "radius": 16, "shadow": true, "title_icon": "bolt", "value_size": 40, "sparkline": false}),
 		w("period", "period_table", 0, y+19, 12, 4, dsb(ds), map[string]any{"title": "Period table (daily min and max)", "interval": "day", "values": "min,max", "period": "last_7d", "total": true, "decimals": 1}),
 		withSource(w("overview", "overview_table", 0, y+23, 12, 5, dsb(nil), map[string]any{"title": "Overview table — every datastream (query source)", "page_size": 10}), map[string]any{}),
+		withAlias(w("etable", "entities_table", 0, y+28, 8, 4, nil, map[string]any{"title": "Entities table — all devices (alias)", "columns": []string{"name", "profile", "site", "alarm", "last_seen"}, "page_size": 10}), "devices"),
+		withAlias(w("selector", "entity_selector", 8, y+28, 4, 1, nil, map[string]any{"title": "Entity selector"}), "devices"),
 	}
+}
+
+// showcaseAliases are the entity aliases of the showcase (0.73.0): all devices of the organization.
+func showcaseAliases() []map[string]any {
+	return []map[string]any{{"id": "devices", "name": "All devices", "kind": "type", "entity_type": "device", "types": []string{"*"}}}
+}
+
+// withAlias binds a starter widget to an entity alias of the dashboard.
+func withAlias(w map[string]any, alias string) map[string]any {
+	w["alias"] = map[string]any{"id": alias}
+	return w
 }
 
 // withSource gives a starter widget a query source (its datastreams are selected by the server, 0.68.0).

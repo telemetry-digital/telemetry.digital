@@ -1,0 +1,26 @@
+meta {
+  name: Set the attributes of the organization
+  type: http
+  seq: 5
+}
+
+put {
+  url: {{baseUrl}}/api/v1/organization/attributes
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "attributes": {},
+    "reason": "string"
+  }
+}
+
+docs {
+  Set the attributes of the organization
+  
+  Replaces all attributes (at most 50; names of letters, digits, . _ -; values text up to 200 characters, numbers or true/false). Audited.
+  
+  Requires permission `config.write`.
+}

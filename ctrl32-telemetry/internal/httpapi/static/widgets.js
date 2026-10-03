@@ -4,6 +4,9 @@
 // uses the canvas layout (pixels) and process symbols. Widgets read through the public API only.
 // Format 1.1 (0.68.0, additive): spec.filters (the dashboard filter bar) and per widget source (datastreams selected
 // by a query on the server) and follow (the widget follows the dashboard filters; filters only narrow).
+// Format 1.2 (0.73.0, additive): spec.aliases (named sets of entities resolved by the server), spec.key_filters
+// (predicates on latest values and attributes), spec.states (views; drill-down passes a "current entity") and per
+// widget alias {id, filter, quantity, key}, state and actions (row/marker/chart/widget click and buttons).
 // No dependencies except Leaflet (vendored, BSD-2) for the map widget, loaded on demand.
 (function () {
   'use strict';
@@ -129,6 +132,10 @@
       const near = (W - L - R) ? 6 / (W - L - R) * (t1 - t0) : 0; const hit = anns.filter((a) => t >= a.t0 - near && t <= a.t1 + near);
       if (hit.length) tip.textContent += ' · ✎ ' + hit.map(annTxt).join(' | '); };
     svg.onmouseleave = () => { cursor.setAttribute('visibility', 'hidden'); tip.textContent = ''; };
+    // a click picks the series nearest to the pointer (widget action "chart click", 0.73.0)
+    if (o.onPick) { svg.style.cursor = 'pointer'; svg.onclick = (e) => { e.stopPropagation(); const rect = svg.getBoundingClientRect(); const x = (e.clientX - rect.left) / rect.width * W, y = (e.clientY - rect.top) / rect.height * H; const t = t0 + (x - L) / (W - L - R) * (t1 - t0); let best = -1, dist = Infinity;
+      list.forEach((s, i) => { if (s.hidden || !s.points.length) return; const yp = s.axis === 'right' && sr ? pyOf(sr) : py; let near = s.points[0]; for (const p of s.points) if (Math.abs(p.t - t) < Math.abs(near.t - t)) near = p; if (near.v == null) return; const d = Math.abs(yp(near.v) - y); if (d < dist) { dist = d; best = i; } });
+      if (best >= 0) o.onPick(best); }; }
   }
   function sparkline(points, c) { if (points.length < 2) return ''; const t0 = points[0].t, t1 = points[points.length - 1].t, vs = points.map((p) => p.v), lo = Math.min(...vs), hi = Math.max(...vs); return `<svg viewBox="0 0 120 30" style="width:120px;height:30px;display:block;flex:none"><path d="${points.map((p, k) => (k ? 'L' : 'M') + ((p.t - t0) / ((t1 - t0) || 1) * 120).toFixed(1) + ',' + (28 - ((p.v - lo) / ((hi - lo) || 1)) * 26).toFixed(1)).join(' ')}" fill="none" stroke="${c}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`; }
 
@@ -140,8 +147,8 @@
   const FKINDS = ['site', 'asset_type', 'quantity', 'device'];
   const filtersActive = (f) => !!f && (FKINDS.some((k) => (f[k] || []).length) || !!f.q || Object.values(f.attr || {}).some((v) => v && v.length));
   function defaultFilters(spec) {
-    const f = { site: [], asset_type: [], quantity: [], device: [], attr: {}, q: '', range: '' };
-    for (const d of (spec && spec.filters) || []) { const v = d.default; if (d.kind === 'search') f.q = v || ''; else if (d.kind === 'range') f.range = v || ''; else if (d.kind === 'attribute') f.attr[d.key] = [].concat(v || []); else f[d.kind] = [].concat(v || []); }
+    const f = { site: [], asset_type: [], quantity: [], device: [], attr: {}, q: '', range: '', values: {} };
+    for (const d of (spec && spec.filters) || []) { const v = d.default; if (d.kind === 'search') f.q = v || ''; else if (d.kind === 'range') f.range = v || ''; else if (d.kind === 'value') f.values[d.key] = v || ''; else if (d.kind === 'attribute') f.attr[d.key] = [].concat(v || []); else f[d.kind] = [].concat(v || []); }
     return f;
   }
   const maxRows = (w) => (MANY.has(w.type) ? 500 : 24);
@@ -156,9 +163,62 @@
     return q;
   }
   const queryDS = (w, f, extra) => api('GET', P('/api/v1/datastreams/query?' + queryParams(w, f, extra)));
+  // ---- entity aliases (0.73.0): the server resolves the alias of a widget (its key filter, the current entity of the
+  // dashboard state, the value filters and — when the widget follows them — the dashboard filters) ----
+  const ENTITY_WIDGETS = new Set(['entities_table', 'entity_selector']);
+  const aliasOf = (spec, w) => (w && w.alias && ((spec && spec.aliases) || []).find((a) => a.id === w.alias.id)) || null;
+  const keyFilterOf = (spec, id) => (id && ((spec && spec.key_filters) || []).find((f) => f.id === id)) || null;
+  const wantOf = (w) => (ENTITY_WIDGETS.has(w.type) ? 'entities' : w.type === 'devices' || w.type === 'map' ? 'devices' : 'datastreams');
+  // columns of an entity table: t:<key> latest value, a:<name> attribute, an optional label after =
+  function colKeys(cols) { const v = [], a = []; for (const c0 of cols || []) { const c = String(c0).split('=')[0].trim(); if (/^t:[a-z][a-z0-9_]{0,31}$/.test(c)) v.push(c.slice(2)); else if (/^a:[A-Za-z0-9_.-]{1,40}$/.test(c)) a.push(c.slice(2)); } return [[...new Set(v)], [...new Set(a)]]; }
+  const refStr = (e) => (e && e.type && e.id ? e.type + ':' + e.id : '');
+  function aliasParams(spec, w, f, extra, nav) {
+    const q = new URLSearchParams();
+    if (PUBLIC) q.set('widget', w.id || '');
+    else {
+      q.set('alias', JSON.stringify(aliasOf(spec, w))); const kf = keyFilterOf(spec, w.alias.filter); if (kf) q.set('filter', JSON.stringify(kf));
+      const hl = keyFilterOf(spec, (w.params || {}).highlight_filter); if (hl) q.set('highlight', JSON.stringify(hl));
+      q.set('want', wantOf(w)); if ((w.alias.quantity || []).length) q.set('quantity', w.alias.quantity.join(',')); if ((w.alias.key || []).length) q.set('key', w.alias.key.join(','));
+      if (w.type === 'entities_table') { const [v, a] = colKeys((w.params || {}).columns); if (v.length) q.set('values', v.join(',')); if (a.length) q.set('attrs', a.join(',')); }
+      if (w.follow) q.set('follow', '1');
+    }
+    const cur = nav && nav.current; if (cur) q.set('current', refStr(cur));
+    for (const [k, v] of Object.entries((f && f.values) || {})) if (v !== '' && v != null) q.append('f_value', k + '=' + v);
+    if (w.follow && f) { for (const k of FKINDS) if ((f[k] || []).length) q.set('f_' + k, f[k].join(',')); for (const [k, v] of Object.entries(f.attr || {})) for (const x of v || []) q.append('f_attr', k + '=' + x); if (f.q) q.set('f_q', f.q); }
+    q.set('limit', String(ENTITY_WIDGETS.has(w.type) || wantOf(w) === 'devices' || ALARM_TYPES.has(w.type) ? 500 : maxRows(w)));
+    for (const [k, v] of Object.entries(extra || {})) if (v != null && v !== '') q.set(k, v);
+    return q;
+  }
+  const aliasQuery = (spec, w, f, extra, nav) => api('GET', P('/api/v1/entities/query?' + aliasParams(spec, w, f, extra, nav)));
+  // the alias of a widget waits for a current entity (a detail state opened without one, no entity chosen yet)
+  const waitsForEntity = (spec, w, nav) => { const a = aliasOf(spec, w); return !!a && (a.kind === 'current' || a.root_current) && !(nav && nav.current) && !(a.kind === 'current' && a.default); };
+  // ---- actions (0.73.0): go to a dashboard state with the entity, open the device page, open another dashboard ----
+  function passEntity(a, e) {
+    if (!e) return null;
+    if (a.pass === 'device') { if (e.type === 'device') return { type: 'device', id: e.id, name: e.name || '' }; if (e.device_id) return { type: 'device', id: e.device_id, name: e.device || '' }; }
+    if (a.pass === 'asset') { if (e.type === 'asset') return { type: 'asset', id: e.id, name: e.name || '' }; if (e.asset_id) return { type: 'asset', id: e.asset_id, name: e.asset || '' }; }
+    return { type: e.type, id: e.id, name: e.name || '' };
+  }
+  function runAction(a, e, nav) {
+    if (!a) return false; const ent = passEntity(a, e);
+    if (a.action === 'state') { if (nav && nav.go) { nav.go(a.target, ent); return true; } return false; }
+    if (PUBLIC) return false; // a public link never leaves the dashboard
+    if (a.action === 'device') { const id = ent && (ent.type === 'device' ? ent.id : null) || (e && (e.type === 'device' ? e.id : e.device_id)); if (!id) { if (window.ctrl32 && ctrl32.toast) ctrl32.toast(TR('No device for this row'), 'warn'); return false; } location.href = '/devices/' + encodeURIComponent(id); return true; }
+    if (a.action === 'dashboard') { location.href = '/dashboards/' + encodeURIComponent(a.target) + (ent ? '?st=' + encodeURIComponent('.' + ent.type + '.' + ent.id + '.' + (ent.name || '')) : ''); return true; }
+    return false;
+  }
   // resolve: the effective bindings of a widget for the current filter values (cached 30 s per card)
-  async function resolve(w, f) {
+  async function resolve(w, f, spec, nav) {
     const b = w.bindings || {}; const act = !!w.follow && filtersActive(f); const out = { bindings: b, scopeDS: null, devScope: null, truncated: false, total: null };
+    if (w.alias) {
+      if (!PUBLIC && !aliasOf(spec, w)) { out.bindings = Object.assign({}, b, { datastreams: [] }); out.devScope = new Set(); out.scopeDS = new Set(); out.noAlias = true; return out; }
+      if (waitsForEntity(spec, w, nav)) { out.bindings = Object.assign({}, b, { datastreams: [] }); out.devScope = new Set(); out.scopeDS = new Set(); out.waits = true; return out; }
+      if (ENTITY_WIDGETS.has(w.type)) return out; // the renderer asks for its entities itself (ctx.query)
+      const r = await aliasQuery(spec, w, f, null, nav); const ids2 = r.items.map((x) => x.id); out.truncated = r.truncated; out.total = r.total; out.items = r.items;
+      if (wantOf(w) === 'devices') { out.devScope = new Set(ids2); out.bindings = Object.assign({}, b, { devices: ids2 }); }
+      else { out.bindings = Object.assign({}, b, { datastreams: ids2 }); if (ALARM_TYPES.has(w.type)) out.scopeDS = new Set(ids2); }
+      return out;
+    }
     if (w.source || (act && (b.datastreams || []).length)) {
       const r = await queryDS(w, f); out.bindings = Object.assign({}, b, { datastreams: r.items.map((x) => x.id) }); out.truncated = r.truncated; out.total = r.total; out.items = r.items; return out;
     }
@@ -187,7 +247,8 @@
       const side = pos === 'right';
       el.innerHTML = `<div style="display:flex;flex-direction:${side ? 'row' : 'column'};flex:1;min-height:0;gap:6px">${pos === 'bottom' || side ? '' : `<div class="muted dw-legend" style="font-size:12px;margin-bottom:2px;display:flex;justify-content:space-between;flex-wrap:wrap"><span>${legend}</span>${info}</div>`}<div class="chart-box" style="flex:1;min-height:0;min-width:0"></div>${pos === 'bottom' ? `<div class="muted dw-legend" style="font-size:12px;display:flex;justify-content:space-between;flex-wrap:wrap"><span>${legend}</span>${info}</div>` : ''}${side ? `<div class="muted dw-legend" style="font-size:12px;display:flex;flex-direction:column;gap:4px;max-width:40%;overflow:auto">${legend}${info}</div>` : ''}${pos === 'none' ? `<div class="muted" style="font-size:11px;text-align:right">${info}</div>` : ''}</div>`;
       el.style.display = 'flex'; el.style.flexDirection = 'column';
-      renderChart(el.querySelector('.chart-box'), list, { t0: win.t0, t1: win.t1, yMin: p.y_min, yMax: p.y_max, decimals: p.decimals, warn: p.warn, action: p.action, style: p.chart, band: p.band, annotations: anns.filter((a) => !list[ids(ctx).indexOf(a.datastream_id)] || !list[ids(ctx).indexOf(a.datastream_id)].hidden), height: Math.max(160, ctx.px_h - 60) });
+      const pick = ctx.actions && ctx.actions('chart').length && !ctx.edit ? (si) => { const id = ids(ctx)[si]; const it = (ctx.items || []).find((x) => x.id === id) || {}; ctx.act('chart', { type: 'datastream', id, name: list[si].label, device_id: it.device_id, device: it.device, asset_id: it.asset_id || dsInfo(all, id).asset_id, asset: it.asset }); } : null;
+      renderChart(el.querySelector('.chart-box'), list, { t0: win.t0, t1: win.t1, yMin: p.y_min, yMax: p.y_max, decimals: p.decimals, warn: p.warn, action: p.action, style: p.chart, band: p.band, annotations: anns.filter((a) => !list[ids(ctx).indexOf(a.datastream_id)] || !list[ids(ctx).indexOf(a.datastream_id)].hidden), height: Math.max(160, ctx.px_h - 60), onPick: pick });
       for (const x of el.querySelectorAll('.dw-leg')) x.onclick = (e) => { e.stopPropagation(); const s = list[+x.dataset.s]; s.hidden = !s.hidden; draw(); };
     };
     draw();
@@ -246,8 +307,9 @@
     };
   };
   W.devices = async (el, p, ctx) => {
-    const ds = devScope(await devices(ctx.bindings && ctx.bindings.devices), ctx); const lim = p.limit || 20;
-    el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Device</th><th>Transport</th><th>State</th><th>Last seen</th></tr></thead><tbody>${ds.filter((d) => !d.revoked_at).slice(0, lim).map((d) => { const [s, b] = devState(d); return `<tr><td>${PUBLIC ? esc(d.name || d.external_id) : '<a href="/devices/' + d.id + '">' + esc(d.name || d.external_id) + '</a>'}</td><td>${esc(d.transport)}</td><td><span class="badge ${b}">${s}</span></td><td>${d.last_seen ? fmt(d.last_seen) : '—'}</td></tr>`; }).join('') || '<tr><td colspan="4" class="muted">no devices</td></tr>'}</tbody></table></div>`;
+    const ds = devScope(await devices(ctx.bindings && ctx.bindings.devices), ctx); const lim = p.limit || 20; const rowAct = ctx.actions && ctx.actions('row').length && !ctx.edit;
+    el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Device</th><th>Transport</th><th>State</th><th>Last seen</th></tr></thead><tbody>${ds.filter((d) => !d.revoked_at).slice(0, lim).map((d) => { const [s, b] = devState(d); return `<tr${rowAct ? ` class="dw-rowact" data-dev="${esc(d.id)}" data-name="${esc(d.name || d.external_id)}"` : ''}><td>${PUBLIC || rowAct ? esc(d.name || d.external_id) : '<a href="/devices/' + d.id + '">' + esc(d.name || d.external_id) + '</a>'}</td><td>${esc(d.transport)}</td><td><span class="badge ${b}">${s}</span></td><td>${d.last_seen ? fmt(d.last_seen) : '—'}</td></tr>`; }).join('') || '<tr><td colspan="4" class="muted">no devices</td></tr>'}</tbody></table></div>`;
+    if (rowAct) for (const tr of el.querySelectorAll('tr[data-dev]')) tr.onclick = (e) => { e.stopPropagation(); ctx.act('row', { type: 'device', id: tr.dataset.dev, name: tr.dataset.name, device_id: tr.dataset.dev, device: tr.dataset.name }); };
   };
   // ---- control widgets: every send is a command with a reason; disabled in public mode and without device.command ----
   const canCmd = () => !PUBLIC && window.ctrl32 && typeof ctrl32.can === 'function' && ctrl32.can('device.command');
@@ -306,7 +368,8 @@
     const devs = devScope(await devices(ctx.bindings && ctx.bindings.devices), ctx).filter((d) => d.location && d.location.lat != null && d.location.lon != null && !d.revoked_at);
     el.innerHTML = `<div class="map-box" style="height:100%;min-height:200px;border-radius:var(--radius);overflow:hidden"></div>`;
     const map = makeMap(el.querySelector('.map-box'), cfg); const pts = [];
-    for (const d of devs) { const [s, , c] = devState(d); const ll = [d.location.lat, d.location.lon]; pts.push(ll); L.circleMarker(ll, { radius: 8, color: '#fff', weight: 2, fillColor: c, fillOpacity: 0.95 }).addTo(map).bindPopup(`<b>${esc(d.name || d.external_id)}</b><br>${s} · ${d.last_seen ? esc(fmt(d.last_seen)) : 'never'}<br><span style="font-size:11px">${d.location.source === 'fixed' ? 'fixed position' : 'reported ' + (d.location.updated_at ? esc(fmt(d.location.updated_at)) : '')}</span><br><a href="/devices/${d.id}">open device</a>`); }
+    const markerAct = ctx.actions && ctx.actions('marker').length && !ctx.edit;
+    for (const d of devs) { const [s, , c] = devState(d); const ll = [d.location.lat, d.location.lon]; pts.push(ll); const mk = L.circleMarker(ll, { radius: 8, color: '#fff', weight: 2, fillColor: c, fillOpacity: 0.95 }).addTo(map); if (markerAct) { mk.bindTooltip(esc(d.name || d.external_id)); mk.on('click', () => ctx.act('marker', { type: 'device', id: d.id, name: d.name || d.external_id, device_id: d.id, device: d.name || d.external_id })); continue; } mk.bindPopup(`<b>${esc(d.name || d.external_id)}</b><br>${s} · ${d.last_seen ? esc(fmt(d.last_seen)) : 'never'}<br><span style="font-size:11px">${d.location.source === 'fixed' ? 'fixed position' : 'reported ' + (d.location.updated_at ? esc(fmt(d.location.updated_at)) : '')}</span><br><a href="/devices/${d.id}">open device</a>`); }
     if (pts.length) map.fitBounds(pts, { padding: [24, 24], maxZoom: 15 }); else map.setView([cfg.center_lat || 48.7, cfg.center_lon || 19.5], p.zoom || cfg.zoom || 7);
     setTimeout(() => map.invalidateSize(), 50);
   };
@@ -375,12 +438,20 @@
       if (p.title_size) title.style.fontSize = p.title_size + 'px'; if (p.title_icon) title.insertAdjacentHTML('afterbegin', ICON(p.title_icon, 16) + ' '); }
     if (p.show_title === false) { if (title) title.hidden = true; if (head && !opts.header) head.hidden = true; }
     if (opts.header) return; // editing: no full screen, no click actions
+    // widget actions (0.73.0): buttons in the head, a click on the card
+    for (const a of (w.actions || []).filter((x) => x.event === 'button' && (!PUBLIC || x.action === 'state'))) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'btn small dw-act'; b.textContent = a.label || TR('Open');
+      b.onclick = (e) => { e.stopPropagation(); const c = ctxOf(); runAction(a, c.entity ? c.entity() : null, opts.nav); };
+      if (head && !head.hidden) head.appendChild(b); else card.appendChild(b);
+    }
+    const clickAct = (w.actions || []).find((x) => x.event === 'click' && (!PUBLIC || x.action === 'state'));
+    if (clickAct) { card.classList.add('dw-click'); card.addEventListener('click', (e) => { if (e.target.closest('button,input,select,textarea,a,.dw-leg,.leaflet-container,tr[data-ds],tr[data-ent],tr[data-dev]')) return; const c = ctxOf(); runAction(clickAct, c.entity ? c.entity() : null, opts.nav); }); }
     if (p.fullscreen !== false && framed(w)) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'btn small ghost dw-fs'; b.title = 'Full screen'; b.innerHTML = ICON('maximize', 14) || '⤢';
       b.onclick = (e) => { e.stopPropagation(); fullView(w, ctxOf()); };
       if (head && !head.hidden) head.appendChild(b); else { b.classList.add('floating'); card.appendChild(b); }
     }
-    if (p.click) { card.classList.add('dw-click'); card.addEventListener('click', (e) => { if (e.target.closest('button,input,select,textarea,a,.dw-leg,.leaflet-container')) return; clickAction(w); }); }
+    if (p.click && !clickAct) { card.classList.add('dw-click'); card.addEventListener('click', (e) => { if (e.target.closest('button,input,select,textarea,a,.dw-leg,.leaflet-container')) return; clickAction(w); }); }
   }
   function clickAction(w) {
     const p = w.params || {}, tag = ((w.bindings || {}).datastreams || [])[0], dev = ((w.bindings || {}).devices || [])[0];
@@ -438,17 +509,18 @@
     bindsOf = bindsOf || ((i) => (spec.widgets[i] || {}).bindings || {});
     const ds = new Set(), devs = new Set(); let allDevs = false, alarms = false;
     const layerTags = layer ? layer.tags() : new Set(); layerTags.forEach((id) => ds.add(id)); let layerDue = false;
-    (spec.widgets || []).forEach((w, i) => { const b = bindsOf(i) || {}; (b.datastreams || []).forEach((id) => ds.add(id)); if (Array.isArray(b.devices)) { if (!b.devices.length && (w.type === 'map' || w.type === 'devices')) allDevs = true; b.devices.forEach((id) => devs.add(id)); } if (ALARM_TYPES.has(w.type)) alarms = true; });
+    const shown = (i) => !!container.querySelector(`.dash-widget[data-i="${i}"]`);
+    (spec.widgets || []).forEach((w, i) => { if (!shown(i)) return; const b = bindsOf(i) || {}; (b.datastreams || []).forEach((id) => ds.add(id)); if (Array.isArray(b.devices)) { if (!b.devices.length && (w.type === 'map' || w.type === 'devices') && !w.alias) allDevs = true; b.devices.forEach((id) => devs.add(id)); } if (ALARM_TYPES.has(w.type)) alarms = true; });
     if (!ds.size && !devs.size && !allDevs && !alarms) return '';
     const qs = 'datastreams=' + [...ds].slice(0, 200).join(',') + '&devices=' + (allDevs ? 'all' : [...devs].slice(0, 200).join(',')) + '&alarms=' + (alarms ? 1 : 0);
     const pending = new Set();
-    const flush = () => { liveTimer = null; const cards = [...container.querySelectorAll('.dash-widget')]; for (const i of pending) { if (cards[i]) refreshOne(cards[i], true); } pending.clear(); if (layerDue && layer) { layerDue = false; layer.refresh(); } };
-    const mark = (pred) => { (spec.widgets || []).forEach((w, i) => { if (pred(w, bindsOf(i) || {})) pending.add(i); }); if ((pending.size || layerDue) && !liveTimer) liveTimer = setTimeout(flush, 400); };
+    const flush = () => { liveTimer = null; for (const i of pending) { const c = container.querySelector(`.dash-widget[data-i="${i}"]`); if (c) refreshOne(c, true); } pending.clear(); if (layerDue && layer) { layerDue = false; layer.refresh(); } };
+    const mark = (pred) => { (spec.widgets || []).forEach((w, i) => { if (shown(i) && pred(w, bindsOf(i) || {})) pending.add(i); }); if ((pending.size || layerDue) && !liveTimer) liveTimer = setTimeout(flush, 400); };
     const es = new EventSource(P('/api/v1/stream') + '?' + qs, { withCredentials: true }); ES = es;
     const state = (connected) => window.dispatchEvent(new CustomEvent('ctrl32:live', { detail: { connected } }));
     es.onopen = () => state(true); es.onerror = () => state(false);
     es.addEventListener('observation', (e) => { const d = JSON.parse(e.data); if (layerTags.has(d.datastream_id)) layerDue = true; mark((w, b) => (b.datastreams || []).includes(d.datastream_id)); });
-    es.addEventListener('device', (e) => { const d = JSON.parse(e.data); mark((w, b) => (w.type === 'map' || w.type === 'devices') && (!(b.devices || []).length || b.devices.includes(d.device_id))); });
+    es.addEventListener('device', (e) => { const d = JSON.parse(e.data); mark((w, b) => (w.type === 'map' || w.type === 'devices' || w.type === 'entities_table') && (!(b.devices || []).length || b.devices.includes(d.device_id))); });
     es.addEventListener('alarm', () => mark((w) => ALARM_TYPES.has(w.type)));
     es.addEventListener('command', (e) => { const d = JSON.parse(e.data); const out = PENDING.get(d.command_id); if (!out) return; const det = d.detail || {}; const res = det.result && typeof det.result === 'object' ? det.result : {}; showCmd(out, d.status, { readback: res.readback, error: det.error }); if (d.status !== 'queued' && d.status !== 'sent' && d.status !== 'pending') PENDING.delete(d.command_id); });
     window.addEventListener('pagehide', () => es.close(), { once: true });
@@ -459,9 +531,13 @@
   // Canvas (mimic) layout: widgets sit at absolute pixel positions on a fixed-size canvas that is scaled to the container width.
   function placeCanvas(card, g) { card.style.left = g.x + 'px'; card.style.top = g.y + 'px'; card.style.width = g.w + 'px'; card.style.height = g.h + 'px'; }
   function fitMimic(container) { const wrap = container.querySelector('.mimic-wrap'), m = container.querySelector('.mimic'); if (!wrap || !m) return 1; const W0 = +m.dataset.w || 1600, H0 = +m.dataset.h || 900; const s = Math.max(0.1, Math.min(1.5, (wrap.clientWidth || W0) / W0)); m.style.transform = `scale(${s})`; wrap.style.height = Math.round(H0 * s) + 'px'; return s; }
-  // render(container, spec, {range, filters, header(widget, index) -> html, onReady}) → refresh()
+  // the state a widget belongs to (absent = the root state, the first of spec.states)
+  const stateOf = (spec, w) => (w.state || (((spec.states || [])[0] || {}).id) || '');
+  const inState = (spec, w, st) => !(spec.states || []).length || stateOf(spec, w) === (st || spec.states[0].id);
+  // render(container, spec, {range, filters, nav {state, current, go(state, entity), setEntity(entity)}, header(widget, index) -> html, onReady}) → refresh()
   async function render(container, spec, opts) {
     opts = opts || {}; const range = opts.range || spec.range || '24h'; const filters = opts.filters || defaultFilters(spec); const rowH = (spec.layout && spec.layout.row_height) || 96; const canvas = isCanvas(spec);
+    const nav = opts.nav || null; const vis = (w) => canvas || inState(spec, w, nav && nav.state);
     if (canvas) {
       const W0 = spec.layout.width || 1600, H0 = spec.layout.height || 900;
       container.innerHTML = `<div class="mimic-wrap"><div class="mimic" data-w="${W0}" data-h="${H0}" style="width:${W0}px;height:${H0}px"><div class="sc-host"></div>${(spec.widgets || []).map((w, i) => { const f = framed(w); return `<div class="dash-widget mimic-widget${f ? ' card' : ''}" data-i="${i}" data-id="${esc(w.id || '')}">${f || opts.header ? `<div class="dash-head${f ? '' : ' mimic-tools'}">${f ? `<b class="dash-title">${esc((w.params && w.params.title) || labelOf(w.type))}</b>` : ''}<span class="grow"></span>${opts.header ? opts.header(w, i) : ''}</div>` : ''}<div class="dash-body"><span class="muted">loading…</span></div></div>`; }).join('')}</div></div>`;
@@ -470,13 +546,17 @@
       container._scada = (window.ctrl32Scada && (opts.edit || (spec.elements || []).length || (spec.layout && spec.layout.bg))) ? window.ctrl32Scada.mount(container.querySelector('.sc-host'), spec, { edit: !!opts.edit }) : null;
       fitMimic(container); if (!container._fit) { container._fit = () => fitMimic(container); window.addEventListener('resize', container._fit); }
     } else {
-      container.innerHTML = `<div class="dash-grid" style="--row-h:${rowH}px">${(spec.widgets || []).map((w, i) => `<div class="card dash-widget" data-i="${i}" data-id="${esc(w.id || '')}"><div class="dash-head"><b class="dash-title">${esc((w.params && w.params.title) || labelOf(w.type))}</b><span class="grow"></span>${opts.header ? opts.header(w, i) : ''}</div><div class="dash-body"><span class="muted">loading…</span></div></div>`).join('')}</div>`;
+      container.innerHTML = `<div class="dash-grid" style="--row-h:${rowH}px">${(spec.widgets || []).map((w, i) => vis(w) ? `<div class="card dash-widget" data-i="${i}" data-id="${esc(w.id || '')}"><div class="dash-head"><b class="dash-title">${esc((w.params && w.params.title) || labelOf(w.type))}</b><span class="grow"></span>${opts.header ? opts.header(w, i) : ''}</div><div class="dash-body"><span class="muted">loading…</span></div></div>` : '').join('')}</div>`;
       for (const card of container.querySelectorAll('.dash-widget')) place(card, spec.widgets[+card.dataset.i].geometry || { x: 0, y: 0, w: 6, h: 3 });
     }
     const ctxOf = (w, card) => { const g = w.geometry || { w: 6, h: 3 }; const res = (card && card._res) || null; const binds = res ? res.bindings : (w.bindings || {});
       const c = canvas ? { range, bindings: binds, w: Math.max(1, Math.round(g.w / 130)), h: Math.max(1, Math.round(g.h / 96)), px_h: g.h } : { range, bindings: binds, w: g.w, h: g.h, px_h: g.h * rowH };
-      c.cond = (v) => condFormat(card, w.params || {}, v); c.edit = !!opts.header; c.filters = filters; c.query = (extra) => queryDS(w, filters, extra);
-      if (res) { c.scopeDS = res.scopeDS; c.devScope = res.devScope; c.truncated = res.truncated; c.total = res.total; }
+      c.cond = (v) => condFormat(card, w.params || {}, v); c.edit = !!opts.header; c.filters = filters; c.query = (extra) => (w.alias ? aliasQuery(spec, w, filters, extra, nav) : queryDS(w, filters, extra));
+      if (res) { c.scopeDS = res.scopeDS; c.devScope = res.devScope; c.truncated = res.truncated; c.total = res.total; c.items = res.items; }
+      // drill-down: the actions of the widget for an event, running one with an entity, the current entity
+      c.nav = nav; c.actions = (ev) => (w.actions || []).filter((a) => a.event === ev && (!PUBLIC || a.action === 'state')); c.act = (ev, ent, a) => (opts.header ? false : runAction(a || c.actions(ev)[0], ent, nav));
+      c.setCurrent = (ent) => { if (nav && nav.setEntity) nav.setEntity(ent); }; c.waits = !!(res && res.waits);
+      c.entity = () => { const b = (res ? res.bindings : w.bindings) || {}; const id = (b.datastreams || [])[0]; if (id) { const it = (res && res.items || []).find((x) => x.id === id) || {}; return { type: 'datastream', id, name: it.label || it.key || '', device_id: it.device_id, device: it.device, asset_id: it.asset_id, asset: it.asset }; } const dv = (b.devices || [])[0]; if (dv) return { type: 'device', id: dv, device_id: dv }; return nav && nav.current ? nav.current : null; };
       return c; };
     for (const card of container.querySelectorAll('.dash-widget')) { const w = spec.widgets[+card.dataset.i]; decorate(card, w, opts, () => ctxOf(w, card)); }
     for (const card of container.querySelectorAll('.dash-widget')) filterBar(card, spec.widgets[+card.dataset.i], () => refreshOne(card));
@@ -486,22 +566,26 @@
       // a live event refreshes a heavy table at most every 5 s
       if (live && HEAVY.has(w.type) && Date.now() - (card._last || 0) < 5000) { if (!card._later) card._later = setTimeout(() => { card._later = null; refreshOne(card, false); }, 5000); return; }
       card._last = Date.now();
-      if (w.source || w.follow) {
-        if (!card._res || Date.now() - card._resAt > 30e3) { try { card._res = await resolve(w, filters); card._resAt = Date.now(); } catch (e) { body.innerHTML = `<span class="muted">${esc(e.message)}</span>`; return; } }
+      if (w.source || w.follow || w.alias) {
+        if (!card._res || Date.now() - card._resAt > 30e3) { try { card._res = await resolve(w, filters, spec, nav); card._resAt = Date.now(); } catch (e) { body.innerHTML = `<span class="muted">${esc(e.message)}</span>`; return; } }
         const t = card.querySelector('.dw-trunc'); if (t) t.remove();
         if (card._res.truncated) { const h = card.querySelector('.dash-head'); if (h) { const s = document.createElement('span'); s.className = 'badge warn dw-trunc'; s.title = TR('The query matches more datastreams than the widget shows; narrow the filters.'); s.textContent = card._res.bindings.datastreams.length + ' / ' + card._res.total; const g = h.querySelector('.grow'); (g || h).after(s); } }
       }
       const binds = card._res ? card._res.bindings : (w.bindings || {});
-      if (NEEDS_DS.has(w.type) && !(binds.datastreams || []).length) { body.innerHTML = `<span class="muted">${w.source || w.follow ? TR('No datastreams match the query or the filters.') : 'Select datastreams in the widget properties.'}</span>`; return; }
+      if (card._res && card._res.waits) { body.innerHTML = `<span class="muted">${esc(TR('Choose an entity: click a row, a marker or use the entity selector.'))}</span>`; return; }
+      if (card._res && card._res.noAlias) { body.innerHTML = `<span class="muted">${esc(TR('The alias of this widget no longer exists; choose one on the Data tab.'))}</span>`; return; }
+      if (ENTITY_WIDGETS.has(w.type) && !w.alias) { body.innerHTML = `<span class="muted">${esc(TR('Choose an alias on the Data tab.'))}</span>`; return; }
+      if (NEEDS_DS.has(w.type) && !(binds.datastreams || []).length) { body.innerHTML = `<span class="muted">${w.alias ? TR('No entities match the alias or its key filter.') : w.source || w.follow ? TR('No datastreams match the query or the filters.') : 'Select datastreams in the widget properties.'}</span>`; return; }
       const ctx = ctxOf(w, card);
       try { await (W[w.type] || (async (el) => { el.innerHTML = '<span class="muted">unknown widget</span>'; }))(body, w.params || {}, ctx); }
       catch (e) { body.innerHTML = `<span class="muted">${esc(e.message)}</span>`; }
     };
     const layer = canvas ? container._scada : null;
     const cardsNow = () => [...container.querySelectorAll('.dash-widget')];
-    const bindsOf = (i) => { const c = cardsNow()[i]; return c && c._res ? c._res.bindings : (spec.widgets[i] || {}).bindings || {}; };
+    const bindsOf = (i) => { const c = container.querySelector(`.dash-widget[data-i="${i}"]`); return c && c._res ? c._res.bindings : (spec.widgets[i] || {}).bindings || {}; };
     let liveKey = null;
     const live = () => { if (opts.live !== false && window.EventSource) { const k = JSON.stringify(spec.widgets.map((w, i) => bindsOf(i))); if (k !== liveKey) { liveKey = k; connectLive(container, spec, refreshOne, layer, bindsOf); } } };
+    container._nav = nav;
     const refresh = async () => { await Promise.all(cardsNow().map((c) => refreshOne(c)).concat(layer ? [layer.refresh()] : [])); if (liveKey !== null) live(); };
     await refresh();
     live();
@@ -509,6 +593,7 @@
   }
   window.ctrl32Widgets = { tr: TR, aggLabel, rangeLabel, codeLabel, qualBadge, isPublic: () => !!PUBLIC, isDisplay: () => PUBLIC.startsWith('~'), apiPath: P, render, renderChart, setPublic, series, datastreams, latest, devices, loadLeaflet, makeMap, mapConfig, RANGE_MS, labelOf, isCanvas, fitMimic, placeCanvas, MIMIC_TYPES, register, condFormat, icon: ICON, get types() { return Object.keys(W); },
     defaultFilters, filtersActive, queryDS, queryParams, maxRows, inScope, devScope,
+    aliasOf, keyFilterOf, aliasQuery, aliasParams, wantOf, colKeys, runAction, stateOf, inState, ENTITY_WIDGETS,
     // helpers for renderers registered from other files (widgets-more.js)
     util: { esc, api, fmt, num, color, COLORS, dsInfo, sInfo, dsLabel, ids, level, lvlColor, niceTicks, timeTicks, sparkline, seriesWin, winOf, statsOf, hourly, ctlHead, ctlSend, ctlCurrent, reasonInput, canCmd, P } };
 })();

@@ -824,3 +824,28 @@ dialog.gs-dlg { width: min(640px, calc(100vw - 32px)); padding: 0; border: 1px s
 .gs-dlg a.gs-item .muted { font-size: 12px; }
 .gs-dlg a.gs-item.on, .gs-dlg a.gs-item:hover { background: color-mix(in srgb, var(--primary) 12%, transparent); }
 .gs-dlg .gs-foot { display: flex; gap: 12px; font-size: 11px; color: var(--muted); padding: 6px 12px; border-top: 1px solid var(--line); }
+/* aliases, key filters and dashboard states (0.73.0) */
+.ot-table tr.ot-hl td { background: color-mix(in srgb, var(--warn) 18%, transparent); }
+.ot-table tr.ot-hl td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+.ot-table tr.dw-rowact { cursor: pointer; }
+.ot-table tr.dw-rowact:hover td { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.dash-widget tr.dw-rowact { cursor: pointer; }
+.ot-acts { white-space: nowrap; text-align: right; }
+.ot-acts .btn.small { height: 24px; padding: 0 8px; }
+.et-hlcount { color: var(--warn); font-weight: 600; }
+.dw-act { margin-left: 4px; }
+.es-sel { width: 100%; }
+.es-list { display: flex; flex-direction: column; gap: 2px; overflow: auto; flex: 1; min-height: 0; }
+.es-item { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; padding: 5px 8px; border: 1px solid transparent; border-radius: var(--radius); background: none; color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+.es-item .muted { font-size: 11px; }
+.es-item:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.es-item.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, transparent); }
+.ds-crumbs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 10px; font-size: 14px; }
+.ds-crumbs a { color: var(--primary); text-decoration: none; cursor: pointer; }
+.ds-crumbs a:hover { text-decoration: underline; }
+.ds-crumbs .sep { color: var(--muted); }
+.ds-crumbs b { font-weight: 600; }
+.df-val { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+.df-val input { width: 90px; min-height: 0; padding: 3px 6px; font-size: 13px; }
+.ed-states { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 8px; }
+.ed-states .tab { padding: 3px 10px; }

@@ -35,6 +35,7 @@
 
   <section id="dash" hidden>
     <div class="page-head"><h1 id="dashTitle"></h1><span class="badge ok" id="liveBadge" hidden title="Values update as they arrive">live</span><span class="grow"></span><label style="flex-direction:row;align-items:center;gap:6px">Range <select id="dashRange"></select></label><a class="btn" href="/dashboards">All dashboards</a><a class="btn" id="dashEdit" hidden>Edit</a></div>
+    <div id="dashStates" hidden></div>
     <div id="dashFilters" hidden></div>
     <div id="dashGrid"></div>
   </section>
@@ -145,7 +146,8 @@ ctrl32.ready().then(({me, brand}) => {
     $('#dash').hidden = false; $('#dashTitle').textContent = d.name; $('#dashRange').innerHTML = ['1h','6h','8h','12h','today','24h','7d','30d','90d'].map(r => `<option ${r === d.spec.range ? 'selected' : ''}>${r}</option>`).join('');
     if(ctrl32.can('content.write')){ $('#dashEdit').hidden = false; $('#dashEdit').href = `/dashboards/${d.slug}/edit`; }
     let fn = null; const fc = ctrl32DashFilters.mount($('#dashFilters'), d.spec, {key: (me.id || me.username) + '/' + d.slug, onChange: () => run()}); const rf = (d.spec.filters || []).some(x => x.kind === 'range'); $('#dashRange').closest('label').hidden = rf;
-    const run = async () => { fn = await ctrl32Widgets.render($('#dashGrid'), d.spec, {range: rf ? (fc.values.range || d.spec.range) : $('#dashRange').value, filters: fc.values}); }; $('#dashRange').onchange = run; await run(); setInterval(() => fn && fn(), (d.spec.refresh_s || 30) * 1000);
+    const nav = ctrl32DashStates.mount($('#dashStates'), d.spec, {onChange: () => run()});
+    const run = async () => { fn = await ctrl32Widgets.render($('#dashGrid'), d.spec, {range: rf ? (fc.values.range || d.spec.range) : $('#dashRange').value, filters: fc.values, nav}); }; $('#dashRange').onchange = run; await run(); setInterval(() => fn && fn(), (d.spec.refresh_s || 30) * 1000);
   }).catch(() => { $('#app').hidden=false; load(); setInterval(refresh, 10000); });
 });
 </script>
