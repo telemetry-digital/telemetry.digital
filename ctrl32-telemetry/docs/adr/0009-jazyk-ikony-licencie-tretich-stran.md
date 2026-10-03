@@ -32,3 +32,10 @@ A literal "MIT only" policy would have excluded Go (BSD-3-Clause), PostgreSQL (P
 - All new files, comments and docs in English; Slovak used only in user-facing translations and in regulatory templates.
 - Icon and flag assets are vendored (pinned version, MIT license file kept in the repo).
 - The license check is a release gate alongside `govulncheck`, SBOM and signing (ADR-0007).
+
+## Addendum (3 Oct 2026): separate programs under LGPL
+
+Approved by the owner on 3 Oct 2026 for object counting (ADR-0022): an LGPL program that runs as a **separate,
+unmodified process** — never compiled into, linked with or shipped inside the product binary — is allowed. The first
+case is `ffmpeg`, which decodes camera sub-streams for the analytics worker; the administrator installs it (or points
+`[analytics]` at an existing copy). Everything compiled into the product still follows the licence list above.
