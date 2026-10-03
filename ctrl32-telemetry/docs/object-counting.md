@@ -61,12 +61,41 @@ POST /api/v1/d/telemetry        Authorization: Bearer <device token>
 
 ## Installation of the detector
 
-The server needs three things, named in `config.toml` (without them sensors work and cameras show *not installed*):
+The installers do it (0.72.0, ADR-0022 addendum): off by default, on request they download an unmodified LGPL build
+of ffmpeg, ONNX Runtime and the YOLOX nano and tiny models from their official releases (pinned versions, SHA-256
+verified, HTTPS only; none of it is part of our release files), store the licences next to them, write `[analytics]`
+and run the self-check. On an existing installation the option adds only these parts and restarts the service.
+
+```sh
+curl -fsSL https://portal.telemetry.digital/install.sh | sudo bash -s -- --analytics      # Linux x86-64 or ARM64
+.\install.ps1 -Analytics                                                                # Windows x64, elevated
+```
+
+| Part | Version | Licence | Linux | Windows |
+|---|---|---|---|---|
+| ffmpeg (LGPL build) | 8.1.2 (BtbN `autobuild-2026-08-31-13-27`) | LGPL-3.0 | `/opt/ctrl32-telemetry/analytics/` | `%ProgramFiles%\ctrl32-telemetry\analytics\` |
+| ONNX Runtime (CPU) | 1.30.0 | MIT | `/opt/ctrl32-telemetry/analytics/` | `%ProgramFiles%\ctrl32-telemetry\analytics\` |
+| YOLOX nano, tiny | release 0.1.1rc0 | Apache-2.0 | `/var/lib/ctrl32-telemetry/models/` | `%ProgramData%\ctrl32-telemetry\models\` |
+
+Download size about 90 MB on Linux and 180 MB on Windows; on disk about 200 MB. Distribution packages of ffmpeg
+(Debian, Ubuntu) are GPL builds; `install.sh --analytics --ffmpeg apt` uses one anyway on your explicit choice and the
+self-check marks it as a GPL build.
+
+**Self-check:** `ctrl32-telemetry analytics-worker -selfcheck [-config /etc/ctrl32-telemetry/config.toml]` prints
+ffmpeg (version, LGPL or GPL build), ONNX Runtime (version), each model (SHA-256 against the pin, one test inference)
+and whether cameras can count (exit code 0) or not (1). The same check is shown on *Object counting → Cameras* and
+*System → Server* (*Check again* repeats it; the server caches it for 5 minutes), with advice for a missing part.
+
+**Then switch counting on per camera:** *Object counting → Areas and entrances* (an area with its entrances) →
+*Cameras* → *Configure*: draw a line, choose the entrance and the classes, enable, save with a reason.
+
+By hand, the server needs three things, named in `config.toml` (without them sensors work and cameras show *not
+installed*):
 
 ```toml
 [analytics]
-ffmpeg = "/usr/bin/ffmpeg"                                  # an LGPL build, unmodified (distribution package or "lgpl" build)
-onnxruntime = "/opt/onnxruntime/lib/libonnxruntime.so"      # ONNX Runtime 1.17 or newer (MIT), CPU package
+ffmpeg = "/opt/ctrl32-telemetry/analytics/ffmpeg-n8.1.2-50-g1a748fe2cd-lgpl/bin/ffmpeg"   # an unmodified LGPL build
+onnxruntime = "/opt/ctrl32-telemetry/analytics/onnxruntime-1.30.0/lib/libonnxruntime.so"  # 1.17 or newer (MIT), CPU
 model_nano = "/var/lib/ctrl32-telemetry/models/yolox_nano.onnx"   # YOLOX release 0.1.1rc0 (Apache-2.0)
 model_tiny = "/var/lib/ctrl32-telemetry/models/yolox_tiny.onnx"
 nano_sha256 = "c789161ed43c8269fcd4e67c67eeeb4e80c622da2eb296a20bc6007bd18a0b7d"
@@ -80,6 +109,7 @@ max_cameras = 4      # cameras analysed at the same time
 - Models: `yolox_nano.onnx` and `yolox_tiny.onnx` from the YOLOX repository (Megvii), release 0.1.1rc0. With the SHA-256
   pins the worker refuses any other file.
 - ffmpeg must be an LGPL build (no `--enable-gpl`); it runs as a separate program and is not part of the product.
+  Debian's and Ubuntu's `ffmpeg` packages are GPL builds; the "lgpl" builds of BtbN/FFmpeg-Builds are LGPL.
 
 ## Accuracy and CPU
 

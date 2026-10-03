@@ -103,6 +103,7 @@
       <h3 style="margin:8px 0 0">Public link</h3>
       <div class="muted" style="font-size:12px">Anyone with the link sees this dashboard read-only, without signing in — only the data its widgets bind. Regenerating invalidates the old link.</div>
       <div id="shareBox" class="muted">…</div>
+      <label class="inline"><input type="checkbox" name="public_annotations"><span>Show annotations in the charts of the public link and on displays (their texts are internal notes; off by default)</span></label>
       <div class="actions"><button class="btn primary" type="submit">Apply</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
     </form>
   </dialog>
@@ -314,14 +315,16 @@ function renderProps(target){
 }
 // Data source (0.68.0): a fixed list of datastreams, or a query resolved by the server (sites, asset types,
 // quantities, devices, attributes, name pattern) so new devices appear on their own.
+// asset types and quantities are codes: offered as words in the user's language (the value stays the code)
+const codeOpts = (list) => (list || []).map(o => Object.assign({}, o, {label: WG.codeLabel(o.value)}));
 function srcPick(name, options, chosen, label){ return `<label>${esc(label)} <select multiple data-src="${name}">${options.map(o => `<option value="${esc(o.value)}" ${chosen.includes(o.value) ? 'selected' : ''}>${esc(o.label)}${o.n ? ' (' + o.n + ')' : ''}</option>`).join('')}${chosen.filter(c => !options.some(o => o.value === c)).map(c => `<option value="${esc(c)}" selected>${esc(c)}</option>`).join('')}</select></label>`; }
 function sourceHTML(w){
   const s = w.source; const many = ['table', 'entity_table', 'overview_table'].includes(w.type); const max = many ? 500 : 24;
   let h = `<fieldset class="src-box"><legend>Data source</legend><label class="inline"><input type="radio" name="srcmode" data-srcmode value="fixed" ${s ? '' : 'checked'}><span>Fixed list of datastreams</span></label><label class="inline"><input type="radio" name="srcmode" data-srcmode value="query" ${s ? 'checked' : ''}><span>Query — matching datastreams, new devices appear automatically</span></label>`;
   if(s){ const f = FACETS || {}; const attrs = Object.entries(s.attr || {}).map(([k, v]) => [].concat(v).map(x => k + '=' + x).join(', ')).join(', ');
     h += `<div class="muted" style="font-size:12px">Empty fields select everything; several values of one field match any of them. Ctrl/Cmd+click for several.</div>`
-      + srcPick('site', f.site || [], s.site || [], 'Sites') + srcPick('asset_type', f.asset_type || [], s.asset_type || [], 'Asset types')
-      + srcPick('quantity', f.quantity || [], (s.quantity || []).filter(q => !q.endsWith('*')), 'Quantities')
+      + srcPick('site', f.site || [], s.site || [], 'Sites') + srcPick('asset_type', codeOpts(f.asset_type), s.asset_type || [], 'Asset types')
+      + srcPick('quantity', codeOpts(f.quantity), (s.quantity || []).filter(q => !q.endsWith('*')), 'Quantities')
       + `<label>Quantity pattern <input data-src="qpattern" value="${esc((s.quantity || []).filter(q => q.endsWith('*')).join(', '))}" placeholder="energy*"></label>`
       + srcPick('device', f.device || [], s.device || [], 'Devices')
       + `<label>Attributes <input data-src="attr" value="${esc(attrs)}" placeholder="storage_class=2-8C"></label>`
@@ -385,8 +388,8 @@ async function loadEdit(){
   for(const b of document.querySelectorAll('[data-add]')) b.onclick = () => addWidget(b.dataset.add);
   $('#eAdd').onclick = () => $('#addDlg').showModal();
   $('#setForm').range.innerHTML = CAT.ranges.map(r => `<option>${r}</option>`).join('');
-  $('#eSettings').onclick = () => { const f = $('#setForm'); f.name.value = DASH.name; f.range.value = SPEC.range; f.refresh_s.value = SPEC.refresh_s; f.row_height.value = SPEC.layout.row_height || 96; f.width.value = SPEC.layout.width || 1600; f.height.value = SPEC.layout.height || 900; $('#setRowH').hidden = canvas(); $('#setW').hidden = !canvas(); $('#setH').hidden = !canvas(); f.is_default.checked = !!DASH.is_default; fltRows(JSON.parse(JSON.stringify(SPEC.filters || []))); $('#setDlg').showModal(); loadShare(); };
-  $('#setForm').onsubmit = e => { e.preventDefault(); const f = e.target; DASH.name = f.name.value; SPEC.range = f.range.value; SPEC.refresh_s = parseInt(f.refresh_s.value, 10) || 30; if(canvas()){ SPEC.layout.width = parseInt(f.width.value, 10) || 1600; SPEC.layout.height = parseInt(f.height.value, 10) || 900; } SPEC.layout.row_height = parseInt(f.row_height.value, 10) || 96; DASH.is_default = f.is_default.checked;
+  $('#eSettings').onclick = () => { const f = $('#setForm'); f.name.value = DASH.name; f.range.value = SPEC.range; f.refresh_s.value = SPEC.refresh_s; f.row_height.value = SPEC.layout.row_height || 96; f.width.value = SPEC.layout.width || 1600; f.height.value = SPEC.layout.height || 900; $('#setRowH').hidden = canvas(); $('#setW').hidden = !canvas(); $('#setH').hidden = !canvas(); f.is_default.checked = !!DASH.is_default; f.public_annotations.checked = !!SPEC.public_annotations; fltRows(JSON.parse(JSON.stringify(SPEC.filters || []))); $('#setDlg').showModal(); loadShare(); };
+  $('#setForm').onsubmit = e => { e.preventDefault(); const f = e.target; DASH.name = f.name.value; SPEC.range = f.range.value; SPEC.refresh_s = parseInt(f.refresh_s.value, 10) || 30; if(canvas()){ SPEC.layout.width = parseInt(f.width.value, 10) || 1600; SPEC.layout.height = parseInt(f.height.value, 10) || 900; } SPEC.layout.row_height = parseInt(f.row_height.value, 10) || 96; DASH.is_default = f.is_default.checked; if(f.public_annotations.checked) SPEC.public_annotations = true; else delete SPEC.public_annotations;
     const fl = $('#fltList')._read ? $('#fltList')._read() : []; const bad = fl.find(x => x.kind === 'attribute' && !/^[A-Za-z0-9_.-]{1,40}$/.test(x.key || '')); if(bad){ ctrl32.toast('an attribute filter needs the attribute name', 'bad'); return; }
     if(fl.length) SPEC.filters = fl; else delete SPEC.filters; mountEditorFilters();
     $('#eTitle').textContent = 'Edit: ' + DASH.name; $('#setDlg').close(); dirty(); if(EDITOR) EDITOR.commit(); redraw(); };

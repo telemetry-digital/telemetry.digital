@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/analytics"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/config"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/ingest"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/video"
@@ -38,6 +39,10 @@ type Engine struct {
 
 	jobs   chan func()
 	reload chan struct{}
+
+	checkMu sync.Mutex // detector self-check, cached
+	check   *analytics.CheckResult
+	checkAt time.Time
 }
 
 type entrance struct {

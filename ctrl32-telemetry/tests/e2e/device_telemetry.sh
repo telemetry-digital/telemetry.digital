@@ -8,7 +8,9 @@
 #   - sensor faults: "fault" flags in the telemetry and values outside the physical range of the datastream are stored
 #     with quality sensor_fault, a sensor_fault alarm rule raises and clears, value rules skip faulty values;
 #   - annotations of observations (data.annotate): shown with the chart, in the table and in the observation export;
-#     retracted by a new record; refused without the permission;
+#     retracted by a new record; refused without the permission; in the dashboard chart widget and on a public link
+#     only when the owner enabled it (0.72.0);
+#   - a stale latest value: computed from the datastream's expected interval, never stored (0.72.0);
 #   - organization scope: another organization's user sees nothing of the device.
 # Devices talk over the device HTTP API (POST /api/v1/d/telemetry, /api/v1/d/status). Needs curl and Node.
 #   BASE=http://127.0.0.1:8080 USER=admin PASS=admin1234 bash tests/e2e/device_telemetry.sh
@@ -148,6 +150,38 @@ req POST "/api/v1/annotations/$ANN2/retract" '{"reason":"again"}'; check "retrac
 req GET "/api/v1/annotations?datastream_id=$TEMP&from=$FROM&to=$TO"; check "retracted one hidden" "$(jx 'j.map(a=>a.text).join(",")')" "Door open for loading"
 req GET "/api/v1/annotations?datastream_id=$TEMP&from=$FROM&to=$TO&include_retracted=1"; check "…kept as a record" "$(jx 'j.find(a=>a.id==="'"$ANN2"'").retract_reason')" "wrong probe"
 req GET "/api/v1/export/audit?from=$(iso $((NOW - 120)))&format=jsonl"; check "annotations audited (two created, one retracted)" "$(grep -e "$ANN" -e "$ANN2" "$TMP/b" | grep -c 'annotation\.\(create\|retract\)')" "3"
+
+echo "== stale latest value (0.72.0): computed from the expected interval, never stored"
+# the latest temp may be only seconds old (earlier sections send values): an interval of 1 s and a short wait
+req PATCH "/api/v1/datastreams/$TEMP" '{"expected_interval":"1 second","reason":"e2e stale"}'; check "expected interval set" "$(st)" 200
+sleep 2
+req GET "/api/v1/devices/$DEV/telemetry?from=$FROM&to=$TO"
+check "telemetry tab: latest temp is stale" "$(jx 'const k=j.keys.find(k=>k.key==="temp"); [k.last.quality,k.last.stale,k.last.stored_quality].join(" ")')" "stale true ok"
+req GET "/api/v1/datastreams/latest?ids=$TEMP"; check "latest values: stale" "$(jx 'const l=j["'"$TEMP"'"]; [l.quality,l.stale,l.stored_quality].join(" ")')" "stale true ok"
+req GET "/api/v1/datastreams/query?ids=$TEMP&latest=1"; check "overview query: stale" "$(jx 'const l=j.items[0].latest; [l.quality,l.stale].join(" ")')" "stale true"
+req GET "/api/v1/observations?datastream_id=$TEMP&from=$FROM&to=$TO&limit=100"; check "stored observations keep their quality" "$(jx 'j.filter(o=>o.quality==="stale").length')" "0"
+req PATCH "/api/v1/datastreams/$TEMP" '{"expected_interval":"1 hour","reason":"e2e stale"}'
+req GET "/api/v1/datastreams/latest?ids=$TEMP"; check "within the interval: ok" "$(jx 'const l=j["'"$TEMP"'"]; [l.quality,!!l.stale,l.stored_quality===undefined].join(" ")')" "ok false true"
+req PATCH "/api/v1/datastreams/$TEMP" '{"expected_interval":"","reason":"e2e stale"}'
+
+echo "== annotations in the dashboard chart and on the public link (0.72.0)"
+SPEC="{\"version\":1,\"kind\":\"dashboard\",\"layout\":{\"type\":\"grid\",\"row_height\":96},\"range\":\"6h\",\"refresh_s\":30,\"widgets\":[{\"id\":\"t\",\"type\":\"chart\",\"geometry\":{\"x\":0,\"y\":0,\"w\":6,\"h\":3},\"bindings\":{\"datastreams\":[\"$TEMP\"]},\"params\":{\"annotations\":true}}]}"
+req POST /api/v1/dashboards "{\"name\":\"Annotations $SUF\",\"spec\":$SPEC,\"reason\":\"e2e\"}"; check "dashboard with a chart" "$(st)" 201
+DSLUG=$(jx j.slug)
+check "chart setting annotations kept" "$(jx 'j.spec.widgets[0].params.annotations')" "true"
+check "public annotations off by default" "$(jx 'j.spec.public_annotations === undefined')" "true"
+req POST "/api/v1/dashboards/$DSLUG/share" '{"reason":"e2e"}'; PTOK=$(jx j.token); check "public link" "$(st)" 201
+curl -s -o "$TMP/b" -w '%{http_code}' "$BASE/api/v1/public/$PTOK/annotations?datastream_id=$TEMP&from=$FROM&to=$TO" > "$TMP/s"
+check "public link: no annotations unless enabled" "$(st) $(jx 'j.length')" "200 0"
+curl -s -o "$TMP/b" -w '%{http_code}' "$BASE/api/v1/public/$PTOK/annotations?datastream_id=$ASSET&from=$FROM&to=$TO" > "$TMP/s"
+check "public link: unbound datastream refused" "$(st)" 403
+SPEC2="${SPEC%\}},\"public_annotations\":true}"
+req PUT "/api/v1/dashboards/$DSLUG" "{\"spec\":$SPEC2,\"reason\":\"e2e show annotations publicly\"}"; check "owner enables public annotations" "$(st) $(jx 'j.spec.public_annotations')" "200 true"
+curl -s -o "$TMP/b" -w '%{http_code}' "$BASE/api/v1/public/$PTOK/annotations?datastream_id=$TEMP&from=$FROM&to=$TO" > "$TMP/s"
+check "public link: annotation text, retracted hidden" "$(st) $(jx 'j.map(a=>a.text+"|"+a.category).join(",")')" "200 Door open for loading|expected_event"
+check "public link: no author" "$(jx 'j[0].created_by === undefined')" "true"
+req GET "/api/v1/annotations?datastream_id=$TEMP&from=$FROM&to=$TO"; check "signed in: annotations for the chart widget" "$(jx 'j.length + " " + !!j[0].created_by')" "1 true"
+req DELETE "/api/v1/dashboards/$DSLUG/share?reason=e2e"
 
 echo "== create a datastream for a key and assign it"
 req POST "/api/v1/devices/$DEV/telemetry/assign" "{\"key\":\"co2\",\"asset_id\":\"$ASSET\",\"quantity\":\"co2\",\"unit\":\"ppm\",\"reason\":\"e2e\"}"; check "created and assigned" "$(st)" 201

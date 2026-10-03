@@ -150,13 +150,21 @@ tok GET "$RT" "$SUMMARY"; check "a reader sees the summary" "$(st)" 200
 tok POST "$RT" /api/v1/counting/areas "{\"site_id\":\"$SITE\",\"name\":\"Y\",\"reason\":\"e2e\"}"; check "a reader cannot create an area" "$(st)" 403
 tok POST "$RT" "/api/v1/counting/areas/$AREA/occupancy" '{"group":"people","value":1,"reason":"e2e"}'; check "a reader cannot correct the occupancy" "$(st)" 403
 tok PUT "$RT" "/api/v1/counting/cameras/$CAM" '{"enabled":true,"config":{"lines":[]},"reason":"e2e"}'; check "a reader cannot configure a camera" "$(st)" 403
+echo "== detector self-check (0.72.0)"
+req GET /api/v1/counting/selfcheck; check "self-check: ffmpeg, ONNX Runtime and both models" "$(st) $(jx 'j.components.map(c => c.name).join()')" "200 ffmpeg,onnxruntime,model_nano,model_tiny"
+check "self-check: ready only when ffmpeg, ONNX Runtime and a model work" "$(jx 'j.ready === (["ok", "warning"].includes(j.components[0].state) && j.components[1].state === "ok" && (j.components[2].state === "ok" || j.components[3].state === "ok"))')" true
+check "self-check: every missing or broken part has advice" "$(jx 'j.components.filter(c => ["missing", "error"].includes(c.state)).every(c => !!c.hint)')" true
+check "self-check: paths for the server administrator" "$(jx 'j.components.some(c => !!c.path)')" true
+ADMIN_VIEW=$(jx 'j.components.map(c => c.name + ":" + c.state).join()')
+req GET "/api/v1/counting/selfcheck?refresh=1"; check "self-check again (refresh)" "$(st) $(jx 'j.components.map(c => c.name + ":" + c.state).join()')" "200 $ADMIN_VIEW"
+tok GET "$RT" /api/v1/counting/selfcheck; check "a reader sees the states without paths and details" "$(st) $(jx 'j.components.some(c => c.path || c.detail)') $(jx 'j.components.map(c => c.name + ":" + c.state).join()')" "200 false $ADMIN_VIEW"
 req GET "/api/v1/export/audit?format=csv"
 for a in counting_area.create counting_input.create counting_occupancy.update counting_camera.update; do grep -q "$a" "$TMP/b" && ok "audited: $a" || bad "not audited: $a"; done
 req DELETE "/api/v1/counting/entrances/$DOCK?reason=e2e"; check "entrance archived" "$(st)" 200
 req GET /api/v1/counting/areas; check "two entrances left" "$(jx "j.areas.find(a => a.id === '$AREA').entrances.length")" 2
 req DELETE "/api/v1/counting/areas/$PARK?reason=e2e"; check "area archived" "$(st)" 200
 req GET /api/v1/counting/areas; check "archived area not listed" "$(jx "j.areas.some(a => a.id === '$PARK')")" false
-req GET /api/v1/openapi.json; check "documented in OpenAPI" "$(jx 'Object.keys(j.paths).filter(p => p.startsWith("/api/v1/counting")).length')" 11
+req GET /api/v1/openapi.json; check "documented in OpenAPI" "$(jx 'Object.keys(j.paths).filter(p => p.startsWith("/api/v1/counting")).length')" 12
 req DELETE "/api/v1/video/cameras/$CAM?reason=e2e"
 
 echo; echo "passed $pass, failed $fail"; [[ $fail -eq 0 ]]

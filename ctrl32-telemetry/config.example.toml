@@ -71,8 +71,10 @@ secret_key = "REPLACE-WITH-RANDOM-32-CHARS"
 # Object counting on camera pictures (spec 029, ADR-0022, docs/object-counting.md): people and vehicles crossing lines
 # drawn on the picture, counted by a worker process per camera. Needs an unmodified ffmpeg (LGPL build), the ONNX
 # Runtime library (MIT, 1.17+) and the YOLOX models (Apache-2.0); without them counting with sensors still works.
-# ffmpeg = "/usr/bin/ffmpeg"                                   # empty = next to the binary or on PATH
-# onnxruntime = "/opt/onnxruntime/lib/libonnxruntime.so"       # Windows: C:\onnxruntime\lib\onnxruntime.dll
+# The installers write this section: install.sh --analytics, install.ps1 -Analytics (downloaded from the official
+# releases, pinned and SHA-256 verified). Check: ctrl32-telemetry analytics-worker -selfcheck -config <this file>.
+# ffmpeg = "/opt/ctrl32-telemetry/analytics/ffmpeg-n8.1.2-50-g1a748fe2cd-lgpl/bin/ffmpeg"   # empty = next to the binary or on PATH
+# onnxruntime = "/opt/ctrl32-telemetry/analytics/onnxruntime-1.30.0/lib/libonnxruntime.so"   # Windows: …\onnxruntime.dll
 # model_nano = "/var/lib/ctrl32-telemetry/models/yolox_nano.onnx"
 # model_tiny = "/var/lib/ctrl32-telemetry/models/yolox_tiny.onnx"
 # nano_sha256 = "c789161ed43c8269fcd4e67c67eeeb4e80c622da2eb296a20bc6007bd18a0b7d"

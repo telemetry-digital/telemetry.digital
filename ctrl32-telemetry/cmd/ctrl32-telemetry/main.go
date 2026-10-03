@@ -101,6 +101,9 @@ func main() {
 	case "cameras":
 		err = cmdCameras(args)
 	case "analytics-worker": // object counting (spec 029): started by the server per camera, or -bench on a clip
+		if isSelfCheck(args) { // detector installation check (also run by the server for the UI)
+			os.Exit(cmdAnalyticsSelfCheck(args))
+		}
 		os.Exit(analytics.Main(args))
 	case "version":
 		// the server agent reads "released YYYY-MM-DD" before installing an update (licence updates_until)
@@ -124,7 +127,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: ctrl32-telemetry <serve|agent|migrate|audit verify|service <action>|admin bootstrap|admin reset-password|admin seed-dashboard|dev seed|replica attach|status|promote|camera-relay|cameras export|cameras import|verify-evidence|analytics-worker|version> [-config path]")
+	fmt.Fprintln(os.Stderr, "usage: ctrl32-telemetry <serve|agent|migrate|audit verify|service <action>|admin bootstrap|admin reset-password|admin seed-dashboard|dev seed|replica attach|status|promote|camera-relay|cameras export|cameras import|verify-evidence|analytics-worker [-selfcheck]|version> [-config path]")
 }
 
 func loadConfig(args []string) (*config.Config, string, error) {

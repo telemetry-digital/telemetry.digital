@@ -265,7 +265,7 @@
   const SEV_RANK = { warning: 1, action: 2, critical: 3 };
   const ageOf = (r) => (r.latest ? Date.now() - Date.parse(r.latest.measured_at) : null);
   const ageTxt = (ms) => { if (ms == null) return '—'; const s = ms / 1000; return s < 60 ? Math.round(s) + ' s' : s < 3600 ? Math.round(s / 60) + ' min' : s < 172800 ? Math.round(s / 3600) + ' h' : Math.round(s / 86400) + ' d'; };
-  const staleOf = (r, p) => { const a = ageOf(r); if (a == null) return true; const lim = STALE[p.stale_after] || (r.interval_s ? Math.max(2 * r.interval_s * 1000, 120e3) : 3600e3); return a > lim; };
+  const staleOf = (r, p) => { const a = ageOf(r); if (a == null) return true; if (STALE[p.stale_after]) return a > STALE[p.stale_after]; if (r.interval_s) return !!(r.latest && r.latest.stale); return a > 3600e3; };
   const rowVal = (r) => (r.latest ? numVal(r.latest) : null);
   const outOfLimits = (r, v) => { const l = r.limits || {}; if (v == null) return ''; if ((l.high_action != null && v >= l.high_action) || (l.low_action != null && v <= l.low_action)) return 'bad'; if ((l.high_warn != null && v >= l.high_warn) || (l.low_warn != null && v <= l.low_warn)) return 'warn'; return ''; };
   const limTxt = (l) => { if (!l) return '—'; const lo = l.low_action ?? l.low_warn, hi = l.high_action ?? l.high_warn; return lo == null && hi == null ? '—' : (lo != null && hi != null ? `${lo} … ${hi}` : lo != null ? `≥ ${lo}` : `≤ ${hi}`); };
@@ -277,7 +277,9 @@
       case 'datastream': return (r.label || r.key || '').toLowerCase(); default: return String(r[k] || '').toLowerCase();
     }
   }
-  const otGroup = (r, g) => (g === 'device' ? r.device || '—' : r[g] || '—');
+  // asset types and quantities are codes: shown as words in the user's language (grouping and the cells)
+  const OT_CODES = new Set(['asset_type', 'quantity']);
+  const otGroup = (r, g) => (g === 'device' ? r.device || '—' : r[g] ? (OT_CODES.has(g) ? WG.codeLabel(r[g]) : r[g]) : '—');
   reg('overview_table', async (el, p, ctx) => {
     // the column a table is grouped by is shown in the group rows instead
     const cols = (Array.isArray(p.columns) && p.columns.length ? p.columns : ['site', 'asset', 'datastream', 'value', 'age', 'quality', 'alarm']).filter((c) => OT_LBL[c] && c !== p.group_by);
@@ -308,7 +310,8 @@
           return `<td style="text-align:right;font-weight:600;white-space:nowrap;color:${col}">${v == null ? (r.latest && r.latest.value_json != null ? esc(JSON.stringify(r.latest.value_json)) : '—') : num(v, dec(r))} <span class="muted" style="font-weight:400">${esc(r.unit || '')}</span></td>`; }
         case 'age': { const s = staleOf(r, p); return `<td style="white-space:nowrap">${ageTxt(ageOf(r))}${s && r.latest ? ' <span class="badge warn">' + esc(tr('stale')) + '</span>' : ''}</td>`; }
         case 'measured': return `<td style="white-space:nowrap">${r.latest ? fmt(r.latest.measured_at) : '—'}</td>`;
-        case 'quality': return `<td>${r.latest ? `<span class="badge ${r.latest.quality === 'ok' || r.latest.quality === 'backfilled' ? 'ok' : 'warn'}">${esc(r.latest.quality)}</span>` : ''}</td>`;
+        case 'quality': return `<td>${r.latest ? WG.qualBadge(r.latest.quality) : ''}</td>`;
+        case 'asset_type': case 'quantity': return `<td>${r[c] ? esc(WG.codeLabel(r[c])) : '—'}</td>`;
         case 'alarm': return `<td>${r.alarm ? `<span class="badge ${r.alarm.severity === 'warning' ? 'warn' : 'bad'}">${esc(r.alarm.severity)}${r.alarm.acknowledged ? ' ✓' : ''}</span>` : '<span class="muted">—</span>'}</td>`;
         case 'limits': return `<td style="white-space:nowrap" class="muted">${esc(limTxt(r.limits))}</td>`;
         case 'min': case 'max': case 'change': { const x = r.window ? r.window[c] : null; const lim = c !== 'change' && (hl === 'both' || hl === 'limits') ? outOfLimits(r, x) : ''; return `<td style="text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums${lim ? ';color:var(--' + lim + ')' : ''}">${x == null ? '—' : num(x, dec(r)) + (r.unit ? ` <span class="muted">${esc(r.unit)}</span>` : '')}</td>`; }

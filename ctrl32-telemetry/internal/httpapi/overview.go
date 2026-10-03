@@ -304,16 +304,19 @@ func (s *Server) enrichDS(ctx context.Context, org string, items []map[string]an
 		if err != nil {
 			return err
 		}
+		now := time.Now()
 		for rows.Next() {
 			var id, quality string
 			var at time.Time
 			var val *float64
 			var vj json.RawMessage
 			if rows.Scan(&id, &at, &val, &vj, &quality) == nil {
-				l := map[string]any{"measured_at": at, "value": val, "quality": quality}
+				l := map[string]any{"measured_at": at, "value": val}
 				if len(vj) > 0 && string(vj) != "null" {
 					l["value_json"] = vj
 				}
+				iv, _ := byID[id]["interval_s"].(int64)
+				applyLive(l, quality, at, float64(iv), now) // "stale" is computed, never stored (quality.go)
 				byID[id]["latest"] = l
 			}
 		}

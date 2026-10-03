@@ -124,7 +124,9 @@ req POST /api/v1/vpn/uplink/transport "{\"transport\":\"https\",$R}"; check "HTT
 up=false
 for _ in $(seq 20); do req GET /api/v1/vpn; [[ "$(jx 'j.uplink.tunnel && j.uplink.tunnel.connected')" == true ]] && { up=true; break; }; sleep 0.5; done
 check "the agent's tunnel reached the hub with the uplink's key" "$up" true
-check "transport reported" "$(jx '[j.uplink.transport, j.uplink.tunnel_host].join(" ")')" "https ${BASE#http://}"
+# the tunnel host is the host of the hub's base_url (localhost or 127.0.0.1), not necessarily the one of $BASE
+TUNHOST=$(tokfield "$TOKEN" tunnel_url | sed -E 's|^[a-z]+://([^/]+).*|\1|')
+check "transport reported" "$(jx '[j.uplink.transport, j.uplink.tunnel_host].join(" ")')" "https $TUNHOST"
 req PATCH "/api/v1/vpn/peers/$UPLINK" "{\"enabled\":false,$R}"; check "hub disables the uplink peer" "$(st)" 200
 check "a disabled uplink's key is refused" "$(tunnel "$KEY")" 401
 down=false

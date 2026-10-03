@@ -39,6 +39,7 @@
     <div class="card"><h2>Database</h2><dl class="kv" id="kvDb"></dl></div>
     <div class="card"><h2>Storage and files</h2><dl class="kv" id="kvFiles"></dl></div>
     <div class="card"><h2>Components</h2><dl class="kv" id="kvVersions"></dl></div>
+    <div class="card"><h2>Object counting</h2><div id="acBody"></div></div>
   </div>
   <div class="card" style="margin-top:16px"><h2>Services and containers</h2>
     <div class="table-wrap"><table id="units"><thead><tr><th>Unit</th><th>State</th><th>At boot</th><th></th></tr></thead><tbody></tbody></table></div>
@@ -234,6 +235,7 @@
 </dialog>
 </main>
 <script src="/app.js"></script>
+<script src="/analytics-check.js"></script>
 <script>
 const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
 const TITLES = {overview: 'Server', domain: 'Domain and TLS', backups: 'Backups', redundancy: 'Redundant database', updates: 'Updates', license: 'License'};
@@ -259,6 +261,7 @@ function renderOverview(){
   const d = INFO.database;
   kv($('#kvDb'), [['Server', esc(c.db)], ['PostgreSQL', esc(d.server_version || '')], ['Size', (d.size_mb||0).toFixed(1) + ' MB'], ['Organizations', d.organizations], ['Users', d.users], ['Devices', d.devices], ['Sites', d.sites], ['Stored reports', d.reports], ['Pending commands', d.pending_commands]]);
   kv($('#kvFiles'), [['Reports', esc(c.report_storage)], ['Firmware', esc(c.fota_storage) + ` (max ${c.fota_max_mb} MB)`], ['Typst', esc(c.typst_path || 'typst on PATH')], ['Log file', esc(c.log_file) + ` (${esc(c.log_level)})`], ['Gap check', esc(c.gap_check)], ['Metrics (Prometheus)', '<a href="/metrics" target="_blank" rel="noopener">/metrics</a>'], ['Security contact (security.txt)', '<a href="/.well-known/security.txt" target="_blank" rel="noopener">/.well-known/security.txt</a>']]);
+  window.ctrl32AnalyticsCheck.render($('#acBody'));
   kv($('#kvVersions'), st ? Object.entries(st.versions || {}).map(([k, v]) => [k, esc(v)]) : [['Components', '<span class="muted">needs the server agent</span>']]);
   const rows = [];
   if(st){ for(const s of st.services) rows.push(`<tr><td>${esc(s.label)} <span class="muted">${esc(s.unit)}</span></td><td>${badge(s.active)}</td><td>${badge(s.enabled)}</td><td>${s.unit === 'ctrl32-telemetry-agent' ? '<button class="btn small" data-restart="agent" type="button">Restart</button>' : (s.unit.startsWith('wg-quick') ? '<button class="btn small" data-restart="wireguard" type="button">Restart</button>' : '')}</td></tr>`);

@@ -1,0 +1,27 @@
+meta {
+  name: Annotations of a bound datastream
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public/:token/annotations
+  body: none
+  auth: inherit
+}
+
+params:path {
+  token: 
+}
+
+params:query {
+  datastream_id: 
+  ~from: 
+  ~to: 
+}
+
+docs {
+  Annotations of a bound datastream
+  
+  Only when the dashboard owner enabled `public_annotations` in the spec; otherwise an empty list. Time, category and text, without the author.
+}

@@ -88,6 +88,12 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
 
   // ---- camera line editor
   await go(`/counting/cameras?camera=${setup.cam}`, 4000);
+  // detector installation (0.72.0): the self-check card lists ffmpeg, ONNX Runtime and both models with a state
+  const acRows = `[...document.querySelectorAll('#acBody tbody tr')].map(r => r.cells.length + ':' + !!r.querySelector('.badge')).join()`;
+  expect("detector self-check card: four parts with a state", await ev(acRows), "3:true,3:true,3:true,3:true");
+  expect("detector self-check: ready or not installed, and Check again", await ev(`/ready|not installed/.test(document.querySelector('#acBody p').textContent) && !!document.querySelector('#acBody [data-ac-refresh]')`), true);
+  await ev(`document.querySelector('#acBody [data-ac-refresh]').click(); true`); await sleep(2500);
+  expect("detector self-check again", await ev(acRows), "3:true,3:true,3:true,3:true");
   expect("editor open", await ev(`!document.querySelector('#editorCard').hidden && !!document.querySelector('#ocSvg')`), true);
   await ev(`document.querySelector('#ocAdd').click(); true`);
   const clickAt = async (fx, fy) => ev(`(() => { const s = document.querySelector('#ocSvg'), r = s.getBoundingClientRect(); s.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true, clientX: r.left + r.width * ${fx}, clientY: r.top + r.height * ${fy}, pointerId: 1})); return true; })()`);
@@ -123,6 +129,12 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await ev(`document.querySelector('[data-send="${rid}"]').click(); true`); await sleep(5000);
   expect("sent now: a run in the delivery log with an Excel attachment", await ev(`!document.querySelector('#runsCard').hidden && [...document.querySelectorAll('#runs tbody tr')].length >= 1 && document.querySelector('#runs tbody tr').textContent.includes('.xlsx')`), true);
   await shot("counting-scheduled-reports.png");
+
+  // ---- System → Server: the same self-check card for the server administrator (paths only where a part fails)
+  await go("/server", 4000);
+  expect("server page: object counting self-check", await ev(`[...document.querySelectorAll('#acBody tbody tr')].length + ' ' + !!document.querySelector('#acBody [data-ac-refresh]')`), "4 true");
+  expect("server page: a path on hover for every part found", await ev(`[...document.querySelectorAll('#acBody tbody tr')].filter(r => r.querySelector('.badge.ok')).every(r => !!r.cells[0].title)`), true);
+  await shot("counting-server-selfcheck.png");
 
   // clean up what is not data: the dashboard, the report, the camera
   await ev(`(async () => { const api = ctrl32.api; await api('DELETE', '/api/v1/dashboards/${dash}?reason=headless'); await api('DELETE', '/api/v1/scheduled-reports/${rid}?reason=headless'); await api('DELETE', '/api/v1/video/cameras/${setup.cam}?reason=headless'); return true; })()`);

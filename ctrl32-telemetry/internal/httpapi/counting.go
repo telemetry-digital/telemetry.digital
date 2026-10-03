@@ -10,6 +10,7 @@ package httpapi
 //	GET  /api/v1/counting/log?area=                     data.read    resets, corrections, clamps
 //	GET  /api/v1/counting/cameras                       data.read    counting cameras and their state
 //	GET  /api/v1/counting/cameras/{id}                  data.read    one camera: lines, sections, state, boxes of the last frame
+//	GET  /api/v1/counting/selfcheck                     data.read    detector installation: ffmpeg, ONNX Runtime, models
 //	POST/PUT/DELETE areas, entrances, inputs; PUT cameras/{id}; POST areas/{id}/occupancy   config.write, with a reason
 
 import (
@@ -28,6 +29,7 @@ import (
 
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/analytics"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/counting"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/iam"
 )
 
 var hhmmRe = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
@@ -926,6 +928,25 @@ func (s *Server) listCountingCameras(w http.ResponseWriter, r *http.Request) {
 		out = append(out, map[string]any{"camera_id": id, "camera": name, "camera_enabled": camOn, "enabled": on, "fps": fps, "model": model, "min_score": score, "config": json.RawMessage(raw), "status": st})
 	}
 	writeJSON(w, 200, out)
+}
+
+// GET /api/v1/counting/selfcheck: is the detector installed (ffmpeg, ONNX Runtime, models)? Shown on the Object
+// counting page and on System → Server. File paths only for server administrators.
+func (s *Server) getCountingSelfCheck(w http.ResponseWriter, r *http.Request) {
+	if s.counting == nil {
+		writeJSON(w, 200, analytics.CheckResult{Components: []analytics.Component{{Name: "worker", State: analytics.StateError, Detail: "object counting is not available"}}})
+		return
+	}
+	res := s.counting.SelfCheck(r.Context(), r.URL.Query().Get("refresh") == "1")
+	if p := PrincipalFrom(r.Context()); p == nil || !p.Has(iam.ServerPermission) {
+		comps := make([]analytics.Component, len(res.Components))
+		for i, c := range res.Components {
+			c.Path, c.Detail = "", "" // paths and technical details reveal the server's layout
+			comps[i] = c
+		}
+		res.Components = comps
+	}
+	writeJSON(w, 200, res)
 }
 
 // GET /api/v1/counting/cameras/{id}

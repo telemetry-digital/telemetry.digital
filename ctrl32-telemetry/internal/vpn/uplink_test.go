@@ -249,3 +249,18 @@ func TestUplinkPeerAllowedIPs(t *testing.T) {
 		t.Fatalf("%q %q %v", key, hash, err)
 	}
 }
+
+func TestValidTunnelURL(t *testing.T) {
+	for _, s := range []string{"https://hub.example.com/x", "http://127.0.0.1:8080/x", "http://[::1]:8080/x",
+		"http://localhost:8080/x", "http://LOCALHOST/x", "http://localhost./x"} {
+		if err := ValidTunnelURL(s); err != nil {
+			t.Errorf("%s refused: %v", s, err)
+		}
+	}
+	for _, s := range []string{"http://hub.example.com/x", "http://localhost.example.com/x", "http://evil.localhost/x",
+		"http://10.0.0.1/x", "http://localhostx/x", "ftp://localhost/x", "http://u:p@localhost/x", "http://localhost/x?a=1"} {
+		if err := ValidTunnelURL(s); err == nil {
+			t.Errorf("%s accepted", s)
+		}
+	}
+}

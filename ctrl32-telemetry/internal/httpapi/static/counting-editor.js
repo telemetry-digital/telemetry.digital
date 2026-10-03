@@ -14,7 +14,7 @@
   const uid = () => Math.random().toString(36).slice(2, 8);
 
   async function list() {
-    if (!CTX.installed) { $('#camNote').hidden = false; $('#camNote').innerHTML = `<span class="badge warn">${esc(t('not installed'))}</span> <span>${esc(CTX.note)}</span>`; }
+    if (window.ctrl32AnalyticsCheck) window.ctrl32AnalyticsCheck.render($('#acBody')); // ffmpeg, ONNX Runtime, models
     CAMS = await api('GET', '/api/v1/counting/cameras');
     $('#camTable tbody').innerHTML = CAMS.map((c) => {
       const st = c.status || { state: 'off' }, cfg = c.config || {};
