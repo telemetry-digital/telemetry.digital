@@ -35,7 +35,7 @@
 #if d.subtitle != none and d.subtitle != "" { text(size: 10pt, fill: luma(80))[#d.subtitle] }
 #v(6pt)
 #if conf {
-  block(fill: rgb("#fdecea"), stroke: 0.6pt + red, inset: 8pt, radius: 3pt, width: 100%)[
+  block(stroke: (left: 2.5pt + red), inset: (left: 8pt, y: 4pt), width: 100%)[
     #text(fill: red, weight: "bold")[#mark.] Keep this document like the keys to the building and destroy copies you no longer need.
   ]
   v(4pt)
@@ -54,7 +54,7 @@
   let pairs = d.columns.filter(c => c.key != title-key and c.key not in head)
     .map(c => (c.label, cell(r.at(c.key, default: none)), c.key))
     .filter(p => p.at(1) != "")
-  block(breakable: false, width: 100%, stroke: 0.6pt + luma(170), radius: 3pt, inset: 7pt, below: 6pt)[
+  block(breakable: false, width: 100%, stroke: (bottom: 0.5pt + luma(170)), inset: (y: 6pt), below: 6pt)[
     #grid(columns: (auto, 1fr, auto), column-gutter: 8pt, align: (left + horizon, left + horizon, right + horizon),
       text(size: 11pt, weight: "bold")[#title],
       text(fill: luma(70))[#place],
