@@ -32,6 +32,15 @@ import (
 //go:embed templates/*.typ
 var builtin embed.FS
 
+// Liberation Sans (SIL OFL 1.1, metric-compatible with Arial): the default typeface of reports and exports. Typst
+// runs with --ignore-system-fonts, so the PDFs look the same on every server.
+//
+//go:embed fonts/*.ttf
+var fontFS embed.FS
+
+// DefaultFont is the typeface of reports and exports unless a template chooses another one.
+const DefaultFont = "Liberation Sans"
+
 // MaxRows is the hard cap of table rows in one PDF (CSV/JSONL exports carry the complete data).
 const MaxRows = 3000
 
@@ -453,6 +462,9 @@ func (e *Engine) compile(ctx context.Context, body string, d Data, assets map[st
 	if err != nil {
 		return nil, err
 	}
+	// templates saved before 0.73.1 carry the old default serif face in their generated source; new exports use the
+	// bundled sans face instead (stored reports are files and stay as they were)
+	body = strings.ReplaceAll(body, `font: "Libertinus Serif"`, `font: "`+DefaultFont+`"`)
 	layout, _ := fs.ReadFile(builtin, "templates/layout.typ")
 	files := map[string][]byte{"main.typ": []byte(body), "layout.typ": layout, "data.json": dataJSON}
 	for k, v := range assets {
@@ -466,6 +478,18 @@ func (e *Engine) compile(ctx context.Context, body string, d Data, assets map[st
 			return nil, err
 		}
 	}
+	// the bundled typeface goes into the private workspace (not a shared directory another user could prepare)
+	fontDir := filepath.Join(dir, "fonts")
+	if err := os.Mkdir(fontDir, 0o700); err != nil {
+		return nil, err
+	}
+	fonts, _ := fs.ReadDir(fontFS, "fonts")
+	for _, f := range fonts {
+		b, _ := fontFS.ReadFile("fonts/" + f.Name())
+		if err := os.WriteFile(filepath.Join(fontDir, f.Name()), b, 0o600); err != nil {
+			return nil, err
+		}
+	}
 	cctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	// --root confines file access to the workspace; packages are disabled by pointing the package paths into the workspace.
@@ -473,7 +497,7 @@ func (e *Engine) compile(ctx context.Context, body string, d Data, assets map[st
 	// assets give byte-identical PDFs (URS J-08). A template that uses a feature PDF/A forbids falls back to plain PDF.
 	pdfA := true
 	for {
-		args := []string{"compile", "--root", dir, "--ignore-system-fonts"}
+		args := []string{"compile", "--root", dir, "--ignore-system-fonts", "--font-path", fontDir}
 		if pdfA {
 			args = append(args, "--pdf-standard", "a-2b")
 		}

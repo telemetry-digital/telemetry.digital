@@ -101,7 +101,7 @@ func blockDef(t string) *BlockDef {
 
 // DefaultSpec is the block representation of the built-in template of a kind.
 func DefaultSpec(kind string) Spec {
-	page := Page{Paper: "a4", Font: "Libertinus Serif", FontSize: 9.5}
+	page := Page{Paper: "a4", Font: DefaultFont, FontSize: 9.5}
 	b := func(t string, p map[string]any) Block {
 		if p == nil {
 			p = map[string]any{}
@@ -149,8 +149,8 @@ func ParseSpec(raw json.RawMessage) (Spec, error) {
 	default:
 		return sp, errors.New("page.paper must be a4, a3, a5, us-letter or us-legal")
 	}
-	if sp.Page.Font == "" {
-		sp.Page.Font = "Libertinus Serif"
+	if sp.Page.Font == "" || sp.Page.Font == "Libertinus Serif" { // the serif face was the default before 0.73.1
+		sp.Page.Font = DefaultFont
 	}
 	if len(sp.Page.Font) > 64 || strings.ContainsAny(sp.Page.Font, "\"\\\n") {
 		return sp, errors.New("page.font invalid")

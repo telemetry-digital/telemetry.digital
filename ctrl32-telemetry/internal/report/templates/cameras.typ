@@ -27,7 +27,7 @@
       [Page #counter(page).display() of #counter(page).final().first()])
   ],
 )
-#set text(font: "Libertinus Serif", size: 8.5pt, lang: d.locale)
+#set text(font: "Liberation Sans", size: 8.5pt, lang: d.locale)
 #set par(justify: false)
 
 #text(size: 18pt, weight: "bold")[#d.title]

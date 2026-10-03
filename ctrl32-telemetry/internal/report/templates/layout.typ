@@ -17,7 +17,7 @@
   cell(cur)
 }
 
-#let page-setup(d, body, paper: "a4", landscape: false, font: "Libertinus Serif", size: 9.5pt) = {
+#let page-setup(d, body, paper: "a4", landscape: false, font: "Liberation Sans", size: 9.5pt) = {
   set page(
     paper: paper,
     flipped: landscape,

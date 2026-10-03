@@ -126,7 +126,7 @@
       <div class="row">
         <label>Paper <select id="pgPaper"><option value="a4">A4</option><option value="a3">A3</option><option value="a5">A5</option><option value="us-letter">US Letter</option><option value="us-legal">US Legal</option></select></label>
         <label class="inline"><input type="checkbox" id="pgLandscape"><span>Landscape</span></label>
-        <label>Font <input id="pgFont" value="Libertinus Serif" maxlength="64"></label>
+        <label>Font <input id="pgFont" value="Liberation Sans" maxlength="64"></label>
         <label>Font size (pt) <input id="pgSize" type="number" min="6" max="16" step="0.5" value="9.5" style="max-width:90px"></label>
       </div>
     </div>
@@ -455,7 +455,7 @@ function paramInput(bi, p, v){
 }
 function renderBlocks(){
   if(!SPEC) return;
-  $('#pgPaper').value = SPEC.page.paper || 'a4'; $('#pgLandscape').checked = !!SPEC.page.landscape; $('#pgFont').value = SPEC.page.font || 'Libertinus Serif'; $('#pgSize').value = SPEC.page.font_size || 9.5;
+  $('#pgPaper').value = SPEC.page.paper || 'a4'; $('#pgLandscape').checked = !!SPEC.page.landscape; $('#pgFont').value = SPEC.page.font || 'Liberation Sans'; $('#pgSize').value = SPEC.page.font_size || 9.5;
   $('#blocks').innerHTML = SPEC.blocks.map((b, i) => { const d = defOf(b.type) || {label: b.type, help: '', params: []};
     return `<div class="card" style="margin-bottom:8px"><div class="row" style="align-items:center"><b>${i + 1}. ${esc(d.label)}</b><span class="muted" style="font-size:12px">${esc(d.help || '')}</span><span class="grow"></span>
       <button class="btn small" type="button" data-up="${i}" title="Move up" ${i === 0 ? 'disabled' : ''}>↑</button><button class="btn small" type="button" data-down="${i}" title="Move down" ${i === SPEC.blocks.length - 1 ? 'disabled' : ''}>↓</button><button class="btn small danger" type="button" data-del="${i}">Remove</button></div>
@@ -466,7 +466,7 @@ function renderBlocks(){
   for(const el of document.querySelectorAll('#blocks [data-b]')) el.oninput = () => { const b = SPEC.blocks[+el.dataset.b]; const p = (defOf(b.type).params||[]).find(x => x.name === el.dataset.p); b.params = b.params || {};
     b.params[p.name] = p.kind === 'bool' ? el.checked : (p.kind === 'number' ? parseFloat(el.value) : (p.kind === 'list' ? el.value.split(',').map(s => s.trim()).filter(Boolean) : el.value)); };
 }
-function readPage(){ if(!SPEC) return; SPEC.page = {paper: $('#pgPaper').value, landscape: $('#pgLandscape').checked, font: $('#pgFont').value.trim() || 'Libertinus Serif', font_size: parseFloat($('#pgSize').value) || 9.5}; }
+function readPage(){ if(!SPEC) return; SPEC.page = {paper: $('#pgPaper').value, landscape: $('#pgLandscape').checked, font: $('#pgFont').value.trim() || 'Liberation Sans', font_size: parseFloat($('#pgSize').value) || 9.5}; }
 for(const id of ['pgPaper','pgLandscape','pgFont','pgSize']) $('#' + id).oninput = readPage;
 async function compileSpec(){ readPage(); const r = await api('POST','/api/v1/report-templates/compile',{spec: SPEC}); $('#genSrc').textContent = r.body; return r.body; }
 $('#addBlockBtn').onclick = () => { const d = defOf($('#addBlockSel').value); if(!d) return; const params = {}; for(const p of (d.params||[])) params[p.name] = p.default; SPEC.blocks.push({type: d.type, params}); renderBlocks(); };
