@@ -52,7 +52,9 @@ grep -c "^# HELP" "$TMP/b" > "$TMP/n"; [[ $(cat "$TMP/n") -gt 20 ]] && ok "$(cat
 echo "== clock check on the Server page and in healthz"
 req POST /api/v1/auth/login "{\"username\":\"$USER\",\"password\":\"$PASS\"}" >/dev/null; check "login" "$(st)" 200
 CSRF=$(req GET /api/v1/auth/me | jget csrf_token)
-req GET /api/v1/server >/dev/null; check "server info" "$(st)" 200
+# the first NTP query runs in the background after start; give it up to 60 s before judging the clock
+for _ in $(seq 1 30); do req GET /api/v1/server >/dev/null; [[ "$(jx "$TMP/b" 'j.time.checked_at')" > "2026" ]] && break; sleep 2; done
+check "server info" "$(st)" 200
 check "ntp enabled" "$(jx "$TMP/b" 'j.time.enabled')" true
 check "ntp server" "$(jx "$TMP/b" 'j.time.server')" "pool.ntp.org"
 [[ "$(jx "$TMP/b" 'j.time.checked_at')" > "2026" ]] && ok "checked at $(jx "$TMP/b" 'j.time.checked_at')" || bad "not checked yet"

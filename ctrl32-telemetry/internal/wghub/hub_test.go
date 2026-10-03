@@ -181,7 +181,7 @@ func TestHubEndToEnd(t *testing.T) {
 	cancel()
 
 	// ping of the server always works
-	if err := ping(a.net, "10.66.0.1", 5*time.Second); err != nil {
+	if err := ping(a.net, "10.66.0.1", 30*time.Second); err != nil { // generous: the race detector slows the userspace stack down
 		t.Fatalf("ping server: %v", err)
 	}
 
