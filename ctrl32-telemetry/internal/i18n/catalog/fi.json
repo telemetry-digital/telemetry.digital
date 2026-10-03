@@ -2370,6 +2370,8 @@
  "min": "min",
  "max": "max",
  "samples": "näytteet",
+ "total": "summa",
+ "total and max": "summa ja max",
  "out of limits": "rajojen ulkopuolella",
  "Total": "Yhteensä",
  "Previous": "Edellinen",

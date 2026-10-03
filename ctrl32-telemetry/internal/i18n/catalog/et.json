@@ -2370,6 +2370,8 @@
  "min": "min",
  "max": "max",
  "samples": "proovid",
+ "total": "summa",
+ "total and max": "summa ja max",
  "out of limits": "väljaspool piire",
  "Total": "Kokku",
  "Previous": "Eelmine",

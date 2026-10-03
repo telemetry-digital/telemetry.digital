@@ -111,9 +111,9 @@
   // page, and always its start page. Anything else opens the start page instead. This confines the user interface only;
   // permissions stay the security boundary (the API answers what the role allows, whatever window asks).
   const APP_PATHS = {
-    dashboards: ['/', '/dashboards'], home: ['/home', '/smarthome'], energy: ['/energy'], cameras: ['/video'],
+    dashboards: ['/', '/dashboards'], home: ['/home', '/smarthome'], energy: ['/energy'], counting: ['/counting'], cameras: ['/video'],
     displays: ['/displays'], flows: ['/flows'], devices: ['/devices'], incidents: ['/incidents'], assets: ['/assets'],
-    firmware: ['/fota'], users: ['/users'], settings: ['/settings'], system: ['/organizations', '/server', '/landing/edit'],
+    firmware: ['/fota'], users: ['/users'], audit: ['/audit'], settings: ['/settings'], system: ['/organizations', '/server', '/landing/edit'],
   };
   const APP_ALWAYS = ['/login', '/forgot', '/reset', '/account/security', '/license'];
   const pathIn = (p, list) => list.some((x) => p === x || (x !== '/' && p.startsWith(x + '/')));
@@ -212,7 +212,7 @@
         { href: '/fota', label: 'Images' }, { href: '/fota/campaigns', label: 'Campaigns' }] },
       { href: '/users', label: 'Users', icon: ICON.users, show: can('user.admin'), sec: 'users', children: [
         { href: '/users', label: 'Accounts' }, { href: '/users/roles', label: 'Roles and permissions' }] },
-      { href: can('audit.read') ? '/audit' : '/audit/reports', label: 'Audit', icon: ICON.shield, show: can('audit.read') || can('report.sign'), children: [
+      { href: can('audit.read') ? '/audit' : '/audit/reports', label: 'Audit', icon: ICON.shield, show: can('audit.read') || can('report.sign'), sec: 'audit', children: [
         { href: '/audit', label: 'Audit trail', show: can('audit.read') }, { href: '/audit/reviews', label: 'Reviews', show: can('audit.read') },
         { href: '/audit/reports', label: 'Report signatures' }] },
       { href: '/settings', label: 'Settings', icon: ICON.settings, show: can('content.write'), sec: 'settings', children: [

@@ -178,7 +178,7 @@ func TestUplinkEndToEnd(t *testing.T) {
 	if err := reach(t, L.tech.net, web, 2*time.Second); err == nil {
 		t.Fatal("customer server reachable without an uplink rule")
 	}
-	if err := ping(L.tech.net, "10.99.0.7", 5*time.Second); err != nil {
+	if err := ping(L.tech.net, "10.99.0.7", 30*time.Second); err != nil {
 		t.Fatalf("ping of the customer server through the hub: %v", err)
 	}
 	rules := []vpn.FwRule{

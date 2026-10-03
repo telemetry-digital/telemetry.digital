@@ -3,7 +3,8 @@
 #   unit      go vet, go test -race
 #   c         host tests of ctrl32-telemetry-c (C99, AddressSanitizer + UBSan)
 #   e2e       the suites in tests/e2e, iam.sh last (it needs a one-time password and enforced MFA)
-#   headless  the browser probes in tests/headless (skipped when no Chrome/Chromium is found)
+#   headless  the browser probes in tests/headless (skipped when no Chrome/Chromium is found; the hand-run tools
+#             docshots and camera_relay are left out)
 #
 #   bash tests/run-all.sh                 # everything
 #   bash tests/run-all.sh e2e headless    # only these phases
@@ -186,6 +187,9 @@ if has headless; then
     mkdir -p "$LOGS/screenshots"
     for f in tests/headless/*.js; do
       n=$(basename "$f" .js)
+      # tools run by hand, not probes: docshots takes the documentation pictures against the full demo, camera_relay
+      # needs a real camera behind a relay (CAM=<camera id>); neither belongs in an unattended run
+      [[ $n == docshots || $n == camera_relay ]] && continue
       if skip "$n"; then res "headless $n" skipped; continue; fi
       if [[ $n == vpn || $n == vpn2 || $n == vpn3 ]]; then start_server "$CONFIG_VPN"; else start_server; fi
       CHROME=$WORK/chrome TEMP=$WORK OUT=$LOGS/screenshots LOGIN=1 SLUG=$SHOWCASE SLUGS=$SHOWCASE \

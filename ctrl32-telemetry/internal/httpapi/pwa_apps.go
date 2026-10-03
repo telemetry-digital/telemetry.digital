@@ -60,9 +60,9 @@ type pwaSection struct {
 
 var pwaSections = []pwaSection{
 	{"dashboards", "Dashboards", "/dashboards"}, {"home", "Home", "/home"}, {"energy", "Energy", "/energy"},
-	{"cameras", "Cameras", "/video"}, {"displays", "Displays", "/displays"}, {"flows", "Flows", "/flows"},
+	{"counting", "Object counting", "/counting"}, {"cameras", "Cameras", "/video"}, {"displays", "Displays", "/displays"}, {"flows", "Flows", "/flows"},
 	{"devices", "Devices", "/devices"}, {"incidents", "Incidents", "/incidents"}, {"assets", "Assets", "/assets"},
-	{"firmware", "Firmware", "/fota"}, {"users", "Users", "/users"}, {"settings", "Settings", "/settings"},
+	{"firmware", "Firmware", "/fota"}, {"users", "Users", "/users"}, {"audit", "Audit", "/audit"}, {"settings", "Settings", "/settings"},
 	{"system", "System", "/organizations"},
 }
 
@@ -84,9 +84,9 @@ var (
 // pwaSectionPaths are the pages of a section (and their sub-pages) that a locked app may open; app.js keeps the same
 // list (APP_PATHS).
 var pwaSectionPaths = map[string][]string{
-	"dashboards": {"/", "/dashboards"}, "home": {"/home", "/smarthome"}, "energy": {"/energy"}, "cameras": {"/video"},
+	"dashboards": {"/", "/dashboards"}, "home": {"/home", "/smarthome"}, "energy": {"/energy"}, "counting": {"/counting"}, "cameras": {"/video"},
 	"displays": {"/displays"}, "flows": {"/flows"}, "devices": {"/devices"}, "incidents": {"/incidents"}, "assets": {"/assets"},
-	"firmware": {"/fota"}, "users": {"/users"}, "settings": {"/settings"}, "system": {"/organizations", "/server", "/landing/edit"},
+	"firmware": {"/fota"}, "users": {"/users"}, "audit": {"/audit"}, "settings": {"/settings"}, "system": {"/organizations", "/server", "/landing/edit"},
 }
 
 // pwaPathIn reports whether a path is one of the prefixes or below one ("/" matches only itself).

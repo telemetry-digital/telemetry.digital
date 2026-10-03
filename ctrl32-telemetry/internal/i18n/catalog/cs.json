@@ -2370,6 +2370,8 @@
  "min": "min",
  "max": "max",
  "samples": "vzorky",
+ "total": "součet",
+ "total and max": "součet a max",
  "out of limits": "mimo limity",
  "Total": "Celkem",
  "Previous": "Předchozí",

@@ -69,7 +69,8 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await ev(`document.querySelector('#eGrid .dash-widget').click()`);
   expect("widget selected in the editor", await until(`!!document.querySelector('select[data-p="period"]')`), true);
   expect("editor offers readable period names", await ev(`[...document.querySelectorAll('select[data-p="period"] option')].map(o => o.textContent).join('|')`), (s) => typeof s === "string" && s.split("|").length === 11 && !/_/.test(s)); // readable names (any language), not the codes
-  expect("editor offers readable values", await ev(`[...document.querySelectorAll('select[data-p="values"] option')].map(o => o.textContent).join('|')`), (s) => typeof s === "string" && s.split("|").length === 10 && !s.includes("first,last,delta") && !s.includes("min,max"));
+  // every value choice of the catalogue (12 since the sums of object counting, 0.70) shows a readable name, never its code
+  expect("editor offers readable values", await ev(`[...document.querySelectorAll('select[data-p="values"] option')].map(o => o.value === o.textContent ? '!' + o.value : o.textContent).join('|')`), (s) => typeof s === "string" && s.split("|").length === 12 && !s.includes("!"));
   await shot("period-editor.png");
   expect("dashboard removed", await ev(`ctrl32.api('DELETE','/api/v1/dashboards/${made}?reason=headless%20probe').then(() => true)`), true);
   console.log(problems.length ? "PROBLEMS:\n" + problems.join("\n") : "no problems");

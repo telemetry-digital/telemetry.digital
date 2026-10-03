@@ -2370,6 +2370,8 @@
  "min": "min",
  "max": "max",
  "samples": "minták",
+ "total": "összeg",
+ "total and max": "összeg és max",
  "out of limits": "határon kívül",
  "Total": "Összesen",
  "Previous": "Előző",

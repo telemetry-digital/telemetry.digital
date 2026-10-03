@@ -35,7 +35,7 @@ req POST /api/v1/video/walls "{\"name\":\"Gate wall $SUF\",\"reason\":\"e2e\",\"
 
 echo "== options"
 req GET /api/v1/pwa-apps/options; check "options" "$(st)" 200
-check "menu sections" "$(jx 'j.sections.map(s => s.key).join()')" "dashboards,home,energy,cameras,displays,flows,devices,incidents,assets,firmware,users,settings,system"
+check "menu sections" "$(jx 'j.sections.map(s => s.key).join()')" "dashboards,home,energy,counting,cameras,displays,flows,devices,incidents,assets,firmware,users,audit,settings,system"
 check "the wall is a start page" "$(jx "j.start_pages.some(p => p.url === '/video/walls/$WALL' && p.group === 'Video walls')")" true
 check "live view is a start page" "$(jx "j.start_pages.some(p => p.url === '/video')")" true
 

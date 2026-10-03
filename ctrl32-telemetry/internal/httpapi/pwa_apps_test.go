@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -142,6 +143,22 @@ func TestPWASectionsMatchMenu(t *testing.T) {
 	for _, s := range pwaSections {
 		if !strings.Contains(string(b), "sec: '"+s.Key+"'") {
 			t.Errorf("app.js menu has no item with sec: '%s'", s.Key)
+		}
+	}
+	// and the other way round: a menu section the server does not know could never be chosen for an app
+	for _, m := range regexp.MustCompile(`sec: '(\w+)'`).FindAllStringSubmatch(string(b), -1) {
+		if !slices.ContainsFunc(pwaSections, func(p pwaSection) bool { return p.Key == m[1] }) {
+			t.Errorf("app.js menu section %q is not a section of an app (pwaSections)", m[1])
+		}
+	}
+	// every top-level menu item except My account belongs to a section, so an app shows only its own sections
+	items := regexp.MustCompile(`(?m)^      \{ href: .*`).FindAllString(string(b), -1)
+	if len(items) < 10 {
+		t.Fatalf("found %d top-level menu items in app.js, the pattern no longer matches", len(items))
+	}
+	for _, it := range items {
+		if !strings.Contains(it, "sec: '") && !strings.Contains(it, "label: 'My account'") {
+			t.Errorf("top-level menu item without a section (shown in every app): %.80s", strings.TrimSpace(it))
 		}
 	}
 }

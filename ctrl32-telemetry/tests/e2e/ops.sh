@@ -24,10 +24,14 @@ has()  { grep -q -- "$2" "$TMP/b" && ok "$1" || bad "$1 (missing: $2)"; }
 echo "== security.txt"
 curl -s -D "$TMP/h" -o "$TMP/b" -w '%{http_code}' "$BASE/.well-known/security.txt" > "$TMP/s"; check "security.txt" "$(st)" 200
 grep -qi "^content-type: text/plain" "$TMP/h" && ok "text/plain" || bad "content type"
-has "product advisory contact" "^Contact: https://github.com/telemetry-digital/ctrl32-telemetry/security/advisories/new"
+has "product security contact" "^Contact: mailto:info@telemetry.digital"
 has "expires within a year" "^Expires: $(date -u +%Y)\|^Expires: $(( $(date -u +%Y) + 1 ))"
 has "canonical" "^Canonical: .*/.well-known/security.txt"
-has "policy" "^Policy: https://github.com/telemetry-digital/ctrl32-telemetry/blob/main/SECURITY.md"
+has "policy served by the installation" "^Policy: http.*/security-policy"
+POLICY=$(grep -o '^Policy: .*' "$TMP/b" | cut -d' ' -f2 | tr -d '\r')
+curl -s -D "$TMP/h" -o "$TMP/p" -w '%{http_code}' "$POLICY" > "$TMP/s"; check "policy reachable" "$(st)" 200
+grep -qi "^content-type: text/plain" "$TMP/h" && ok "policy is text" || bad "policy content type"
+grep -q "^## Reporting a vulnerability" "$TMP/p" && grep -q "info@telemetry.digital" "$TMP/p" && ok "policy says how to report" || bad "policy text"
 has "languages" "^Preferred-Languages: en"
 curl -s -o /dev/null -D "$TMP/h" -w '%{http_code}' "$BASE/security.txt" > "$TMP/s"; check "/security.txt redirects" "$(st)" 301
 grep -qi "^location: /.well-known/security.txt" "$TMP/h" && ok "redirect target" || bad "redirect location"
@@ -48,7 +52,9 @@ grep -c "^# HELP" "$TMP/b" > "$TMP/n"; [[ $(cat "$TMP/n") -gt 20 ]] && ok "$(cat
 echo "== clock check on the Server page and in healthz"
 req POST /api/v1/auth/login "{\"username\":\"$USER\",\"password\":\"$PASS\"}" >/dev/null; check "login" "$(st)" 200
 CSRF=$(req GET /api/v1/auth/me | jget csrf_token)
-req GET /api/v1/server >/dev/null; check "server info" "$(st)" 200
+# the first NTP query runs in the background after start; give it up to 60 s before judging the clock
+for _ in $(seq 1 30); do req GET /api/v1/server >/dev/null; [[ "$(jx "$TMP/b" 'j.time.checked_at')" > "2026" ]] && break; sleep 2; done
+check "server info" "$(st)" 200
 check "ntp enabled" "$(jx "$TMP/b" 'j.time.enabled')" true
 check "ntp server" "$(jx "$TMP/b" 'j.time.server')" "pool.ntp.org"
 [[ "$(jx "$TMP/b" 'j.time.checked_at')" > "2026" ]] && ok "checked at $(jx "$TMP/b" 'j.time.checked_at')" || bad "not checked yet"

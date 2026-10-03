@@ -2370,6 +2370,8 @@
  "min": "min",
  "max": "max",
  "samples": "metingen",
+ "total": "totaal",
+ "total and max": "totaal en max",
  "out of limits": "buiten de grenzen",
  "Total": "Totaal",
  "Previous": "Vorige",
