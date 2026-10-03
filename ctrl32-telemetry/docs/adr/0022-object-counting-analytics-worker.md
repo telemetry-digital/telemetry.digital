@@ -58,3 +58,39 @@ works on MJPEG/JPEG only, spec 019). The options:
   worse with COCO-trained models), light, crowding and the frame rate; speed is indicative only, never enforcement.
 - The analytics worker is a new process boundary in the threat model (untrusted video parsed by ffmpeg in a separate
   process without network or credentials).
+
+## Addendum (3 Oct 2026, 0.72.0): installation by the installers, downloaded at install time
+
+The installers install the detector on request: `install.sh --analytics` (Linux x86-64 and ARM64, e.g. Raspberry Pi 5)
+and `install.ps1 -Analytics` (Windows x64); off by default. On an existing installation the option adds only these
+parts. Everything is **downloaded at install time from the official upstream releases** — nothing of it is part of our
+release files (binaries, `SHA256SUMS`, the portal's `/dl/`) — over HTTPS only, with the version and the SHA-256 of each
+file **pinned in the installer**; a file with another hash is deleted and nothing is installed from it.
+
+| Part | Licence | Source (pinned) |
+|---|---|---|
+| ffmpeg 8.1.2, LGPL v3 build ("lgpl-shared", no `--enable-gpl` or `--enable-nonfree`) | LGPL-3.0 | github.com/BtbN/FFmpeg-Builds, release `autobuild-2026-08-31-13-27` (month-end builds are kept, daily ones about two weeks) |
+| ONNX Runtime 1.30.0, CPU (linux-x64, linux-aarch64, win-x64) | MIT | github.com/microsoft/onnxruntime, release `v1.30.0` |
+| YOLOX nano and tiny ONNX | Apache-2.0 | github.com/Megvii-BaseDetection/YOLOX, release `0.1.1rc0` (and `LICENSE` of that tag) |
+
+- ffmpeg stays an **unmodified separate program** (ADR-0009 addendum); the installers refuse a downloaded build whose
+  `ffmpeg -version` shows `--enable-gpl` or `--enable-nonfree`. Its `LICENSE.txt` stays next to it; the source is
+  FFmpeg `release/8.1` with the BtbN build scripts (named in `SOURCES.txt`).
+- **Distribution packages are GPL builds.** Verified on 3 Oct 2026: Debian 13 builds ffmpeg (`7.1.5-0+deb13u1`) with
+  `--enable-gpl` (libx264, libx265 and more), and so does Ubuntu 24.04 (`6.1.1-3ubuntu5`). Point 2 of the decision named "the
+  distribution's package" as an example of an LGPL build; that example was wrong. The Linux installer therefore
+  downloads the same upstream LGPL build as on Windows by default (also far smaller than the package with its
+  dependencies); `--ffmpeg apt` uses the distribution's package on the operator's explicit choice, and the self-check
+  then reports a GPL build (a warning; counting works).
+- Licence files are kept next to each part (`onnxruntime-1.30.0/LICENSE` and `ThirdPartyNotices.txt`,
+  `ffmpeg-…/LICENSE.txt`, `models/LICENSE-YOLOX.txt`) with a `SOURCES.txt` naming the origin and the hashes.
+- Layout: Linux `/opt/ctrl32-telemetry/analytics/` (programs) and `/var/lib/ctrl32-telemetry/models/` (models);
+  Windows `%ProgramFiles%\ctrl32-telemetry\analytics\` and `%ProgramData%\ctrl32-telemetry\models\`. The installers
+  write `[analytics]` (keeping `threads` and `max_cameras`) with the SHA-256 pins of the models.
+- **Self-check** `ctrl32-telemetry analytics-worker -selfcheck [-config …]`: ffmpeg found (version, LGPL or GPL build),
+  ONNX Runtime loaded (version, C API 17 or newer), each model found, its SHA-256 against the pin and one test
+  inference. The server runs it in a separate process (ONNX Runtime never enters the server process), caches it for 5
+  minutes and shows it on *Object counting → Cameras* and *System → Server* with advice when a part is missing; paths
+  and technical details only to server administrators (`GET /api/v1/counting/selfcheck`).
+- A new pinned version is a change of the installers (new hashes), tested like a release; pins are never updated
+  automatically.
