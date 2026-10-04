@@ -3265,5 +3265,8 @@
  "with its asset": "az objektumával",
  "with its device": "az eszközével",
  "with the clicked entity": "a kattintott entitással",
- "yes/no": "igen/nem"
+ "yes/no": "igen/nem",
+ "Monitoring": "Felügyelet",
+ "Devices and automation": "Eszközök és automatizálás",
+ "Administration": "Adminisztráció"
 }

@@ -28,6 +28,7 @@
     assets: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21v-14l8 -4v18"/><path d="M19 21v-10l-6 -4"/><path d="M9 9v0"/><path d="M9 12v0"/><path d="M9 15v0"/><path d="M9 18v0"/></svg>',
     camera: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.553 -2.276a1 1 0 0 1 1.447 .894v6.764a1 1 0 0 1 -1.447 .894l-4.553 -2.276v-4z"/><rect x="3" y="6" width="12" height="12" rx="2"/></svg>',
     search: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"/><path d="M21 21l-6 -6"/></svg>',
+    count: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 12v.01"/><path d="M3 21h18"/><path d="M5 21v-16a2 2 0 0 1 2 -2h6m4 10.5v7.5"/><path d="M21 7h-7m3 -3l-3 3l3 3"/></svg>',
     file: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z"/></svg>',
   };
   const $ = (s) => document.querySelector(s);
@@ -113,7 +114,7 @@
   const APP_PATHS = {
     dashboards: ['/', '/dashboards'], home: ['/home', '/smarthome'], energy: ['/energy'], counting: ['/counting'], cameras: ['/video'],
     displays: ['/displays'], flows: ['/flows'], devices: ['/devices'], incidents: ['/incidents'], assets: ['/assets'],
-    firmware: ['/fota'], users: ['/users'], audit: ['/audit'], settings: ['/settings'], system: ['/organizations', '/server', '/landing/edit'],
+    firmware: ['/fota'], users: ['/users'], audit: ['/audit'], settings: ['/settings', '/vpn'], system: ['/organizations', '/server', '/landing/edit'],
   };
   const APP_ALWAYS = ['/login', '/forgot', '/reset', '/account/security', '/license'];
   const pathIn = (p, list) => list.some((x) => p === x || (x !== '/' && p.startsWith(x + '/')));
@@ -191,48 +192,76 @@
 
   // ---- navigation shell -------------------------------------------------------------------------
   // Items are filtered by the signed-in user's permissions. Nothing user-specific appears before loadMe().
-  // Menu: top-level pages with sub-pages (each sub-page is its own screen, nothing is crammed on one page).
+  // Menu: top-level pages with sub-pages (each sub-page is its own screen, nothing is crammed on one page). Every tab of a
+  // page's in-page .subnav is a sub-item here too: the desktop hides the .subnav (TestSubnavTabsInMenu checks it).
+  // { head } items are the section headings (Monitoring, Devices and automation, Administration; '' is a plain divider);
+  // a heading without visible items under it is left out.
   function navItems() {
-    const items = [
+    const items = menuItems();
+    // sub-items the user may not open, and in a locked app the ones outside its sections (they would open its start page)
+    for (const i of items) if (i.children) i.children = i.children.filter((c) => (c.show === undefined || c.show) && appAllows(c.href.split('?')[0]));
+    // app mode: only the app's sections (after the permission filter) and My account
+    const shown = items.filter((i) => i.head !== undefined || (i.show && (!app || !i.sec || app.sections.includes(i.sec))));
+    return shown.filter((i, k) => i.head === undefined || (k > 0 && k + 1 < shown.length && shown[k + 1].head === undefined));
+  }
+  // deniedPages: sub-pages the menu hides for lack of a permission; their page tabs (.subnav) are hidden as well
+  function deniedPages() {
+    const sub = menuItems().flatMap((i) => i.children || []);
+    return new Set(sub.filter((c) => c.show === false && !sub.some((o) => o.href === c.href && o.show !== false)).map((c) => c.href));
+  }
+  function menuItems() {
+    const cw = can('content.write'), cfg = can('config.write');
+    return [
       { href: '/', label: 'Dashboard', icon: ICON.dashboard, show: !!me, sec: 'dashboards' },
       { href: '/dashboards', label: 'Dashboards', icon: ICON.dashboard, show: can('data.read'), sec: 'dashboards' },
+      { head: 'Monitoring' },
       { href: '/home', label: 'Home', icon: ICON.home, show: can('data.read'), sec: 'home' },
       { href: '/energy', label: 'Energy', icon: ICON.bolt, show: can('data.read'), sec: 'energy' },
-      { href: '/counting', label: 'Object counting', icon: ICON.users, show: can('data.read'), sec: 'counting', children: [
+      { href: '/counting', label: 'Object counting', icon: ICON.count, show: can('data.read'), sec: 'counting', children: [
         { href: '/counting', label: 'Overview' }, { href: '/counting/areas', label: 'Areas and entrances' },
-        { href: '/counting/cameras', label: 'Cameras' }, { href: '/counting/sensors', label: 'Sensors', show: can('config.write') }] },
+        { href: '/counting/cameras', label: 'Cameras' }, { href: '/counting/sensors', label: 'Sensors', show: cfg },
+        { href: '/settings/scheduled-reports', label: 'Scheduled reports', show: cw && cfg }] },
       { href: '/video', label: 'Cameras', icon: ICON.camera, show: can('video.view'), sec: 'cameras', children: [
-        { href: '/video', label: 'Live view' }, { href: '/video/walls', label: 'Video walls' }, { href: '/video/manage', label: 'Camera management', show: can('video.manage') }, { href: '/counting/cameras', label: 'Object counting', show: can('data.read') }] },
+        { href: '/video', label: 'Live view' }, { href: '/video/walls', label: 'Video walls' }, { href: '/video/manage', label: 'Camera management', show: can('video.manage') },
+        { href: '/video/evidence', label: 'Evidence', show: can('video.playback') }, { href: '/video/settings', label: 'Settings', show: can('video.manage') },
+        { href: '/counting/cameras', label: 'Object counting', show: can('data.read') }] },
       { href: '/displays', label: 'Displays', icon: ICON.display, show: can('display.control'), sec: 'displays' },
-      { href: '/flows', label: 'Flows', icon: ICON.flow, show: can('data.read'), sec: 'flows' },
-      { href: '/devices', label: 'Devices', icon: ICON.device, show: can('data.read'), sec: 'devices' },
       { href: '/incidents', label: 'Incidents', icon: ICON.alert, show: can('data.read'), sec: 'incidents' },
+      { head: 'Devices and automation' },
+      { href: '/devices', label: 'Devices', icon: ICON.device, show: can('data.read'), sec: 'devices' },
       { href: '/assets', label: 'Assets', icon: ICON.assets, show: can('data.read'), sec: 'assets', children: [
         { href: '/assets/sites', label: 'Sites' }, { href: '/assets', label: 'Assets' }, { href: '/assets/rules', label: 'Alarm rules' },
-        { href: '/assets/automation', label: 'Automation', show: can('config.write') }] },
+        { href: '/assets/automation', label: 'Automation', show: cfg }] },
+      { href: '/flows', label: 'Flows', icon: ICON.flow, show: can('data.read'), sec: 'flows' },
       { href: '/fota', label: 'Firmware', icon: ICON.file, show: can('fota.read'), sec: 'firmware', children: [
         { href: '/fota', label: 'Images' }, { href: '/fota/campaigns', label: 'Campaigns' }] },
+      { head: 'Administration' },
       { href: '/users', label: 'Users', icon: ICON.users, show: can('user.admin'), sec: 'users', children: [
         { href: '/users', label: 'Accounts' }, { href: '/users/roles', label: 'Roles and permissions' }] },
       { href: can('audit.read') ? '/audit' : '/audit/reports', label: 'Audit', icon: ICON.shield, show: can('audit.read') || can('report.sign'), sec: 'audit', children: [
         { href: '/audit', label: 'Audit trail', show: can('audit.read') }, { href: '/audit/reviews', label: 'Reviews', show: can('audit.read') },
         { href: '/audit/reports', label: 'Report signatures' }] },
-      { href: '/settings', label: 'Settings', icon: ICON.settings, show: can('content.write'), sec: 'settings', children: [
-        { href: '/settings/branding', label: 'Branding and theme' }, { href: '/settings/templates', label: 'Report templates' },
-        { href: '/settings/reports', label: 'Stored reports' }, { href: '/settings/scheduled-reports', label: 'Scheduled reports', show: can('config.write') }, { href: '/settings/connectors', label: 'Connectors' },
-        { href: '/settings/languages', label: 'Languages' }, { href: '/settings/translations', label: 'Translations' },
-        { href: '/settings/apps', label: 'Apps' }, { href: '/vpn', label: 'VPN', show: can('vpn.manage') && !can('system.admin') }, { href: '/settings/export', label: 'Organization export', show: can('user.admin') }, { href: '/settings/notifications', label: 'Notifications' }, { href: '/settings/approvals', label: 'Approvals' }, { href: '/settings/policy', label: 'Security policy' }, { href: '/settings/ai', label: 'AI assistants' }] },
+      // in the order of the page tabs: look and language, notifications and reports, connections and apps, rules of the
+      // organization; an organization's VPN manager without content.write sees only VPN here
+      { href: cw ? '/settings' : '/vpn', label: 'Settings', icon: ICON.settings, show: cw || (can('vpn.manage') && !can('system.admin')), sec: 'settings', children: [
+        { href: '/settings/branding', label: 'Branding and theme', show: cw }, { href: '/settings/languages', label: 'Languages', show: cw },
+        { href: '/settings/translations', label: 'Translations', show: cw }, { href: '/settings/notifications', label: 'Notifications', show: cw && cfg },
+        { href: '/settings/templates', label: 'Report templates', show: cw }, { href: '/settings/reports', label: 'Stored reports', show: cw },
+        { href: '/settings/scheduled-reports', label: 'Scheduled reports', show: cw && cfg }, { href: '/settings/connectors', label: 'Connectors', show: cw && cfg },
+        { href: '/settings/apps', label: 'Apps', show: cw }, { href: '/settings/ai', label: 'AI assistants', show: cw },
+        { href: '/settings/approvals', label: 'Approvals', show: cw }, { href: '/settings/policy', label: 'Security policy', show: cw && cfg },
+        { href: '/vpn', label: 'VPN', show: can('vpn.manage') && !can('system.admin') }, { href: '/settings/export', label: 'Organization export', show: cw && can('user.admin') }] },
       { href: '/organizations', label: 'System', icon: ICON.system, show: can('system.admin'), sec: 'system', children: [
         { href: '/organizations', label: 'Organizations' }, { href: '/server', label: 'Server' }, { href: '/server/domain', label: 'Domain and TLS' },
-        { href: '/server/vpn', label: 'VPN' }, { href: '/server/backups', label: 'Backups' }, { href: '/server/redundancy', label: 'Redundant database' }, { href: '/server/updates', label: 'Updates' }, { href: '/landing/edit', label: 'Front page' }] },
+        { href: '/server/vpn', label: 'VPN' }, { href: '/server/backups', label: 'Backups' }, { href: '/server/redundancy', label: 'Redundant database' }, { href: '/server/updates', label: 'Updates' },
+        { href: '/server/license', label: 'License' }, { href: '/landing/edit', label: 'Front page' }] },
+      { head: '' },
       // a locked app keeps only Password and MFA (sign out is at the bottom of the menu)
       { href: accountHref(), label: 'My account', icon: ICON.user, show: !!me, children: locked() ? [{ href: '/account/security', label: 'Password and MFA' }] : [
-        { href: '/account', label: 'Profile' }, { href: '/account/security', label: 'Password and MFA' }, { href: '/account/tokens', label: 'API tokens' }, { href: '/account/push', label: 'Notifications' }, { href: '/api/docs', label: 'API documentation', show: !app },
+        { href: '/account', label: 'Profile' }, { href: '/account/security', label: 'Password and MFA' }, { href: '/account/tokens', label: 'API tokens' }, { href: '/account/push', label: 'Notifications' },
+        { href: '/account/ai', label: 'AI assistants' }, { href: '/api/docs', label: 'API documentation', show: !app },
         { href: '/?full=1', label: 'Open the full application', show: !!app }] },
     ];
-    for (const i of items) if (i.children) i.children = i.children.filter((c) => c.show === undefined || c.show);
-    // app mode: only the app's sections (after the permission filter) and My account
-    return items.filter((i) => i.show && (!app || !i.sec || app.sections.includes(i.sec)));
   }
   // sidebar state: open (default) -> icons only -> hidden (top bar with hamburger); remembered per browser
   function sidebarState() { try { return localStorage.getItem('ctrl32.sidebar') || 'open'; } catch (e) { return 'open'; } }
@@ -271,10 +300,20 @@
     if (!header) return;
     const items = navItems();
     const chev = '<svg class="chev" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6l-6 6"/></svg>';
-    const link = (i, sub) => `<a class="nav-link${(sub ? isExact(i.href) : isActive(i.href)) ? ' active' : ''}" href="${i.href}" title="${esc(i.label)}">${i.icon || ''}<span>${esc(i.label)}</span>${!sub && i.children ? chev : ''}</a>`;
-    const links = items.map((i) => i.children
-      ? `<div class="group${isActive(i.href) ? ' open' : ''}">${link(i)}<div class="sub">${i.children.map((c) => link(c, true)).join('')}</div></div>`
+    // a group is open (and marked) on its own pages and on the pages of its sub-items, e.g. System on /server; a page that
+    // is also a sub-item of another group (Object counting under Cameras) opens only the group it belongs to
+    const inGroup = (i) => isActive(i.href) || i.children.some((c) => isExact(c.href) && !items.some((o) => o !== i && o.children && isActive(o.href) && o.children.some((x) => x.href === c.href)));
+    const opened = new Set(items.filter((i) => i.children && inGroup(i)));
+    const on = (i, sub) => (sub ? isExact(i.href) : i.children ? opened.has(i) : isActive(i.href));
+    const link = (i, sub) => `<a class="nav-link${on(i, sub) ? ' active' : ''}" href="${i.href}" title="${esc(i.label)}">${i.icon || ''}<span>${esc(i.label)}</span>${!sub && i.children ? chev : ''}</a>`;
+    const head = (i) => `<div class="nav-head${i.head ? '' : ' sep'}" role="presentation">${i.head ? `<span>${esc(i.head)}</span>` : ''}</div>`;
+    const links = items.map((i) => i.head !== undefined ? head(i) : i.children
+      ? `<div class="group${opened.has(i) ? ' open' : ''}">${link(i)}<div class="sub">${i.children.map((c) => link(c, true)).join('')}</div></div>`
       : link(i)).join('');
+    // phone drawer: the same headings; a group's sub-items show under it when it is open (tap the group to open it)
+    const drawerLinks = items.map((i, k) => i.head !== undefined ? head(i)
+      : `<a class="nav-link${on(i) ? ' active' : ''}" href="${i.href}"${i.children ? ` data-grp="${k}" aria-expanded="${opened.has(i)}"` : ''}>${i.icon}<span>${esc(i.label)}</span>${i.children ? chev : ''}</a>`
+        + (i.children ? i.children.map((c) => `<a class="nav-link sub-link${isExact(c.href) ? ' active' : ''}" href="${c.href}" data-in="${k}"${opened.has(i) ? '' : ' hidden'}><span>${esc(c.label)}</span></a>`).join('') : '')).join('');
     header.innerHTML = `<div class="container row">
       ${me ? `<button class="btn ghost icon only-mobile" id="menuBtn" type="button" aria-label="Menu" aria-expanded="false">${ICON.menu}</button>` : ''}
       <a class="brand" href="${esc(home())}"><img id="logo" data-logo alt="telemetry.digital" src="${esc(logoURL())}">${me || app ? `<span id="orgname" class="${app ? 'notranslate' : ''}">${esc(app ? app.name : (brand.org_name || brand.product))}</span>` : ''}</a>
@@ -286,6 +325,8 @@
     </div>`;
     // a locked app shows no in-page links out of it either (sub-navigation of a page, e.g. My account)
     if (locked()) for (const a of document.querySelectorAll('.subnav a[href]')) if (!appAllows(new URL(a.href, location.href).pathname)) a.hidden = true;
+    // page tabs follow the menu: a tab whose sub-page the menu hides for this user is hidden too
+    if (me) { const denied = deniedPages(); for (const a of document.querySelectorAll('.subnav:not(#tabs) a[href]')) if (denied.has(a.getAttribute('href'))) a.hidden = true; }
     // Desktop: the bug button lives in its own strip at the top of the page (in flow, sticky), never over page buttons.
     if (me && !locked() && !$('#bugBtnDesk')) { const host = $('main'); const strip = document.createElement('div'); strip.className = 'top-strip only-desktop'; const b = document.createElement('a'); b.id = 'bugBtnDesk'; b.className = 'btn ghost icon bug-btn'; b.href = '#'; b.title = 'Report a bug (opens your mail client, info@telemetry.digital)'; b.setAttribute('aria-label', 'Report a bug'); b.innerHTML = ICON.bug; b.onclick = (e) => { e.preventDefault(); location.href = bugMailto(); }; const gs = document.createElement('button'); gs.type = 'button'; gs.className = 'gs-field'; gs.id = 'gsBtn'; gs.title = 'Search (Ctrl+K)'; gs.innerHTML = ICON.search + '<span>Search…</span><kbd>Ctrl K</kbd>'; strip.appendChild(gs); const sp = document.createElement('span'); sp.style.flex = '1'; strip.appendChild(sp); strip.appendChild(b); if (host) { host.prepend(strip); document.body.classList.add('has-strip'); } else document.body.appendChild(strip); }
     if (me && !locked()) { for (const id of ['gsBtn', 'gsBtnM']) { const el = $('#' + id); if (el) el.onclick = () => openSearch(); } }
@@ -323,9 +364,12 @@
       $('#signout').onclick = logout;
       applySidebar();
       $('#sideToggle').onclick = () => setSidebar({ open: 'icons', icons: 'hidden', hidden: 'open' }[sidebarState()]);
-      // a group header only expands/collapses its sub-pages; navigation happens through the sub-items
+      // a group header only expands/collapses its sub-pages; navigation happens through the sub-items. The compact
+      // sidebar (icons only, or a desktop narrower than 1100 px) shows no sub-items: there the header opens the group's
+      // first page and the page shows its tabs (.subnav).
+      const compact = () => document.body.classList.contains('sb-icons') || window.matchMedia('(min-width: 801px) and (max-width: 1100px)').matches;
       for (const g of document.querySelectorAll('#sidebar .group > .nav-link')) {
-        g.addEventListener('click', (e) => { e.preventDefault(); g.parentElement.classList.toggle('open'); });
+        g.addEventListener('click', (e) => { if (compact()) return; e.preventDefault(); g.parentElement.classList.toggle('open'); });
       }
       // left drawer (mobile)
       let drawer = $('#drawer');
@@ -335,7 +379,7 @@
         drawer.innerHTML = `<div class="drawer-backdrop"></div><aside class="drawer-panel" role="dialog" aria-label="Menu">
           <div class="drawer-head"><a class="brand" href="${esc(home())}"><img data-logo alt="" src="${esc(logoURL())}"><span class="${app ? 'notranslate' : ''}">${esc(app ? app.name : (brand.org_name || brand.product))}</span></a><button class="btn ghost icon" id="drawerClose" type="button" aria-label="Close">${ICON.close}</button></div>
           <div class="drawer-user">${ICON.user}<div><b>${esc(me.full_name || me.username)}</b><br><span class="muted">${esc((me.roles || []).join(', ') || 'no roles')}</span></div></div>
-          <nav class="drawer-nav">${items.map((i) => `<a class="nav-link${isActive(i.href) ? ' active' : ''}" href="${i.href}">${i.icon}<span>${esc(i.label)}</span></a>` + (i.children ? i.children.map((c) => `<a class="nav-link sub-link${isExact(c.href) ? ' active' : ''}" href="${c.href}"><span style="padding-left:30px">${esc(c.label)}</span></a>`).join('') : '')).join('')}</nav>
+          <nav class="drawer-nav">${drawerLinks}</nav>
           <div class="drawer-foot"><button class="btn ghost" data-theme-toggle data-label type="button"></button>${langSwitcher('langDrawer')}<button class="btn ghost" id="drawerSignout" type="button">${ICON.logout}<span>Sign out</span></button></div>
         </aside>`;
         document.body.appendChild(drawer);
@@ -345,6 +389,12 @@
         $('#drawerClose').onclick = () => open(false);
         drawer.querySelector('.drawer-backdrop').onclick = () => open(false);
         $('#drawerSignout').onclick = logout;
+        for (const g of drawer.querySelectorAll('.drawer-nav a[data-grp]')) g.onclick = (e) => {
+          e.preventDefault();
+          const v = g.getAttribute('aria-expanded') !== 'true';
+          g.setAttribute('aria-expanded', String(v));
+          for (const s of drawer.querySelectorAll(`.drawer-nav a[data-in="${g.dataset.grp}"]`)) s.hidden = !v;
+        };
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') open(false); });
       }
     }

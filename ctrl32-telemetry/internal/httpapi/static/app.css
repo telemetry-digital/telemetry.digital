@@ -86,6 +86,7 @@ code, pre { font-family: var(--mono); font-size: 0.85em; }
 .side-brand .mark { display: none; height: 28px; }
 .side-org { padding: 0 8px 10px; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
 .side-nav { display: flex; flex-direction: column; gap: 2px; }
+.sidebar > * { flex-shrink: 0; } /* a long menu scrolls; nothing (the organization name) is squeezed */
 .side-nav .nav-link { padding: 10px 12px; font-size: 15px; gap: 10px; }
 .side-nav .nav-link svg { width: 20px; height: 20px; }
 .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--line); padding-top: 8px; }
@@ -95,7 +96,10 @@ code, pre { font-family: var(--mono); font-size: 0.85em; }
 .side-user div { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (min-width: 801px) {
   body.has-sidebar header.topbar { display: none; }
-  body.has-sidebar .subnav:not(#tabs) { display: none; } /* the sidebar already lists the sub-pages */
+}
+/* the full sidebar already lists the sub-pages; the compact one (icons only, narrow desktop) does not, so the page tabs stay */
+@media (min-width: 1101px) {
+  body.has-sidebar:not(.sb-icons):not(.sb-hidden) .subnav:not(#tabs) { display: none; }
 }
 @media (min-width: 801px) and (max-width: 1100px) {
   .sidebar { width: 68px; padding: 12px 8px; align-items: stretch; }
@@ -104,6 +108,8 @@ code, pre { font-family: var(--mono); font-size: 0.85em; }
   .sidebar .side-brand .mark { display: block; margin: 0 auto 8px; }
   .sidebar .nav-link, .sidebar .btn { justify-content: center; padding: 10px 0; }
   .sidebar .side-user { justify-content: center; padding: 6px 0 10px; }
+  .sidebar .nav-head { padding: 0; margin: 8px 6px 4px; border-top: 1px solid var(--line); }
+  .sidebar .nav-head span { display: none; }
 }
 
 /* left drawer (mobile) */
@@ -119,6 +125,15 @@ code, pre { font-family: var(--mono); font-size: 0.85em; }
 .drawer-user svg { width: 28px; height: 28px; color: var(--muted); }
 .drawer-nav { display: flex; flex-direction: column; padding: 8px; gap: 2px; }
 .drawer-nav .nav-link { padding: 12px 12px; font-size: 16px; }
+.drawer-nav .nav-link .chev { margin-left: auto; width: 18px; height: 18px; transition: transform .15s; }
+.drawer-nav .nav-link[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.drawer-nav .sub-link { padding: 9px 12px 9px 42px; font-size: 15px; color: var(--muted); }
+.drawer-nav .sub-link.active { background: transparent; color: var(--primary); font-weight: 600; }
+/* section headings of the menu (sidebar and phone drawer); '' is a plain divider; the compact sidebar shows a line */
+.nav-head { padding: 14px 12px 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav-head.sep { padding: 0; margin: 8px 0 4px; border-top: 1px solid var(--line); }
+body.sb-icons .sidebar .nav-head { padding: 0; margin: 8px 6px 4px; border-top: 1px solid var(--line); }
+body.sb-icons .sidebar .nav-head span { display: none; }
 .drawer-foot { margin-top: auto; padding: 8px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
 .drawer-foot .btn { justify-content: flex-start; }
 /* the menu (sidebar, phone drawer and their buttons) has square corners whatever the theme radius (user, 2 Oct 2026) */

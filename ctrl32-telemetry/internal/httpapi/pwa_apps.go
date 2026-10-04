@@ -58,10 +58,11 @@ type pwaSection struct {
 	Key, Label, URL string
 }
 
+// In the order of the menu (0.73.4): Monitoring, Devices and automation, Administration.
 var pwaSections = []pwaSection{
 	{"dashboards", "Dashboards", "/dashboards"}, {"home", "Home", "/home"}, {"energy", "Energy", "/energy"},
-	{"counting", "Object counting", "/counting"}, {"cameras", "Cameras", "/video"}, {"displays", "Displays", "/displays"}, {"flows", "Flows", "/flows"},
-	{"devices", "Devices", "/devices"}, {"incidents", "Incidents", "/incidents"}, {"assets", "Assets", "/assets"},
+	{"counting", "Object counting", "/counting"}, {"cameras", "Cameras", "/video"}, {"displays", "Displays", "/displays"},
+	{"incidents", "Incidents", "/incidents"}, {"devices", "Devices", "/devices"}, {"assets", "Assets", "/assets"}, {"flows", "Flows", "/flows"},
 	{"firmware", "Firmware", "/fota"}, {"users", "Users", "/users"}, {"audit", "Audit", "/audit"}, {"settings", "Settings", "/settings"},
 	{"system", "System", "/organizations"},
 }
@@ -86,7 +87,7 @@ var (
 var pwaSectionPaths = map[string][]string{
 	"dashboards": {"/", "/dashboards"}, "home": {"/home", "/smarthome"}, "energy": {"/energy"}, "counting": {"/counting"}, "cameras": {"/video"},
 	"displays": {"/displays"}, "flows": {"/flows"}, "devices": {"/devices"}, "incidents": {"/incidents"}, "assets": {"/assets"},
-	"firmware": {"/fota"}, "users": {"/users"}, "audit": {"/audit"}, "settings": {"/settings"}, "system": {"/organizations", "/server", "/landing/edit"},
+	"firmware": {"/fota"}, "users": {"/users"}, "audit": {"/audit"}, "settings": {"/settings", "/vpn"}, "system": {"/organizations", "/server", "/landing/edit"},
 }
 
 // pwaPathIn reports whether a path is one of the prefixes or below one ("/" matches only itself).

@@ -3265,5 +3265,8 @@
  "with its asset": "cu activul său",
  "with its device": "cu dispozitivul său",
  "with the clicked entity": "cu entitatea pe care s-a dat clic",
- "yes/no": "da/nu"
+ "yes/no": "da/nu",
+ "Monitoring": "Monitorizare",
+ "Devices and automation": "Dispozitive și automatizare",
+ "Administration": "Administrare"
 }

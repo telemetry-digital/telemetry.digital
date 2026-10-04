@@ -116,6 +116,8 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await page("start-home", "/", { wait: 5000 });
   await page("start-sidebar-icons", "/", { wait: 1500, before: "localStorage.setItem('ctrl32.sidebar', 'icons'); location.reload(); true", afterWait: 4000 });
   await ev("localStorage.setItem('ctrl32.sidebar', 'open'); true");
+  // the whole menu with its sections (0.73.4), Object counting open
+  if (wanted("start-menu")) { await viewport(1440, 1150, false); await page("start-menu", "/counting/areas", { wait: 3000, clip: "#sidebar", pad: 0 }); await viewport(1440, 900, false); }
   await page("admin-api-docs", "/api/docs", { wait: 3000 });
 
   // ---- dashboards
@@ -342,8 +344,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
     await page(`admin-settings-${s}`, `/settings/${s}`, { wait: 3500, full: s === "branding" || s === "templates", maxH: 3200 });
   }
   await page("admin-settings-new-channel-dialog", "/settings/notifications", { wait: 3000, click: "#newChanBtn" });
-  await page("admin-settings-new-app-dialog", "/settings/apps", { wait: 3000, click: "#newAppBtn" });
-  await page("admin-settings-new-connector-dialog", "/settings/connectors", { wait: 3000, click: "#newConnBtn" });
+  await page("admin-settings-new-app-dialog", "/settings/apps", { wait: 3000, click: "#newAppBtn" });  await page("admin-settings-new-connector-dialog", "/settings/connectors", { wait: 3000, click: "#newConnBtn" });
   await page("admin-organizations", "/organizations", { wait: 3000 });
   await page("admin-server", "/server", { wait: 4000 });
   for (const s of ["domain", "backups", "redundancy", "updates", "license"]) await page(`admin-server-${s}`, `/server/${s}`, { wait: 3500 });

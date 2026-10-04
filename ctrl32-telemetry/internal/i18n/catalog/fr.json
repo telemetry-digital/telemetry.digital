@@ -3265,5 +3265,8 @@
  "with its asset": "avec son équipement",
  "with its device": "avec son appareil",
  "with the clicked entity": "avec l'entité cliquée",
- "yes/no": "oui/non"
+ "yes/no": "oui/non",
+ "Monitoring": "Supervision",
+ "Devices and automation": "Appareils et automatisation",
+ "Administration": "Administration"
 }
