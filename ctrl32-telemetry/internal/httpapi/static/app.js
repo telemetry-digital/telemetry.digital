@@ -106,6 +106,19 @@
     } catch (e) { /* storage blocked */ }
   }
   function appSlug() { try { return sessionStorage.getItem(APP_KEY) || ''; } catch (e) { return ''; } }
+  // The app also rides in the address (?app=<slug>): browsers that reopen the last page in a fresh session (Firefox on
+  // iPhone, a home-screen bookmark) lose sessionStorage, the address keeps the app.
+  (function appFromAddress() {
+    const s = new URLSearchParams(location.search).get('app');
+    if (s && /^[a-z0-9][a-z0-9-]{0,39}$/.test(s) && s !== appSlug()) { appStore(''); appStore(s); }
+  })();
+  function markAddress() {
+    if (!app) return;
+    const u = new URL(location.href);
+    if (u.searchParams.get('app') === app.slug) return;
+    u.searchParams.set('app', app.slug);
+    history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+  }
   // the remembered profile is known at once, so a locked app is confined before the page renders
   if (appSlug()) { try { app = JSON.parse(sessionStorage.getItem(APP_KEY + '.profile') || 'null'); } catch (e) { app = null; } if (app && app.slug !== appSlug()) app = null; }
   // Locked app (0.61.0): the window stays on the app's sections. Pages of a section (and their sub-pages), as the server's
@@ -135,7 +148,7 @@
   (function leaveAppByLink() { // "Open the full application" links to ?full=1; a locked app has no way out
     const q = new URLSearchParams(location.search);
     if (!q.has('full')) return;
-    q.delete('full');
+    q.delete('full'); if (!(app && app.locked)) q.delete('app');
     history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
     if (app && app.locked) return;
     if (appSlug() && !app) { pendingFull = true; return; } // profile not known yet: loadApp decides
@@ -183,11 +196,12 @@
     if (pendingFull && app && !app.locked) { app = null; appStore(''); }
     pendingFull = false;
     applyAppMode();
+    markAddress();
     if (confine()) return new Promise(() => {}); // leaving for the start page: nothing to render here
     return app;
   }
   // enterApp: called by the install page; remembers the app and opens its start page in this window
-  function enterApp(slug, start) { appStore(''); appStore(slug); location.replace(start || '/'); }
+  function enterApp(slug, start) { appStore(''); appStore(slug); const u = new URL(start || '/', location.href); u.searchParams.set('app', slug); location.replace(u.pathname + u.search + u.hash); }
   function home() { return app ? app.start_url : '/'; }
   const locked = () => !!(app && app.locked);
   const accountHref = () => (locked() ? '/account/security' : '/account');
@@ -470,6 +484,13 @@
       f.innerHTML = '<div class="container row"><span>ctrl32 · telemetry</span>' +
         '<a href="' + brand.footer.github + '" target="_blank" rel="noopener noreferrer" title="Source on GitHub" aria-label="GitHub">' + ICON.github + '</a>' +
         '<a href="' + brand.footer.license + '">License</a>' + ver + '</div>';
+    }
+    // in an app the bug report lives in the footer (the header has no bug button there)
+    if (app) {
+      const row = f.querySelector('.row'), b = document.createElement('a');
+      b.href = '#'; b.id = 'bugFoot'; b.title = 'Report a bug'; b.setAttribute('aria-label', 'Report a bug'); b.innerHTML = ICON.bug;
+      b.onclick = (e) => { e.preventDefault(); location.href = bugMailto(); };
+      row.insertBefore(b, row.querySelector('.grow'));
     }
     ($('.content') || document.body).appendChild(f);
   }
