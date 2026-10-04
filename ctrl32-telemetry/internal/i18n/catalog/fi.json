@@ -3265,5 +3265,8 @@
  "with its asset": "kohteineen",
  "with its device": "laitteineen",
  "with the clicked entity": "napsautetulla entiteetillä",
- "yes/no": "kyllä/ei"
+ "yes/no": "kyllä/ei",
+ "Monitoring": "Valvonta",
+ "Devices and automation": "Laitteet ja automaatio",
+ "Administration": "Ylläpito"
 }

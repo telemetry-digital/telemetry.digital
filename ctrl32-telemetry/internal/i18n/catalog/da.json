@@ -3265,5 +3265,8 @@
  "with its asset": "med sit aktiv",
  "with its device": "med sin enhed",
  "with the clicked entity": "med den klikkede entitet",
- "yes/no": "ja/nej"
+ "yes/no": "ja/nej",
+ "Monitoring": "Overvågning",
+ "Devices and automation": "Enheder og automatisering",
+ "Administration": "Administration"
 }

@@ -3265,5 +3265,8 @@
  "with its asset": "koos oma varaga",
  "with its device": "koos oma seadmega",
  "with the clicked entity": "klõpsatud olemiga",
- "yes/no": "jah/ei"
+ "yes/no": "jah/ei",
+ "Monitoring": "Seire",
+ "Devices and automation": "Seadmed ja automatiseerimine",
+ "Administration": "Haldus"
 }
