@@ -320,6 +320,8 @@
         case 'limits': return `<td style="white-space:nowrap" class="muted">${esc(limTxt(r.limits))}</td>`;
         case 'min': case 'max': case 'change': { const x = r.window ? r.window[c] : null; const lim = c !== 'change' && (hl === 'both' || hl === 'limits') ? outOfLimits(r, x) : ''; return `<td style="text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums${lim ? ';color:var(--' + lim + ')' : ''}">${x == null ? '—' : num(x, dec(r)) + (r.unit ? ` <span class="muted">${esc(r.unit)}</span>` : '')}</td>`; }
         case 'device': return `<td class="notranslate">${r.device ? (WG.isPublic() ? esc(r.device) : `<a href="/devices/${esc(r.device_id)}">${esc(r.device)}</a>`) : '—'}</td>`;
+        case 'asset': return `<td class="notranslate">${r.asset ? (WG.isPublic() || !r.asset_id ? esc(r.asset) : `<a href="/assets/${esc(r.asset_id)}">${esc(r.asset)}</a>`) : '—'}</td>`;
+        case 'site': return `<td class="notranslate">${r.site ? (WG.isPublic() || !r.site_id ? esc(r.site) : `<a href="/assets/sites/${esc(r.site_id)}">${esc(r.site)}</a>`) : '—'}</td>`;
         case 'datastream': return `<td class="notranslate" title="${esc(r.quantity)}">${esc(r.label || r.key)}</td>`;
         default: return `<td class="notranslate">${esc(r[c] || '—')}</td>`;
       }
@@ -394,7 +396,10 @@
         return `<td style="text-align:right;white-space:nowrap;font-weight:600${cf.value ? ';color:' + cf.value : ''}" title="${esc(fmt(v.measured_at))}">${x == null ? (v.value_json != null ? esc(JSON.stringify(v.value_json)) : '—') : num(x, dec)}${v.unit ? ` <span class="muted" style="font-weight:400">${esc(v.unit)}</span>` : ''}${v.stale ? ' <span class="badge warn">' + esc(tr('stale')) + '</span>' : ''}</td>`; }
       if (c.kind === 'a') { const v = (r.attributes || {})[c.key]; return `<td class="notranslate">${v == null ? '<span class="muted">—</span>' : esc(typeof v === 'object' ? JSON.stringify(v) : String(v))}</td>`; }
       switch (c.key) {
-        case 'name': return `<td class="notranslate"><b>${esc(r.name)}</b></td>`;
+        case 'name': { const href = WG.isPublic() || ctx.edit ? '' : r.type === 'asset' ? '/assets/' + r.id : r.type === 'site' ? '/assets/sites/' + r.id : r.type === 'device' ? '/devices/' + r.id : r.type === 'datastream' && r.asset_id ? '/assets/' + r.asset_id + '/datastreams?ds=' + r.id : '';
+          return `<td class="notranslate">${href ? `<a href="${esc(href)}"><b>${esc(r.name)}</b></a>` : `<b>${esc(r.name)}</b>`}</td>`; }
+        case 'asset': return `<td class="notranslate">${r.asset ? (WG.isPublic() || !r.asset_id ? esc(r.asset) : `<a href="/assets/${esc(r.asset_id)}">${esc(r.asset)}</a>`) : '—'}</td>`;
+        case 'site': return `<td class="notranslate">${r.site ? (WG.isPublic() || !r.site_id ? esc(r.site) : `<a href="/assets/sites/${esc(r.site_id)}">${esc(r.site)}</a>`) : '—'}</td>`;
         case 'type': return `<td>${esc(tr(ET_TYPE[r.type] || r.type))}</td>`;
         case 'asset_type': case 'quantity': return `<td>${r[c.key] ? esc(WG.codeLabel(r[c.key])) : '—'}</td>`;
         case 'alarm': return `<td>${r.alarm ? `<span class="badge ${r.alarm.severity === 'warning' ? 'warn' : 'bad'}">${esc(r.alarm.severity)}${r.alarm.acknowledged ? ' ✓' : ''}</span>` : '<span class="muted">—</span>'}</td>`;

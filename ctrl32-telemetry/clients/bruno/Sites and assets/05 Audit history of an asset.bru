@@ -1,0 +1,28 @@
+meta {
+  name: Audit history of an asset
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/v1/assets/:id/history
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~before: 
+  ~limit: 
+}
+
+docs {
+  Audit history of an asset
+  
+  Audit entries of the asset, its datastreams, their alarm rules and device assignments, newest first; page with `before` = `next_before`.
+  
+  Requires permission `audit.read`.
+}

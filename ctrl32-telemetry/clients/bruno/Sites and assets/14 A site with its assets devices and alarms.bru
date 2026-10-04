@@ -1,0 +1,23 @@
+meta {
+  name: A site with its assets devices and alarms
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/v1/sites/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  A site with its assets, devices and alarms
+  
+  The site (with its map position), every asset of it as in the assets list, the devices that feed its datastreams now and the active alarms of its datastreams.
+  
+  Requires permission `data.read`.
+}

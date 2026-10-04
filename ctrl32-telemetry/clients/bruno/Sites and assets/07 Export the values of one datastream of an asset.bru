@@ -1,0 +1,30 @@
+meta {
+  name: Export the values of one datastream of an asset
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/assets/:id/telemetry/export
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  datastream_id: 
+  ~from: 
+  ~to: 
+  ~format: 
+}
+
+docs {
+  Export the values of one datastream of an asset
+  
+  CSV or Excel, oldest first, at most 100 000 rows; the same columns as the device export. Audited against the asset.
+  
+  Requires permission `data.export`.
+}

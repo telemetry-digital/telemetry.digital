@@ -43,8 +43,9 @@ echo "== search"
 req GET "/api/v1/search?q=$Q" >/dev/null; check "search" "$(st)" 200
 check "every kind found" "$(jx '["site","asset","datastream","device","dashboard","incident","user"].every(k=>j.results.some(r=>r.kind===k))')" true
 check "device links its page" "$(jx "j.results.find(r=>r.kind==='device').url")" "/devices/$DEV"
-check "datastream links the asset page" "$(jx "j.results.find(r=>r.kind==='datastream').url")" "/assets?site=$SITE&ds=$DS"
-check "asset links its card" "$(jx "j.results.find(r=>r.kind==='asset' && r.id==='$ASSET').url")" "/assets?site=$SITE&asset=$ASSET"
+check "datastream links the asset page" "$(jx "j.results.find(r=>r.kind==='datastream').url")" "/assets/$ASSET/datastreams?ds=$DS"
+check "asset links its page" "$(jx "j.results.find(r=>r.kind==='asset' && r.id==='$ASSET').url")" "/assets/$ASSET"
+check "site links its page" "$(jx "j.results.find(r=>r.kind==='site' && r.id==='$SITE').url")" "/assets/sites/$SITE"
 check "dashboard, incident and user links" "$(jx "['dashboard','incident','user'].map(k=>j.results.find(r=>r.kind===k).url).join(' ')")" "/dashboards/$DASH /incidents?id=$INC /users?id=$USR"
 check "at most 5 per kind by default, more announced" "$(jx "[j.results.filter(r=>r.kind==='asset').length, j.more.includes('asset')].join()")" "5,true"
 check "hits of a kind ordered by name" "$(jx "j.results.filter(r=>r.kind==='asset')[0].title")" "Fridge $Q"
@@ -65,7 +66,7 @@ tok "$TOK2" "/api/v1/search?q=$Q" >/dev/null; check "a token without data.read f
 req GET /api/v1/tokens >/dev/null; for n in "search e2e" "search e2e 2"; do TID=$(jx "j.find(t => t.name === '$n' && !t.revoked_at).id"); req DELETE "/api/v1/tokens/$TID" >/dev/null; done
 
 echo "== deep links open the object"
-for p in "/assets?site=$SITE&ds=$DS" "/incidents?id=$INC" "/users?id=$USR"; do req GET "$p" >/dev/null; check "page $p served" "$(st)" 200; done
+for p in "/assets/$ASSET/datastreams?ds=$DS" "/assets/$ASSET" "/assets/sites/$SITE" "/incidents?id=$INC" "/users?id=$USR"; do req GET "$p" >/dev/null; check "page $p served" "$(st)" 200; done
 req GET /app.js >/dev/null; grep -q "openSearch" "$TMP/b" && grep -q "/api/v1/search" "$TMP/b" && ok "Ctrl+K search in the page runtime" || bad "search runtime"
 req DELETE "/api/v1/dashboards/$DASH?reason=e2e" >/dev/null; check "dashboard retired" "$(st)" 200
 

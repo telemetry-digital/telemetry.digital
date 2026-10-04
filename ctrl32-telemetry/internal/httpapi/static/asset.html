@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Asset — ctrl32 telemetry</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  dialog.wide { width: min(860px, calc(100vw - 32px)); }
+  .crumbs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 6px; font-size: 14px; color: var(--muted); }
+  .crumbs a { color: var(--primary); }
+  .pair { display: grid; gap: 16px; grid-template-columns: 1fr; align-items: start; }
+  @media (min-width: 1000px) { .pair { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  .card-head { display: flex; align-items: center; gap: 8px; } .card-head h2 { margin: 0; } .card-head + * { margin-top: 10px; }
+  .pair > .card { margin: 0; }
+  .stack > .card + .card { margin-top: 16px; }
+  .loc-map { height: 260px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); margin: 8px 0; }
+  table.list td.num, table.list th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.list .tree { color: var(--muted); margin-right: 4px; }
+  table.list th { white-space: normal; }
+  .attr-row { display: grid; grid-template-columns: minmax(90px, 1fr) minmax(120px, 2fr) auto; gap: 6px; align-items: center; margin-bottom: 6px; }
+  #histTable pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; margin: 4px 0 0; max-width: 640px; }
+  tr.hl td { background: color-mix(in srgb, var(--primary) 10%, transparent); }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<!-- asset page -->
+<div id="assetView" hidden>
+  <nav class="crumbs" id="aCrumbs"></nav>
+  <div class="page-head"><h1 id="aTitle" class="notranslate"></h1><span id="aBadges"></span><span class="grow"></span><button class="btn" id="aChildBtn" type="button" hidden>New child asset</button><button class="btn" id="aEditBtn" type="button" hidden>Edit</button></div>
+  <nav class="subnav" id="tabs"></nav>
+
+  <section data-section="overview">
+    <div class="pair">
+      <div class="stack">
+        <div class="card"><h2>Asset</h2><div class="kv" id="aInfo"></div></div>
+        <div class="card"><div class="card-head"><h2>Attributes</h2><span class="grow"></span><button class="btn small" type="button" id="attrEdit" hidden>Edit attributes</button></div><div id="aAttrs"></div>
+          <form id="attrForm" class="form" style="margin-top:10px" hidden><div id="attrRows"></div><div><button class="btn small" type="button" id="attrAdd">+ attribute</button></div>
+            <label>Reason (audit trail) <input name="reason" required maxlength="200"></label><div class="err" id="attrErr"></div><div><button class="btn small primary" type="submit">Save attributes</button></div>
+            <p class="muted" style="margin:0;font-size:12px">Free key–value data of the asset (storage class, serial number, capacity…), used by dashboards and filters. Numbers, true and false are stored as such.</p></form>
+        </div>
+        <div class="card"><h2>Child assets</h2><div class="table-wrap"><table class="list" id="childTable"><thead><tr><th>Name</th><th>Type</th><th class="num">Datastreams</th><th class="num">Devices</th><th>Alarm</th><th>Last value</th></tr></thead><tbody></tbody></table></div></div>
+      </div>
+      <div class="stack">
+        <div class="card"><div class="card-head"><h2>Location</h2><span class="grow"></span><button class="btn small" type="button" id="aLocEdit" hidden>Change position</button></div><div id="aLocInfo" class="muted"></div><div class="loc-map" id="aMap" hidden></div>
+          <form id="aLocForm" class="form" hidden><div class="row"><label>Latitude <input name="lat" type="number" step="any" min="-90" max="90" placeholder="48.1486"></label><label>Longitude <input name="lon" type="number" step="any" min="-180" max="180" placeholder="17.1077"></label></div>
+            <p class="muted" style="margin:0;font-size:12px">Click the map to take a position.</p>
+            <label>Reason (audit trail) <input name="reason" maxlength="200" required></label><div class="err" id="aLocErr"></div>
+            <div class="actions"><button class="btn small primary" type="submit">Save position</button><button class="btn small" type="button" id="aLocClear">Remove position</button></div></form>
+        </div>
+        <div class="card"><h2>Devices feeding it</h2><div class="table-wrap"><table class="list" id="devTable"><thead><tr><th>Device</th><th>Transport</th><th>Datastreams</th><th>Last seen</th><th>State</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="card"><h2>Active alarms</h2><div class="table-wrap"><table class="list" id="alarmTable"><thead><tr><th>Raised</th><th>Severity</th><th>State</th><th>Datastream</th><th class="num">Value</th></tr></thead><tbody></tbody></table></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section data-section="telemetry" id="telSection"></section>
+
+  <section data-section="datastreams">
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Datastreams</h2><span class="grow"></span><button class="btn small primary" id="newDsBtn" type="button" hidden>New datastream</button></div>
+      <div class="table-wrap" style="margin-top:12px"><table class="list" id="dsTable"><thead><tr><th>Key</th><th>Quantity</th><th>Kind</th><th>Expected interval</th><th>Physical range</th><th>Source device</th><th class="num">Latest value</th><th class="num">Alarm rules</th></tr></thead><tbody></tbody></table></div>
+      <p class="muted" style="margin-bottom:0;font-size:12px">A datastream is one measured quantity of the asset; the device assigned to it publishes the values under its key. Click a datastream to edit its unit, expected interval and physical range, assign a device and set alarm rules.</p>
+    </div>
+  </section>
+
+  <section data-section="rules">
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Alarm rules</h2><span class="grow"></span><button class="btn small primary" id="newRuleBtn" type="button" hidden>New rule</button></div>
+      <div class="table-wrap" style="margin-top:12px"><table class="list" id="ruleTable"><thead><tr><th>Datastream</th><th>Type</th><th>Warning</th><th>Action</th><th>Delay</th><th>Hysteresis</th><th>Version</th><th>Since</th></tr></thead><tbody></tbody></table></div>
+      <p class="muted" style="margin-bottom:0;font-size:12px">Current versions of the alarm rules of this asset's datastreams. Click a rule to open its datastream (new version, disable).</p>
+    </div>
+  </section>
+
+  <section data-section="history">
+    <div class="card">
+      <h2>History</h2>
+      <div class="table-wrap"><table class="list" id="histTable"><thead><tr><th>Time</th><th>Change</th><th>Record</th><th>By</th><th>Reason</th></tr></thead><tbody></tbody></table></div>
+      <div class="row" style="margin-top:8px"><button class="btn small" type="button" id="histMore" hidden>Older</button></div>
+      <p class="muted" style="margin-bottom:0;font-size:12px">Entries of the audit trail about the asset, its datastreams, their alarm rules and device assignments, newest first. Click an entry for the values before and after.</p>
+    </div>
+  </section>
+</div>
+
+<!-- site page -->
+<div id="siteView" hidden>
+  <nav class="crumbs" id="sCrumbs"></nav>
+  <div class="page-head"><h1 id="sTitle" class="notranslate"></h1><span id="sBadges"></span><span class="grow"></span><button class="btn" id="sAssetBtn" type="button" hidden>New asset</button><button class="btn" id="sEditBtn" type="button" hidden>Edit</button></div>
+  <div class="pair">
+    <div class="card"><h2>Site</h2><div class="kv" id="sInfo"></div></div>
+    <div class="card"><div class="card-head"><h2>Location</h2><span class="grow"></span><button class="btn small" type="button" id="sLocEdit" hidden>Change position</button></div><div id="sLocInfo" class="muted"></div><div class="loc-map" id="sMap" hidden></div>
+        <form id="sLocForm" class="form" hidden><div class="row"><label>Latitude <input name="lat" type="number" step="any" min="-90" max="90" placeholder="48.1486"></label><label>Longitude <input name="lon" type="number" step="any" min="-180" max="180" placeholder="17.1077"></label></div>
+          <p class="muted" style="margin:0;font-size:12px">Click the map to take a position.</p>
+          <label>Reason (audit trail) <input name="reason" maxlength="200" required></label><div class="err" id="sLocErr"></div>
+          <div class="actions"><button class="btn small primary" type="submit">Save position</button><button class="btn small" type="button" id="sLocClear">Remove position</button></div></form>
+    </div>
+  </div>
+  <div class="card" style="margin:16px 0"><h2>Assets</h2><div class="table-wrap"><table class="list" id="sAssetTable"><thead><tr><th>Name</th><th>Type</th><th class="num">Datastreams</th><th class="num">Devices</th><th>Alarm</th><th>Last value</th></tr></thead><tbody></tbody></table></div></div>
+  <div class="pair">
+    <div class="card"><h2>Devices</h2><div class="table-wrap"><table class="list" id="sDevTable"><thead><tr><th>Device</th><th>Transport</th><th>Datastreams</th><th>Last seen</th><th>State</th></tr></thead><tbody></tbody></table></div></div>
+    <div class="card"><h2>Active alarms</h2><div class="table-wrap"><table class="list" id="sAlarmTable"><thead><tr><th>Raised</th><th>Severity</th><th>Asset</th><th>Datastream</th><th class="num">Value</th></tr></thead><tbody></tbody></table></div></div>
+  </div>
+</div>
+
+<dialog id="editDlg">
+  <form id="editForm" class="form" method="dialog">
+    <h2 style="margin-top:0">Edit asset</h2>
+    <label>Name <input name="name" required maxlength="128"></label>
+    <label>Type <input name="type" required maxlength="32" list="types"></label>
+    <label>Parent asset <select name="parent_id"></select></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="editErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" data-close>Cancel</button></div>
+  </form>
+</dialog>
+<dialog id="assetDlg">
+  <form id="assetForm" class="form" method="dialog">
+    <h2 style="margin-top:0" id="assetDlgTitle">New asset</h2>
+    <p class="muted" id="assetDlgWhere" style="margin:0"></p>
+    <label>Type <input name="type" required maxlength="32" placeholder="fridge, room, meter, machine…" list="types"></label>
+    <datalist id="types"><option value="fridge"><option value="freezer"><option value="room"><option value="meter"><option value="machine"><option value="building"><option value="vehicle"></datalist>
+    <label>Name <input name="name" required maxlength="128"></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="assetErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Create</button><button class="btn" type="button" data-close>Cancel</button></div>
+  </form>
+</dialog>
+<dialog id="siteDlg">
+  <form id="siteForm" class="form" method="dialog">
+    <h2 style="margin-top:0">Edit site</h2>
+    <label>Name <input name="name" required maxlength="128"></label>
+    <label>Time zone <input name="tz" maxlength="64"></label>
+    <label>Address <input name="address" maxlength="200"></label>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="siteErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" data-close>Cancel</button></div>
+  </form>
+</dialog>
+<dialog id="dsNewDlg">
+  <form id="dsForm" class="form" method="dialog">
+    <h2 style="margin-top:0">New datastream</h2>
+    <div class="row">
+      <label>Key (what the device publishes) <input name="key" required pattern="[a-z][a-z0-9_]{0,31}" maxlength="32" placeholder="temp"></label>
+      <label>Kind <select name="kind"><option value="gauge">gauge</option><option value="counter">counter</option><option value="state">state</option><option value="event">event</option></select></label>
+    </div>
+    <div class="row">
+      <label>Quantity <input name="quantity" required maxlength="64" placeholder="temperature" list="quantities"></label>
+      <datalist id="quantities"><option value="temperature"><option value="humidity"><option value="energy_active_import"><option value="power_active"><option value="pressure"><option value="state"><option value="co2"></datalist>
+      <label>Unit <input name="unit" maxlength="16" placeholder="°C"></label>
+    </div>
+    <div class="row">
+      <label>Expected interval (gap detection) <input name="expected_interval" placeholder="5 minutes" maxlength="32"></label>
+      <label>Required accuracy <input name="accuracy" type="number" step="any" placeholder="0.5"></label>
+    </div>
+    <div class="row"><label>Physical range from <input name="range_min" type="number" step="any"></label><label>to <input name="range_max" type="number" step="any"></label></div>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="dsErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Create</button><button class="btn" type="button" data-close>Cancel</button></div>
+  </form>
+</dialog>
+<dialog id="ruleDlg">
+  <form id="ruleNew" class="form" method="dialog">
+    <h2 style="margin-top:0">New alarm rule</h2>
+    <label>Datastream <select name="datastream_id" required></select></label>
+    <div class="row"><label>Type <select name="type"></select></label><label>Warning limit <input name="warning" type="number" step="any"></label><label>Action limit <input name="action" type="number" step="any"></label></div>
+    <div class="row"><label>Delay (s) <input name="delay" type="number" min="0" value="0"></label><label>Hysteresis <input name="hysteresis" type="number" step="any" min="0" value="0"></label><label>Escalation policy <select name="policy"></select></label></div>
+    <p class="muted rule-hint" style="margin:0;font-size:12px"></p>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="ruleNewErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" data-close>Cancel</button></div>
+    <p class="muted" style="margin:0">A rule of the same type on the same datastream is superseded by the new version.</p>
+  </form>
+</dialog>
+<dialog id="dsDlg" class="wide"></dialog>
+
+<script src="/app.js"></script>
+<script src="/scada.js"></script>
+<script src="/vendor/tabler-icons.js"></script>
+<script src="/widgets.js"></script>
+<script src="/widgets-more.js"></script>
+<script src="/telemetry.js"></script>
+<script src="/alarmrules.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
+const {ruleTypeOpts, policyOpts, ruleHint, loadPols, ruleBody, ruleSaved} = ctrl32Rules;
+const TABS = [['overview', 'Overview'], ['telemetry', 'Telemetry'], ['datastreams', 'Datastreams'], ['rules', 'Alarm rules'], ['history', 'History']];
+const canCfg = () => ctrl32.can('config.write');
+let A = null, SITE = null, ID = null, TAB = 'overview', TEL = null, SITE_ASSETS = null;
+for(const b of document.querySelectorAll('[data-close]')) b.onclick = () => b.closest('dialog').close();
+const SEV = {warning: 'warn', action: 'bad', critical: 'bad'};
+function alarmBadge(a){ return a ? `<span class="badge ${SEV[a.severity] || 'bad'}">${esc(ctrl32.t(a.severity))}${a.count > 1 ? ' ×' + a.count : ''}${a.acknowledged ? ' ✓' : ''}</span>` : '<span class="muted">—</span>'; }
+function devState(d){ if(d.revoked_at) return '<span class="badge bad">revoked</span>'; if(d.connected) return '<span class="badge ok">online</span>'; if(!d.last_seen) return '<span class="badge">never connected</span>'; const age = (Date.now() - new Date(d.last_seen).getTime()) / 60000; return age < 15 ? '<span class="badge ok">recent</span>' : `<span class="badge warn" title="${esc(fmt(d.last_seen))}">offline</span>`; }
+const num = (v) => ctrl32Telemetry.numFmt(v);
+// a time as "5 minutes ago" (the full time on hover): keeps the columns narrow
+const ago = (t) => t ? `<span title="${esc(fmt(t))}" style="white-space:nowrap">${esc(ctrl32Telemetry.relTime(t))}</span>` : '<span class="muted">—</span>';
+function devRows(list){ return list.map(d => `<tr class="clickable" data-href="/devices/${d.id}"><td class="notranslate"><a href="/devices/${d.id}"><b>${esc(d.name || d.external_id)}</b></a>${d.name && d.name !== d.external_id ? `<div class="muted" style="font-size:12px">${esc(d.external_id)}</div>` : ''}</td><td>${esc(d.transport)}</td><td><code>${esc((d.keys || []).join(', '))}</code></td><td>${ago(d.last_seen)}</td><td>${devState(d)}</td></tr>`).join('') || `<tr><td colspan="5" class="muted">${esc(ctrl32.t('no device feeds it yet'))}</td></tr>`; }
+function assetRows(list, tree){ const ind = a => tree && a.depth ? `<span class="tree" style="padding-left:${(a.depth - 1) * 18}px">└ </span>` : '';
+  return list.map(a => `<tr class="clickable" data-href="/assets/${a.id}"><td class="notranslate">${ind(a)}<a href="/assets/${a.id}"><b>${esc(a.name)}</b></a>${a.children ? ` <span class="muted" style="font-size:12px">(${a.children})</span>` : ''}</td><td>${esc(a.type)}</td><td class="num">${a.datastreams}</td><td class="num">${a.devices}</td><td>${alarmBadge(a.alarm)}</td><td>${ago(a.last_at)}</td></tr>`).join(''); }
+function wireRows(scope){ for(const tr of document.querySelectorAll(scope + ' tr[data-href]')) tr.onclick = e => { if(e.target.closest('a,button')) return; location.href = tr.dataset.href; }; }
+function treeOrder(all){
+  const by = new Map(all.map(a => [a.id, a])), kids = new Map();
+  for(const a of all){ const p = a.parent_id && by.has(a.parent_id) ? a.parent_id : ''; if(!kids.has(p)) kids.set(p, []); kids.get(p).push(a); }
+  const out = [], seen = new Set();
+  const walk = (a, d) => { if(seen.has(a.id)) return; seen.add(a.id); a.depth = d; out.push(a); for(const c of (kids.get(a.id) || []).sort((x, y) => x.name.localeCompare(y.name))) walk(c, d + 1); };
+  for(const r of (kids.get('') || []).sort((x, y) => x.name.localeCompare(y.name))) walk(r, 0);
+  for(const a of all) if(!seen.has(a.id)) walk(a, 0);
+  return out;
+}
+// ---- map: the place and what is around it (devices with a position, assets with one)
+const MAPS = {};
+async function drawMap(box, center, points, editForm){
+  const cfg = ctrl32Widgets.mapConfig();
+  if(!cfg.tile_url){ box.hidden = true; return null; }
+  box.hidden = false; await ctrl32Widgets.loadLeaflet();
+  if(MAPS[box.id]){ MAPS[box.id].remove(); }
+  const map = ctrl32Widgets.makeMap(box, cfg); MAPS[box.id] = map; const pts = [];
+  for(const p of points){ const ll = [p.lat, p.lon]; pts.push(ll); L.circleMarker(ll, {radius: p.main ? 9 : 7, color: '#fff', weight: 2, fillColor: p.color || 'var(--primary)', fillOpacity: 0.95}).addTo(map).bindPopup(p.html); }
+  if(center){ pts.push([center.lat, center.lon]); }
+  if(pts.length > 1) map.fitBounds(pts, {padding: [24, 24], maxZoom: 16}); else if(pts.length) map.setView(pts[0], 15); else map.setView([cfg.center_lat || 48.7, cfg.center_lon || 19.5], cfg.zoom || 7);
+  if(editForm){ let mk = null; map.on('click', ev => { editForm.lat.value = ev.latlng.lat.toFixed(6); editForm.lon.value = ev.latlng.lng.toFixed(6); if(mk) mk.setLatLng(ev.latlng); else mk = L.marker(ev.latlng).addTo(map); }); }
+  setTimeout(() => map.invalidateSize(), 50);
+  return map;
+}
+function devicePoints(devs){ return devs.filter(d => d.location && d.location.lat != null && d.location.lon != null).map(d => ({lat: d.location.lat, lon: d.location.lon, color: d.connected ? '#16a34a' : '#64748b', html: `<b>${esc(d.name || d.external_id)}</b><br>${esc(ctrl32.t('device'))} · ${d.last_seen ? esc(fmt(d.last_seen)) : '—'}<br><a href="/devices/${d.id}">${esc(ctrl32.t('open device'))}</a>`})); }
+function wireLocation(form, errEl, clearBtn, url, reload){
+  form.onsubmit = async e => { e.preventDefault(); errEl.textContent = ''; try{ await api('PATCH', url, {location: {lat: parseFloat(form.lat.value), lon: parseFloat(form.lon.value)}, reason: form.reason.value}); ctrl32.toast('position saved', 'ok'); form.reason.value = ''; reload(); }catch(x){ errEl.textContent = x.message; } };
+  clearBtn.onclick = async () => { errEl.textContent = ''; if(!form.reason.value){ errEl.textContent = ctrl32.t('reason is required'); return; } try{ await api('PATCH', url, {clear_location: true, reason: form.reason.value}); ctrl32.toast('position removed', 'ok'); form.reason.value = ''; form.lat.value = ''; form.lon.value = ''; reload(); }catch(x){ errEl.textContent = x.message; } };
+}
+// ---- asset page
+async function loadAsset(){
+  A = await api('GET', `/api/v1/assets/${ID}`); const a = A.asset, cfg = canCfg();
+  document.title = a.name + ' — ' + ctrl32.t('Assets');
+  $('#aCrumbs').innerHTML = [`<a href="/assets">${esc(ctrl32.t('Assets'))}</a>`, `<a class="notranslate" href="/assets/sites/${A.site.id}">${esc(A.site.name)}</a>`, ...A.path.map(p => `<a class="notranslate" href="/assets/${p.id}">${esc(p.name)}</a>`)].join(' › ') + ' ›';
+  $('#aTitle').textContent = a.name;
+  $('#aBadges').innerHTML = `<span class="badge">${esc(a.type)}</span> ${a.alarm ? alarmBadge(a.alarm) : ''}`;
+  $('#aEditBtn').hidden = $('#aChildBtn').hidden = !cfg;
+  const parent = A.path.length ? A.path[A.path.length - 1] : null;
+  $('#aInfo').innerHTML = `<b>Type</b><span>${esc(a.type)}</span><b>Site</b><span class="notranslate"><a href="/assets/sites/${A.site.id}">${esc(A.site.name)}</a></span><b>Parent</b><span class="notranslate">${parent ? `<a href="/assets/${parent.id}">${esc(parent.name)}</a>` : '<span class="muted">—</span>'}</span>
+    <b>Datastreams</b><span>${a.datastreams}</span><b>Devices</b><span>${a.devices}</span><b>Child assets</b><span>${a.children}</span><b>Last value</b><span>${a.last_at ? fmt(a.last_at) : '—'}</span><b>Created</b><span>${fmt(a.created_at)}</span><b>Id</b><code>${esc(a.id)}</code>`;
+  renderAttrs();
+  $('#childTable tbody').innerHTML = assetRows(A.children) || `<tr><td colspan="6" class="muted">${esc(ctrl32.t('no child assets'))}</td></tr>`;
+  $('#devTable tbody').innerHTML = devRows(A.devices);
+  $('#alarmTable tbody').innerHTML = A.alarms.map(x => `<tr><td>${fmt(x.raised_at)}</td><td><span class="badge ${SEV[x.severity] || 'bad'}">${esc(ctrl32.t(x.severity))}</span></td><td>${esc(ctrl32.t(x.state))}</td><td><code>${esc(x.key)}</code></td><td class="num">${num(x.value)}</td></tr>`).join('') || `<tr><td colspan="5" class="muted">${esc(ctrl32.t('no active alarms'))}</td></tr>`;
+  wireRows('#childTable'); wireRows('#devTable');
+  // location: its own, else the site's; devices with a position around it
+  const l = A.location;
+  $('#aLocInfo').innerHTML = l ? `<b>${l.lat.toFixed(5)}, ${l.lon.toFixed(5)}</b> <span class="badge ${l.source === 'asset' ? 'primary' : ''}">${esc(ctrl32.t(l.source === 'asset' ? 'own position' : 'position of the site'))}</span>` : esc(ctrl32.t('no position yet'));
+  const f = $('#aLocForm'); f.hidden = true; $('#aLocEdit').hidden = !cfg; $('#aLocEdit').onclick = () => { f.hidden = !f.hidden; };
+  if(cfg){ if(l && l.source === 'asset'){ f.lat.value = l.lat; f.lon.value = l.lon; } wireLocation(f, $('#aLocErr'), $('#aLocClear'), `/api/v1/assets/${ID}`, loadAsset); }
+  if(TAB === 'overview') drawMap($('#aMap'), null, [...(l ? [{lat: l.lat, lon: l.lon, main: true, html: `<b>${esc(a.name)}</b><br>${esc(a.type)}`}] : []), ...devicePoints(A.devices)], cfg ? f : null);
+  renderDatastreams();
+}
+// attributes: key-value editor (location lives in its own card)
+function attrVal(v){ return typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v); }
+function renderAttrs(){
+  const at = Object.assign({}, A.asset.attributes || {}); delete at.lat; delete at.lon; const keys = Object.keys(at).sort();
+  $('#aAttrs').innerHTML = keys.length ? `<div class="kv notranslate">${keys.map(k => `<b>${esc(k)}</b><span>${esc(attrVal(at[k]))}</span>`).join('')}</div>` : `<span class="muted">${esc(ctrl32.t('no attributes'))}</span>`;
+  const f = $('#attrForm'); f.hidden = true; $('#attrEdit').hidden = !canCfg(); if(!canCfg()) return;
+  $('#attrEdit').onclick = () => { f.hidden = !f.hidden; };
+  const rows = keys.map(k => [k, attrVal(at[k])]);
+  const draw = () => { $('#attrRows').innerHTML = rows.map((r, i) => `<div class="attr-row"><input data-i="${i}" data-f="0" value="${esc(r[0])}" placeholder="${esc(ctrl32.t('key'))}" maxlength="64" aria-label="key"><input data-i="${i}" data-f="1" value="${esc(r[1])}" placeholder="${esc(ctrl32.t('value'))}" maxlength="1000" aria-label="value"><button class="btn small danger" type="button" data-rm="${i}" aria-label="Remove">×</button></div>`).join('');
+    for(const el of document.querySelectorAll('#attrRows input')) el.oninput = () => { rows[+el.dataset.i][+el.dataset.f] = el.value; };
+    for(const b of document.querySelectorAll('#attrRows [data-rm]')) b.onclick = () => { rows.splice(+b.dataset.rm, 1); draw(); }; };
+  draw();
+  $('#attrAdd').onclick = () => { rows.push(['', '']); draw(); const ins = document.querySelectorAll('#attrRows input[data-f="0"]'); if(ins.length) ins[ins.length - 1].focus(); };
+  f.onsubmit = async e => { e.preventDefault(); $('#attrErr').textContent = '';
+    const out = {}; const prev = A.asset.attributes || {}; if(prev.lat != null) out.lat = prev.lat; if(prev.lon != null) out.lon = prev.lon;
+    for(const [k, v] of rows){ const key = k.trim(); if(!key) continue; if(key === 'lat' || key === 'lon'){ $('#attrErr').textContent = ctrl32.t('lat and lon are set under Location'); return; }
+      let val = v.trim(); try{ if(/^(-?\d+(\.\d+)?([eE][-+]?\d+)?|true|false|null|\{.*\}|\[.*\])$/.test(val)) val = JSON.parse(val); }catch(_){ /* text */ } out[key] = val; }
+    try{ await api('PATCH', `/api/v1/assets/${ID}`, {attributes: out, reason: f.reason.value}); ctrl32.toast('attributes saved', 'ok'); f.reason.value = ''; loadAsset(); }catch(x){ $('#attrErr').textContent = x.message; } };
+}
+// edit: name, type, parent (an asset of the same site, never itself or one below it)
+$('#aEditBtn').onclick = async () => { const f = $('#editForm'), a = A.asset; f.reset(); $('#editErr').textContent = ''; f.name.value = a.name; f.type.value = a.type;
+  const all = await api('GET', `/api/v1/assets?site_id=${a.site_id}`), below = new Set([a.id]); let grew = true;
+  while(grew){ grew = false; for(const x of all) if(x.parent_id && below.has(x.parent_id) && !below.has(x.id)){ below.add(x.id); grew = true; } }
+  f.parent_id.innerHTML = `<option value="">${esc(ctrl32.t('(top level)'))}</option>` + treeOrder(all).filter(x => !below.has(x.id)).map(x => `<option value="${x.id}" ${x.id === a.parent_id ? 'selected' : ''}>${'  '.repeat(x.depth || 0)}${esc(x.name)}</option>`).join('');
+  $('#editDlg').showModal(); };
+$('#editForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#editErr').textContent = '';
+  try{ await api('PATCH', `/api/v1/assets/${ID}`, {name: f.name.value, type: f.type.value, parent_id: f.parent_id.value, reason: f.reason.value}); $('#editDlg').close(); ctrl32.toast('asset updated', 'ok'); loadAsset(); }catch(x){ $('#editErr').textContent = x.message; } };
+let NEW_ASSET = {};
+function openAssetDlg(siteId, parentId, where){ NEW_ASSET = {siteId, parentId}; const f = $('#assetForm'); f.reset(); $('#assetErr').textContent = ''; $('#assetDlgTitle').textContent = ctrl32.t(parentId ? 'New child asset' : 'New asset'); $('#assetDlgWhere').textContent = where; $('#assetDlg').showModal(); }
+$('#aChildBtn').onclick = () => openAssetDlg(A.asset.site_id, A.asset.id, A.site.name + ' › ' + A.asset.name);
+$('#assetForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#assetErr').textContent = '';
+  try{ const r = await api('POST', '/api/v1/assets', {site_id: NEW_ASSET.siteId, parent_id: NEW_ASSET.parentId || '', type: f.type.value, name: f.name.value, reason: f.reason.value}); $('#assetDlg').close(); ctrl32.toast('asset created', 'ok'); location.href = '/assets/' + r.id; }catch(x){ $('#assetErr').textContent = x.message; } };
+// ---- datastreams
+function rangeText(d){ return d.range_min == null && d.range_max == null ? '<span class="muted">—</span>' : `${d.range_min ?? '−∞'} … ${d.range_max ?? '+∞'}`; }
+function renderDatastreams(){
+  const want = new URLSearchParams(location.search).get('ds');
+  $('#newDsBtn').hidden = !canCfg();
+  $('#dsTable tbody').innerHTML = A.datastreams.map(d => `<tr class="clickable${d.id === want ? ' hl' : ''}" data-ds="${d.id}"><td><code>${esc(d.key)}</code></td><td>${esc(d.quantity)} ${d.unit ? `[${esc(d.unit)}]` : ''}</td><td>${esc(d.kind)}</td><td>${esc(d.expected_interval || '—')}</td><td>${rangeText(d)}</td>
+    <td class="notranslate">${d.device_id ? `<a href="/devices/${d.device_id}">${esc(d.device)}</a>` : `<span class="muted">${esc(ctrl32.t('none'))}</span>`}</td><td class="num">${d.last ? `<b>${esc(ctrl32Telemetry.valText(d.last))}</b> ${esc(d.unit)} ${d.last.quality !== 'ok' ? ctrl32Telemetry.qualBadge(d.last.quality) : ''}<div class="muted" style="font-size:11px">${esc(fmt(d.last.at))}</div>` : '<span class="muted">—</span>'}</td><td class="num">${d.alarm_rules || 0}</td></tr>`).join('')
+    || `<tr><td colspan="8" class="muted">${esc(ctrl32.t('no datastreams yet'))}</td></tr>`;
+  for(const tr of document.querySelectorAll('#dsTable tr[data-ds]')) tr.onclick = e => { if(e.target.closest('a')) return; openDS(tr.dataset.ds); };
+}
+$('#newDsBtn').onclick = () => { const f = $('#dsForm'); f.reset(); $('#dsErr').textContent = ''; $('#dsNewDlg').showModal(); };
+$('#dsForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#dsErr').textContent = ''; const rng = v => v === '' ? null : parseFloat(v);
+  const body = {asset_id: ID, key: f.key.value, kind: f.kind.value, quantity: f.quantity.value, unit: f.unit.value, expected_interval: f.expected_interval.value, reason: f.reason.value}; if(f.accuracy.value !== '') body.accuracy = parseFloat(f.accuracy.value);
+  if(f.range_min.value !== '' || f.range_max.value !== '') body.range = {min: rng(f.range_min.value), max: rng(f.range_max.value)};
+  try{ await api('POST', '/api/v1/datastreams', body); $('#dsNewDlg').close(); ctrl32.toast('datastream created', 'ok'); await loadAsset(); if(TEL) TEL.load(); }catch(x){ $('#dsErr').textContent = x.message; } };
+// one datastream: detail, edit, source device, alarm rules (versions)
+let DEVICES = null;
+async function openDS(id){
+  await loadPols();
+  const dlg = $('#dsDlg'); dlg.innerHTML = '<p class="muted">…</p>'; if(!dlg.open) dlg.showModal();
+  let d; try{ d = await api('GET', `/api/v1/datastreams/${id}`); }catch(x){ dlg.innerHTML = `<p class="err">${esc(x.message)}</p>`; return; }
+  const ds = d.datastream, cfg = canCfg(), mng = ctrl32.can('device.manage');
+  if(mng && !DEVICES){ try{ DEVICES = (await api('GET', '/api/v1/devices')).filter(x => !x.revoked_at); }catch(_){ DEVICES = []; } }
+  dlg.innerHTML = `<div class="row"><h2 style="margin:0"><span class="notranslate">${esc(d.asset.name)}</span> / <code>${esc(ds.key)}</code></h2><span class="badge">${esc(ds.kind)}</span><span class="grow"></span><button class="btn ghost icon" id="dsClose" type="button" aria-label="Close">${ctrl32.ICON.close}</button></div>
+    <div class="two" style="margin-top:12px"><div>
+      <div class="kv"><b>Site</b><span class="notranslate">${esc(d.site.name)}</span><b>Quantity</b><span>${esc(ds.quantity)} [${esc(ds.unit)}]</span><b>Expected interval</b><span>${esc(ds.expected_interval || ctrl32.t('— (no gap detection)'))}</span><b>Accuracy</b><span>${ds.accuracy ?? '—'}</span><b>Physical range</b><span>${ds.range_min == null && ds.range_max == null ? `<span class="muted">${esc(ctrl32.t('not set'))}</span>` : `${ds.range_min ?? '−∞'} … ${ds.range_max ?? '+∞'} ${esc(ds.unit)} <span class="muted">${esc(ctrl32.t('(outside = sensor fault)'))}</span>`}</span><b>Source device</b><span class="notranslate">${d.device ? `<a href="/devices/${d.device.id}">${esc(d.device.name || d.device.external_id)}</a> <span class="muted">${esc(ctrl32.t('since'))} ${fmt(d.device.since)}</span>` : `<span class="muted">${esc(ctrl32.t('none'))}</span>`}</span><b>Last value</b><span>${d.last_observation ? `${d.last_observation.value ?? '—'} ${esc(ds.unit)} <span class="muted">${fmt(d.last_observation.measured_at)} · ${esc(d.last_observation.quality)}</span>` : `<span class="muted">${esc(ctrl32.t('no data yet'))}</span>`}</span><b>Rules</b><span>${(d.rules || []).length ? d.rules.map(r => `<a href="/assets/automation">${esc(r.name)}</a> <span class="muted">${r.role === 'derive' ? esc(ctrl32.t('derives this datastream')) : esc(ctrl32.t('reads it'))}</span>`).join('<br>') : `<span class="muted">${esc(ctrl32.t('none'))}</span>`}</span><b>Id</b><code>${esc(ds.id)}</code></div>
+      ${mng ? `<form id="dsAssign" class="form" style="margin-top:12px"><h3 style="margin:0">Source device</h3><label>Device <select name="device_id"><option value="">…</option>${(DEVICES || []).map(x => `<option value="${x.id}" ${d.device && d.device.id === x.id ? 'selected' : ''}>${esc(x.name || x.external_id)} (${esc(x.external_id)})</option>`).join('')}</select></label><p class="muted" style="margin:0;font-size:12px">The device publishes the datastream's key. Assigning another device ends the current assignment.</p><label>Reason <input name="reason" required maxlength="200"></label><div class="err" id="dsAssignErr"></div><div class="row"><button class="btn small primary" type="submit">Assign</button>${d.device ? '<button class="btn small" type="button" id="dsUnassign">Remove assignment</button>' : ''}</div></form>` : ''}
+      ${cfg ? `<form id="dsEdit" class="form" style="margin-top:12px"><h3 style="margin:0">Edit</h3><div class="row"><label>Unit <input name="unit" value="${esc(ds.unit)}" maxlength="16"></label><label>Expected interval <input name="expected_interval" value="${esc(ds.expected_interval)}" maxlength="32" placeholder="5 minutes"></label></div><div class="row"><label>Physical range from <input name="range_min" type="number" step="any" value="${ds.range_min ?? ''}"></label><label>to <input name="range_max" type="number" step="any" value="${ds.range_max ?? ''}"></label></div><p class="muted" style="margin:0;font-size:12px">What the sensor can measure at all. A value outside it is stored with the quality sensor fault. Empty = no limit.</p><label>Reason <input name="reason" required maxlength="200"></label><div class="err" id="dsEditErr"></div><div><button class="btn small primary" type="submit">Save</button></div></form>` : ''}
+    </div><div>
+      <h3 style="margin-top:0">Alarm rules (current versions)</h3>
+      <div class="table-wrap"><table><thead><tr><th>Type</th><th>Warning</th><th>Action</th><th>Delay</th><th>Hyst.</th><th>v</th><th></th></tr></thead><tbody>${d.alarm_rules.map(r => `<tr><td>${esc(r.type)}</td><td>${r.warning ?? '—'}</td><td>${r.action ?? '—'}</td><td>${r.delay_seconds} s</td><td>${r.hysteresis}</td><td title="${esc(r.reason)}">${r.version}</td><td>${cfg ? `<button class="btn small" type="button" data-close-rule="${r.id}">Disable</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">no rules</td></tr>'}</tbody></table></div>
+      ${cfg ? `<form id="ruleForm" class="form" style="margin-top:12px"><h3 style="margin:0">New rule version</h3><div class="row"><label>Type <select name="type">${ruleTypeOpts((d.alarm_rules[0] || {}).type)}</select></label><label>Warning limit <input name="warning" type="number" step="any"></label><label>Action limit <input name="action" type="number" step="any"></label></div><div class="row"><label>Delay (s) <input name="delay" type="number" min="0" value="0"></label><label>Hysteresis <input name="hysteresis" type="number" step="any" min="0" value="0"></label><label>Escalation policy <select name="policy">${policyOpts()}</select></label></div><p class="muted rule-hint" style="margin:0;font-size:12px"></p><label>Reason <input name="reason" required maxlength="200"></label><div class="err" id="ruleErr"></div><div><button class="btn small primary" type="submit">Save as new version</button></div></form>` : ''}
+    </div></div>`;
+  $('#dsClose').onclick = () => { dlg.close(); };
+  dlg.onclose = () => { refreshAfterDS(); };
+  if(mng){
+    $('#dsAssign').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#dsAssignErr').textContent = ''; if(!f.device_id.value){ $('#dsAssignErr').textContent = ctrl32.t('choose a device'); return; }
+      try{ const r = await api('POST', `/api/v1/devices/${f.device_id.value}/datastreams`, {datastream_id: id, reason: f.reason.value}); ctrl32.toast(r.status === 'pending' ? 'change request recorded — waiting for approval by a second person' : 'assigned', r.status === 'pending' ? 'bad' : 'ok'); openDS(id); }catch(x){ $('#dsAssignErr').textContent = x.message; } };
+    const un = $('#dsUnassign'); if(un) un.onclick = async () => { const f = $('#dsAssign'); $('#dsAssignErr').textContent = ''; if(!f.reason.value){ $('#dsAssignErr').textContent = ctrl32.t('reason is required'); return; }
+      try{ const r = await api('DELETE', `/api/v1/devices/${d.device.id}/datastreams/${id}?reason=${encodeURIComponent(f.reason.value)}`); if(r.status === 'pending') ctrl32.toast('change request recorded — waiting for approval by a second person', 'bad'); else ctrl32.toast('assignment removed', 'ok'); openDS(id); }catch(x){ $('#dsAssignErr').textContent = x.message; } };
+  }
+  if(cfg){
+    $('#dsEdit').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#dsEditErr').textContent = ''; const rng = v => v === '' ? null : parseFloat(v);
+      try{ await api('PATCH', `/api/v1/datastreams/${id}`, {unit: f.unit.value, expected_interval: f.expected_interval.value, range: {min: rng(f.range_min.value), max: rng(f.range_max.value)}, reason: f.reason.value}); ctrl32.toast('saved', 'ok'); openDS(id); }catch(x){ $('#dsEditErr').textContent = x.message; } };
+    // the form starts from the current version of the chosen type (limits, delay, hysteresis, escalation policy)
+    const rf = $('#ruleForm'), fill = () => { const cur = d.alarm_rules.find(r => r.type === rf.type.value); rf.warning.value = cur && cur.warning != null ? cur.warning : ''; rf.action.value = cur && cur.action != null ? cur.action : ''; rf.delay.value = cur ? cur.delay_seconds : 0; rf.hysteresis.value = cur ? cur.hysteresis : 0; rf.policy.innerHTML = policyOpts(cur && cur.escalation_policy_id); ruleHint(rf); };
+    rf.type.onchange = fill; fill();
+    rf.onsubmit = async e => { e.preventDefault(); $('#ruleErr').textContent = ''; try{ ruleSaved(await api('POST', '/api/v1/alarm-rules', ruleBody(rf, id))); openDS(id); }catch(x){ $('#ruleErr').textContent = x.message; } };
+    for(const b of document.querySelectorAll('[data-close-rule]')) b.onclick = async () => { const reason = ctrl32.ask('Reason for disabling this rule:'); if(!reason) return; try{ const r = await api('DELETE', `/api/v1/alarm-rules/${b.dataset.closeRule}?reason=${encodeURIComponent(reason)}`); if(r.status === 'pending') ctrl32.toast('change request recorded — waiting for approval by a second person', 'bad'); openDS(id); }catch(x){ ctrl32.toast(x.message, 'bad'); } };
+  }
+}
+async function refreshAfterDS(){ try{ await loadAsset(); if(TAB === 'rules') loadRules(); }catch(_){ } }
+// ---- alarm rules of the asset
+async function loadRules(){
+  $('#newRuleBtn').hidden = !canCfg();
+  const want = new URLSearchParams(location.search).get('ds');
+  try{ const rs = await api('GET', `/api/v1/alarm-rules?asset_id=${ID}`);
+    $('#ruleTable tbody').innerHTML = rs.map(r => `<tr class="clickable${r.datastream_id === want ? ' hl' : ''}" data-ds="${r.datastream_id}"><td><code>${esc(r.key)}</code></td><td>${esc(r.type)}</td><td>${r.warning ?? '—'}</td><td>${r.action ?? '—'}</td><td>${r.delay_seconds} s</td><td>${r.hysteresis}</td><td title="${esc(r.reason)}">v${r.version}</td><td>${fmt(r.valid_from)}</td></tr>`).join('') || `<tr><td colspan="8" class="muted">${esc(ctrl32.t('no alarm rules yet'))}</td></tr>`;
+    for(const tr of document.querySelectorAll('#ruleTable tr[data-ds]')) tr.onclick = () => openDS(tr.dataset.ds);
+  }catch(x){ $('#ruleTable tbody').innerHTML = `<tr><td colspan="8" class="muted">${esc(x.message)}</td></tr>`; }
+}
+$('#newRuleBtn').onclick = async () => { const f = $('#ruleNew'); f.reason.value = ''; $('#ruleNewErr').textContent = ''; await loadPols();
+  f.datastream_id.innerHTML = A.datastreams.map(d => `<option value="${d.id}">${esc(d.key)} [${esc(d.unit)}]</option>`).join('');
+  f.type.innerHTML = ruleTypeOpts(f.type.value || 'high'); f.policy.innerHTML = policyOpts(); ruleHint(f); f.type.onchange = () => ruleHint(f); $('#ruleDlg').showModal(); };
+$('#ruleNew').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#ruleNewErr').textContent = '';
+  try{ ruleSaved(await api('POST', '/api/v1/alarm-rules', ruleBody(f, f.datastream_id.value))); $('#ruleDlg').close(); loadRules(); loadAsset(); }catch(x){ $('#ruleNewErr').textContent = x.message; } };
+// ---- history (audit.read)
+let HIST_BEFORE = '';
+async function loadHistory(more){
+  if(!ctrl32.can('audit.read')){ $('#histTable tbody').innerHTML = `<tr><td colspan="5" class="muted">${esc(ctrl32.t('Your role has no audit.read permission.'))}</td></tr>`; return; }
+  try{ const r = await api('GET', `/api/v1/assets/${ID}/history?limit=50${more && HIST_BEFORE ? '&before=' + HIST_BEFORE : ''}`); HIST_BEFORE = r.next_before;
+    const html = r.entries.map(x => `<tr class="clickable" data-seq="${x.seq}"><td>${fmt(x.ts)}</td><td><code>${esc(x.action)}</code></td><td>${esc(x.entity_type)}</td><td class="notranslate">${esc(x.actor)}</td><td style="white-space:normal">${esc(x.reason)}</td></tr><tr class="detail" data-for="${x.seq}" hidden><td colspan="5"><pre>${esc(JSON.stringify({before: x.old_value, after: x.new_value}, null, 1))}</pre></td></tr>`).join('');
+    if(more) $('#histTable tbody').insertAdjacentHTML('beforeend', html); else $('#histTable tbody').innerHTML = html || `<tr><td colspan="5" class="muted">${esc(ctrl32.t('nothing yet'))}</td></tr>`;
+    for(const tr of document.querySelectorAll('#histTable tr[data-seq]')) tr.onclick = () => { const d = document.querySelector(`#histTable tr[data-for="${tr.dataset.seq}"]`); if(d) d.hidden = !d.hidden; };
+    $('#histMore').hidden = !HIST_BEFORE;
+  }catch(x){ $('#histTable tbody').innerHTML = `<tr><td colspan="5" class="muted">${esc(x.message)}</td></tr>`; }
+}
+$('#histMore').onclick = () => loadHistory(true);
+// ---- telemetry: every datastream of the asset, optionally with the assets below it (telemetry.js)
+function initTelemetry(){
+  if(TEL) return;
+  const kids = A.asset.children > 0; let withKids = false;
+  TEL = ctrl32Telemetry.mount($('#telSection'), {
+    base: `/api/v1/assets/${ID}/telemetry`, rowId: (k) => k.datastream_id, columns: kids ? ['asset', 'device'] : ['device'],
+    keyQuery: (k) => `datastream_id=${encodeURIComponent(k.datastream_id)}`, summaryQuery: () => withKids ? '&children=1' : '',
+    tools: kids ? `<label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="telKids"> Include child assets</label>` : '',
+    onTools: () => { const c = $('#telKids'); if(c) c.onchange = () => { withKids = c.checked; TEL.load(); }; },
+    note: 'Every datastream of this asset with its latest value, quality, age and statistics over the chosen range; values marked sensor fault are counted but left out of minimum, maximum and average. Click a datastream for its chart, values and exports.',
+    empty: 'no datastreams yet',
+    streamURL: (keys) => `/api/v1/stream?datastreams=${keys.map(k => k.datastream_id).slice(0, 199).join(',')}`,
+  });
+}
+// ---- site page
+async function loadSite(){
+  const r = await api('GET', `/api/v1/sites/${ID}`); SITE = r; const s = r.site, cfg = canCfg();
+  document.title = s.name + ' — ' + ctrl32.t('Sites');
+  $('#sCrumbs').innerHTML = `<a href="/assets/sites">${esc(ctrl32.t('Sites'))}</a> ›`;
+  $('#sTitle').textContent = s.name;
+  const worst = r.alarms.length ? r.alarms.reduce((w, x) => ({warning: 1, action: 2, critical: 3}[x.severity] > ({warning: 1, action: 2, critical: 3}[w.severity] || 0) ? x : w), {}) : null;
+  $('#sBadges').innerHTML = `<span class="badge">${esc(s.tz)}</span> ${worst ? alarmBadge({severity: worst.severity, count: r.alarms.length}) : ''}`;
+  $('#sEditBtn').hidden = $('#sAssetBtn').hidden = !cfg;
+  $('#sInfo').innerHTML = `<b>Time zone</b><span>${esc(s.tz)}</span><b>Address</b><span class="notranslate">${esc(s.address || '—')}</span><b>Assets</b><span>${r.assets.length}</span><b>Datastreams</b><span>${r.datastreams}</span><b>Devices</b><span>${r.devices.length}</span><b>Created</b><span>${fmt(s.created_at)}</span><b>Id</b><code>${esc(s.id)}</code>`;
+  SITE_ASSETS = treeOrder(r.assets);
+  $('#sAssetTable tbody').innerHTML = assetRows(SITE_ASSETS, true) || `<tr><td colspan="6" class="muted">${esc(ctrl32.t('No assets in this site yet.'))}</td></tr>`;
+  $('#sDevTable tbody').innerHTML = devRows(r.devices);
+  $('#sAlarmTable tbody').innerHTML = r.alarms.map(x => `<tr><td>${fmt(x.raised_at)}</td><td><span class="badge ${SEV[x.severity] || 'bad'}">${esc(ctrl32.t(x.severity))}</span></td><td class="notranslate"><a href="/assets/${x.asset_id}">${esc(x.asset)}</a></td><td><code>${esc(x.key)}</code></td><td class="num">${num(x.value)}</td></tr>`).join('') || `<tr><td colspan="5" class="muted">${esc(ctrl32.t('no active alarms'))}</td></tr>`;
+  wireRows('#sAssetTable'); wireRows('#sDevTable');
+  const l = s.location;
+  $('#sLocInfo').innerHTML = l ? `<b>${l.lat.toFixed(5)}, ${l.lon.toFixed(5)}</b>` : esc(ctrl32.t('no position yet'));
+  const f = $('#sLocForm'); f.hidden = true; $('#sLocEdit').hidden = !cfg; $('#sLocEdit').onclick = () => { f.hidden = !f.hidden; };
+  if(cfg){ if(l){ f.lat.value = l.lat; f.lon.value = l.lon; } wireLocation(f, $('#sLocErr'), $('#sLocClear'), `/api/v1/sites/${ID}`, loadSite); }
+  const assetPts = r.assets.filter(a => a.attributes && a.attributes.lat != null && a.attributes.lon != null).map(a => ({lat: a.attributes.lat, lon: a.attributes.lon, color: a.alarm ? '#dc2626' : '#2563eb', html: `<b>${esc(a.name)}</b><br>${esc(a.type)}<br><a href="/assets/${a.id}">${esc(ctrl32.t('open asset'))}</a>`}));
+  drawMap($('#sMap'), null, [...(l ? [{lat: l.lat, lon: l.lon, main: true, html: `<b>${esc(s.name)}</b><br>${esc(s.address || '')}`}] : []), ...assetPts, ...devicePoints(r.devices)], cfg ? f : null);
+}
+$('#sEditBtn').onclick = () => { const f = $('#siteForm'), s = SITE.site; f.reset(); $('#siteErr').textContent = ''; f.name.value = s.name; f.tz.value = s.tz; f.address.value = s.address || ''; $('#siteDlg').showModal(); };
+$('#siteForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#siteErr').textContent = '';
+  try{ await api('PATCH', `/api/v1/sites/${ID}`, {name: f.name.value, tz: f.tz.value, address: f.address.value, reason: f.reason.value}); $('#siteDlg').close(); ctrl32.toast('site updated', 'ok'); loadSite(); }catch(x){ $('#siteErr').textContent = x.message; } };
+$('#sAssetBtn').onclick = () => openAssetDlg(ID, '', SITE.site.name);
+
+ctrl32.ready({requireAuth: true}).then(async () => {
+  const parts = location.pathname.replace(/\/$/, '').split('/').filter(Boolean); // assets, id, tab? | assets, sites, id
+  try{
+    if(parts[1] === 'sites'){ ID = parts[2]; $('#siteView').hidden = false; await loadSite(); return; }
+    ID = parts[1]; $('#assetView').hidden = false;
+    const tabs = TABS.filter(t => t[0] !== 'history' || ctrl32.can('audit.read'));
+    TAB = parts[2] && tabs.some(t => t[0] === parts[2]) ? parts[2] : 'overview';
+    $('#tabs').innerHTML = tabs.map(([k, l]) => `<a href="/assets/${ID}/${k}" data-section="${k}" class="${k === TAB ? 'active' : ''}">${esc(ctrl32.t(l))}</a>`).join('');
+    for(const el of document.querySelectorAll('section[data-section]')) el.classList.toggle('active', el.dataset.section === TAB);
+    await loadAsset();
+    if(TAB === 'telemetry') initTelemetry();
+    if(TAB === 'rules') loadRules();
+    if(TAB === 'history') loadHistory(false);
+    const ds = new URLSearchParams(location.search).get('ds');
+    if(ds && (TAB === 'datastreams' || TAB === 'rules') && A.datastreams.some(d => d.id === ds)) openDS(ds);
+  }catch(x){ const v = parts[1] === 'sites' ? '#sTitle' : '#aTitle'; $(v).textContent = x.message; }
+});
+</script>
+</body>
+</html>

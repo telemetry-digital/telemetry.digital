@@ -83,10 +83,11 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
     const ch = await api('POST', '/api/v1/notification-channels', { name: 'probe-mail-' + sfx, kind: 'email', settings: { recipients: ['ops@example.com'] }, reason: 'headless probe' });
     const pol = await api('POST', '/api/v1/escalation-policies', { name: 'probe-pol-' + sfx, steps: [{ after_s: 0, channel_id: ch.id }], reason: 'headless probe' });
     const rule = await api('POST', '/api/v1/alarm-rules', { datastream_id: ds.id, type: 'high', warning: 1e6, action: 2e6, escalation_policy_id: pol.id, reason: 'headless probe' });
-    return { ds: ds.id, unit: ds.unit, ch: ch.id, pol: pol.id, rule: rule.id, dev: ((await api('GET', '/api/v1/devices')).find(d => !d.revoked_at) || {}).id };
+    return { ds: ds.id, asset: ds.asset_id, unit: ds.unit, ch: ch.id, pol: pol.id, rule: rule.id, dev: ((await api('GET', '/api/v1/devices')).find(d => !d.revoked_at) || {}).id };
   })()`);
   expect("rule with an escalation policy", !!(setup && setup.rule), true);
-  await ev(`openDS(${JSON.stringify(setup.ds)})`);
+  // the datastream opens on the page of its asset (0.74.0)
+  await go(`/assets/${setup.asset}/datastreams?ds=${setup.ds}`, 3000);
   expect("datastream detail with the rule form", await until(`!!document.querySelector('#ruleForm')`), true);
   const rf = await ev(`(() => { const f = document.querySelector('#ruleForm'); f.type.value = 'high'; f.type.dispatchEvent(new Event('change')); return { pol: f.policy.value, warn: f.warning.value }; })()`);
   expect("New rule version keeps the escalation policy", rf && rf.pol, setup.pol);

@@ -1,0 +1,38 @@
+meta {
+  name: Update an asset
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/assets/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "attributes": {},
+    "clear_location": true,
+    "location": {
+      "lat": 21.5,
+      "lon": 21.5
+    },
+    "name": "string",
+    "parent_id": "string",
+    "reason": "string",
+    "type": "string"
+  }
+}
+
+docs {
+  Update an asset
+  
+  `parent_id` moves it under another asset of the same site ("" = top level; never under itself or an asset below it); `location` sets its map position (kept in the attributes as lat, lon), `clear_location` removes it.
+  
+  Requires permission `config.write`.
+}

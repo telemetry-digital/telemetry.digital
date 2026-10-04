@@ -6,7 +6,8 @@
                        a display, firmware and a campaign, users and a custom role, an API token, a report template and
                        stored reports, a PWA app, the "overview" and "showcase" starter dashboards, the overviews with
                        filters (all sensors, energy, cold chain; 0.68.0), a cold chain drill-down with entity aliases,
-                       key filters and dashboard states (0.73.0), and the VPN (a site,
+                       key filters and dashboard states (0.73.0), the asset tree of the pharmacy with places on the map
+                       (asset and site pages, 0.74.0), and the VPN (a site,
                        a technician, a gateway and access rules; needs the agent's VPN simulation and a licence)
                        ; 0.67.0: keys without a datastream and status of a logger, a sensor fault, annotations, a
                        signed report and a signed audit review (records)
@@ -193,6 +194,27 @@ def cold_chain():
     send(t3, s3)
     return {"site": sid, "f1": f1, "f2": f2, "fz": fz, "rt": rt, "rh": rh, "esp_token": esp_tok, "t0": t0, "t2": t2, "t3": t3,
             "dev2": d2, "esp": esp["id"], "ch1": ch1, "ch2": ch2, "policy": pol, "excursion_until": until}
+
+
+@once("tree")
+def asset_tree():
+    """Asset and site pages (0.74.0): the fridges and the freezer stand in the store room (child assets of it), the
+    pharmacy, the Nitra plant and the store room have a place on the map, the room has attributes."""
+    c = st["cold"]
+    assets = {a["name"]: a for a in call("GET", "/api/v1/assets")}
+    call("PATCH", f"/api/v1/sites/{c['site']}", {"location": {"lat": 48.3076, "lon": 18.0858}, "reason": R})
+    plant = next((s for s in call("GET", "/api/v1/sites") if s["name"] == "Nitra plant"), None)
+    if plant:
+        call("PATCH", f"/api/v1/sites/{plant['id']}", {"location": {"lat": 48.3311, "lon": 18.1189}, "reason": R})
+    room = assets.get("Medicine store – room")
+    if not room:
+        return {"room": ""}
+    attrs = dict(room.get("attributes") or {}, floor="ground floor", area_m2=24, responsible="pharmacist on duty")
+    call("PATCH", f"/api/v1/assets/{room['id']}", {"attributes": attrs, "location": {"lat": 48.30765, "lon": 18.08585}, "reason": R})
+    for n in ("Medicine fridge 1", "Medicine fridge 2", "Vaccine freezer"):
+        if n in assets and not assets[n].get("parent_id"):
+            call("PATCH", f"/api/v1/assets/{assets[n]['id']}", {"parent_id": room["id"], "reason": "the fridges stand in the store room"})
+    return {"room": room["id"]}
 
 
 # ---------------------------------------------------------------------------------------------- energy
@@ -930,7 +952,7 @@ def counting_views():
 def setup():
     login()
     partitions()
-    cold_chain(); energy(); dashboards(); overviews(); drilldown(); rules(); flows(); mqtt_accounts(); home(); display(); firmware(); people(); settings(); incidents(); records()
+    cold_chain(); energy(); dashboards(); overviews(); drilldown(); asset_tree(); rules(); flows(); mqtt_accounts(); home(); display(); firmware(); people(); settings(); incidents(); records()
     counting(); counting_views()
     st["vpn"] = vpn(); st["vpn2"] = vpn2(); st["vpn3"] = vpn3(); save()
     print("docs demo ready:", ", ".join(st))

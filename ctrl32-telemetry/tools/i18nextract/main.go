@@ -1,6 +1,7 @@
 // i18nextract collects the English UI strings from the static pages (text nodes, placeholders, titles and quoted
-// string literals in page scripts) and writes them as the key list of the base catalog: internal/i18n/catalog/en.json
-// (a JSON object whose keys are the English strings and values are the same strings).
+// string literals in page scripts, app.js and the shared telemetry.js and alarmrules.js) and writes them as the key
+// list of the base catalog: internal/i18n/catalog/en.json (a JSON object whose keys are the English strings and
+// values are the same strings).
 //
 //	go run ./tools/i18nextract
 package main
@@ -58,7 +59,7 @@ func main() {
 	out := "internal/i18n/catalog/en.json"
 	keys := map[string]bool{}
 	files, _ := filepath.Glob(filepath.Join(dir, "*.html"))
-	files = append(files, filepath.Join(dir, "app.js"))
+	files = append(files, filepath.Join(dir, "app.js"), filepath.Join(dir, "telemetry.js"), filepath.Join(dir, "alarmrules.js"))
 	for _, f := range files {
 		b, err := os.ReadFile(f)
 		if err != nil {

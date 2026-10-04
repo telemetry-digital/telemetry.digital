@@ -498,6 +498,14 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("GET /api/v1/assets", s.require("data.read", s.listAssets))
 	mux.Handle("POST /api/v1/assets", s.require("config.write", s.createAsset))
 	mux.Handle("PATCH /api/v1/assets/{id}", s.require("config.write", s.patchAsset))
+	// asset and site pages (asset_page.go)
+	mux.Handle("GET /api/v1/sites/{id}", s.require("data.read", s.getSite))
+	mux.Handle("GET /api/v1/assets/{id}", s.require("data.read", s.getAsset))
+	mux.Handle("GET /api/v1/assets/{id}/history", s.require("audit.read", s.assetHistory))
+	mux.Handle("GET /api/v1/assets/{id}/telemetry", s.require("data.read", s.assetTelemetry))
+	mux.Handle("GET /api/v1/assets/{id}/telemetry/series", s.require("data.read", s.assetTelemetrySeries))
+	mux.Handle("GET /api/v1/assets/{id}/telemetry/values", s.require("data.read", s.assetTelemetryValues))
+	mux.Handle("GET /api/v1/assets/{id}/telemetry/export", s.require("data.export", s.assetTelemetryExport))
 	mux.Handle("GET /api/v1/datastreams/{id}", s.require("data.read", s.getDatastream))
 	mux.Handle("POST /api/v1/datastreams", s.require("config.write", s.createDatastream))
 	mux.Handle("PATCH /api/v1/datastreams/{id}", s.require("config.write", s.patchDatastream))
@@ -639,7 +647,13 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.HandleFunc("GET /server/{section}", page("server.html"))
 	mux.HandleFunc("GET /fota/{section}", page("fota.html"))
 	mux.HandleFunc("GET /account/{section}", page("account.html"))
-	mux.HandleFunc("GET /assets/{section}", page("assets.html"))
+	// the sections of the assets screen; any other segment is an asset page (asset.html), /assets/sites/{id} a site page
+	mux.HandleFunc("GET /assets/sites", page("assets.html"))
+	mux.HandleFunc("GET /assets/rules", page("assets.html"))
+	mux.HandleFunc("GET /assets/automation", page("assets.html"))
+	mux.HandleFunc("GET /assets/sites/{id}", page("asset.html"))
+	mux.HandleFunc("GET /assets/{id}", page("asset.html"))
+	mux.HandleFunc("GET /assets/{id}/{tab}", page("asset.html"))
 	mux.HandleFunc("GET /devices/{id}", page("devices.html"))
 	mux.HandleFunc("GET /devices/{id}/{tab}", page("devices.html"))
 	mux.Handle("GET /", files)
@@ -717,8 +731,10 @@ func (s *Server) datastreams(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) devices(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFrom(r.Context())
-	rows, err := s.pool.Query(r.Context(), `SELECT id::text, external_id, name, transport, status, status->>'last_seen', revoked_at, location
-		FROM core.device WHERE ($1 = '' OR org_id = $1::uuid) ORDER BY revoked_at NULLS FIRST, name`, orgOf(p))
+	rows, err := s.pool.Query(r.Context(), `SELECT dv.id::text, dv.external_id, dv.name, dv.transport, dv.status, dv.status->>'last_seen', dv.revoked_at, dv.location,
+		COALESCE((SELECT jsonb_agg(DISTINCT jsonb_build_object('id', ast.id, 'name', ast.name)) FROM core.assignment g JOIN core.datastream d ON d.id = g.to_id
+		          JOIN core.asset ast ON ast.id = d.asset_id WHERE g.kind = 'device_datastream' AND g.from_id = dv.id AND g.valid_to IS NULL), '[]'::jsonb)
+		FROM core.device dv WHERE ($1 = '' OR dv.org_id = $1::uuid) ORDER BY dv.revoked_at NULLS FIRST, dv.name`, orgOf(p))
 	if err != nil {
 		writeErr(w, 500, "query failed")
 		return
@@ -730,12 +746,13 @@ func (s *Server) devices(w http.ResponseWriter, r *http.Request) {
 		var status json.RawMessage
 		var lastSeen *string
 		var revoked *time.Time
-		var location json.RawMessage
-		if err := rows.Scan(&id, &ext, &name, &tr, &status, &lastSeen, &revoked, &location); err != nil {
+		var location, assets json.RawMessage
+		if err := rows.Scan(&id, &ext, &name, &tr, &status, &lastSeen, &revoked, &location, &assets); err != nil {
 			writeErr(w, 500, "scan failed")
 			return
 		}
-		out = append(out, map[string]any{"id": id, "external_id": ext, "name": name, "transport": tr, "status": status, "last_seen": lastSeen, "revoked_at": revoked, "location": location, "connected": s.br != nil && s.br.IsConnected(id)})
+		out = append(out, map[string]any{"id": id, "external_id": ext, "name": name, "transport": tr, "status": status, "last_seen": lastSeen, "revoked_at": revoked, "location": location,
+			"connected": s.br != nil && s.br.IsConnected(id), "assets": assets})
 	}
 	writeJSON(w, 200, out)
 }
