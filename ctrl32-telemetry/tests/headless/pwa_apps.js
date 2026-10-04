@@ -82,6 +82,12 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   if ((await ev(`location.pathname`)) !== "/video") { how = "launch=1"; await go(`/app/${slug}?launch=1`, 3000); }
   expect("start page opened (" + how + ")", await ev(`location.pathname`), "/video");
   expect("app: no search field and no bug button", await ev(`["gsBtn","gsBtnM","bugBtn","bugBtnDesk"].filter(id => { const e = document.getElementById(id); return e && e.offsetParent !== null; }).join(",")`), "");
+  expect("app: the address carries the app", await ev(`new URLSearchParams(location.search).get('app')`), slug);
+  expect("app: bug report in the footer", await ev(`!!document.querySelector('.footer #bugFoot')`), true);
+  // a browser that reopens the last page in a fresh session (Firefox on iPhone) loses sessionStorage: still the app
+  await ev(`sessionStorage.clear()`); await send("Page.reload", {}); await sleep(2500);
+  expect("app after a fresh session (address marker)", await ev(`sessionStorage.getItem('ctrl32.app')`), slug);
+  expect("app after a fresh session: no search field", await ev(`["gsBtn","gsBtnM","bugBtnDesk"].filter(id => { const e = document.getElementById(id); return e && e.offsetParent !== null; }).join(",")`), "");
   expect("app name in the header", await until(`(document.querySelector('.side-org span') || {}).textContent === 'Cameras'`), true);
   expect("logo leads to the start page", await ev(`document.querySelector('#sidebar .side-brand').getAttribute('href')`), "/video");
   expect("menu restricted to Cameras and My account", await ev(topMenu + `.join()`), "/video,/account");
