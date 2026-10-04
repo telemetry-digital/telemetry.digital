@@ -1,0 +1,31 @@
+meta {
+  name: Set the update mode
+  type: http
+  seq: 21
+}
+
+put {
+  url: {{baseUrl}}/api/v1/server/updates
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "include_minor": true,
+    "mode": "manual",
+    "reason": "string",
+    "rollback_minutes": 1,
+    "time": "string",
+    "tz": "string",
+    "weekday": 1
+  }
+}
+
+docs {
+  Set the update mode
+  
+  manual: nothing happens by itself. notify (default): a daily check (with jitter), a banner for system administrators and one e-mail per version to the server administrators (when SMTP works). auto: in the weekly window (weekday 0 = Sunday, time HH:MM in `tz`, empty = the server's time zone; the window stays open one hour) a patch version — with `include_minor` also a minor one, never a major one — is installed with a backup first and the automatic rollback; a version that failed is not retried automatically. Audited as server.update_settings.
+  
+  Requires permission `system.admin`.
+}

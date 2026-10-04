@@ -81,6 +81,8 @@ var mcpExclusions = map[string]string{
 	"POST /api/v1/vpn/uplink":                           "connects this server to an outside network with a pasted private key; needs the user's password (and authenticator code) again in the browser",
 	"POST /api/v1/counting/install":                     "the server agent downloads and installs programs on the host; a person confirms with the password (and authenticator code) in the browser",
 	"DELETE /api/v1/counting/install":                   "the server agent removes programs from the host; a person confirms with the password (and authenticator code) in the browser",
+	"POST /api/v1/server/update/package":                "uploads an update package from the user's computer; a person confirms with the password (and authenticator code) in the browser",
+	"GET /api/v1/server/updates/notice":                 "the update banner of the web UI (the same facts: GET /api/v1/server/updates)",
 }
 
 // mcpExcluded gives the reason an operation is not offered to assistants ("" = offered).

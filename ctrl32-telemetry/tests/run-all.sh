@@ -17,7 +17,8 @@
 #   SKIP          space-separated suite names to skip, e.g. SKIP="ops" where NTP (udp/123) is blocked
 #   CHROME        browser for the headless probes (default: first Chrome/Chromium found)
 #   KEEP=1        leave the server running afterwards
-# Ports 8080 (HTTP), 1883 and 1884 (MQTT) and 18790 (the stand-in licence service of whitelabel.sh) must be free.
+# Ports 8080 (HTTP), 1883 and 1884 (MQTT), 18790 (the stand-in licence service of whitelabel.sh), 18791 (the test
+# distribution point of updates.sh) and 2526 (the SMTP sink of smtp.sh) must be free.
 set -u
 cd "$(dirname "$0")/.."
 ROOT=$PWD
@@ -102,7 +103,14 @@ BIN=$WORK/bin/ctrl32-telemetry
 # test builds trust the test license keys (tests/keys/README.md); release builds do not
 LICKEY=$(grep -v '^#' tests/keys/license-test.pub | tr -d '[:space:]')
 LICONLINE=$(grep -v '^#' tests/keys/license-online-test.pub | tr -d '[:space:]')
-go build -ldflags "-X github.com/telemetry-digital/ctrl32-telemetry/internal/license.extraKey=$LICKEY -X github.com/telemetry-digital/ctrl32-telemetry/internal/license.extraOnlineKey=$LICONLINE" -o "$BIN" ./cmd/ctrl32-telemetry || exit 2
+# test builds also trust a release key generated for this run only (key id build-test, ADR-0024): the update suites
+# sign their packages with it; the release key of the project is never used by tests
+RELSIGN=$WORK/bin/relsign
+go build -o "$RELSIGN" ./tools/relsign || exit 2
+"$RELSIGN" keygen -dir "$WORK/relkey" -id build-test > /dev/null || exit 2
+RELKEY=$WORK/relkey/release-signing.key
+RELPUB=$(grep -v '^#' "$WORK/relkey/release-signing.pub" | tr -d '[:space:]')
+go build -ldflags "-X github.com/telemetry-digital/ctrl32-telemetry/internal/license.extraKey=$LICKEY -X github.com/telemetry-digital/ctrl32-telemetry/internal/license.extraOnlineKey=$LICONLINE -X github.com/telemetry-digital/ctrl32-telemetry/internal/release.extraKey=$RELPUB" -o "$BIN" ./cmd/ctrl32-telemetry || exit 2
 go run ./tools/pmtilesgen -o "$WORK/bin/sample.pmtiles" -maxzoom 4 > /dev/null || exit 2
 CONFIG=$WORK/config.toml
 APP_PW=e2e-app-$RANDOM$RANDOM
@@ -137,7 +145,8 @@ SHOWCASE=$(psql -Atq "$DB_ADMIN" -c "SELECT slug FROM core.dashboard WHERE slug 
 # directory and applies nothing to the host (internal/agent/vpn.go). The detector installation (analytics_install.sh)
 # uses the same simulation: stand-in downloads served from memory, installed into that directory.
 CONFIG_VPN=$WORK/config-vpn.toml
-sed -e "s|^\[agent\]$|[agent]\nsocket = \"$WORK/agent.sock\"\nvpn_simulate = \"$WORK/vpnsim\"|" "$CONFIG" > "$CONFIG_VPN"
+# updates.sh serves a signed test release on 127.0.0.1:18791 (the distribution point of the simulated agent)
+sed -e "s|^\[agent\]$|[agent]\nsocket = \"$WORK/agent.sock\"\nvpn_simulate = \"$WORK/vpnsim\"\nupdate_url = \"http://127.0.0.1:18791/dl\"|" "$CONFIG" > "$CONFIG_VPN"
 
 # The login limiter allows 10 attempts a minute per address, so the server restarts before each suite.
 start_server() { # [config]
@@ -155,7 +164,7 @@ start_server() { # [config]
   echo "server did not start, see test-results/server.log" >&2; exit 2
 }
 : > "$LOGS/server.log"
-export BASE USER=admin PASS=admin1234 MQTT=127.0.0.1:1883 BIN CONFIG CONFIG_VPN REPORTS_DIR=$WORK/reports
+export BASE USER=admin PASS=admin1234 MQTT=127.0.0.1:1883 BIN CONFIG CONFIG_VPN REPORTS_DIR=$WORK/reports RELSIGN RELKEY
 
 # ------------------------------------------------------------------------------------------------ e2e
 if has e2e; then
@@ -165,7 +174,7 @@ if has e2e; then
     [[ $n == iam ]] && continue
     if skip "$n"; then res "e2e $n" skipped; continue; fi
     # the VPN suites and the detector installation run against the agent's simulation
-    if [[ $n == vpn || $n == vpn2 || $n == vpn3 || $n == analytics_install ]]; then start_server "$CONFIG_VPN"; else start_server; fi
+    if [[ $n == vpn || $n == vpn2 || $n == vpn3 || $n == analytics_install || $n == updates ]]; then start_server "$CONFIG_VPN"; else start_server; fi
     timeout 600 bash "$f" > "$LOGS/e2e-$n.log" 2>&1; rc=$?
     okc=$(grep -c '^  ok' "$LOGS/e2e-$n.log"); bad=$(grep -c 'FAIL' "$LOGS/e2e-$n.log")
     if [[ $rc == 0 && $bad == 0 ]]; then res "e2e $n" "ok ($okc)"; else res "e2e $n" "FAIL ($bad of $((okc + bad)), test-results/e2e-$n.log)"; fi
@@ -193,7 +202,7 @@ if has headless; then
       # needs a real camera behind a relay (CAM=<camera id>); neither belongs in an unattended run
       [[ $n == docshots || $n == camera_relay ]] && continue
       if skip "$n"; then res "headless $n" skipped; continue; fi
-      if [[ $n == vpn || $n == vpn2 || $n == vpn3 ]]; then start_server "$CONFIG_VPN"; else start_server; fi
+      if [[ $n == vpn || $n == vpn2 || $n == vpn3 || $n == updates ]]; then start_server "$CONFIG_VPN"; else start_server; fi
       CHROME=$WORK/chrome TEMP=$WORK OUT=$LOGS/screenshots LOGIN=1 SLUG=$SHOWCASE SLUGS=$SHOWCASE \
         timeout 180 node "$f" > "$LOGS/headless-$n.log" 2>&1; rc=$?
       probs=$(grep '^problems:' "$LOGS/headless-$n.log" | grep -v 'problems: none' | head -1)

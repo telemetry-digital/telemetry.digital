@@ -66,11 +66,16 @@ type vpnStored struct {
 }
 
 // SetSimulation makes the agent a VPN simulation for development and tests: state and rendered files live in dir,
-// no program is run, nothing on the host changes, and only the VPN operations are served (routes).
+// nothing on the host changes, and only the VPN, detector and update operations are served (routes). An update in the
+// simulation verifies the release exactly like a real one and installs its binary into dir/bin (it runs that binary's
+// `version` and `migrate`, never restarts a service and never restores a database).
 func (a *Server) SetSimulation(dir string) {
 	a.simulate = true
 	a.an.sim = &setup.SimFetcher{Files: setup.SimulatedArtifacts(analyticsPlatform()), Delay: 150 * time.Millisecond}
-	optDir, etcDir = dir, dir
+	optDir, etcDir, libDir = dir, dir, dir
+	// updates install into the simulation directory: never the running binary, never the real backups
+	binPath = filepath.Join(dir, "bin", "ctrl32-telemetry"+map[bool]string{true: ".exe"}[isWindows()])
+	BackupDir = filepath.Join(dir, "backups")
 	wgConfFile = filepath.Join(dir, "wireguard", "wg0.conf")
 	derivePaths()
 	var mu sync.Mutex

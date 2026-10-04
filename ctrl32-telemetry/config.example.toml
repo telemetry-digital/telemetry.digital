@@ -23,12 +23,19 @@ admin_url = "postgres://ctrl32:ctrl32-dev-only@localhost:5433/ctrl32?sslmode=dis
 app_password = "change-me"   # `migrate` sets this password on the ctrl32_app role
 
 [smtp]
+# Outgoing e-mail. Since 0.76.0 a system administrator can also set it in System → Server → E-mail (SMTP); settings
+# saved there take precedence over this section (the password is stored encrypted with security.secret_key).
+# override = true makes this section win and the page read-only.
 # host = "smtp.example.com"
 port = 587
+# security = "starttls"   # starttls (587), tls (implicit TLS, 465) or none (only a relay on this host / local network)
 # user = ""
 # password = ""
 # from = "ctrl32-telemetry@example.com"
+# from_name = "ctrl32 telemetry"
+# reply_to = ""
 # to = ["alarms@example.com"]
+# override = false
 
 [log]
 level = "info"
@@ -100,7 +107,10 @@ secret_key = "REPLACE-WITH-RANDOM-32-CHARS"
 # socket = "/run/ctrl32-telemetry/agent.sock"       # Windows: C:\ProgramData\ctrl32-telemetry\agent.sock
 # pg_dump = "C:\Program Files\PostgreSQL\18\bin\pg_dump.exe"   # Windows backups (default: bundled PostgreSQL)
 # pg_container = "ctrl32-telemetry-postgres"        # backups through the Docker container (Linux default)
-# update_url = "https://portal.telemetry.digital/dl"       # where updates are downloaded from (SHA256SUMS verified)
+# update_url = "https://portal.telemetry.digital/dl"   # the distribution point, or a mirror in your network
+#                                                     # (ctrl32-telemetry update mirror --to DIR); releases are
+#                                                     # installed only with a valid signature (ADR-0024)
+# max_package_mb = 2048                               # largest offline update package (System → Updates)
 
 [map]
 # Self-hosted map tiles for the map widgets (ADR-0014): a raster PMTiles v3 archive (png/jpg/webp) served by this

@@ -261,6 +261,7 @@
       { href: '/organizations', label: 'System', icon: ICON.system, show: can('system.admin'), sec: 'system', children: [
         { href: '/organizations', label: 'Organizations' }, { href: '/server', label: 'Server' }, { href: '/server/domain', label: 'Domain and TLS' },
         { href: '/server/vpn', label: 'VPN' }, { href: '/server/backups', label: 'Backups' }, { href: '/server/redundancy', label: 'Redundant database' }, { href: '/server/updates', label: 'Updates' },
+        { href: '/server/email', label: 'E-mail (SMTP)' },
         { href: '/server/license', label: 'License' }, { href: '/landing/edit', label: 'Front page' }] },
       { head: '' },
       // My account (foot: true) sits once, at the bottom of the sidebar next to Sign out, and at the end of the phone
@@ -561,11 +562,28 @@
   }
   function wireLang() { for (const s of document.querySelectorAll('.lang-sel')) s.onchange = () => setLocale(s.value); }
 
+  // a newer version for system administrators (update mode notify or automatic, ADR-0024); hidden per version
+  function updateBanner() {
+    if (!can('system.admin') || app || location.pathname.startsWith('/server/updates')) return;
+    api('GET', '/api/v1/server/updates/notice').then((n) => {
+      if (!n || !n.version) return;
+      try { if (localStorage.getItem('ctrl32.updateDismissed') === n.version) return; } catch (e) { /* storage blocked */ }
+      const m = $('main');
+      if (!m) return;
+      const d = document.createElement('div');
+      d.className = 'card update-banner';
+      d.innerHTML = `<span>${esc(t('Version'))} <b>${esc(n.version)}</b> ${esc(t('is available'))}${n.window ? ' — ' + esc(t('installs automatically in the maintenance window')) + ' ' + esc(new Date(n.window).toLocaleString(document.documentElement.lang || undefined)) : ''}.</span>`
+        + `<span class="grow"></span><a class="btn small primary" href="/server/updates">${esc(t('Open Updates'))}</a><button class="btn small ghost" type="button">${esc(t('Later'))}</button>`;
+      d.querySelector('button').onclick = () => { try { localStorage.setItem('ctrl32.updateDismissed', n.version); } catch (e) { /* storage blocked */ } d.remove(); };
+      m.prepend(d);
+    }).catch(() => {});
+  }
+
   // init: branding + session + language, then shell + footer. Pages call ctrl32.ready() and get {me, brand}.
   let readyPromise = null;
   function ready(opts) {
     opts = opts || {};
-    if (!readyPromise) readyPromise = Promise.all([loadBranding(), loadMe(), loadApp()]).then(loadI18n).then(() => { renderShell(); footer(); wireLang(); translateNode(document.body); if (document.title && catalog[document.title]) document.title = catalog[document.title]; observeI18n(); applyWhiteLabel(); return { me, brand, app }; });
+    if (!readyPromise) readyPromise = Promise.all([loadBranding(), loadMe(), loadApp()]).then(loadI18n).then(() => { renderShell(); footer(); wireLang(); translateNode(document.body); if (document.title && catalog[document.title]) document.title = catalog[document.title]; observeI18n(); applyWhiteLabel(); updateBanner(); return { me, brand, app }; });
     return readyPromise.then((r) => {
       if (opts.requireAuth && !me) { location.href = '/login'; return new Promise(() => {}); }
       if (opts.requirePerm && !can(opts.requirePerm)) { const m = $('main'); if (m) m.innerHTML = '<div class="card">Your role has no <code>' + esc(opts.requirePerm) + '</code> permission.</div>'; return new Promise(() => {}); }

@@ -231,9 +231,10 @@ func (a *Server) analyticsOptions(l setup.Layout, force bool) setup.Options {
 			return int64(d.FreeGB * 1000), ok
 		}}
 	if a.an.sim != nil {
-		o.Fetch, o.FFmpegVersion = a.an.sim, setup.SimFFmpegVersion
+		o.Fetch, o.FFmpegVersion = a.mirrorFetcher(a.an.sim), setup.SimFFmpegVersion
 		return o
 	}
+	o.Fetch = a.mirrorFetcher(setup.HTTPFetcher{})
 	if !isWindows() {
 		// the models belong to the service user (as install.sh leaves them)
 		if u, err := user.Lookup(appGroup); err == nil {

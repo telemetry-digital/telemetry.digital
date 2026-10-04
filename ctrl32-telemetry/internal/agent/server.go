@@ -1,10 +1,9 @@
 package agent
 
 import (
-	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
@@ -82,6 +81,12 @@ type Server struct {
 	setIfForwarding  func(iface string, on bool) error
 	// installation of the object counting detector (analytics.go)
 	an analyticsRunner
+	// updates (update.go): [agent] max_package_mb and allow_unsigned_updates (development builds only)
+	maxPackageMB  int
+	allowUnsigned bool
+	direct        bool // the command line installs without the agent service (update.go)
+	// testKeys replaces the trusted release keys in unit tests (nil = release.TrustedKeys)
+	testKeys map[string]ed25519.PublicKey
 }
 
 func NewServer(socket, cfgPath, version, updateURL string, log *slog.Logger) *Server {
@@ -154,6 +159,7 @@ func (a *Server) routes() http.Handler {
 		mux.HandleFunc("PUT /vpn", a.hApplyVPN)
 		a.uplinkRoutes(mux)
 		a.analyticsRoutes(mux) // stand-in downloads into the simulation directory (setup.SimulatedArtifacts)
+		a.updateRoutes(mux)    // installs into the simulation directory; no restart, no database restore
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 501, "not available in the VPN simulation of the agent (vpn_simulate)")
 		})
@@ -167,7 +173,7 @@ func (a *Server) routes() http.Handler {
 	mux.HandleFunc("PUT /vpn", a.hApplyVPN)
 	a.uplinkRoutes(mux)
 	a.analyticsRoutes(mux)
-	mux.HandleFunc("POST /update", a.hUpdate)
+	a.updateRoutes(mux)
 	mux.HandleFunc("GET /backups", a.hBackups)
 	mux.HandleFunc("POST /backups", a.hCreateBackup)
 	mux.HandleFunc("DELETE /backups/{name}", a.hDeleteBackup)
@@ -742,110 +748,6 @@ func (a *Server) hRestart(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---- update ---------------------------------------------------------------------------------------
-
-func (a *Server) hUpdate(w http.ResponseWriter, r *http.Request) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	var in UpdateRequest
-	if err := decode(r, &in); err != nil || !versionRe.MatchString(in.Version) {
-		writeErr(w, 400, "invalid version")
-		return
-	}
-	ctx := r.Context()
-	name := "ctrl32-telemetry-" + runtime.GOOS + "-" + runtime.GOARCH
-	if isWindows() {
-		name += ".exe"
-	}
-	client := &http.Client{Timeout: 5 * time.Minute}
-	fetch := func(u string) ([]byte, error) {
-		req, _ := http.NewRequestWithContext(ctx, "GET", u, nil)
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, err
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != 200 {
-			return nil, fmt.Errorf("%s: HTTP %d", u, resp.StatusCode)
-		}
-		return io.ReadAll(io.LimitReader(resp.Body, 256<<20))
-	}
-	sums, err := fetch(a.updateURL + "/SHA256SUMS")
-	if err != nil {
-		writeErr(w, 502, "checksums unavailable: "+err.Error())
-		return
-	}
-	want := ""
-	for _, l := range strings.Split(string(sums), "\n") {
-		f := strings.Fields(l)
-		if len(f) == 2 && strings.TrimPrefix(f[1], "*") == name {
-			want = f[0]
-		}
-	}
-	if want == "" {
-		writeErr(w, 502, "no checksum published for "+name)
-		return
-	}
-	bin, err := fetch(a.updateURL + "/" + name)
-	if err != nil {
-		writeErr(w, 502, "download failed: "+err.Error())
-		return
-	}
-	sum := sha256.Sum256(bin)
-	got := hex.EncodeToString(sum[:])
-	if got != want {
-		writeErr(w, 502, "checksum mismatch — update refused")
-		return
-	}
-	tmp := binPath + ".new"
-	if err := os.WriteFile(tmp, bin, 0o755); err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	out, err := run(ctx, 20*time.Second, tmp, "version")
-	if err != nil || !bytes.Contains([]byte(out), []byte(in.Version)) {
-		_ = os.Remove(tmp)
-		writeErr(w, 502, "downloaded binary does not report version "+in.Version)
-		return
-	}
-	if msg := updateEntitled(in.UpdatesUntil, out, time.Now()); msg != "" {
-		_ = os.Remove(tmp)
-		a.log.Warn("update refused: the licence does not include it", "version", in.Version, "updates_until", in.UpdatesUntil)
-		writeJSON(w, 402, map[string]string{"error": msg, "code": "updates_ended"})
-		return
-	}
-	if isWindows() {
-		// a running executable can be renamed but not overwritten: park the old one, then move the new one in
-		old := binPath + ".old"
-		_ = os.Remove(old)
-		if err := os.Rename(binPath, old); err != nil {
-			writeErr(w, 500, "cannot park the current binary: "+err.Error())
-			return
-		}
-		if err := os.Rename(tmp, binPath); err != nil {
-			_ = os.Rename(old, binPath)
-			writeErr(w, 500, err.Error())
-			return
-		}
-	} else if err := os.Rename(tmp, binPath); err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	if out, err := run(ctx, 5*time.Minute, binPath, "migrate", "-config", a.cfgPath); err != nil {
-		writeErr(w, 500, "migration failed: "+firstLine(out))
-		return
-	}
-	a.log.Info("updated binary", "version", in.Version, "sha256", got)
-	a.restartAppLater()
-	if isWindows() {
-		restartServiceLater(agentUnit, 4*time.Second)
-	} else {
-		go func() {
-			time.Sleep(4 * time.Second)
-			_, _ = run(context.Background(), 30*time.Second, "systemctl", "restart", agentUnit)
-		}()
-	}
-	writeJSON(w, 200, UpdateResult{Version: in.Version, SHA256: got, Message: "installed; service and agent are restarting"})
-}
 
 // updateEntitled checks a downloaded binary against the licence's updates_until (YYYY-MM-DD, empty = no limit) using
 // the release date the binary reports in `version` (internal/release). It returns "" when it may be installed. The

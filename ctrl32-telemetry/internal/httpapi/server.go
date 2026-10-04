@@ -90,6 +90,7 @@ type Server struct {
 	credExportLimiter *limiter          // exports with camera passwords per user (camera_inventory.go)
 	uplinkTunnel      *uptunnel.Handler // VPN phase 3: the hub's end of the uplinks' HTTPS transport (vpn_uplink.go)
 	counting          *counting.Engine  // object counting (spec 029, counting.go)
+	upd               updatesRuntime    // update checks and the automatic mode (updates.go)
 }
 
 // New builds the handler tree.
@@ -121,6 +122,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 		}
 		go s.counting.Run(context.Background())
 		go s.scheduledReportsLoop() // reports mailed on a cron schedule (scheduled_reports.go)
+		s.applySMTP(context.Background())
+		go s.updatesLoop() // update check, notices and the automatic mode (updates.go)
 	}
 	sub, _ := fs.Sub(static, "static")
 	files := http.FileServer(http.FS(sub))
@@ -489,6 +492,15 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("POST /api/v1/vpn/uplink/rules/{id}/remove", s.require("system.admin", s.removeUplinkRule))
 	mux.HandleFunc("GET /api/v1/vpn/uplink/tunnel", s.uplinkTunnelWS) // vpn.UplinkTunnelPath; authenticated with the uplink's secret, not a session
 	mux.Handle("POST /api/v1/server/update", s.require("system.admin", s.serverUpdate))
+	mux.Handle("GET /api/v1/server/updates", s.require("system.admin", s.serverUpdates))
+	mux.Handle("PUT /api/v1/server/updates", s.require("system.admin", s.serverUpdatesSettings))
+	mux.Handle("POST /api/v1/server/updates/check", s.require("system.admin", s.serverUpdatesCheck))
+	mux.Handle("GET /api/v1/server/updates/notice", s.require("system.admin", s.serverUpdateNotice))
+	mux.Handle("POST /api/v1/server/update/package", s.require("system.admin", s.serverUpdatePackage))
+	mux.Handle("GET /api/v1/server/smtp", s.require("system.admin", s.serverSMTP))
+	mux.Handle("PUT /api/v1/server/smtp", s.require("system.admin", s.serverSetSMTP))
+	mux.Handle("DELETE /api/v1/server/smtp", s.require("system.admin", s.serverResetSMTP))
+	mux.Handle("POST /api/v1/server/smtp/test", s.require("system.admin", s.serverTestSMTP))
 	mux.Handle("GET /api/v1/server/backups", s.require("system.admin", s.serverBackups))
 	mux.Handle("POST /api/v1/server/backups", s.require("system.admin", s.serverBackupCreate))
 	mux.Handle("PUT /api/v1/server/backups/schedule", s.require("system.admin", s.serverBackupSchedule))

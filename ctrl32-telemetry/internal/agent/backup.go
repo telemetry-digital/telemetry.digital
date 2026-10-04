@@ -383,6 +383,113 @@ func (a *Server) runScheduler(ctx context.Context) {
 	}
 }
 
+// restoreDatabase restores the database from a backup of this agent: the rollback of an update whose migrations
+// failed (update.go). The service is stopped while pg_restore replaces the schema and the data in one transaction, and
+// started again afterwards (with the binary the caller has put back).
+func (a *Server) restoreDatabase(ctx context.Context, name string) error {
+	if a.simulate {
+		a.log.Info("simulation: the database restore is not run", "backup", name)
+		return nil
+	}
+	if !backupNameRe.MatchString(name) {
+		return errors.New("invalid backup name")
+	}
+	file := filepath.Join(BackupDir, name)
+	work, err := os.MkdirTemp(BackupDir, ".restore-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(work)
+	rctx, cancel := context.WithTimeout(ctx, 60*time.Minute)
+	defer cancel()
+	bundle := file
+	if strings.HasSuffix(name, ".enc") {
+		pass := a.backupLoad().Passphrase
+		if pass == "" {
+			return errors.New("the backup is encrypted and no passphrase is stored")
+		}
+		bundle = filepath.Join(work, "bundle.tar.gz")
+		c := exec.CommandContext(rctx, "openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2", "-iter", "200000", "-in", file, "-out", bundle, "-pass", "env:CTRL32_BACKUP_PASS")
+		c.Env = append(os.Environ(), "CTRL32_BACKUP_PASS="+pass)
+		if out, err := c.CombinedOutput(); err != nil {
+			return fmt.Errorf("decryption failed: %s", firstLine(strings.TrimSpace(string(out))))
+		}
+	}
+	dump := filepath.Join(work, "db.dump")
+	if err := extractFromBundle(bundle, "db.dump", dump); err != nil {
+		return err
+	}
+	var cmd *exec.Cmd
+	args := []string{"--clean", "--if-exists", "--no-owner", "--single-transaction"}
+	switch a.dbMode(rctx) {
+	case "docker":
+		cmd = exec.CommandContext(rctx, "docker", append([]string{"exec", "-i", a.pgContainer, "pg_restore", "-U", dbAdmin, "-d", dbName}, args...)...)
+	case "native":
+		if isWindows() {
+			pr := strings.Replace(findPgDump(a.pgDump), "pg_dump.exe", "pg_restore.exe", 1)
+			url := a.adminURL()
+			if url == "" {
+				return errors.New("db.admin_url missing in the configuration")
+			}
+			cmd = exec.CommandContext(rctx, pr, append([]string{"--dbname", url}, args...)...)
+		} else {
+			cmd = exec.CommandContext(rctx, "runuser", append([]string{"-u", "postgres", "--", "pg_restore", "-d", dbName}, args...)...)
+		}
+	default:
+		return errors.New("no PostgreSQL found (neither the Docker container nor pg_restore)")
+	}
+	in, err := os.Open(dump)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	var stderr bytes.Buffer
+	cmd.Stdin, cmd.Stderr = in, &stderr
+	stopApp(rctx)
+	err = cmd.Run()
+	startApp(rctx)
+	if err != nil {
+		return fmt.Errorf("pg_restore failed: %s", firstLine(strings.TrimSpace(stderr.String())))
+	}
+	a.log.Info("database restored", "backup", name)
+	return nil
+}
+
+// extractFromBundle copies one member of a backup bundle (.tar.gz) to dst.
+func extractFromBundle(bundle, member, dst string) error {
+	f, err := os.Open(bundle)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return err
+	}
+	tr := tar.NewReader(gz)
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			return fmt.Errorf("%s is not in the backup", member)
+		}
+		if err != nil {
+			return err
+		}
+		if h.Name != member {
+			continue
+		}
+		out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(out, tr); err != nil {
+			out.Close()
+			return err
+		}
+		return out.Close()
+	}
+}
+
 func (a *Server) prune(keep int) {
 	files := a.backupState(context.Background()).Files // newest first
 	for i, f := range files {

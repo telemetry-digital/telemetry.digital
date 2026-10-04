@@ -1,9 +1,7 @@
 package httpapi
 
 import (
-	"context"
 	"errors"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -11,8 +9,6 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/agent"
 )
@@ -27,46 +23,7 @@ import (
 //	GET  /api/v1/server/wireguard
 //	PUT  /api/v1/server/wireguard               {enabled, listen_port, address, endpoint, dns, reason}
 //	(peers and access rules of the VPN: vpn.go, /api/v1/vpn)
-//	POST /api/v1/server/update                  {version, reason}
-
-var updateCheck struct {
-	sync.Mutex
-	version string
-	at      time.Time
-	err     string
-}
-
-func (s *Server) updateURL() string {
-	if u := strings.TrimRight(s.cfg.Agent.UpdateURL, "/"); u != "" {
-		return u
-	}
-	return "https://portal.telemetry.digital/dl"
-}
-
-func (s *Server) availableVersion(ctx context.Context) (string, time.Time, string) {
-	updateCheck.Lock()
-	defer updateCheck.Unlock()
-	if time.Since(updateCheck.at) < 10*time.Minute {
-		return updateCheck.version, updateCheck.at, updateCheck.err
-	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	updateCheck.at, updateCheck.err = time.Now(), ""
-	req, _ := http.NewRequestWithContext(ctx, "GET", s.updateURL()+"/VERSION", nil)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		updateCheck.err = err.Error()
-		return updateCheck.version, updateCheck.at, updateCheck.err
-	}
-	defer resp.Body.Close()
-	b, _ := io.ReadAll(io.LimitReader(resp.Body, 64))
-	if resp.StatusCode == 200 {
-		updateCheck.version = strings.TrimSpace(string(b))
-	} else {
-		updateCheck.err = "HTTP " + resp.Status
-	}
-	return updateCheck.version, updateCheck.at, updateCheck.err
-}
+//	(updates: updates.go; e-mail (SMTP): smtp_settings.go)
 
 func hostOf(dsn string) string {
 	u, err := url.Parse(dsn)
@@ -85,7 +42,7 @@ func (s *Server) serverInfo(w http.ResponseWriter, r *http.Request) {
 		"config": map[string]any{
 			"profile": cfg.Profile, "http_listen": cfg.HTTP.Listen, "base_url": cfg.HTTP.BaseURL, "public_read": cfg.HTTP.PublicRead,
 			"http_tls": cfg.HTTP.TLSCert != "", "mqtt_listen": cfg.MQTT.Listen, "mqtt_tls_listen": cfg.MQTT.TLSListen, "mqtt_ws_listen": cfg.MQTT.WSListen,
-			"mqtt_vpn_listen": cfg.MQTT.VPNListen, "db": hostOf(cfg.DB.URL), "smtp_host": cfg.SMTP.Host, "smtp_port": cfg.SMTP.Port,
+			"mqtt_vpn_listen": cfg.MQTT.VPNListen, "db": hostOf(cfg.DB.URL), "smtp_host": s.mailer().SMTP().Host, "smtp_port": s.mailer().SMTP().Port,
 			"log_file": cfg.Log.File, "log_level": cfg.Log.Level, "report_storage": cfg.Report.StorageDir, "typst_path": cfg.Report.TypstPath,
 			"fota_storage": cfg.FOTA.StorageDir, "fota_max_mb": cfg.FOTA.MaxSizeMB, "gap_check": cfg.Gap.CheckInterval.String(),
 			"agent_socket": cfg.Agent.Socket, "update_url": s.updateURL(),
@@ -216,38 +173,6 @@ func (s *Server) serverSetWireGuard(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "server.wireguard", "server", "wireguard", nil, map[string]any{"enabled": in.Enabled, "listen_port": in.ListenPort, "address": in.Address, "endpoint": in.Endpoint}, in.Reason)
 	writeJSON(w, 200, st)
-}
-
-func (s *Server) serverUpdate(w http.ResponseWriter, r *http.Request) {
-	var in struct{ Version, Reason string }
-	if err := decodeJSON(r, &in, 1024); err != nil {
-		writeErr(w, 400, err.Error())
-		return
-	}
-	in.Version = strings.TrimSpace(in.Version)
-	if strings.TrimSpace(in.Reason) == "" || in.Version == "" {
-		writeErr(w, 400, "version and reason are required")
-		return
-	}
-	if strings.ContainsAny(in.Version, " /\\") {
-		writeErr(w, 400, "invalid version")
-		return
-	}
-	// a licensed server installs only the versions released while its licence includes updates; the agent checks the
-	// release date of the downloaded binary (servers without a licence always update)
-	until := s.updatesUntil(r.Context())
-	res, err := s.agent.Update(r.Context(), in.Version, until)
-	if err != nil {
-		var ce *agent.CodedError
-		if errors.As(err, &ce) && ce.Code == "updates_ended" {
-			writeJSON(w, http.StatusPaymentRequired, map[string]string{"error": ce.Msg, "code": ce.Code})
-			return
-		}
-		s.agentErr(w, err)
-		return
-	}
-	s.audit(r, "server.update", "server", in.Version, map[string]any{"version": s.version}, map[string]any{"version": in.Version, "sha256": res.SHA256}, in.Reason)
-	writeJSON(w, 200, res)
 }
 
 // ---- backups (URS K-14) ---------------------------------------------------------------------------

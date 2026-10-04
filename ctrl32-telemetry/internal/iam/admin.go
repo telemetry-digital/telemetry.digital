@@ -225,6 +225,33 @@ func (s *Service) ServerAdmins(ctx context.Context, excludeUser, excludeRole str
 	return n, err
 }
 
+// AdminContact is a server administrator with an e-mail address (notices of the server: updates).
+type AdminContact struct {
+	OrgID, UserID, Username, Email string
+}
+
+// ServerAdminContacts lists the enabled server administrators that have an e-mail address.
+func (s *Service) ServerAdminContacts(ctx context.Context) ([]AdminContact, error) {
+	rows, err := s.pool.Query(ctx, `WITH cur AS (
+		SELECT user_id, role_id, (array_agg(event ORDER BY ts DESC, id DESC))[1] AS ev FROM core.user_role_history GROUP BY user_id, role_id)
+		SELECT DISTINCT u.org_id::text, u.id::text, u.username, u.email FROM cur JOIN core.role r ON r.id = cur.role_id JOIN core.user_account u ON u.id = cur.user_id
+		JOIN core.organization o ON o.id = u.org_id
+		WHERE cur.ev = 'granted' AND $1 = ANY (r.permissions) AND u.disabled_at IS NULL AND o.disabled_at IS NULL AND COALESCE(u.email, '') <> ''`, ServerPermission)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AdminContact
+	for rows.Next() {
+		var c AdminContact
+		if err := rows.Scan(&c.OrgID, &c.UserID, &c.Username, &c.Email); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
 // RoleHistory lists grants and revokes of a user, newest first.
 func (s *Service) RoleHistory(ctx context.Context, userID string) ([]RoleEvent, error) {
 	rows, err := s.pool.Query(ctx, `SELECT h.ts, r.name, h.event, COALESCE(a.username, ''), h.reason

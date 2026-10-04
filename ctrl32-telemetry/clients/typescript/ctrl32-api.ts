@@ -8287,24 +8287,250 @@ export class Ctrl32Client {
   }>('POST', `/api/v1/server/restart`, undefined, body, false);
   }
 
+  /** Outgoing e-mail (SMTP)
+   *
+   * The settings in use and their source: `ui` (saved on this page), `config` ([smtp] of config.toml) or `none`. Settings saved here take precedence over config.toml unless [smtp] override = true. The password is never returned (`has_password`).
+   * 
+   * Requires permission `system.admin`. */
+  getServerSmtp(): Promise<{
+    /** e-mail can be sent */
+    available?: boolean;
+    /** [smtp] of config.toml without the password */
+    config?: Record<string, unknown>;
+    config_has_password?: boolean;
+    has_password?: boolean;
+    /** config.toml wins; the page is read-only */
+    override?: boolean;
+    saved?: boolean;
+    /** host, port, security, user, from, from_name, reply_to, to */
+    settings?: Record<string, unknown>;
+    source?: "ui" | "config" | "none";
+  }> {
+    return this.request<{
+    /** e-mail can be sent */
+    available?: boolean;
+    /** [smtp] of config.toml without the password */
+    config?: Record<string, unknown>;
+    config_has_password?: boolean;
+    has_password?: boolean;
+    /** config.toml wins; the page is read-only */
+    override?: boolean;
+    saved?: boolean;
+    /** host, port, security, user, from, from_name, reply_to, to */
+    settings?: Record<string, unknown>;
+    source?: "ui" | "config" | "none";
+  }>('GET', `/api/v1/server/smtp`, undefined, undefined, false);
+  }
+
+  /** Set the outgoing e-mail
+   *
+   * Security: `starttls` (port 587), `tls` (implicit TLS, port 465) or `none` — only for a relay on this server or in the local network (localhost, a private address or a name without a public domain). The password is write-only and stored encrypted with the server's secret key; an empty password keeps the stored one, clear_password removes it. An AI assistant cannot set the password. Applies without a restart; audited as server.smtp (without the password).
+   * 
+   * Requires permission `system.admin`. */
+  putServerSmtp(body: {
+    clear_password?: boolean;
+    /** sender address */
+    from: string;
+    /** sender name */
+    from_name?: string;
+    host: string;
+    /** write-only */
+    password?: string;
+    /** default 587, 465 with tls */
+    port?: number;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    reply_to?: string;
+    security: "starttls" | "tls" | "none";
+    to?: string[];
+    user?: string;
+  }): Promise<{
+    ok?: boolean;
+    warnings?: string[];
+  }> {
+    return this.request<{
+    ok?: boolean;
+    warnings?: string[];
+  }>('PUT', `/api/v1/server/smtp`, undefined, body, false);
+  }
+
+  /** Use config.toml for the outgoing e-mail
+   *
+   * Removes the settings saved on the page; [smtp] of config.toml applies again. Audited as server.smtp_reset.
+   * 
+   * Requires permission `system.admin`. */
+  deleteServerSmtp(body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    ok?: boolean;
+  }> {
+    return this.request<{
+    ok?: boolean;
+  }>('DELETE', `/api/v1/server/smtp`, undefined, body, false);
+  }
+
+  /** Send a test e-mail
+   *
+   * Sends a test message to `to` with the settings of the form (`settings`, unsaved; an empty password takes the stored one) or the ones in use, and returns the SMTP conversation (authentication redacted) also when it fails. Logged in the delivery log and audited as server.smtp_test.
+   * 
+   * Requires permission `system.admin`. */
+  postServerSmtpTest(body: {
+    /** optional: the form values as in PUT */
+    settings?: Record<string, unknown>;
+    /** recipient of the test message */
+    to: string;
+  }): Promise<{
+    error?: string;
+    ok?: boolean;
+    /** the SMTP conversation */
+    transcript?: string;
+  }> {
+    return this.request<{
+    error?: string;
+    ok?: boolean;
+    /** the SMTP conversation */
+    transcript?: string;
+  }>('POST', `/api/v1/server/smtp/test`, undefined, body, false);
+  }
+
   /** Download, verify and install a release
    *
-   * The agent fetches the binary and SHA256SUMS from the update URL, verifies, installs and restarts. With a license whose included updates end (`updates_until`), a binary released later (release date reported by the binary) is refused with 402 `updates_ended` and the running system stays as it is; servers without a license always update.
+   * The agent installs a release only when its manifest (`release.json`) carries a valid Ed25519 signature of a key built into this version and the binary matches the size and SHA-256 the manifest lists (ADR-0024). From the update URL (the portal or a mirror) or, with `source` package, from the offline package staged by an upload. Optionally a backup first; the running binary is kept, the migrations run, and when they fail the previous binary returns and the database is restored from that backup. After the restart the previous version returns automatically unless the new one answers healthy within the rollback time of the update settings. With a license whose included updates end (`updates_until`), a release dated later (signed release date) is refused with 402 `updates_ended` and the running system stays as it is; servers without a license always update. Refusals: 409 `version` (the distribution point offers another version), 409 `busy`, 502 `signature` / `checksum` / `unsigned`, 500 `rolled_back`.
    * 
    * Requires permission `system.admin`. */
   postServerUpdate(body: {
+    /** take a backup first (database, configuration) */
+    backup?: boolean;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
-    /** release version, e.g. 0.24.0 */
-    version: string;
+    source?: "" | "package";
+    /** release version, e.g. 0.76.0 (optional with source package) */
+    version?: string;
   }): Promise<{
+    /** backup file taken first */
+    backup?: string;
+    /** installation id in the history */
+    id?: string;
+    /** trusted key that verified the release */
+    key_id?: string;
+    message?: string;
     sha256?: string;
     version?: string;
   }> {
     return this.request<{
+    /** backup file taken first */
+    backup?: string;
+    /** installation id in the history */
+    id?: string;
+    /** trusted key that verified the release */
+    key_id?: string;
+    message?: string;
     sha256?: string;
     version?: string;
   }>('POST', `/api/v1/server/update`, undefined, body, false);
+  }
+
+  /** Upload an offline update package
+   *
+   * multipart/form-data, the fields before the file. A package of deploy/publish.sh (`ctrl32-telemetry-<version>-offline.zip`: the signed manifest, the binaries of every platform, optionally the parts of the object counting detector) is streamed to the agent, which verifies the signature and every member (no member outside the manifest, sizes and SHA-256) before anything is kept, stages it and — unless install=0 — installs it exactly like an online release (license check, backup, migrations, rollback). The detector installation then takes its parts from the staged package. At most [agent] max_package_mb (default 2048 MB). Asks for the password (and authenticator code) again, from a browser session only (not an API token or an AI assistant); audited as server.update_package (also refusals).
+   * 
+   * Requires permission `system.admin`. */
+  postServerUpdatePackage(body: FormData): Promise<{
+    package?: {
+      bytes?: number;
+      detector?: string[];
+      files?: number;
+      /** the server binary of this platform */
+      has_binary?: boolean;
+      key_id?: string;
+      platform?: string;
+      released?: string;
+      staged_at?: string;
+      version?: string;
+    };
+    /** the installation, as POST /api/v1/server/update; absent when nothing was installed */
+    update?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    package?: {
+      bytes?: number;
+      detector?: string[];
+      files?: number;
+      /** the server binary of this platform */
+      has_binary?: boolean;
+      key_id?: string;
+      platform?: string;
+      released?: string;
+      staged_at?: string;
+      version?: string;
+    };
+    /** the installation, as POST /api/v1/server/update; absent when nothing was installed */
+    update?: Record<string, unknown>;
+  }>('POST', `/api/v1/server/update/package`, undefined, body, false);
+  }
+
+  /** Update mode, available release and history
+   *
+   * The update mode (manual, notify — the default — or auto with a weekly maintenance window), the latest release of the distribution point (`available`: version, signed release date, the key that signed it), the kind of step (patch, minor, major), whether the automatic mode may install it and the license covers it, the next window and check, and the agent's history of installations (with rollbacks), the staged offline package and the trusted keys.
+   * 
+   * Requires permission `system.admin`. */
+  getServerUpdates(): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('GET', `/api/v1/server/updates`, undefined, undefined, false);
+  }
+
+  /** Set the update mode
+   *
+   * manual: nothing happens by itself. notify (default): a daily check (with jitter), a banner for system administrators and one e-mail per version to the server administrators (when SMTP works). auto: in the weekly window (weekday 0 = Sunday, time HH:MM in `tz`, empty = the server's time zone; the window stays open one hour) a patch version — with `include_minor` also a minor one, never a major one — is installed with a backup first and the automatic rollback; a version that failed is not retried automatically. Audited as server.update_settings.
+   * 
+   * Requires permission `system.admin`. */
+  putServerUpdates(body: {
+    include_minor?: boolean;
+    mode: "manual" | "notify" | "auto";
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** 2–60, default 10 */
+    rollback_minutes?: number;
+    /** HH:MM */
+    time?: string;
+    /** IANA time zone, empty = server time */
+    tz?: string;
+    /** 0 = Sunday … 6 = Saturday */
+    weekday?: number;
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('PUT', `/api/v1/server/updates`, undefined, body, false);
+  }
+
+  /** Check the distribution point now
+   *
+   * Reads VERSION and the signed manifest of the update URL now (otherwise once a day).
+   * 
+   * Requires permission `system.admin`. */
+  postServerUpdatesCheck(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/v1/server/updates/check`, undefined, body, false);
+  }
+
+  /** Update banner of the web UI
+   *
+   * A newer version for the banner of system administrators (empty when the mode is manual or the server is up to date). From the last check, no network access.
+   * 
+   * Requires permission `system.admin`. */
+  getServerUpdatesNotice(): Promise<{
+    current?: string;
+    mode?: string;
+    signed?: boolean;
+    version?: string;
+    /** automatic mode: when it will be installed */
+    window?: string;
+  }> {
+    return this.request<{
+    current?: string;
+    mode?: string;
+    signed?: boolean;
+    version?: string;
+    /** automatic mode: when it will be installed */
+    window?: string;
+  }>('GET', `/api/v1/server/updates/notice`, undefined, undefined, false);
   }
 
   /** WireGuard status and peers

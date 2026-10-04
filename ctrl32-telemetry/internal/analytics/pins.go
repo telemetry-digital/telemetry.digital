@@ -1,8 +1,12 @@
 package analytics
 
+import "path"
+
 // Pinned third-party parts of object counting on camera pictures (ADR-0022): ONNX Runtime (MIT), an unmodified LGPL
 // build of ffmpeg and the YOLOX nano/tiny models (Apache-2.0). They are downloaded at install time from their official
-// releases over HTTPS and kept only when the SHA-256 matches the pin; they are never part of our release files.
+// releases over HTTPS and kept only when the SHA-256 matches the pin; they are never compiled into our binary. Since
+// 0.76.0 the offline update package and a mirror of the distribution point also carry them unmodified (analytics/,
+// with their licences and SOURCES.txt) for servers without the Internet; the same pins apply (ADR-0024).
 //
 // This file is the one place of the pins. deploy/install.sh and deploy/install.ps1 carry the same values for an install
 // without the server (TestInstallerPinsMatch keeps all three in sync); the server agent installs from these
@@ -51,6 +55,16 @@ type Artifact struct {
 	URL    string `json:"url"`    // official release, HTTPS
 	SHA256 string `json:"sha256"` // lower-case hex
 	Format string `json:"format"`
+}
+
+// MirrorName is the file name of a part on a mirror of the distribution point and in an offline update package
+// (analytics/<name>, ADR-0024): the file name of its official download, the YOLOX licence with its release. The pin,
+// not the source, decides whether a file is kept.
+func MirrorName(a Artifact) string {
+	if a.Name == "model_licence" {
+		return "YOLOX-" + YOLOXRelease + "-LICENSE"
+	}
+	return path.Base(a.URL)
 }
 
 // PinnedArtifacts lists the downloads for a platform ("os/arch") in install order; nil when the platform is not one of

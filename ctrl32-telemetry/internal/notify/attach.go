@@ -20,15 +20,11 @@ func (n *Notifier) SendWithAttachments(ctx context.Context, to, subject, body st
 	if !n.Available() {
 		return errors.New("smtp not configured")
 	}
-	m := mail.NewMsg()
-	if err := m.From(n.cfg.From); err != nil {
+	c := n.SMTP()
+	m, err := NewMessage(c, []string{to}, subject, body)
+	if err != nil {
 		return err
 	}
-	if err := m.To(to); err != nil {
-		return err
-	}
-	m.Subject(subject)
-	m.SetBodyString(mail.TypeTextPlain, body)
 	for _, f := range files {
 		ct := f.ContentType
 		if ct == "" {
@@ -38,13 +34,5 @@ func (n *Notifier) SendWithAttachments(ctx context.Context, to, subject, body st
 			return err
 		}
 	}
-	opts := []mail.Option{mail.WithPort(n.cfg.Port), mail.WithTLSPolicy(mail.TLSOpportunistic)}
-	if n.cfg.User != "" {
-		opts = append(opts, mail.WithSMTPAuth(mail.SMTPAuthAutoDiscover), mail.WithUsername(n.cfg.User), mail.WithPassword(n.cfg.Password))
-	}
-	c, err := mail.NewClient(n.cfg.Host, opts...)
-	if err != nil {
-		return err
-	}
-	return c.DialAndSendWithContext(ctx, m)
+	return sendMsg(ctx, c, m, nil)
 }
