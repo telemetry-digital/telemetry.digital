@@ -1,4 +1,5 @@
-// Headless Chrome: the menu (0.73.4). Checks the section headings (Monitoring, Devices and automation, Administration),
+// Headless Chrome: the menu (0.73.4; 0.75.0: Overview, the Reports and Automation groups, My account once in the
+// footer, the old report and rule addresses redirect). Checks the section headings (Monitoring, Devices and automation, Administration),
 // that every page tab (.subnav) a user sees is also in the sidebar, that the group of a sub-page opens on it (System on
 // /server/license), that the compact sidebar (icons only, narrow desktop) opens a group's first page and keeps the page
 // tabs, the phone drawer (only the current group open, a tap opens another one) and what a viewer sees (no
@@ -48,12 +49,16 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   expect("admin signed in", (await login("admin", "admin1234")).user !== undefined, true);
   await desktop(1500);
   await go("/settings/branding");
-  expect("headings", await ev(heads), "Monitoring|Devices and automation|Administration|—");
-  expect("top-level order", await ev(top), "/,/dashboards,/home,/energy,/counting,/video,/displays,/incidents,/devices,/assets,/flows,/fota,/users,/audit,/settings,/organizations,/account");
+  expect("headings", await ev(heads), "Monitoring|Devices and automation|Administration");
+  expect("top-level order", await ev(top), "/,/dashboards,/home,/energy,/counting,/video,/displays,/incidents,/reports/templates,/devices,/assets,/flows,/fota,/users,/audit,/settings,/organizations,/account");
+  // 0.75.0: clearer names, Reports and Automation groups, My account once (in the footer of the sidebar)
+  expect("Overview and Dashboards", await ev(`[...document.querySelectorAll('#sidebar a.nav-link[href="/"], #sidebar a.nav-link[href="/dashboards"]')].map(a => a.textContent).join()`), "Overview,Dashboards");
+  expect("My account once", await ev(`[...document.querySelectorAll('#sidebar a, #sidebar button')].filter(a => a.textContent.trim() === 'My account').length + ' ' + !!document.querySelector('#sidebar .side-foot .side-acct a[href="/account"]')`), "1 true");
+  expect("Settings without the report pages", await ev(`[...document.querySelectorAll('#sidebar .group.open .sub a')].map(a => a.textContent).filter(x => /report|Notification/i.test(x)).join()`), "Notification channels");
   expect("Object counting has its own icon", await ev(`(() => { const a = document.querySelector('#sidebar a[href="/counting"]'), u = document.querySelector('#sidebar a[href="/users"]'); return a.querySelector('svg').outerHTML !== u.querySelector('svg').outerHTML; })()`), true);
-  expect("Settings sub-pages in the order of the page tabs", await ev(`[...document.querySelectorAll('#sidebar .group.open .sub a')].map(a => a.getAttribute('href')).join() === [...document.querySelectorAll('.subnav a')].filter(a => !a.hidden).map(a => a.getAttribute('href')).join()`), true);
+  expect("Settings sub-pages in the order of the page tabs", await ev(`[...document.querySelectorAll('#sidebar .group.open .sub a')].map(a => a.getAttribute('href')).join() === [...document.querySelectorAll('nav.subnav:not([hidden]) a')].filter(a => !a.hidden).map(a => a.getAttribute('href')).join()`), true);
   expect("page tabs hidden next to the full sidebar", await ev(`getComputedStyle(document.querySelector('.subnav')).display`), "none");
-  for (const p of ["/settings/branding", "/settings/scheduled-reports", "/server/license", "/server/vpn", "/video", "/account/ai", "/counting", "/audit", "/users", "/fota", "/assets"]) {
+  for (const p of ["/settings/branding", "/reports/scheduled", "/reports", "/reports/templates", "/reports/signatures", "/automation/rules", "/flows", "/account/push", "/server/license", "/server/vpn", "/video", "/account/ai", "/counting", "/audit", "/users", "/fota", "/assets"]) {
     await go(p, 1500);
     expect("tabs of " + p + " in the sidebar", await ev(tabsInMenu), "all");
   }
@@ -61,7 +66,19 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   expect("System open on /server/license", await ev(`[...document.querySelectorAll('#sidebar .group.open > a.nav-link')].map(a => a.textContent).join() + ' ' + (document.querySelector('#sidebar .sub a.active') || {}).textContent`), "System License");
   await go("/counting/cameras");
   expect("only Object counting open on its Cameras tab", await ev(`[...document.querySelectorAll('#sidebar .group.open > a.nav-link')].map(a => a.getAttribute('href')).join()`), "/counting");
-  expect("counting has Scheduled reports", await ev(`!!document.querySelector('#sidebar .group.open .sub a[href="/settings/scheduled-reports"]')`), true);
+  expect("counting has Scheduled reports", await ev(`!!document.querySelector('#sidebar .group.open .sub a[href="/reports/scheduled"]')`), true);
+  const openGroups = `[...document.querySelectorAll('#sidebar .group.open > a.nav-link')].map(a => a.textContent).join()`;
+  await go("/reports/scheduled");
+  expect("only Reports open on Scheduled reports", await ev(openGroups), "Reports");
+  expect("Reports: four pages", await ev(`[...document.querySelectorAll('#sidebar .group.open .sub a')].map(a => a.textContent).join()`), "Report templates,Stored reports,Scheduled reports,Report signatures");
+  await go("/automation/rules");
+  expect("only Automation open on Automation rules", await ev(openGroups + ` + ' ' + document.querySelector('#sidebar .sub a.active').textContent`), "Automation Automation rules");
+  await go("/account/push");
+  expect("My account (footer) open on Browser notifications", await ev(openGroups + ` + ' ' + document.querySelector('#sidebar .sub a.active').textContent`), "My account Browser notifications");
+  for (const [from, to] of [["/settings/scheduled-reports", "/reports/scheduled"], ["/settings/templates", "/reports/templates"], ["/settings/reports", "/reports"], ["/audit/reports", "/reports/signatures"], ["/assets/rules", "/automation/alarm-rules"], ["/assets/automation", "/automation/rules"]]) {
+    await go(from, 1200);
+    expect("old address " + from, await ev(`location.pathname`), to);
+  }
   await go("/video/evidence");
   expect("Cameras: Evidence and Settings", await ev(`[...document.querySelectorAll('#sidebar .group.open .sub a')].map(a => a.textContent).join()`), "Live view,Video walls,Camera management,Evidence,Settings,Object counting");
   await go("/settings/branding");
@@ -88,7 +105,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   expect("drawer open", await ev(`document.querySelector('#drawer').classList.contains('open')`), true);
   expect("drawer headings", await ev(`[...document.querySelectorAll('#drawer .nav-head')].map(h => h.textContent || '—').join('|')`), "Monitoring|Devices and automation|Administration|—");
   const subs = `[...document.querySelectorAll('#drawer .sub-link')].filter(a => !a.hidden).map(a => a.getAttribute('href')).join()`;
-  expect("drawer: only the current group open", await ev(subs), "/counting,/counting/areas,/counting/cameras,/counting/sensors,/settings/scheduled-reports");
+  expect("drawer: only the current group open", await ev(subs), "/counting,/counting/areas,/counting/cameras,/counting/sensors,/reports/scheduled");
   await shot("menu-phone-admin.png");
   await ev(`document.querySelector('#drawer a[data-grp][href="/video"]').click()`); await sleep(300);
   expect("drawer: a tap opens a group without leaving the page", await ev(`location.pathname + ' ' + [...document.querySelectorAll('#drawer .sub-link')].filter(a => !a.hidden).some(a => a.getAttribute('href') === '/video/walls')`), "/counting/areas true");
@@ -108,9 +125,9 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await login(uname, "Menu-probe-2026-viewer!"); // a new password ends the other sessions
   await go("/");
   expect("viewer: start page", await ev(`location.pathname`), "/");
-  expect("viewer: headings", await ev(heads), "Monitoring|Devices and automation|—");
+  expect("viewer: headings", await ev(heads), "Monitoring|Devices and automation");
   expect("viewer: no administration", await ev(`['/users', '/audit', '/settings', '/organizations'].filter(h => document.querySelector('#sidebar a[href="' + h + '"]')).join() || 'none'`), "none");
-  expect("viewer: counting without its settings", await ev(`[...document.querySelectorAll('#sidebar a[href^="/counting"], #sidebar a[href="/settings/scheduled-reports"]')].map(a => a.getAttribute('href')).join()`), "/counting,/counting,/counting/areas,/counting/cameras");
+  expect("viewer: counting without its settings", await ev(`[...document.querySelectorAll('#sidebar a[href^="/counting"], #sidebar a[href="/reports/scheduled"]')].map(a => a.getAttribute('href')).join()`), "/counting,/counting,/counting/areas,/counting/cameras");
   await shot("menu-viewer.png", "#sidebar");
   await phone();
   await go("/counting");

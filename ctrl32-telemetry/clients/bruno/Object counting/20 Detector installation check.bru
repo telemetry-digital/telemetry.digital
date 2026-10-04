@@ -1,0 +1,23 @@
+meta {
+  name: Detector installation check
+  type: http
+  seq: 20
+}
+
+get {
+  url: {{baseUrl}}/api/v1/counting/selfcheck
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~refresh: 
+}
+
+docs {
+  Detector installation check
+  
+  Whether object counting on cameras can run on this server: ffmpeg (version, LGPL/GPL build), ONNX Runtime (version) and the YOLOX models (SHA-256 against the pins, one test inference). Checked in a separate process and cached for 5 minutes; refresh=1 checks again. Paths and technical details only for server administrators (system.admin). Installed with the button *Install the detector* (POST /api/v1/counting/install), `install.sh --analytics` or `install.ps1 -Analytics`.
+  
+  Requires permission `data.read`.
+}

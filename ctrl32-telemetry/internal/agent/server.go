@@ -80,6 +80,8 @@ type Server struct {
 	tunnelWatchEvery time.Duration
 	ifForwarding     func(iface string) (bool, error)
 	setIfForwarding  func(iface string, on bool) error
+	// installation of the object counting detector (analytics.go)
+	an analyticsRunner
 }
 
 func NewServer(socket, cfgPath, version, updateURL string, log *slog.Logger) *Server {
@@ -151,6 +153,7 @@ func (a *Server) routes() http.Handler {
 		mux.HandleFunc("PUT /wireguard", a.hSetWireGuard)
 		mux.HandleFunc("PUT /vpn", a.hApplyVPN)
 		a.uplinkRoutes(mux)
+		a.analyticsRoutes(mux) // stand-in downloads into the simulation directory (setup.SimulatedArtifacts)
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 501, "not available in the VPN simulation of the agent (vpn_simulate)")
 		})
@@ -163,6 +166,7 @@ func (a *Server) routes() http.Handler {
 	mux.HandleFunc("PUT /wireguard", a.hSetWireGuard)
 	mux.HandleFunc("PUT /vpn", a.hApplyVPN)
 	a.uplinkRoutes(mux)
+	a.analyticsRoutes(mux)
 	mux.HandleFunc("POST /update", a.hUpdate)
 	mux.HandleFunc("GET /backups", a.hBackups)
 	mux.HandleFunc("POST /backups", a.hCreateBackup)
@@ -328,15 +332,23 @@ func (a *Server) setConfigValue(section, key, value string) (bool, error) {
 	if !changed {
 		return false, nil
 	}
+	if err := a.writeConfig([]byte(strings.Join(lines, "\n"))); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// writeConfig replaces config.toml atomically and keeps its mode and group (root:ctrl32 0640 on Linux).
+func (a *Server) writeConfig(data []byte) error {
 	st, _ := os.Stat(a.cfgPath)
 	mode := os.FileMode(0o640)
 	if st != nil {
 		mode = st.Mode().Perm()
 	}
-	if err := writeFileAtomic(a.cfgPath, []byte(strings.Join(lines, "\n")), mode); err != nil {
-		return false, err
+	if err := writeFileAtomic(a.cfgPath, data, mode); err != nil {
+		return err
 	}
-	if st != nil {
+	if st != nil && !isWindows() {
 		if sys, ok := st.Sys().(interface{ Gid() uint32 }); ok {
 			_ = os.Chown(a.cfgPath, 0, int(sys.Gid()))
 		} else if g, err := user.LookupGroup(appGroup); err == nil {
@@ -344,7 +356,7 @@ func (a *Server) setConfigValue(section, key, value string) (bool, error) {
 			_ = os.Chown(a.cfgPath, 0, gid)
 		}
 	}
-	return true, nil
+	return nil
 }
 
 func (a *Server) restartAppLater() {

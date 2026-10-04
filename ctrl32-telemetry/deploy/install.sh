@@ -53,7 +53,9 @@ ANALYTICS=false
 FFMPEG_SOURCE=lgpl
 
 # Object counting (--analytics, ADR-0022): third-party parts downloaded from their official releases at install time,
-# pinned and SHA-256 verified. Never bundled into our release files.
+# pinned and SHA-256 verified. Never bundled into our release files. The pins live in internal/analytics/pins.go (the
+# server agent installs the same parts from the user interface, "Install the detector"); keep these values equal to it
+# (go test ./internal/analytics checks TestInstallerPinsMatch).
 ORT_VERSION=1.30.0                                   # ONNX Runtime (MIT), github.com/microsoft/onnxruntime releases
 ORT_SHA256_amd64=a5ed5a3cac51fbb2e90da632ae43d19212faaa20e76484e62bcb7c23ddb3b3fd   # onnxruntime-linux-x64-1.30.0.tgz
 ORT_SHA256_arm64=e16a27a8ed330bbc698df7330b0cf56e722f354e3bcc92118682c74ef3c3e3da   # onnxruntime-linux-aarch64-1.30.0.tgz

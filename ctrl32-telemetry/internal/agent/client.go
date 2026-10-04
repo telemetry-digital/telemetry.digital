@@ -191,3 +191,26 @@ func (c *Client) SetBackupSchedule(ctx context.Context, in ScheduleRequest) (*Ba
 	err := c.do(ctx, "PUT", "/backups/schedule", in, &st, 30*time.Second)
 	return &st, err
 }
+
+// Analytics is the installation of the object counting detector: platform, last installation, running or last job.
+func (c *Client) Analytics(ctx context.Context) (*AnalyticsState, error) {
+	var st AnalyticsState
+	if err := c.do(ctx, "GET", "/analytics", nil, &st, 20*time.Second); err != nil {
+		return nil, err
+	}
+	return &st, nil
+}
+
+// InstallAnalytics starts the installation of the pinned detector parts (force: download every part again).
+func (c *Client) InstallAnalytics(ctx context.Context, force bool) (*AnalyticsState, error) {
+	var st AnalyticsState
+	err := c.do(ctx, "POST", "/analytics/install", AnalyticsRequest{Force: force}, &st, 30*time.Second)
+	return &st, err
+}
+
+// RemoveAnalytics starts the removal of the detector parts and their paths in [analytics].
+func (c *Client) RemoveAnalytics(ctx context.Context) (*AnalyticsState, error) {
+	var st AnalyticsState
+	err := c.do(ctx, "POST", "/analytics/remove", nil, &st, 30*time.Second)
+	return &st, err
+}

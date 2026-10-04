@@ -91,6 +91,10 @@ code, pre { font-family: var(--mono); font-size: 0.85em; }
 .side-nav .nav-link svg { width: 20px; height: 20px; }
 .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--line); padding-top: 8px; }
 .side-foot .btn { justify-content: flex-start; border: 0; }
+.side-foot .side-acct .nav-link { padding: 8px 12px; font-size: 14px; } /* My account: once, in the footer (0.75.0) */
+.side-foot .side-acct .sub { padding-left: 30px; }
+.ac-progress { margin: 10px 0; } /* detector installation (analytics-check.js) */
+.ac-progress progress { display: block; width: 100%; margin: 6px 0; }
 .side-user { display: flex; gap: 10px; align-items: center; padding: 6px 12px 10px; font-size: 13px; line-height: 1.3; min-width: 0; }
 .side-user svg { width: 24px; height: 24px; color: var(--muted); flex: none; }
 .side-user div { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

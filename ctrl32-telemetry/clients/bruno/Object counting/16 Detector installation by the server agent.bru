@@ -1,0 +1,19 @@
+meta {
+  name: Detector installation by the server agent
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{baseUrl}}/api/v1/counting/install
+  body: none
+  auth: inherit
+}
+
+docs {
+  Detector installation by the server agent
+  
+  Whether the server agent can install the detector on this host, the pinned versions, the last installation and the running or last job with its progress (download x of y, unpack, verify). A finished job is applied to object counting at once (no restart).
+  
+  Requires permission `system.admin`.
+}

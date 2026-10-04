@@ -159,9 +159,12 @@ req GET /api/v1/tokens >/dev/null; TID=$(jx "j.find(t => t.name === 'asset page 
 req PATCH "/api/v1/assets/$ROOM" '{"location":{"lat":1,"lon":1}}' >/dev/null; check "reason required" "$(st)" 400
 
 echo "== pages"
-for p in "/assets" "/assets/sites" "/assets/rules" "/assets/automation" "/assets/$ROOM" "/assets/$ROOM/telemetry" "/assets/$ROOM/history" "/assets/sites/$SITE"; do
+for p in "/assets" "/assets/sites" "/automation/alarm-rules" "/automation/rules" "/assets/$ROOM" "/assets/$ROOM/telemetry" "/assets/$ROOM/history" "/assets/sites/$SITE"; do
   req GET "$p" >/dev/null; check "page $p" "$(st)" 200; done
 req GET "/assets/$ROOM" >/dev/null; grep -q 'telemetry.js' "$TMP/b" && grep -q 'id="assetView"' "$TMP/b" && ok "asset page served" || bad "asset page content"
+# 0.75.0: alarm and automation rules moved under Automation; the earlier addresses redirect (query kept)
+for x in "/assets/rules /automation/alarm-rules" "/assets/automation?x=1 /automation/rules?x=1"; do
+  set -- $x; R=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "$BASE$1"); check "$1 redirects" "$R" "301 $BASE$2"; done
 req GET "/assets/sites" >/dev/null; grep -q 'id="siteTable"' "$TMP/b" && ok "sites list served by the assets screen" || bad "sites list content"
 
 echo "== audit entries"

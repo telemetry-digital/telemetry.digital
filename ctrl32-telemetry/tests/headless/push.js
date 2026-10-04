@@ -1,5 +1,5 @@
-// Headless Chrome: My account → Notifications (state without push support in headless http), Settings →
-// Notifications channel dialog with the web_push and voice_http kinds; screenshots.
+// Headless Chrome: My account → Browser notifications (state without push support in headless http), Settings →
+// Notification channels: the channel dialog with the web_push and voice_http kinds; screenshots.
 const { spawn } = require("child_process");
 const fs = require("fs");
 const http = require("http");

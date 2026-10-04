@@ -66,7 +66,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   expect("unmasked stream (video.unmask): picture as is, flagged", snap && snap.plain && [light(snap.plain.left), snap.plain.unmasked].join(), "true,true");
 
   // ---- 2. alarm rule forms
-  await go("/assets/rules", 3000);
+  await go("/automation/alarm-rules", 3000);
   await ev(`document.querySelector('#newRuleBtn').click()`);
   expect("new rule dialog open", await until(`document.querySelector('#ruleDlg').open`), true);
   const dlg = await ev(`(() => { const f = document.querySelector('#ruleNew'); return { types: [...f.type.options].map(o => o.value).join(), pol: [...f.policy.options].map(o => o.textContent).join('|'), html: f.innerHTML.includes('\${POLS') }; })()`);

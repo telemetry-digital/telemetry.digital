@@ -58,11 +58,12 @@ type pwaSection struct {
 	Key, Label, URL string
 }
 
-// In the order of the menu (0.73.4): Monitoring, Devices and automation, Administration.
+// In the order of the menu (0.73.4): Monitoring, Devices and automation, Administration. 0.75.0: Reports (every
+// report page) and Automation (the key stays "flows": flows, alarm rules and automation rules).
 var pwaSections = []pwaSection{
 	{"dashboards", "Dashboards", "/dashboards"}, {"home", "Home", "/home"}, {"energy", "Energy", "/energy"},
 	{"counting", "Object counting", "/counting"}, {"cameras", "Cameras", "/video"}, {"displays", "Displays", "/displays"},
-	{"incidents", "Incidents", "/incidents"}, {"devices", "Devices", "/devices"}, {"assets", "Assets", "/assets"}, {"flows", "Flows", "/flows"},
+	{"incidents", "Incidents", "/incidents"}, {"reports", "Reports", "/reports"}, {"devices", "Devices", "/devices"}, {"assets", "Assets", "/assets"}, {"flows", "Automation", "/flows"},
 	{"firmware", "Firmware", "/fota"}, {"users", "Users", "/users"}, {"audit", "Audit", "/audit"}, {"settings", "Settings", "/settings"},
 	{"system", "System", "/organizations"},
 }
@@ -86,8 +87,9 @@ var (
 // list (APP_PATHS).
 var pwaSectionPaths = map[string][]string{
 	"dashboards": {"/", "/dashboards"}, "home": {"/home", "/smarthome"}, "energy": {"/energy"}, "counting": {"/counting"}, "cameras": {"/video"},
-	"displays": {"/displays"}, "flows": {"/flows"}, "devices": {"/devices"}, "incidents": {"/incidents"}, "assets": {"/assets"},
-	"firmware": {"/fota"}, "users": {"/users"}, "audit": {"/audit"}, "settings": {"/settings", "/vpn"}, "system": {"/organizations", "/server", "/landing/edit"},
+	"displays": {"/displays"}, "flows": {"/flows", "/automation"}, "devices": {"/devices"}, "incidents": {"/incidents"}, "assets": {"/assets"},
+	"firmware": {"/fota"}, "users": {"/users"}, "audit": {"/audit", "/reports/signatures"}, "settings": {"/settings", "/vpn"}, "system": {"/organizations", "/server", "/landing/edit"},
+	"reports": {"/reports"},
 }
 
 // pwaPathIn reports whether a path is one of the prefixes or below one ("/" matches only itself).
@@ -305,7 +307,7 @@ func (s *Server) pwaAppOptions(w http.ResponseWriter, r *http.Request) {
 		secs = append(secs, map[string]string{"key": sec.Key, "label": sec.Label, "url": sec.URL})
 	}
 	pages := []map[string]string{
-		{"group": "Pages", "label": "Dashboard (home screen)", "url": "/"},
+		{"group": "Pages", "label": "Overview (home screen)", "url": "/"},
 		{"group": "Pages", "label": "Dashboards", "url": "/dashboards"},
 		{"group": "Pages", "label": "Cameras — live view", "url": "/video"},
 		{"group": "Pages", "label": "Video walls", "url": "/video/walls"},
@@ -315,6 +317,7 @@ func (s *Server) pwaAppOptions(w http.ResponseWriter, r *http.Request) {
 		{"group": "Pages", "label": "Displays", "url": "/displays"},
 		{"group": "Pages", "label": "Devices", "url": "/devices"},
 		{"group": "Pages", "label": "Flows", "url": "/flows"},
+		{"group": "Pages", "label": "Reports", "url": "/reports"},
 		{"group": "Pages", "label": "Assets", "url": "/assets"},
 	}
 	add := func(ctx context.Context, group, q, prefix string, filter func(extra string) bool) {

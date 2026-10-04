@@ -17,14 +17,11 @@
 <body>
 <header class="topbar"></header>
 <main class="container">
-<nav class="subnav">
+<nav class="subnav" data-nav="settings">
   <a href="/settings/branding" data-section="branding">Branding and theme</a>
   <a href="/settings/languages" data-section="languages">Languages</a>
   <a href="/settings/translations" data-section="translations">Translations</a>
-  <a href="/settings/notifications" data-section="notifications">Notifications</a>
-  <a href="/settings/templates" data-section="templates">Report templates</a>
-  <a href="/settings/reports" data-section="reports">Stored reports</a>
-  <a href="/settings/scheduled-reports" data-section="scheduled">Scheduled reports</a>
+  <a href="/settings/notifications" data-section="notifications">Notification channels</a>
   <a href="/settings/connectors" data-section="connectors">Connectors</a>
   <a href="/settings/apps" data-section="apps">Apps</a>
   <a href="/settings/ai" data-section="ai">AI assistants</a>
@@ -32,6 +29,12 @@
   <a href="/settings/policy" data-section="policy">Security policy</a>
   <a href="/vpn" data-section="vpn">VPN</a>
   <a href="/settings/export" data-section="export">Organization export</a>
+</nav>
+<nav class="subnav" data-nav="reports" hidden>
+  <a href="/reports/templates" data-section="templates">Report templates</a>
+  <a href="/reports" data-section="reports">Stored reports</a>
+  <a href="/reports/scheduled" data-section="scheduled">Scheduled reports</a>
+  <a href="/reports/signatures" data-section="signatures">Report signatures</a>
 </nav>
 
 <section data-section="languages">
@@ -156,7 +159,7 @@
   <div class="card">
   <p class="muted">Every generated PDF is a record: data hash, file hash and the audit chain head at generation time. Downloads verify the file against its recorded hash.</p>
   <div class="table-wrap"><table id="reports"><thead><tr><th>Generated</th><th>Kind</th><th>By</th><th>Template</th><th>Size</th><th>File hash</th><th>Signatures</th><th></th></tr></thead><tbody></tbody></table></div>
-  <p class="muted" style="margin-bottom:0;font-size:12px">Reports are signed electronically under <a href="/audit/reports">Audit → Report signatures</a> (permission report.sign).</p>
+  <p class="muted" style="margin-bottom:0;font-size:12px">Reports are signed electronically under <a href="/reports/signatures">Reports → Report signatures</a> (permission report.sign).</p>
   </div>
 </section>
 
@@ -216,9 +219,9 @@
 </dialog>
 
 <section data-section="notifications">
-  <div class="page-head"><h1>Notifications</h1><span class="grow"></span><button class="btn" id="newPolBtn" type="button">New escalation policy</button><button class="btn primary" id="newChanBtn" type="button">New channel</button></div>
+  <div class="page-head"><h1>Notification channels</h1><span class="grow"></span><button class="btn" id="newPolBtn" type="button">New escalation policy</button><button class="btn primary" id="newChanBtn" type="button">New channel</button></div>
   <div class="card"><h2>Channels</h2>
-    <p class="muted">Where alarms are delivered: e-mail recipients, an HTTP webhook signed with HMAC-SHA256, a generic HTTP SMS gateway, a voice call through an HTTP provider, or Web Push to the browsers of named users (each user enables it under My account → Notifications). Alarm rules without an escalation policy use the server's global e-mail recipients.</p>
+    <p class="muted">Where alarms are delivered: e-mail recipients, an HTTP webhook signed with HMAC-SHA256, a generic HTTP SMS gateway, a voice call through an HTTP provider, or Web Push to the browsers of named users (each user enables it under My account → Browser notifications). Alarm rules without an escalation policy use the server's global e-mail recipients.</p>
     <div class="table-wrap"><table id="chanTable"><thead><tr><th>Name</th><th>Kind</th><th>Target</th><th>State</th><th></th></tr></thead><tbody></tbody></table></div>
   </div>
   <div class="card"><h2>Escalation policies</h2>
@@ -369,7 +372,7 @@
 <script>
 const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
 const t = (s) => ctrl32.t(s);
-const TITLES = {policy: 'Security policy', approvals: 'Approvals', notifications: 'Notifications', branding: 'Branding and theme', templates: 'Report templates', reports: 'Stored reports', connectors: 'Connectors', languages: 'Languages', translations: 'Translations', apps: 'Apps', ai: 'AI assistants', export: 'Organization export'};
+const TITLES = {policy: 'Security policy', approvals: 'Approvals', notifications: 'Notification channels', branding: 'Branding and theme', templates: 'Report templates', reports: 'Stored reports', connectors: 'Connectors', languages: 'Languages', translations: 'Translations', apps: 'Apps', ai: 'AI assistants', export: 'Organization export'};
 // ---- AI assistants over MCP (spec 022)
 async function settingsAI(){
   const f = $('#aiForm');
@@ -484,7 +487,7 @@ async function loadTemplate(){ const kind=$('#kind').value, locale=$('#locale').
     if(SPEC){ renderBlocks(); setMode('blocks'); try{ await compileSpec(); }catch(x){} } else { setMode('source'); }
     const c = await api('GET',`/api/v1/report-templates/${kind}/contract?locale=${encodeURIComponent(locale)}`); $('#contract').textContent = JSON.stringify(c,null,2);
   }catch(x){ $('#tplErr').textContent=x.message; } }
-async function loadKinds(){ const r = await api('GET','/api/v1/report-templates'); const kinds = new Set([...r.builtin_kinds, ...r.overrides.map(o=>o.kind)]); $('#kind').innerHTML = [...kinds].map(k=>`<option>${esc(k)}</option>`).join(''); $('#kind').onchange = loadTemplate; $('#locale').onchange = loadTemplate; loadTemplate(); }
+async function loadKinds(){ let r; try{ r = await api('GET','/api/v1/report-templates'); }catch(x){ $('#tplErr').textContent = x.message; return; } const kinds = new Set([...r.builtin_kinds, ...r.overrides.map(o=>o.kind)]); $('#kind').innerHTML = [...kinds].map(k=>`<option>${esc(k)}</option>`).join(''); $('#kind').onchange = loadTemplate; $('#locale').onchange = loadTemplate; loadTemplate(); }
 $('#previewBtn').onclick = async () => { $('#tplErr').textContent=''; try{ const body = tplMode() === 'blocks' ? await compileSpec() : $('#src').value; const blob = await api('POST','/api/v1/report-templates/preview',{kind:$('#kind').value,locale:$('#locale').value,body}); window.open(URL.createObjectURL(blob),'_blank'); }catch(x){ $('#tplErr').textContent=x.message; } };
 $('#saveBtn').onclick = async () => { $('#tplErr').textContent=''; if(!$('#tplReason').value.trim()){ $('#tplErr').textContent='reason is required'; return; }
   try{ const payload = {locale:$('#locale').value, reason:$('#tplReason').value}; if(tplMode() === 'blocks'){ readPage(); payload.spec = SPEC; } else { payload.body = $('#src').value; }
@@ -607,7 +610,11 @@ async function approvals(){
     for(const b of document.querySelectorAll('[data-cr-reject]')) b.onclick = () => withReason('Reason for rejecting this change:', reason => api('POST',`/api/v1/change-requests/${b.dataset.crReject}/reject`,{reason}));
   }catch(x){ $('#crTable tbody').innerHTML = `<tr><td colspan="6" class="muted">${esc(x.message)}</td></tr>`; } }
 ctrl32.ready({requireAuth: true, requirePerm: 'content.write'}).then(() => {
-  const sec = ctrl32.section('branding', Object.keys(TITLES)); document.title = TITLES[sec] + ' — Settings';
+  // report templates and stored reports are under Reports (/reports, /reports/templates); the old /settings addresses redirect
+  const inReports = location.pathname === '/reports' || location.pathname.startsWith('/reports/');
+  for (const n of document.querySelectorAll('nav.subnav[data-nav]')) n.hidden = (n.dataset.nav === 'reports') !== inReports;
+  const sec = ctrl32.section(inReports ? 'reports' : 'branding', inReports ? ['templates', 'reports'] : Object.keys(TITLES).filter((k) => k !== 'templates' && k !== 'reports'));
+  document.title = ctrl32.t(TITLES[sec]) + ' — ' + ctrl32.t(inReports ? 'Reports' : 'Settings');
   ({branding: () => { loadBrand(); loadWL(); }, templates: loadKinds, reports, connectors, languages: loadLangs, translations: loadTrLocales, apps: settingsApps, ai: () => settingsAI().catch(x => { $('#aiErr').textContent = x.message; }), export: () => {}, policy: loadPolicy, approvals, notifications})[sec]();
 });
 </script>

@@ -164,7 +164,7 @@ req DELETE "/api/v1/counting/entrances/$DOCK?reason=e2e"; check "entrance archiv
 req GET /api/v1/counting/areas; check "two entrances left" "$(jx "j.areas.find(a => a.id === '$AREA').entrances.length")" 2
 req DELETE "/api/v1/counting/areas/$PARK?reason=e2e"; check "area archived" "$(st)" 200
 req GET /api/v1/counting/areas; check "archived area not listed" "$(jx "j.areas.some(a => a.id === '$PARK')")" false
-req GET /api/v1/openapi.json; check "documented in OpenAPI" "$(jx 'Object.keys(j.paths).filter(p => p.startsWith("/api/v1/counting")).length')" 12
+req GET /api/v1/openapi.json; check "documented in OpenAPI" "$(jx 'Object.keys(j.paths).filter(p => p.startsWith("/api/v1/counting")).length')" 13
 req DELETE "/api/v1/video/cameras/$CAM?reason=e2e"
 
 echo; echo "passed $pass, failed $fail"; [[ $fail -eq 0 ]]

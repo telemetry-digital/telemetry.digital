@@ -161,7 +161,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   expect("old asset link opens the asset page", await ev(`location.pathname`), "/assets/" + setup.fridge);
   await go(`/assets?ds=${setup.ft}`, 4000);
   expect("old datastream link opens it on the asset page", await ev(`location.pathname + ' ' + document.querySelector('#dsDlg').open`), `/assets/${setup.fridge}/datastreams true`);
-  await go("/assets/rules", 3000);
+  await go("/automation/alarm-rules", 3000);
   expect("alarm rules screen links the asset page", await ev(`!!document.querySelector('#rules a[href="/assets/${setup.fridge}"]')`), true);
   // ---- phone: the tables scroll inside their cards, the page does not
   await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });

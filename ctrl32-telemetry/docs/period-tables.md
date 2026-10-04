@@ -2,7 +2,7 @@
 
 The dashboard widget **Period table** (0.63.0, spec 023) shows values of datastreams per local period — hour, day,
 week, month or year in the organization's time zone — and exports exactly that table to **Excel (XLSX)**, **CSV** and
-a **PDF report** (stored under *Settings → Stored reports* with its hashes).
+a **PDF report** (stored under *Reports → Stored reports* with its hashes).
 
 ## Typical set-ups
 
