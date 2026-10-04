@@ -156,6 +156,13 @@ func (e *Engine) SelfCheck(ctx context.Context, refresh bool) analytics.CheckRes
 	p := analytics.CheckPaths{FFmpeg: cfg.FFmpeg, ONNXRuntime: cfg.ONNXRuntime, ModelNano: cfg.ModelNano, ModelTiny: cfg.ModelTiny,
 		NanoSHA256: cfg.NanoSHA256, TinySHA256: cfg.TinySHA256}
 	res, err := runSelfCheck(ctx, p)
+	if err != nil && ctx.Err() == nil {
+		// a check process that ends without an answer (seen once each on Linux and Windows right after the parts were
+		// replaced or the binary copied, not reproducible) is asked once more; a lasting fault fails again
+		e.log.Warn("detector self-check failed, checking again", "err", err)
+		time.Sleep(time.Second)
+		res, err = runSelfCheck(ctx, p)
+	}
 	if err != nil {
 		res = analytics.CheckResult{Checked: time.Now().UTC(), Components: []analytics.Component{{Name: "worker", State: analytics.StateError, Detail: err.Error()}}}
 	}
