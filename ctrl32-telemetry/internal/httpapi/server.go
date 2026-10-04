@@ -86,6 +86,7 @@ type Server struct {
 	lic               licenseCache
 	vpnMu             sync.Mutex // one VPN change at a time (vpn.go)
 	stepUpLimiter     *limiter
+	anJobs            anJobs            // detector installations from the user interface (analytics_install.go)
 	credExportLimiter *limiter          // exports with camera passwords per user (camera_inventory.go)
 	uplinkTunnel      *uptunnel.Handler // VPN phase 3: the hub's end of the uplinks' HTTPS transport (vpn_uplink.go)
 	counting          *counting.Engine  // object counting (spec 029, counting.go)
@@ -382,6 +383,9 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("GET /api/v1/counting/log", s.require("data.read", s.countingLog))
 	mux.Handle("GET /api/v1/counting/cameras", s.require("data.read", s.listCountingCameras))
 	mux.Handle("GET /api/v1/counting/selfcheck", s.require("data.read", s.getCountingSelfCheck))
+	mux.Handle("GET /api/v1/counting/install", s.require("system.admin", s.analyticsInstallState))
+	mux.Handle("POST /api/v1/counting/install", s.require("system.admin", s.analyticsInstall))
+	mux.Handle("DELETE /api/v1/counting/install", s.require("system.admin", s.analyticsRemove))
 	mux.Handle("GET /api/v1/counting/cameras/{id}", s.require("data.read", s.getCountingCamera))
 	mux.Handle("PUT /api/v1/counting/cameras/{id}", s.require("config.write", s.putCountingCamera))
 	mux.Handle("GET /api/v1/counting/inputs", s.require("data.read", s.listCountingInputs))
@@ -614,6 +618,21 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 		return func(w http.ResponseWriter, r *http.Request) { r.URL.Path = "/" + file; files.ServeHTTP(w, r) }
 	}
 	mux.HandleFunc("GET /settings/{section}", page("settings.html"))
+	// Reports (0.75.0): every report page in one place; the earlier addresses under Settings and Audit redirect
+	mux.HandleFunc("GET /reports", page("settings.html"))
+	mux.HandleFunc("GET /reports/templates", page("settings.html"))
+	mux.HandleFunc("GET /reports/scheduled", page("scheduled-reports.html"))
+	mux.HandleFunc("GET /reports/signatures", page("audit.html"))
+	mux.Handle("GET /settings/templates", movedTo("/reports/templates"))
+	mux.Handle("GET /settings/reports", movedTo("/reports"))
+	mux.Handle("GET /settings/scheduled-reports", movedTo("/reports/scheduled"))
+	mux.Handle("GET /audit/reports", movedTo("/reports/signatures"))
+	// Automation (0.75.0): flows, alarm rules and automation rules; the earlier addresses under Assets redirect
+	mux.HandleFunc("GET /automation/alarm-rules", page("assets.html"))
+	mux.HandleFunc("GET /automation/rules", page("assets.html"))
+	mux.Handle("GET /automation", movedTo("/flows"))
+	mux.Handle("GET /assets/rules", movedTo("/automation/alarm-rules"))
+	mux.Handle("GET /assets/automation", movedTo("/automation/rules"))
 	mux.HandleFunc("GET /users/{section}", page("users.html"))
 	mux.HandleFunc("GET /organizations", page("organizations.html"))
 	mux.HandleFunc("GET /incidents", page("incidents.html"))
@@ -631,7 +650,6 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.HandleFunc("GET /energy", page("energy.html"))
 	mux.HandleFunc("GET /counting", page("counting.html"))
 	mux.HandleFunc("GET /counting/{section}", page("counting.html"))
-	mux.HandleFunc("GET /settings/scheduled-reports", page("scheduled-reports.html"))
 	mux.HandleFunc("GET /landing/edit", page("landing-edit.html"))
 	mux.HandleFunc("GET /video", page("video.html"))
 	mux.HandleFunc("GET /video/{section}", page("video.html"))
@@ -648,9 +666,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.HandleFunc("GET /fota/{section}", page("fota.html"))
 	mux.HandleFunc("GET /account/{section}", page("account.html"))
 	// the sections of the assets screen; any other segment is an asset page (asset.html), /assets/sites/{id} a site page
+	// (/assets/rules and /assets/automation redirect to Automation, above)
 	mux.HandleFunc("GET /assets/sites", page("assets.html"))
-	mux.HandleFunc("GET /assets/rules", page("assets.html"))
-	mux.HandleFunc("GET /assets/automation", page("assets.html"))
 	mux.HandleFunc("GET /assets/sites/{id}", page("asset.html"))
 	mux.HandleFunc("GET /assets/{id}", page("asset.html"))
 	mux.HandleFunc("GET /assets/{id}/{tab}", page("asset.html"))
@@ -659,6 +676,17 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("GET /", files)
 
 	return countRequests(noStaleShell(s.secureHeaders(s.requestID(s.authenticate(mux)))))
+}
+
+// movedTo redirects a page that moved (301) and keeps the query, so bookmarks and links of earlier versions still work.
+func movedTo(path string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		to := path
+		if r.URL.RawQuery != "" {
+			to += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, to, http.StatusMovedPermanently)
+	})
 }
 
 // secureHeaders applies the baseline headers from ADR-0007 to every response.

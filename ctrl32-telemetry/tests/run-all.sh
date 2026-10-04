@@ -134,7 +134,8 @@ set_mfa_optional true
 SHOWCASE=$(psql -Atq "$DB_ADMIN" -c "SELECT slug FROM core.dashboard WHERE slug LIKE 'showcase%' ORDER BY slug LIMIT 1")
 
 # The VPN suites run against the server agent's VPN simulation: it renders wg0.conf and the nftables table into a
-# directory and applies nothing to the host (internal/agent/vpn.go).
+# directory and applies nothing to the host (internal/agent/vpn.go). The detector installation (analytics_install.sh)
+# uses the same simulation: stand-in downloads served from memory, installed into that directory.
 CONFIG_VPN=$WORK/config-vpn.toml
 sed -e "s|^\[agent\]$|[agent]\nsocket = \"$WORK/agent.sock\"\nvpn_simulate = \"$WORK/vpnsim\"|" "$CONFIG" > "$CONFIG_VPN"
 
@@ -154,7 +155,7 @@ start_server() { # [config]
   echo "server did not start, see test-results/server.log" >&2; exit 2
 }
 : > "$LOGS/server.log"
-export BASE USER=admin PASS=admin1234 MQTT=127.0.0.1:1883 BIN CONFIG REPORTS_DIR=$WORK/reports
+export BASE USER=admin PASS=admin1234 MQTT=127.0.0.1:1883 BIN CONFIG CONFIG_VPN REPORTS_DIR=$WORK/reports
 
 # ------------------------------------------------------------------------------------------------ e2e
 if has e2e; then
@@ -163,7 +164,8 @@ if has e2e; then
     n=$(basename "$f" .sh)
     [[ $n == iam ]] && continue
     if skip "$n"; then res "e2e $n" skipped; continue; fi
-    if [[ $n == vpn || $n == vpn2 || $n == vpn3 ]]; then start_server "$CONFIG_VPN"; else start_server; fi
+    # the VPN suites and the detector installation run against the agent's simulation
+    if [[ $n == vpn || $n == vpn2 || $n == vpn3 || $n == analytics_install ]]; then start_server "$CONFIG_VPN"; else start_server; fi
     timeout 600 bash "$f" > "$LOGS/e2e-$n.log" 2>&1; rc=$?
     okc=$(grep -c '^  ok' "$LOGS/e2e-$n.log"); bad=$(grep -c 'FAIL' "$LOGS/e2e-$n.log")
     if [[ $rc == 0 && $bad == 0 ]]; then res "e2e $n" "ok ($okc)"; else res "e2e $n" "FAIL ($bad of $((okc + bad)), test-results/e2e-$n.log)"; fi

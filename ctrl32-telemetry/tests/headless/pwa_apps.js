@@ -98,7 +98,8 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await send("Emulation.setEmulatedMedia", { features: [] });
   await go("/?full=1", 2500);
   expect("full application again", await ev(topMenu + `.length`), (n) => n > 5);
-  expect("marker removed from the address", await ev(`location.search`), "");
+  // (the default dashboard may add its own ?st= of a selected entity; only the marker must be gone)
+  expect("marker removed from the address", await ev(`new URLSearchParams(location.search).has('full')`), false);
 
   // a deleted app leaves the app mode of an open window
   await go(`/app/${slug}?launch=1`, 3000);

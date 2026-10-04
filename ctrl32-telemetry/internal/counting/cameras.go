@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/analytics"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/config"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/video"
 )
 
@@ -89,13 +90,55 @@ func (e *Engine) Status(cameraID string) CameraStatus {
 
 // Installed reports whether the detector can run (ONNX Runtime and a model configured).
 func (e *Engine) Installed() (bool, string) {
-	if e.cfg.ONNXRuntime == "" {
+	cfg := e.conf()
+	if e.installing.Load() {
+		return false, "the detector is being installed on this server"
+	}
+	if cfg.ONNXRuntime == "" {
 		return false, "object counting on cameras is not installed on this server (analytics.onnxruntime in config.toml)"
 	}
-	if e.cfg.ModelNano == "" && e.cfg.ModelTiny == "" {
+	if cfg.ModelNano == "" && cfg.ModelTiny == "" {
 		return false, "no detector model configured (analytics.model_nano or analytics.model_tiny in config.toml)"
 	}
 	return true, ""
+}
+
+// conf is the current [analytics] configuration (SetAnalytics replaces it after an installation from the user interface).
+func (e *Engine) conf() config.AnalyticsConfig {
+	e.cfgMu.RLock()
+	defer e.cfgMu.RUnlock()
+	return e.cfg
+}
+
+// SetInstalling stops the camera workers while the server agent replaces the detector parts (a running ffmpeg or a
+// loaded ONNX Runtime would keep the old files busy on Windows); SetAnalytics ends it.
+func (e *Engine) SetInstalling(on bool) {
+	e.installing.Store(on)
+	if on {
+		e.stopAll()
+	}
+	e.kick()
+}
+
+// SetAnalytics applies new detector paths written by the server agent ([analytics] in config.toml): the paths and pins
+// change, threads and max_cameras stay. The workers restart with the new parts and the cached self-check is dropped.
+func (e *Engine) SetAnalytics(ffmpeg, ort, nano, tiny, nanoSum, tinySum string) {
+	e.cfgMu.Lock()
+	e.cfg.FFmpeg, e.cfg.ONNXRuntime, e.cfg.ModelNano, e.cfg.ModelTiny, e.cfg.NanoSHA256, e.cfg.TinySHA256 = ffmpeg, ort, nano, tiny, nanoSum, tinySum
+	e.cfgMu.Unlock()
+	e.checkMu.Lock()
+	e.check = nil
+	e.checkMu.Unlock()
+	e.installing.Store(false)
+	e.stopAll()
+	e.kick()
+}
+
+func (e *Engine) kick() {
+	select {
+	case e.reload <- struct{}{}:
+	default:
+	}
 }
 
 // selfCheckTTL is how long a self-check result is reused (the pages ask on every load).
@@ -109,9 +152,17 @@ func (e *Engine) SelfCheck(ctx context.Context, refresh bool) analytics.CheckRes
 	if !refresh && e.check != nil && time.Since(e.checkAt) < selfCheckTTL {
 		return *e.check
 	}
-	p := analytics.CheckPaths{FFmpeg: e.cfg.FFmpeg, ONNXRuntime: e.cfg.ONNXRuntime, ModelNano: e.cfg.ModelNano, ModelTiny: e.cfg.ModelTiny,
-		NanoSHA256: e.cfg.NanoSHA256, TinySHA256: e.cfg.TinySHA256}
+	cfg := e.conf()
+	p := analytics.CheckPaths{FFmpeg: cfg.FFmpeg, ONNXRuntime: cfg.ONNXRuntime, ModelNano: cfg.ModelNano, ModelTiny: cfg.ModelTiny,
+		NanoSHA256: cfg.NanoSHA256, TinySHA256: cfg.TinySHA256}
 	res, err := runSelfCheck(ctx, p)
+	if err != nil && ctx.Err() == nil {
+		// a check process that ends without an answer (seen once each on Linux and Windows right after the parts were
+		// replaced or the binary copied, not reproducible) is asked once more; a lasting fault fails again
+		e.log.Warn("detector self-check failed, checking again", "err", err)
+		time.Sleep(time.Second)
+		res, err = runSelfCheck(ctx, p)
+	}
 	if err != nil {
 		res = analytics.CheckResult{Checked: time.Now().UTC(), Components: []analytics.Component{{Name: "worker", State: analytics.StateError, Detail: err.Error()}}}
 	}
@@ -157,10 +208,10 @@ func (e *Engine) setStatus(id string, f func(*CameraStatus)) {
 }
 
 func (e *Engine) maxCameras() int {
-	if e.cfg.MaxCameras <= 0 {
-		return 4
+	if n := e.conf().MaxCameras; n > 0 {
+		return n
 	}
-	return e.cfg.MaxCameras
+	return 4
 }
 
 // reconcile starts and stops camera workers to match the configuration.
@@ -176,6 +227,7 @@ func (e *Engine) reconcile(ctx context.Context) {
 	}
 	want := map[string]camSpec{}
 	var order []string
+	installing := e.installing.Load()
 	for rows.Next() {
 		var s camSpec
 		var raw string
@@ -187,6 +239,9 @@ func (e *Engine) reconcile(ctx context.Context) {
 		}
 		sum := sha256.Sum256([]byte(fmt.Sprintf("%s|%v|%v|%s|%s", s.Model, s.FPS, s.MinScore, raw, s.Name)))
 		s.hash = hex.EncodeToString(sum[:8])
+		if installing {
+			continue // the parts are being replaced: no worker until the installation ends (SetAnalytics)
+		}
 		want[s.ID] = s
 		order = append(order, s.ID)
 	}
@@ -268,13 +323,14 @@ func (e *Engine) superviseCamera(ctx context.Context, s camSpec) {
 var errNotInstalled = errors.New("not installed")
 
 func (e *Engine) modelOf(name string) (string, string) {
-	if name == "tiny" && e.cfg.ModelTiny != "" {
-		return e.cfg.ModelTiny, e.cfg.TinySHA256
+	cfg := e.conf()
+	if name == "tiny" && cfg.ModelTiny != "" {
+		return cfg.ModelTiny, cfg.TinySHA256
 	}
-	if e.cfg.ModelNano != "" {
-		return e.cfg.ModelNano, e.cfg.NanoSHA256
+	if cfg.ModelNano != "" {
+		return cfg.ModelNano, cfg.NanoSHA256
 	}
-	return e.cfg.ModelTiny, e.cfg.TinySHA256
+	return cfg.ModelTiny, cfg.TinySHA256
 }
 
 // runCamera feeds one worker process until it or the stream fails.
@@ -315,8 +371,9 @@ func (e *Engine) runCamera(ctx context.Context, s camSpec) error {
 	if codec != video.H264 && codec != video.H265 && codec != video.MJPEG {
 		return fmt.Errorf("unsupported codec %s", codec)
 	}
-	wc := analytics.WorkerConfig{Camera: s.Name, Codec: codec, Width: tr.Width, Height: tr.Height, FPS: s.FPS, FFmpeg: e.cfg.FFmpeg,
-		ORTLib: e.cfg.ONNXRuntime, Model: model, ModelSHA256: sum, Threads: e.cfg.Threads, MinScore: s.MinScore, Count: s.Cfg.Analytics(), Boxes: true, StatsEvery: 10}
+	cfg := e.conf()
+	wc := analytics.WorkerConfig{Camera: s.Name, Codec: codec, Width: tr.Width, Height: tr.Height, FPS: s.FPS, FFmpeg: cfg.FFmpeg,
+		ORTLib: cfg.ONNXRuntime, Model: model, ModelSHA256: sum, Threads: cfg.Threads, MinScore: s.MinScore, Count: s.Cfg.Analytics(), Boxes: true, StatsEvery: 10}
 	raw, _ := json.Marshal(wc)
 	exe, err := os.Executable()
 	if err != nil {

@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/analytics/setup"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/vpn"
 )
 
@@ -68,6 +69,7 @@ type vpnStored struct {
 // no program is run, nothing on the host changes, and only the VPN operations are served (routes).
 func (a *Server) SetSimulation(dir string) {
 	a.simulate = true
+	a.an.sim = &setup.SimFetcher{Files: setup.SimulatedArtifacts(analyticsPlatform()), Delay: 150 * time.Millisecond}
 	optDir, etcDir = dir, dir
 	wgConfFile = filepath.Join(dir, "wireguard", "wg0.conf")
 	derivePaths()

@@ -1,6 +1,6 @@
 package httpapi
 
-// Scheduled reports by e-mail (spec 029): Settings → Scheduled reports. A report has content (a summary of object
+// Scheduled reports by e-mail (spec 029): Reports → Scheduled reports. A report has content (a summary of object
 // counting for an area, a period table of a dashboard, or a report template: observations of a datastream or the
 // alarms), a period (the previous day, week or month in the organization's time zone), a cron schedule, recipients
 // (e-mail notification channels and addresses) and PDF and/or XLSX (CSV for templates) attachments. The files are made

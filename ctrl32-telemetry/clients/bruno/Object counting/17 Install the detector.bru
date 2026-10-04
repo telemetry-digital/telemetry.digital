@@ -1,0 +1,28 @@
+meta {
+  name: Install the detector
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{baseUrl}}/api/v1/counting/install
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "code": "string",
+    "force": true,
+    "password": "string",
+    "reason": "string"
+  }
+}
+
+docs {
+  Install the detector
+  
+  The server agent downloads ONNX Runtime, the LGPL build of ffmpeg and the YOLOX models pinned in this version from their official releases over HTTPS, keeps a file only when its SHA-256 matches the pin, refuses a GPL build of ffmpeg, swaps the parts in atomically (a failure changes nothing installed), writes [analytics] in config.toml (threads and max_cameras stay) and object counting uses them at once; the self-check then runs again. Installed parts are kept unless force. Asks for the password (and authenticator code) again, from a browser session only; audited as analytics.install (request and result). Camera counting pauses while it runs. 409 while another job runs.
+  
+  Requires permission `system.admin`.
+}

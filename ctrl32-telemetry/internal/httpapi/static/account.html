@@ -20,7 +20,7 @@
   <a href="/account" data-section="profile">Profile</a>
   <a href="/account/security" data-section="security">Password and MFA</a>
   <a href="/account/tokens" data-section="tokens">API tokens</a>
-  <a href="/account/push" data-section="push">Notifications</a>
+  <a href="/account/push" data-section="push">Browser notifications</a>
   <a href="/account/ai" data-section="ai">AI assistants</a>
 </nav>
 
@@ -70,9 +70,9 @@
   </div>
 </section>
 <section data-section="push">
-  <div class="page-head"><h1>Notifications</h1><span class="grow"></span><button class="btn primary" id="pushOn" type="button" hidden>Enable in this browser</button></div>
+  <div class="page-head"><h1>Browser notifications</h1><span class="grow"></span><button class="btn primary" id="pushOn" type="button" hidden>Enable in this browser</button></div>
   <div class="card">
-    <p class="muted">Alarms and rule notifications can reach this browser as system notifications, even when the app is closed (on phones: install the app from the browser menu first). Administrators pick who is notified with a Web Push channel under Settings → Notifications.</p>
+    <p class="muted">Alarms and rule notifications can reach this browser as system notifications, even when the app is closed (on phones: install the app from the browser menu first). Administrators pick who is notified with a Web Push channel under Settings → Notification channels.</p>
     <p id="pushState"></p>
     <div class="table-wrap"><table id="pushTable"><thead><tr><th>Browser</th><th>Registered</th><th>Last notification</th><th>State</th><th></th></tr></thead><tbody></tbody></table></div>
     <div class="row" style="margin-top:10px"><button class="btn" id="pushTest" type="button" hidden>Send a test notification</button><button class="btn" id="pushOff" type="button" hidden>Disable in this browser</button></div>
@@ -108,7 +108,7 @@
 <script src="/app.js"></script>
 <script>
 const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
-const TITLES = {profile: 'Profile', security: 'Password and MFA', tokens: 'API tokens', push: 'Notifications', ai: 'AI assistants'};
+const TITLES = {profile: 'Profile', security: 'Password and MFA', tokens: 'API tokens', push: 'Browser notifications', ai: 'AI assistants'};
 // ---- AI assistants (spec 022)
 async function loadAI(){
   const st = await api('GET','/api/v1/mcp/settings');

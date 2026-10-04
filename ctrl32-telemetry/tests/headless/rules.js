@@ -34,8 +34,8 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
     const a = await post('/api/v1/datastreams',{asset_id:asset.id,key:'t_in',quantity:'temperature',unit:'C',kind:'gauge',reason:'probe'}); const b = await post('/api/v1/datastreams',{asset_id:asset.id,key:'t_diff',quantity:'temperature',unit:'K',kind:'gauge',reason:'probe'});
     window.__P = {ch: ch.id, a: a.id, b: b.id}; return JSON.stringify(window.__P); })()`));
   const P = JSON.parse(await ev(`JSON.stringify(window.__P)`));
-  await send("Page.navigate", { url: base + "/assets/automation" }); await sleep(3000);
-  console.log("nav has Automation:", await ev(`!![...document.querySelectorAll('#sidebar a')].find(a => a.getAttribute('href') === '/assets/automation')`));
+  await send("Page.navigate", { url: base + "/automation/rules" }); await sleep(3000);
+  console.log("nav has Automation:", await ev(`!![...document.querySelectorAll('#sidebar a')].find(a => a.getAttribute('href') === '/automation/rules')`));
   console.log("open editor:", await ev(`(() => { document.querySelector('#newAutoBtn').click(); return document.querySelector('#autoDlg').open; })()`));
   console.log("build rule:", await ev(`(() => { const f = document.querySelector('#autoForm'); f.name.value = 'probe-rule-${suf}'; f.description.value = 'built in the browser';
     document.querySelector('#autoAddInput').click(); const inSel = document.querySelector('#autoInputs select'); inSel.value = '${P.a}'; inSel.dispatchEvent(new Event('change', {bubbles:true}));

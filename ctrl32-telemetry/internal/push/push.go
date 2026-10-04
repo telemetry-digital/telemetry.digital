@@ -170,7 +170,7 @@ func payloadFor(msg notify.Message) []byte {
 			p.Tag = "alarm-" + id
 		}
 	case msg.Rule != nil:
-		p.URL = "/assets/automation"
+		p.URL = "/automation/rules"
 		if id, _ := msg.Rule["id"].(string); id != "" {
 			p.Tag = "rule-" + id
 		}

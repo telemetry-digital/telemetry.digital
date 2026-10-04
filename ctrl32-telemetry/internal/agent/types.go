@@ -1,6 +1,7 @@
 // Package agent implements the privileged helper of ctrl32 telemetry (ADR-0012): a root process listening on a
 // Unix socket that performs a closed list of host operations for the unprivileged web service — status, service
-// restarts, Caddy (domain/TLS), WireGuard with its VPN firewall and binary updates. Nothing here builds shell commands from input.
+// restarts, Caddy (domain/TLS), WireGuard with its VPN firewall, binary updates and the installation of the object
+// counting detector (analytics.go). Nothing here builds shell commands from input.
 package agent
 
 import (

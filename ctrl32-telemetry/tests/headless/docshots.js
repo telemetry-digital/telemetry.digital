@@ -117,7 +117,8 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await page("start-sidebar-icons", "/", { wait: 1500, before: "localStorage.setItem('ctrl32.sidebar', 'icons'); location.reload(); true", afterWait: 4000 });
   await ev("localStorage.setItem('ctrl32.sidebar', 'open'); true");
   // the whole menu with its sections (0.73.4), Object counting open
-  if (wanted("start-menu")) { await viewport(1440, 1150, false); await page("start-menu", "/counting/areas", { wait: 3000, clip: "#sidebar", pad: 0 }); await viewport(1440, 900, false); }
+  // (tall enough for the footer with My account and Sign out, 0.75.0)
+  if (wanted("start-menu")) { await viewport(1440, 1480, false); await page("start-menu", "/counting/areas", { wait: 3000, clip: "#sidebar", pad: 0 }); await viewport(1440, 900, false); }
   await page("admin-api-docs", "/api/docs", { wait: 3000 });
 
   // ---- dashboards
@@ -245,9 +246,9 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await page("devices-displays-pair-dialog", "/displays", { wait: 3000, click: "#pairBtn" });
 
   // ---- automation, alarms, incidents
-  await page("automation-alarm-rules", "/assets/rules");
+  await page("automation-alarm-rules", "/automation/alarm-rules");
   // the dialog alone, for a datastream of the cold chain (test runs against the server may leave other assets behind)
-  await page("automation-alarm-rule-editor", "/assets/rules", { click: "#newRuleBtn", clip: "#ruleDlg", pad: -4,
+  await page("automation-alarm-rule-editor", "/automation/alarm-rules", { click: "#newRuleBtn", clip: "#ruleDlg", pad: -4,
     before: "setTimeout(() => { const f = document.querySelector('#ruleNew'); const o = f && [...f.datastream_id.options].find((x) => x.textContent.startsWith('Medicine fridge 2 / temp')); if (o) f.datastream_id.value = o.value; f.warning.value = '7.5'; f.action.value = '8'; f.hysteresis.value = '0.2'; f.reason.value = 'Limits per SOP-12'; }, 1000); true" });
   // the datastream's "New rule version" form, filled from the current version (medicine fridge 2)
   if (wanted("automation-rule-version")) {
@@ -267,8 +268,8 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
       await shot("automation-alarms-acknowledge", { clip: "js:(() => { const d = document.querySelector('dialog.dw-full'); const b = d ? [...d.querySelectorAll('[data-ack]')] : []; if (!b.length) return null; const last = b[b.length - 1].closest('tr').getBoundingClientRect(); return { getBoundingClientRect: () => { const r = d.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: last.bottom - r.top + 8 }; }, scrollIntoView: () => {} }; })()", pad: 0 });
     }
   }
-  await page("automation-rules", "/assets/automation", { wait: 3000 });
-  await page("automation-rule-editor", "/assets/automation", { wait: 3000, click: "#newAutoBtn" });
+  await page("automation-rules", "/automation/rules", { wait: 3000 });
+  await page("automation-rule-editor", "/automation/rules", { wait: 3000, click: "#newAutoBtn" });
   await page("automation-incidents", "/incidents", { wait: 3000 });
   await page("automation-incident-new-dialog", "/incidents", { wait: 3000, click: "#newBtn" });
   await page("automation-incident-detail", "/incidents", { wait: 3000, before: "(() => { const r = [...document.querySelectorAll('#list tbody tr[data-id]')].find(t => /temperature above 8/.test(t.textContent)); if (r) r.click(); return !!r; })()", afterWait: 1500 });
@@ -348,9 +349,9 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await page("admin-audit-trail", "/audit", { wait: 3500 });
   await page("admin-audit-reviews", "/audit/reviews", { wait: 3000 });
   await page("admin-audit-review-dialog", "/audit", { wait: 3500, before: "(() => { document.querySelector('#reviewPeriodBtn').hidden = false; document.querySelector('#reviewPeriodBtn').click(); return true; })()", afterWait: 800, clip: "#reviewDlg", pad: -4 });
-  await page("admin-audit-report-signatures", "/audit/reports", { wait: 3000 });
-  await page("admin-audit-sign-dialog", "/audit/reports", { wait: 3000, before: "(() => { const f = document.querySelector('#signForm'); f.dataset.id = 'x'; document.querySelector('#signWhat').textContent = 'observations · ' + new Date().toLocaleString() + ' · SHA-256 3f9a1c0e5b7d2a64…'; document.querySelector('#signDlg').showModal(); return true; })()", afterWait: 800, clip: "#signDlg", pad: -4 });
-  await page("admin-audit-signatures-dialog", "/audit/reports", { wait: 3000, before: "(() => { const b = [...document.querySelectorAll('[data-sigs]')].find((x) => x.closest('tr').textContent.includes('Reviewed')) || document.querySelector('[data-sigs]'); if (b) b.click(); return !!b; })()", afterWait: 1500, clip: "#sigDlg", pad: -4 });
+  await page("admin-audit-report-signatures", "/reports/signatures", { wait: 3000 });
+  await page("admin-audit-sign-dialog", "/reports/signatures", { wait: 3000, before: "(() => { const f = document.querySelector('#signForm'); f.dataset.id = 'x'; document.querySelector('#signWhat').textContent = 'observations · ' + new Date().toLocaleString() + ' · SHA-256 3f9a1c0e5b7d2a64…'; document.querySelector('#signDlg').showModal(); return true; })()", afterWait: 800, clip: "#signDlg", pad: -4 });
+  await page("admin-audit-signatures-dialog", "/reports/signatures", { wait: 3000, before: "(() => { const b = [...document.querySelectorAll('[data-sigs]')].find((x) => x.closest('tr').textContent.includes('Reviewed')) || document.querySelector('[data-sigs]'); if (b) b.click(); return !!b; })()", afterWait: 1500, clip: "#sigDlg", pad: -4 });
   await page("admin-new-role-dialog", "/users/roles", { wait: 3000, click: "#newRoleBtn" });
   // the server administrator's own account: server_admin and org_admin, both locked for oneself (0.65.0)
   if (wanted("admin-user-server-admin")) {
@@ -359,7 +360,9 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
     await shot("admin-user-server-admin", { clip: "#userDlg", pad: -6 });
   }
   for (const s of ["branding", "templates", "reports", "connectors", "languages", "translations", "apps", "export", "notifications", "approvals", "policy"]) {
-    await page(`admin-settings-${s}`, `/settings/${s}`, { wait: 3500, full: s === "branding" || s === "templates", maxH: 3200 });
+    // report templates and stored reports are under Reports since 0.75.0
+    const url = { templates: "/reports/templates", reports: "/reports" }[s] || `/settings/${s}`;
+    await page(`admin-settings-${s}`, url, { wait: 3500, full: s === "branding" || s === "templates", maxH: 3200 });
   }
   await page("admin-settings-new-channel-dialog", "/settings/notifications", { wait: 3000, click: "#newChanBtn" });
   await page("admin-settings-new-app-dialog", "/settings/apps", { wait: 3000, click: "#newAppBtn" });  await page("admin-settings-new-connector-dialog", "/settings/connectors", { wait: 3000, click: "#newConnBtn" });
@@ -600,17 +603,30 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
     await page("counting-cameras", "/counting/cameras", { wait: 3500 });
     // the self-check of the detector installation (0.72.0; ready when [analytics] points at an installed detector)
     await page("counting-detector-check", "/counting/cameras", { wait: 6000, clip: "#acCard" });
+    // installation from the user interface (0.75.0, server administrators; needs the server agent): the dialog of the
+    // button, and with DETECTOR_INSTALL=1 the progress of a real repair (it downloads every part again)
+    await page("counting-detector-install-dialog", "/counting/cameras", { wait: 6000, click: "[data-ac-buttons] [data-ac-install]", clickWait: 1200, clip: "#acDlg", pad: -4 });
+    if (process.env.DETECTOR_INSTALL === "1" && wanted("counting-detector-progress")) {
+      await go("/counting/cameras", 6000);
+      await click("[data-ac-buttons] [data-ac-install]", 1200);
+      await ev(`(() => { const f = document.querySelector('#acForm'); if (f.force) f.force.checked = true; f.reason.value = 'documentation pictures'; f.password.value = ${JSON.stringify(pass)}; f.requestSubmit(); return true; })()`);
+      await sleep(Number(process.env.DETECTOR_WAIT || 5000));
+      await shot("counting-detector-progress", { clip: "#acCard" });
+      for (let i = 0; i < 300 && await ev(`!!document.querySelector('.ac-progress')`); i++) await sleep(1000);
+      await sleep(4000);
+      await shot("counting-detector-installed", { clip: "#acCard" });
+    }
     if (entCam && wanted("counting-camera-editor")) { await go(`/counting/cameras?camera=${entCam.camera_id}`, 16000); await shot("counting-camera-editor", { full: true, maxH: 2600 }); }
     if (entCam && wanted("counting-camera-picture")) { await go(`/counting/cameras?camera=${entCam.camera_id}`, 16000); await shot("counting-camera-picture", { clip: "#ocEd" }); }
     if (roadCam && wanted("counting-speed-editor")) { await go(`/counting/cameras?camera=${roadCam.camera_id}`, 14000); await shot("counting-speed-editor", { full: true, maxH: 2600 }); }
     const vd = dashes.find((d) => d.name === "Visitors and vehicles");
     if (vd) await page("counting-dashboard", `/dashboards/${vd.slug}`, { wait: 7000 });
-    await page("admin-scheduled-reports", "/settings/scheduled-reports", { wait: 3000 });
+    await page("admin-scheduled-reports", "/reports/scheduled", { wait: 3000 });
     const reps = ((await api("/api/v1/scheduled-reports")) || { reports: [] }).reports;
     const r1 = reps.find((r) => r.name === "Main building – daily visitors") || reps[0];
     if (r1) {
-      await page("admin-scheduled-report-dialog", "/settings/scheduled-reports", { wait: 3000, click: `[data-edit="${r1.id}"]`, clickWait: 2000 });
-      await page("admin-scheduled-report-log", "/settings/scheduled-reports", { wait: 3000, click: `[data-runs="${r1.id}"]`, clickWait: 2000, full: true });
+      await page("admin-scheduled-report-dialog", "/reports/scheduled", { wait: 3000, click: `[data-edit="${r1.id}"]`, clickWait: 2000 });
+      await page("admin-scheduled-report-log", "/reports/scheduled", { wait: 3000, click: `[data-runs="${r1.id}"]`, clickWait: 2000, full: true });
     }
     if (wanted("counting-phone")) { await viewport(390, 844, true); await go(`/counting?area=${bld.id}`, 4000); await click("#prev", 3000); await shot("counting-phone", { full: true, maxH: 2600 }); await viewport(1440, 900, false); }
   }

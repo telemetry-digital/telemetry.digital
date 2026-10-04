@@ -79,6 +79,8 @@ var mcpExclusions = map[string]string{
 	"GET /api/v1/video/inventory/template":              "an empty file for people to fill in",
 	"POST /api/v1/video/inventory/import":               "uploads a file from the user's computer; done in the browser or with the command line, after checking the preview",
 	"POST /api/v1/vpn/uplink":                           "connects this server to an outside network with a pasted private key; needs the user's password (and authenticator code) again in the browser",
+	"POST /api/v1/counting/install":                     "the server agent downloads and installs programs on the host; a person confirms with the password (and authenticator code) in the browser",
+	"DELETE /api/v1/counting/install":                   "the server agent removes programs from the host; a person confirms with the password (and authenticator code) in the browser",
 }
 
 // mcpExcluded gives the reason an operation is not offered to assistants ("" = offered).

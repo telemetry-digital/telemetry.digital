@@ -13,6 +13,7 @@ var (
 	optDir  = "/opt/ctrl32-telemetry"
 	etcDir  = "/etc/ctrl32-telemetry"
 	binPath = "/usr/local/bin/ctrl32-telemetry"
+	libDir  = "/var/lib/ctrl32-telemetry" // Linux: data of the service user (the detector models live in models/)
 	// BackupDir is exported: the web service streams downloads from here.
 	BackupDir  = "/var/lib/ctrl32-telemetry/backups"
 	wgConfFile = "/etc/wireguard/wg0.conf"

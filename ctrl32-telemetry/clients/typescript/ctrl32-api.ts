@@ -2902,6 +2902,295 @@ export class Ctrl32Client {
   }>('DELETE', `/api/v1/counting/inputs/${encodeURIComponent(id)}`, query, undefined, false);
   }
 
+  /** Detector installation by the server agent
+   *
+   * Whether the server agent can install the detector on this host, the pinned versions, the last installation and the running or last job with its progress (download x of y, unpack, verify). A finished job is applied to object counting at once (no restart).
+   * 
+   * Requires permission `system.admin`. */
+  getCountingInstall(): Promise<{
+    agent?: {
+      configured?: boolean;
+      connected?: boolean;
+      error?: string;
+    };
+    /** last installation by the agent: time, versions, paths */
+    installed?: Record<string, unknown>;
+    job?: {
+      action?: "install" | "remove";
+      /** [analytics] paths written, null after a removal */
+      config?: Record<string, unknown>;
+      /** why it failed; nothing installed changed */
+      error?: string;
+      finished_at?: string;
+      force?: boolean;
+      id?: string;
+      installed?: string[];
+      kept?: string[];
+      progress?: {
+        bytes?: number;
+        /** download item of items */
+        item?: number;
+        items?: number;
+        /** the part */
+        label?: string;
+        step?: "prepare" | "download" | "unpack" | "verify" | "swap" | "done";
+        /** 0 = unknown */
+        total?: number;
+      };
+      started_at?: string;
+      state?: "running" | "done" | "failed";
+    };
+    /** versions: onnxruntime, ffmpeg, ffmpeg_release, yolox */
+    pins?: Record<string, unknown>;
+    /** os/arch */
+    platform?: string;
+    /** development and tests: stand-in downloads */
+    simulated?: boolean;
+    /** Linux amd64/arm64 or Windows amd64 */
+    supported?: boolean;
+  }> {
+    return this.request<{
+    agent?: {
+      configured?: boolean;
+      connected?: boolean;
+      error?: string;
+    };
+    /** last installation by the agent: time, versions, paths */
+    installed?: Record<string, unknown>;
+    job?: {
+      action?: "install" | "remove";
+      /** [analytics] paths written, null after a removal */
+      config?: Record<string, unknown>;
+      /** why it failed; nothing installed changed */
+      error?: string;
+      finished_at?: string;
+      force?: boolean;
+      id?: string;
+      installed?: string[];
+      kept?: string[];
+      progress?: {
+        bytes?: number;
+        /** download item of items */
+        item?: number;
+        items?: number;
+        /** the part */
+        label?: string;
+        step?: "prepare" | "download" | "unpack" | "verify" | "swap" | "done";
+        /** 0 = unknown */
+        total?: number;
+      };
+      started_at?: string;
+      state?: "running" | "done" | "failed";
+    };
+    /** versions: onnxruntime, ffmpeg, ffmpeg_release, yolox */
+    pins?: Record<string, unknown>;
+    /** os/arch */
+    platform?: string;
+    /** development and tests: stand-in downloads */
+    simulated?: boolean;
+    /** Linux amd64/arm64 or Windows amd64 */
+    supported?: boolean;
+  }>('GET', `/api/v1/counting/install`, undefined, undefined, false);
+  }
+
+  /** Install the detector
+   *
+   * The server agent downloads ONNX Runtime, the LGPL build of ffmpeg and the YOLOX models pinned in this version from their official releases over HTTPS, keeps a file only when its SHA-256 matches the pin, refuses a GPL build of ffmpeg, swaps the parts in atomically (a failure changes nothing installed), writes [analytics] in config.toml (threads and max_cameras stay) and object counting uses them at once; the self-check then runs again. Installed parts are kept unless force. Asks for the password (and authenticator code) again, from a browser session only; audited as analytics.install (request and result). Camera counting pauses while it runs. 409 while another job runs.
+   * 
+   * Requires permission `system.admin`. */
+  postCountingInstall(body: {
+    /** authenticator code with two-factor sign-in */
+    code?: string;
+    /** repair: download and replace every part again */
+    force?: boolean;
+    /** the caller's password again */
+    password: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    agent?: {
+      configured?: boolean;
+      connected?: boolean;
+      error?: string;
+    };
+    /** last installation by the agent: time, versions, paths */
+    installed?: Record<string, unknown>;
+    job?: {
+      action?: "install" | "remove";
+      /** [analytics] paths written, null after a removal */
+      config?: Record<string, unknown>;
+      /** why it failed; nothing installed changed */
+      error?: string;
+      finished_at?: string;
+      force?: boolean;
+      id?: string;
+      installed?: string[];
+      kept?: string[];
+      progress?: {
+        bytes?: number;
+        /** download item of items */
+        item?: number;
+        items?: number;
+        /** the part */
+        label?: string;
+        step?: "prepare" | "download" | "unpack" | "verify" | "swap" | "done";
+        /** 0 = unknown */
+        total?: number;
+      };
+      started_at?: string;
+      state?: "running" | "done" | "failed";
+    };
+    /** versions: onnxruntime, ffmpeg, ffmpeg_release, yolox */
+    pins?: Record<string, unknown>;
+    /** os/arch */
+    platform?: string;
+    /** development and tests: stand-in downloads */
+    simulated?: boolean;
+    /** Linux amd64/arm64 or Windows amd64 */
+    supported?: boolean;
+  }> {
+    return this.request<{
+    agent?: {
+      configured?: boolean;
+      connected?: boolean;
+      error?: string;
+    };
+    /** last installation by the agent: time, versions, paths */
+    installed?: Record<string, unknown>;
+    job?: {
+      action?: "install" | "remove";
+      /** [analytics] paths written, null after a removal */
+      config?: Record<string, unknown>;
+      /** why it failed; nothing installed changed */
+      error?: string;
+      finished_at?: string;
+      force?: boolean;
+      id?: string;
+      installed?: string[];
+      kept?: string[];
+      progress?: {
+        bytes?: number;
+        /** download item of items */
+        item?: number;
+        items?: number;
+        /** the part */
+        label?: string;
+        step?: "prepare" | "download" | "unpack" | "verify" | "swap" | "done";
+        /** 0 = unknown */
+        total?: number;
+      };
+      started_at?: string;
+      state?: "running" | "done" | "failed";
+    };
+    /** versions: onnxruntime, ffmpeg, ffmpeg_release, yolox */
+    pins?: Record<string, unknown>;
+    /** os/arch */
+    platform?: string;
+    /** development and tests: stand-in downloads */
+    simulated?: boolean;
+    /** Linux amd64/arm64 or Windows amd64 */
+    supported?: boolean;
+  }>('POST', `/api/v1/counting/install`, undefined, body, false);
+  }
+
+  /** Remove the detector
+   *
+   * The server agent removes the detector parts and their paths in [analytics]; counting with sensors keeps working. Password (and authenticator code) again, browser session only; audited as analytics.remove.
+   * 
+   * Requires permission `system.admin`. */
+  deleteCountingInstall(body: {
+    /** authenticator code with two-factor sign-in */
+    code?: string;
+    /** the caller's password again */
+    password: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    agent?: {
+      configured?: boolean;
+      connected?: boolean;
+      error?: string;
+    };
+    /** last installation by the agent: time, versions, paths */
+    installed?: Record<string, unknown>;
+    job?: {
+      action?: "install" | "remove";
+      /** [analytics] paths written, null after a removal */
+      config?: Record<string, unknown>;
+      /** why it failed; nothing installed changed */
+      error?: string;
+      finished_at?: string;
+      force?: boolean;
+      id?: string;
+      installed?: string[];
+      kept?: string[];
+      progress?: {
+        bytes?: number;
+        /** download item of items */
+        item?: number;
+        items?: number;
+        /** the part */
+        label?: string;
+        step?: "prepare" | "download" | "unpack" | "verify" | "swap" | "done";
+        /** 0 = unknown */
+        total?: number;
+      };
+      started_at?: string;
+      state?: "running" | "done" | "failed";
+    };
+    /** versions: onnxruntime, ffmpeg, ffmpeg_release, yolox */
+    pins?: Record<string, unknown>;
+    /** os/arch */
+    platform?: string;
+    /** development and tests: stand-in downloads */
+    simulated?: boolean;
+    /** Linux amd64/arm64 or Windows amd64 */
+    supported?: boolean;
+  }> {
+    return this.request<{
+    agent?: {
+      configured?: boolean;
+      connected?: boolean;
+      error?: string;
+    };
+    /** last installation by the agent: time, versions, paths */
+    installed?: Record<string, unknown>;
+    job?: {
+      action?: "install" | "remove";
+      /** [analytics] paths written, null after a removal */
+      config?: Record<string, unknown>;
+      /** why it failed; nothing installed changed */
+      error?: string;
+      finished_at?: string;
+      force?: boolean;
+      id?: string;
+      installed?: string[];
+      kept?: string[];
+      progress?: {
+        bytes?: number;
+        /** download item of items */
+        item?: number;
+        items?: number;
+        /** the part */
+        label?: string;
+        step?: "prepare" | "download" | "unpack" | "verify" | "swap" | "done";
+        /** 0 = unknown */
+        total?: number;
+      };
+      started_at?: string;
+      state?: "running" | "done" | "failed";
+    };
+    /** versions: onnxruntime, ffmpeg, ffmpeg_release, yolox */
+    pins?: Record<string, unknown>;
+    /** os/arch */
+    platform?: string;
+    /** development and tests: stand-in downloads */
+    simulated?: boolean;
+    /** Linux amd64/arm64 or Windows amd64 */
+    supported?: boolean;
+  }>('DELETE', `/api/v1/counting/install`, undefined, body, false);
+  }
+
   /** Resets, corrections and clamps
    *
    * Requires permission `data.read`. */
@@ -2927,7 +3216,7 @@ export class Ctrl32Client {
 
   /** Detector installation check
    *
-   * Whether object counting on cameras can run on this server: ffmpeg (version, LGPL/GPL build), ONNX Runtime (version) and the YOLOX models (SHA-256 against the pins, one test inference). Checked in a separate process and cached for 5 minutes; refresh=1 checks again. Paths and technical details only for server administrators (system.admin). Installed with `install.sh --analytics` or `install.ps1 -Analytics`.
+   * Whether object counting on cameras can run on this server: ffmpeg (version, LGPL/GPL build), ONNX Runtime (version) and the YOLOX models (SHA-256 against the pins, one test inference). Checked in a separate process and cached for 5 minutes; refresh=1 checks again. Paths and technical details only for server administrators (system.admin). Installed with the button *Install the detector* (POST /api/v1/counting/install), `install.sh --analytics` or `install.ps1 -Analytics`.
    * 
    * Requires permission `data.read`. */
   getCountingSelfcheck(query?: { refresh?: string; /** 1 = check again now */ }): Promise<{

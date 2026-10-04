@@ -1,0 +1,27 @@
+meta {
+  name: Remove the detector
+  type: http
+  seq: 18
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/counting/install
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "code": "string",
+    "password": "string",
+    "reason": "string"
+  }
+}
+
+docs {
+  Remove the detector
+  
+  The server agent removes the detector parts and their paths in [analytics]; counting with sensors keeps working. Password (and authenticator code) again, browser session only; audited as analytics.remove.
+  
+  Requires permission `system.admin`.
+}

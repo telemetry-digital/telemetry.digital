@@ -67,6 +67,8 @@ function Step($desc, [scriptblock]$action) { if ($DryRun) { Write-Host "[dry-run
 function TomlPath($p) { return ($p -replace '\\', '/') }
 
 # ---- object counting (-Analytics, ADR-0022) ---------------------------------------------------------------
+# The pins live in internal/analytics/pins.go (the server agent installs the same parts from the user interface,
+# "Install the detector"); keep these values equal to it (go test ./internal/analytics: TestInstallerPinsMatch).
 # Third-party parts downloaded from their official releases at install time, pinned and SHA-256 verified.
 # They are never bundled into our release files.
 $OrtVersion = "1.30.0"                                   # ONNX Runtime (MIT), github.com/microsoft/onnxruntime

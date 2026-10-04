@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -26,8 +27,11 @@ type Engine struct {
 	pool *pgxpool.Pool
 	ing  *ingest.Ingest
 	vid  *video.Manager
-	cfg  config.AnalyticsConfig
+	cfg  config.AnalyticsConfig // guarded by cfgMu (SetAnalytics)
 	log  *slog.Logger
+
+	cfgMu      sync.RWMutex
+	installing atomic.Bool // the server agent is installing the detector: no camera workers
 
 	mu     sync.Mutex
 	ds     map[string]string // asset id + "/" + key → datastream id

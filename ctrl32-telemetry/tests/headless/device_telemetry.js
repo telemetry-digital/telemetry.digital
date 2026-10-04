@@ -74,7 +74,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   expect("live indicator", await ev(`document.querySelector('#telLive').textContent.length > 0`), true);
   await ev(`document.querySelector('#telTable tr[data-row="unassigned:rh"]').click(), true`); await sleep(2500);
   expect("create-datastream form for a key without one", await ev(`!!document.querySelector('#mkForm') && document.querySelector('#mkForm').asset_id.options.length > 1`), true);
-  for (const p of ["/audit", "/audit/reviews", "/audit/reports"]) {
+  for (const p of ["/audit", "/audit/reviews", "/reports/signatures"]) {
     await send("Page.navigate", { url: base + p }); await sleep(2500);
     expect("page " + p, await ev(`!!document.querySelector('section.active table tbody tr')`), true);
   }

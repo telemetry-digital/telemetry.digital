@@ -86,6 +86,23 @@ ffmpeg (version, LGPL or GPL build), ONNX Runtime (version), each model (SHA-256
 and whether cameras can count (exit code 0) or not (1). The same check is shown on *Object counting → Cameras* and
 *System → Server* (*Check again* repeats it; the server caches it for 5 minutes), with advice for a missing part.
 
+**From the user interface (0.75.0):** a server administrator (`system.admin`) presses *Install the detector* on the
+Detector installation card (*Object counting → Cameras*, *System → Server*), gives a reason, the password and, with
+two-factor sign-in, the authenticator code. The server asks the privileged agent (`POST /analytics/install` on its
+socket) to install exactly the parts above: the pins are in one place, `internal/analytics/pins.go`, and the installers
+carry the same values (`TestInstallerPinsMatch`). The agent downloads over HTTPS from the official hosts only, keeps a
+file only when its SHA-256 matches the pin, refuses an ffmpeg configured with `--enable-gpl`/`--enable-nonfree`,
+unpacks into a staging directory next to the target and swaps the parts in by renaming them only when everything was
+downloaded and checked (`internal/analytics/setup`; a failed swap is rolled back), then writes the paths into
+`[analytics]` (threads, max_cameras and everything else stay) and records the installation in `analytics.json` next to
+`config.toml`. The server applies the new paths without a restart (camera workers pause meanwhile) and runs the
+self-check again; the card polls the progress (download x of y with megabytes, unpack, verify). A second run downloads
+only what is missing or broken; *Repair or update* with *force* downloads every part again; *Remove* deletes the parts
+and their paths. Request and result are audited (`analytics.install`, `analytics.remove`); API tokens and AI assistants
+are refused (MCP exclusion). Linux amd64/arm64 and Windows amd64; on Linux the agent installs `xz-utils` when `xz` is
+missing (the ffmpeg build is a `.tar.xz`). API: `GET|POST|DELETE /api/v1/counting/install`. Threat model:
+`docs/threat-model.md`.
+
 **Then switch counting on per camera:** *Object counting → Areas and entrances* (an area with its entrances) →
 *Cameras* → *Configure*: draw a line, choose the entrance and the classes, enable, save with a reason.
 
@@ -155,7 +172,7 @@ viewing follow the camera's own rules (docs/video.md). Inform people about the c
 
 ## Scheduled reports by e-mail
 
-*Settings → Scheduled reports* (`config.write`): content (counting summary of an area, a period table of a dashboard,
+*Reports → Scheduled reports* (`config.write`; before 0.75.0 under *Settings*): content (counting summary of an area, a period table of a dashboard,
 or a report template — observations of a datastream or alarms), period (previous day, week Monday–Sunday, month in the
 organization's time zone), a cron schedule (`minute hour day month weekday`, presets daily 07:00, Monday 07:00, 1st of
 the month 07:00; a time skipped by the change to summer time runs at the first moment after it, a repeated time once),

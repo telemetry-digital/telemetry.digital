@@ -196,3 +196,22 @@ func TestOAuthRedirects(t *testing.T) {
 		t.Error("exact match")
 	}
 }
+
+// The server agent installs programs on the host: AI assistants are never offered the installation or removal of the
+// object counting detector (0.75.0); reading its state is offered like the other server facts.
+func TestMCPDetectorInstallExcluded(t *testing.T) {
+	for _, m := range []string{"POST /api/v1/counting/install", "DELETE /api/v1/counting/install"} {
+		found := false
+		for i := range apiOps {
+			if apiOps[i].M == m {
+				found = true
+				if mcpExcluded(&apiOps[i]) == "" {
+					t.Errorf("%s is offered to AI assistants", m)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("%s is not in the API description", m)
+		}
+	}
+}

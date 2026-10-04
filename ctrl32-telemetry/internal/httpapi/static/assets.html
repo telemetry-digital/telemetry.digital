@@ -22,11 +22,14 @@
 <body>
 <header class="topbar"></header>
 <main class="container">
-<nav class="subnav">
+<nav class="subnav" data-nav="assets">
   <a href="/assets/sites" data-section="sites">Sites</a>
   <a href="/assets" data-section="assets">Assets</a>
-  <a href="/assets/rules" data-section="rules">Alarm rules</a>
-  <a href="/assets/automation" data-section="automation">Automation</a>
+</nav>
+<nav class="subnav" data-nav="automation" hidden>
+  <a href="/flows" data-section="flows">Flows</a>
+  <a href="/automation/alarm-rules" data-section="rules">Alarm rules</a>
+  <a href="/automation/rules" data-section="automation">Automation rules</a>
 </nav>
 
 <section data-section="sites">
@@ -63,7 +66,7 @@
 </section>
 
 <section data-section="automation">
-  <div class="page-head"><h1>Automation</h1><span class="grow"></span><button class="btn primary" id="newAutoBtn" type="button" hidden>New automation rule</button></div>
+  <div class="page-head"><h1>Automation rules</h1><span class="grow"></span><button class="btn primary" id="newAutoBtn" type="button" hidden>New automation rule</button></div>
   <div class="card"><h2>Rules</h2>
     <p class="muted">Condition → action over any datastreams: when all (or any) of the conditions hold — optionally for a hold time — the rule fires its actions: notify a channel, call a webhook, send a device command, raise an alarm or write a derived datastream. When the condition ends, the exit actions run and alarms raised by the rule are cleared. Rules that send commands need a second person's approval when the four-eyes policy is on.</p>
     <div class="table-wrap"><table id="autoTable"><thead><tr><th>Rule</th><th>State</th><th>Condition</th><th>Actions</th><th>Last run</th><th></th></tr></thead><tbody></tbody></table></div>
@@ -324,8 +327,12 @@ ctrl32.ready({requireAuth: true}).then(async () => {
   const p = new URLSearchParams(location.search);
   if(p.get('asset')){ location.replace('/assets/' + encodeURIComponent(p.get('asset'))); return; }
   if(p.get('ds')){ try{ const d = await api('GET', '/api/v1/datastreams/' + encodeURIComponent(p.get('ds'))); location.replace(`/assets/${d.asset.id}/datastreams?ds=${d.datastream.id}`); return; }catch(_){ /* unknown: the list */ } }
-  const sec = ctrl32.section('assets', ['sites', 'assets', 'rules', 'automation']);
-  document.title = ctrl32.t({sites: 'Sites', assets: 'Assets', rules: 'Alarm rules', automation: 'Automation'}[sec]) + ' — ctrl32 telemetry';
+  // alarm rules and automation rules are under Automation (0.75.0): /automation/alarm-rules and /automation/rules
+  // (/assets/rules and /assets/automation redirect there)
+  const inAuto = location.pathname.startsWith('/automation/');
+  for(const n of document.querySelectorAll('nav.subnav[data-nav]')) n.hidden = (n.dataset.nav === 'automation') !== inAuto;
+  const sec = inAuto ? ctrl32.section('rules', ['rules', 'automation'], {'alarm-rules': 'rules', rules: 'automation'}) : ctrl32.section('assets', ['sites', 'assets']);
+  document.title = ctrl32.t({sites: 'Sites', assets: 'Assets', rules: 'Alarm rules', automation: 'Automation rules'}[sec]) + ' — ctrl32 telemetry';
   if(sec === 'sites'){ $('#newSiteBtn').hidden = !canCfg(); loadSitesTable().catch(x => ctrl32.toast(x.message,'bad')); }
   else if(sec === 'rules') loadRules();
   else if(sec === 'automation') loadAutomation();

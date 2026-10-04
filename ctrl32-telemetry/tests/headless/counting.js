@@ -119,7 +119,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await shot("counting-widgets.png");
 
   // ---- scheduled reports
-  await go("/settings/scheduled-reports", 3000);
+  await go("/reports/scheduled", 3000);
   await ev(`document.querySelector('#newBtn').click(); true`); await sleep(1500);
   await ev(`document.querySelector('[data-p="0 7 * * 1"]').click(); true`); await sleep(1500);
   expect("preset fills the cron and the next runs", await ev(`document.querySelector('#srForm').cron.value + ' | ' + /\\d/.test(document.querySelector('#next').textContent)`), "0 7 * * 1 | true");

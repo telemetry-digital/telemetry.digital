@@ -6,7 +6,7 @@ Developer: telemetry.digital (Palo Krnáč). Revenue comes from implementation s
 
 ## Status
 
-Version **0.74.0** (4 Oct 2026; production runs 0.73.0). Development on a PC: `deploy/dev/README.md`. Phases 1–2 of the roadmap (`docs/02-navrh-systemu.md`, chapter 13) are functionally covered; the `Zdroj` column of the URS names the version and the test that fulfil each requirement. The production instance runs at `https://telemetry.digital/` (installed with the public installer, updated from the Server page). Every release has an entry in `JOURNAL.md`.
+Version **0.75.0** (4 Oct 2026; production runs 0.74.0). Development on a PC: `deploy/dev/README.md`. Phases 1–2 of the roadmap (`docs/02-navrh-systemu.md`, chapter 13) are functionally covered; the `Zdroj` column of the URS names the version and the test that fulfil each requirement. The production instance runs at `https://telemetry.digital/` (installed with the public installer, updated from the Server page). Every release has an entry in `JOURNAL.md`.
 
 ## What it does
 
@@ -49,7 +49,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 irm https://portal.telemetry.digital/install.ps1 -OutFile install.ps1; .\install.ps1
 ```
 
-Object counting on camera pictures (optional, off by default): `--analytics` / `-Analytics` downloads an unmodified LGPL build of ffmpeg, ONNX Runtime and the YOLOX models from their official releases (pinned, SHA-256 verified; never part of our release files), writes `[analytics]` and runs the self-check; on an existing installation it adds only these parts (`docs/object-counting.md`, ADR-0022).
+Object counting on camera pictures (optional, off by default): `--analytics` / `-Analytics` downloads an unmodified LGPL build of ffmpeg, ONNX Runtime and the YOLOX models from their official releases (pinned, SHA-256 verified; never part of our release files), writes `[analytics]` and runs the self-check; on an existing installation it adds only these parts (`docs/object-counting.md`, ADR-0022). Since 0.75.0 a server administrator installs the same pinned parts with the button *Install the detector* (Object counting → Cameras, System → Server): the server agent downloads, verifies and swaps them in atomically and writes `[analytics]`; repair, update and removal from the same card.
 
 Both installers are idempotent. Binaries and `SHA256SUMS` are at `https://portal.telemetry.digital/dl/`; the Server page offers updates from there. Without `--domain` the server runs in the `intranet` profile (TLS optional); with a public hostname it runs in `internet` (TLS everywhere, MFA for everyone).
 
