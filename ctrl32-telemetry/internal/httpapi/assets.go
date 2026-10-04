@@ -17,7 +17,7 @@ import (
 // Assignments and alarm rules are history rows: a change closes the current row (valid_to) and inserts a new one.
 //
 //	GET    /api/v1/sites                              POST /api/v1/sites                 PATCH /api/v1/sites/{id}
-//	GET    /api/v1/assets?site_id=                    POST /api/v1/assets                PATCH /api/v1/assets/{id}
+//	GET    /api/v1/assets?site_id= (asset_page.go)    POST /api/v1/assets                PATCH /api/v1/assets/{id}
 //	GET    /api/v1/datastreams/{id}                   POST /api/v1/datastreams           PATCH /api/v1/datastreams/{id}
 //	GET    /api/v1/alarm-rules?datastream_id=         POST /api/v1/alarm-rules           DELETE /api/v1/alarm-rules/{id}
 //	GET    /api/v1/devices/{id}                       PATCH /api/v1/devices/{id}
@@ -49,8 +49,17 @@ func (s *Server) mustOrg(w http.ResponseWriter, r *http.Request) (string, bool) 
 
 func (s *Server) listSites(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFrom(r.Context())
-	rows, err := s.pool.Query(r.Context(), `SELECT s.id::text, s.name, s.tz, COALESCE(s.address,''), COALESCE(s.customer_id::text,''), s.created_at,
-		(SELECT count(*) FROM core.asset a WHERE a.site_id = s.id) FROM core.site s WHERE ($1 = '' OR s.org_id = $1::uuid) ORDER BY s.name`, orgOf(p))
+	rows, err := s.pool.Query(r.Context(), `
+		WITH st AS (SELECT s.* FROM core.site s WHERE ($1 = '' OR s.org_id = $1::uuid)),
+		ds AS (SELECT d.id, a.site_id FROM core.datastream d JOIN core.asset a ON a.id = d.asset_id JOIN st ON st.id = a.site_id),
+		dev AS (SELECT ds.site_id, count(DISTINCT g.from_id) AS n FROM core.assignment g JOIN ds ON ds.id = g.to_id
+		        WHERE g.kind = 'device_datastream' AND g.valid_to IS NULL GROUP BY ds.site_id),
+		al AS (SELECT ds.site_id, max(CASE x.severity WHEN 'critical' THEN 3 WHEN 'action' THEN 2 ELSE 1 END) AS sev, count(*) AS n, bool_and(x.state = 'acknowledged') AS ack
+		       FROM core.alarm x JOIN ds ON ds.id = x.datastream_id WHERE ($1 = '' OR x.org_id = $1::uuid) AND x.cleared_at IS NULL AND x.state <> 'cleared' GROUP BY ds.site_id)
+		SELECT st.id::text, st.name, st.tz, COALESCE(st.address,''), COALESCE(st.customer_id::text,''), st.created_at,
+		       (SELECT count(*) FROM core.asset a WHERE a.site_id = st.id), (SELECT count(*) FROM ds WHERE ds.site_id = st.id), COALESCE(dev.n, 0),
+		       COALESCE(al.sev, 0), COALESCE(al.n, 0), COALESCE(al.ack, false), st.attributes
+		FROM st LEFT JOIN dev ON dev.site_id = st.id LEFT JOIN al ON al.site_id = st.id ORDER BY st.name`, orgOf(p))
 	if err != nil {
 		writeErr(w, 500, "query failed")
 		return
@@ -60,12 +69,19 @@ func (s *Server) listSites(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var id, name, tz, addr, cust string
 		var created time.Time
-		var assets int
-		if err := rows.Scan(&id, &name, &tz, &addr, &cust, &created, &assets); err != nil {
+		var assets, streams, devices, sev, alarms int
+		var acked bool
+		var attrs json.RawMessage
+		if err := rows.Scan(&id, &name, &tz, &addr, &cust, &created, &assets, &streams, &devices, &sev, &alarms, &acked, &attrs); err != nil {
 			writeErr(w, 500, "scan failed")
 			return
 		}
-		out = append(out, map[string]any{"id": id, "name": name, "tz": tz, "address": addr, "customer_id": cust, "created_at": created, "assets": assets})
+		var alarm map[string]any
+		if alarms > 0 {
+			alarm = map[string]any{"severity": sevName[sev], "count": alarms, "acknowledged": acked}
+		}
+		out = append(out, map[string]any{"id": id, "name": name, "tz": tz, "address": addr, "customer_id": cust, "created_at": created, "assets": assets,
+			"datastreams": streams, "devices": devices, "alarm": alarm, "location": locationOf(attrs)})
 	}
 	writeJSON(w, 200, out)
 }
@@ -112,6 +128,8 @@ func (s *Server) patchSite(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var in struct {
 		Name, TZ, Address *string
+		Location          *geoPoint `json:"location"`       // map position of the site (kept in its attributes)
+		ClearLocation     bool      `json:"clear_location"` // forget the position
 		Reason            string
 	}
 	if err := decodeJSON(r, &in, 4096); err != nil || !reasonOf(w, in.Reason) {
@@ -120,8 +138,13 @@ func (s *Server) patchSite(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	if msg := in.Location.problem(); msg != "" {
+		writeErr(w, 400, msg)
+		return
+	}
 	var oldName, oldTZ, oldAddr string
-	if err := s.pool.QueryRow(r.Context(), `SELECT name, tz, COALESCE(address,'') FROM core.site WHERE id = $1::uuid AND org_id = $2::uuid`, id, org).Scan(&oldName, &oldTZ, &oldAddr); err != nil {
+	var oldAttrs json.RawMessage
+	if err := s.pool.QueryRow(r.Context(), `SELECT name, tz, COALESCE(address,''), attributes FROM core.site WHERE id = $1::uuid AND org_id = $2::uuid`, id, org).Scan(&oldName, &oldTZ, &oldAddr, &oldAttrs); err != nil {
 		writeErr(w, 404, "site not found")
 		return
 	}
@@ -139,41 +162,20 @@ func (s *Server) patchSite(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "invalid name or tz")
 		return
 	}
-	if _, err := s.pool.Exec(r.Context(), `UPDATE core.site SET name = $3, tz = $4, address = NULLIF($5,'') WHERE id = $1::uuid AND org_id = $2::uuid`, id, org, name, tz, addr); err != nil {
+	attrs := withLocation(oldAttrs, in.Location, in.ClearLocation)
+	if _, err := s.pool.Exec(r.Context(), `UPDATE core.site SET name = $3, tz = $4, address = NULLIF($5,''), attributes = $6::jsonb WHERE id = $1::uuid AND org_id = $2::uuid`, id, org, name, tz, addr, string(attrs)); err != nil {
 		writeErr(w, 409, "update failed (duplicate name?)")
 		return
 	}
-	s.audit(r, "site.update", "site", id, map[string]any{"name": oldName, "tz": oldTZ, "address": oldAddr}, map[string]any{"name": name, "tz": tz, "address": addr}, in.Reason)
-	writeJSON(w, 200, map[string]any{"id": id, "name": name, "tz": tz, "address": addr})
+	before, after := map[string]any{"name": oldName, "tz": oldTZ, "address": oldAddr}, map[string]any{"name": name, "tz": tz, "address": addr}
+	if in.Location != nil || in.ClearLocation {
+		before["location"], after["location"] = locationOf(oldAttrs), locationOf(attrs)
+	}
+	s.audit(r, "site.update", "site", id, before, after, in.Reason)
+	writeJSON(w, 200, map[string]any{"id": id, "name": name, "tz": tz, "address": addr, "location": locationOf(attrs)})
 }
 
 // ---- assets -------------------------------------------------------------------------------------
-
-func (s *Server) listAssets(w http.ResponseWriter, r *http.Request) {
-	p := PrincipalFrom(r.Context())
-	site := r.URL.Query().Get("site_id")
-	rows, err := s.pool.Query(r.Context(), `SELECT a.id::text, a.site_id::text, COALESCE(a.parent_id::text,''), a.type, a.name, a.attributes, a.created_at, st.name,
-		(SELECT count(*) FROM core.datastream d WHERE d.asset_id = a.id)
-		FROM core.asset a JOIN core.site st ON st.id = a.site_id WHERE ($1 = '' OR a.org_id = $1::uuid) AND ($2 = '' OR a.site_id = $2::uuid) ORDER BY st.name, a.name`, orgOf(p), site)
-	if err != nil {
-		writeErr(w, 500, "query failed")
-		return
-	}
-	defer rows.Close()
-	out := []map[string]any{}
-	for rows.Next() {
-		var id, siteID, parent, typ, name, siteName string
-		var attrs json.RawMessage
-		var created time.Time
-		var n int
-		if err := rows.Scan(&id, &siteID, &parent, &typ, &name, &attrs, &created, &siteName, &n); err != nil {
-			writeErr(w, 500, "scan failed")
-			return
-		}
-		out = append(out, map[string]any{"id": id, "site_id": siteID, "site": siteName, "parent_id": parent, "type": typ, "name": name, "attributes": attrs, "created_at": created, "datastreams": n})
-	}
-	writeJSON(w, 200, out)
-}
 
 func (s *Server) createAsset(w http.ResponseWriter, r *http.Request) {
 	org, ok := s.mustOrg(w, r)
@@ -226,10 +228,13 @@ func (s *Server) patchAsset(w http.ResponseWriter, r *http.Request) {
 	}
 	id := r.PathValue("id")
 	var in struct {
-		Name       *string         `json:"name"`
-		Type       *string         `json:"type"`
-		Attributes json.RawMessage `json:"attributes"`
-		Reason     string          `json:"reason"`
+		Name          *string         `json:"name"`
+		Type          *string         `json:"type"`
+		Attributes    json.RawMessage `json:"attributes"`
+		ParentID      *string         `json:"parent_id"`      // move under another asset of the same site; "" = top level
+		Location      *geoPoint       `json:"location"`       // map position (kept in the attributes as lat, lon)
+		ClearLocation bool            `json:"clear_location"` // forget the position
+		Reason        string          `json:"reason"`
 	}
 	if err := decodeJSON(r, &in, 16384); err != nil {
 		writeErr(w, 400, err.Error())
@@ -238,13 +243,49 @@ func (s *Server) patchAsset(w http.ResponseWriter, r *http.Request) {
 	if !reasonOf(w, in.Reason) {
 		return
 	}
-	var oldName, oldType string
-	var oldAttrs json.RawMessage
-	if err := s.pool.QueryRow(r.Context(), `SELECT name, type, attributes FROM core.asset WHERE id = $1::uuid AND org_id = $2::uuid`, id, org).Scan(&oldName, &oldType, &oldAttrs); err != nil {
+	if msg := in.Location.problem(); msg != "" {
+		writeErr(w, 400, msg)
+		return
+	}
+	if !uuidRe.MatchString(id) {
 		writeErr(w, 404, "asset not found")
 		return
 	}
-	name, typ, attrs := oldName, oldType, oldAttrs
+	var oldName, oldType, oldParent, siteID string
+	var oldAttrs json.RawMessage
+	if err := s.pool.QueryRow(r.Context(), `SELECT name, type, attributes, COALESCE(parent_id::text, ''), site_id::text FROM core.asset WHERE id = $1::uuid AND org_id = $2::uuid`, id, org).Scan(&oldName, &oldType, &oldAttrs, &oldParent, &siteID); err != nil {
+		writeErr(w, 404, "asset not found")
+		return
+	}
+	name, typ, attrs, parent := oldName, oldType, oldAttrs, oldParent
+	if in.ParentID != nil && *in.ParentID != oldParent {
+		parent = *in.ParentID
+		if parent != "" {
+			if parent == id || !uuidRe.MatchString(parent) {
+				writeErr(w, 400, "an asset cannot be its own parent")
+				return
+			}
+			// the new parent must be on the same site and must not lie below the asset (no cycles)
+			var sameSite, below bool
+			_ = s.pool.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM core.asset WHERE id = $1::uuid AND org_id = $2::uuid AND site_id = $3::uuid)`, parent, org, siteID).Scan(&sameSite)
+			if !sameSite {
+				writeErr(w, 400, "the parent must be an asset of the same site")
+				return
+			}
+			ids, err := s.assetIDs(r.Context(), org, id, true)
+			if err != nil {
+				writeErr(w, 500, "query failed")
+				return
+			}
+			for _, x := range ids {
+				below = below || x == parent
+			}
+			if below {
+				writeErr(w, 400, "the parent cannot be the asset itself or one of the assets below it")
+				return
+			}
+		}
+	}
 	if in.Name != nil {
 		name = strings.TrimSpace(*in.Name)
 	}
@@ -256,18 +297,28 @@ func (s *Server) patchAsset(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 400, "attributes must be JSON")
 			return
 		}
+		var obj map[string]any
+		if json.Unmarshal(in.Attributes, &obj) != nil {
+			writeErr(w, 400, "attributes must be a JSON object")
+			return
+		}
 		attrs = in.Attributes
 	}
-	if name == "" || typ == "" {
+	attrs = withLocation(attrs, in.Location, in.ClearLocation)
+	if name == "" || len(name) > 128 || typ == "" || len(typ) > 32 {
 		writeErr(w, 400, "name and type required")
 		return
 	}
-	if _, err := s.pool.Exec(r.Context(), `UPDATE core.asset SET name = $3, type = $4, attributes = $5::jsonb WHERE id = $1::uuid AND org_id = $2::uuid`, id, org, name, typ, string(attrs)); err != nil {
+	if _, err := s.pool.Exec(r.Context(), `UPDATE core.asset SET name = $3, type = $4, attributes = $5::jsonb, parent_id = NULLIF($6, '')::uuid WHERE id = $1::uuid AND org_id = $2::uuid`, id, org, name, typ, string(attrs), parent); err != nil {
 		writeErr(w, 409, "update failed (duplicate name?)")
 		return
 	}
-	s.audit(r, "asset.update", "asset", id, map[string]any{"name": oldName, "type": oldType, "attributes": oldAttrs}, map[string]any{"name": name, "type": typ, "attributes": attrs}, in.Reason)
-	writeJSON(w, 200, map[string]any{"id": id, "name": name, "type": typ, "attributes": attrs})
+	before, after := map[string]any{"name": oldName, "type": oldType, "attributes": oldAttrs}, map[string]any{"name": name, "type": typ, "attributes": attrs}
+	if parent != oldParent {
+		before["parent_id"], after["parent_id"] = oldParent, parent
+	}
+	s.audit(r, "asset.update", "asset", id, before, after, in.Reason)
+	writeJSON(w, 200, map[string]any{"id": id, "name": name, "type": typ, "attributes": attrs, "parent_id": parent})
 }
 
 // ---- datastreams --------------------------------------------------------------------------------
@@ -409,6 +460,41 @@ func (s *Server) patchDatastream(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"id": id, "quantity": q, "unit": u, "expected_interval": iv, "accuracy": acc, "range_min": rng.Min, "range_max": rng.Max})
 }
 
+// geoPoint is a map position set by an operator.
+type geoPoint struct {
+	Lat float64 `json:"lat"`
+	Lon float64 `json:"lon"`
+}
+
+func (g *geoPoint) problem() string {
+	if g == nil {
+		return ""
+	}
+	if math.IsNaN(g.Lat) || math.IsNaN(g.Lon) || g.Lat < -90 || g.Lat > 90 || g.Lon < -180 || g.Lon > 180 {
+		return "location out of range"
+	}
+	return ""
+}
+
+// withLocation sets (or removes) lat and lon in a JSON object of attributes.
+func withLocation(attrs json.RawMessage, loc *geoPoint, clear bool) json.RawMessage {
+	if loc == nil && !clear {
+		return attrs
+	}
+	m := map[string]any{}
+	_ = json.Unmarshal(attrs, &m)
+	if m == nil {
+		m = map[string]any{}
+	}
+	delete(m, "lat")
+	delete(m, "lon")
+	if loc != nil && !clear {
+		m["lat"], m["lon"] = loc.Lat, loc.Lon
+	}
+	b, _ := json.Marshal(m)
+	return b
+}
+
 // dsRange is the physical (measuring) range of a datastream, kept in its attributes (range_min, range_max): a value
 // outside it is stored with quality sensor_fault (internal/ingest).
 type dsRange struct {
@@ -458,7 +544,7 @@ func (s *Server) getDatastream(w http.ResponseWriter, r *http.Request) {
 		WHERE a.kind = 'device_datastream' AND a.to_id = $1::uuid AND a.valid_to IS NULL ORDER BY a.valid_from DESC LIMIT 1`, id).Scan(&devID, &devExt, &devName, &since); err == nil {
 		device = map[string]any{"id": devID, "external_id": devExt, "name": devName, "since": since}
 	}
-	rules := s.alarmRulesFor(r, orgOf(p), id)
+	rules := s.alarmRulesFor(r, orgOf(p), id, "")
 	var last map[string]any
 	var mAt time.Time
 	var val *float64
@@ -494,34 +580,42 @@ func (s *Server) getDatastream(w http.ResponseWriter, r *http.Request) {
 
 // ---- alarm rules --------------------------------------------------------------------------------
 
-func (s *Server) alarmRulesFor(r *http.Request, org, dsID string) []map[string]any {
-	rows, err := s.pool.Query(r.Context(), `SELECT ar.id::text, ar.datastream_id::text, d.key, a.name, ar.type, ar.warning::float8, ar.action::float8, EXTRACT(EPOCH FROM ar.delay)::float8, ar.hysteresis::float8, ar.enabled, ar.version, ar.valid_from, ar.reason, ar.escalation_policy_id::text
+func (s *Server) alarmRulesFor(r *http.Request, org, dsID, assetID string) []map[string]any {
+	rows, err := s.pool.Query(r.Context(), `SELECT ar.id::text, ar.datastream_id::text, d.key, a.name, a.id::text, ar.type, ar.warning::float8, ar.action::float8, EXTRACT(EPOCH FROM ar.delay)::float8, ar.hysteresis::float8, ar.enabled, ar.version, ar.valid_from, ar.reason, ar.escalation_policy_id::text
 		FROM core.alarm_rule ar JOIN core.datastream d ON d.id = ar.datastream_id JOIN core.asset a ON a.id = d.asset_id
-		WHERE ar.valid_to IS NULL AND ($1 = '' OR ar.org_id = $1::uuid) AND ($2 = '' OR ar.datastream_id = $2::uuid) ORDER BY a.name, d.key, ar.type`, org, dsID)
+		WHERE ar.valid_to IS NULL AND ($1 = '' OR ar.org_id = $1::uuid) AND ($2 = '' OR ar.datastream_id = $2::uuid)
+		  AND ($3 = '' OR d.asset_id = $3::uuid) ORDER BY a.name, d.key, ar.type`, org, dsID, assetID)
 	if err != nil {
 		return []map[string]any{}
 	}
 	defer rows.Close()
 	out := []map[string]any{}
 	for rows.Next() {
-		var id, ds, key, asset, typ, reason string
+		var id, ds, key, asset, assetID, typ, reason string
 		var warning, action *float64
 		var delay, hyst float64
 		var enabled bool
 		var version int
 		var from time.Time
 		var policyID *string
-		if err := rows.Scan(&id, &ds, &key, &asset, &typ, &warning, &action, &delay, &hyst, &enabled, &version, &from, &reason, &policyID); err != nil {
+		if err := rows.Scan(&id, &ds, &key, &asset, &assetID, &typ, &warning, &action, &delay, &hyst, &enabled, &version, &from, &reason, &policyID); err != nil {
 			continue
 		}
-		out = append(out, map[string]any{"id": id, "datastream_id": ds, "key": key, "asset": asset, "type": typ, "warning": warning, "action": action, "delay_seconds": delay, "hysteresis": hyst, "enabled": enabled, "version": version, "valid_from": from, "reason": reason, "escalation_policy_id": policyID})
+		out = append(out, map[string]any{"id": id, "datastream_id": ds, "key": key, "asset": asset, "asset_id": assetID, "type": typ, "warning": warning, "action": action, "delay_seconds": delay, "hysteresis": hyst, "enabled": enabled, "version": version, "valid_from": from, "reason": reason, "escalation_policy_id": policyID})
 	}
 	return out
 }
 
 func (s *Server) listAlarmRules(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFrom(r.Context())
-	writeJSON(w, 200, s.alarmRulesFor(r, orgOf(p), r.URL.Query().Get("datastream_id")))
+	q := r.URL.Query()
+	for _, k := range []string{"datastream_id", "asset_id"} {
+		if v := q.Get(k); v != "" && !uuidRe.MatchString(v) {
+			writeErr(w, 400, k+" must be a uuid")
+			return
+		}
+	}
+	writeJSON(w, 200, s.alarmRulesFor(r, orgOf(p), q.Get("datastream_id"), q.Get("asset_id")))
 }
 
 // alarmRuleProblem checks that a rule of the type can be evaluated as given (see internal/alarm): a type the engine
@@ -700,13 +794,13 @@ func (s *Server) getDevice(w http.ResponseWriter, r *http.Request) {
 		rows.Close()
 	}
 	assigned := []map[string]any{}
-	if rows, err := s.pool.Query(r.Context(), `SELECT a.id::text, d.id::text, d.key, d.unit, d.quantity, ast.name, a.valid_from FROM core.assignment a JOIN core.datastream d ON d.id = a.to_id JOIN core.asset ast ON ast.id = d.asset_id
+	if rows, err := s.pool.Query(r.Context(), `SELECT a.id::text, d.id::text, d.key, d.unit, d.quantity, ast.name, ast.id::text, a.valid_from FROM core.assignment a JOIN core.datastream d ON d.id = a.to_id JOIN core.asset ast ON ast.id = d.asset_id
 		WHERE a.kind = 'device_datastream' AND a.from_id = $1::uuid AND a.valid_to IS NULL ORDER BY ast.name, d.key`, id); err == nil {
 		for rows.Next() {
-			var aid, dsID, key, unit, quantity, asset string
+			var aid, dsID, key, unit, quantity, asset, assetID string
 			var since time.Time
-			if rows.Scan(&aid, &dsID, &key, &unit, &quantity, &asset, &since) == nil {
-				assigned = append(assigned, map[string]any{"assignment_id": aid, "datastream_id": dsID, "key": key, "unit": unit, "quantity": quantity, "asset": asset, "since": since})
+			if rows.Scan(&aid, &dsID, &key, &unit, &quantity, &asset, &assetID, &since) == nil {
+				assigned = append(assigned, map[string]any{"assignment_id": aid, "datastream_id": dsID, "key": key, "unit": unit, "quantity": quantity, "asset": asset, "asset_id": assetID, "since": since})
 			}
 		}
 		rows.Close()
@@ -862,14 +956,14 @@ func (s *Server) unassignDatastream(w http.ResponseWriter, r *http.Request) {
 	if !reasonOf(w, reason) {
 		return
 	}
-	tag, err := s.pool.Exec(r.Context(), `UPDATE core.assignment SET valid_to = now() WHERE kind = 'device_datastream' AND org_id = $1::uuid AND from_id = $2::uuid AND to_id = $3::uuid AND valid_to IS NULL`, org, devID, dsID)
-	if err != nil || tag.RowsAffected() == 0 {
+	var asgID string
+	if err := s.pool.QueryRow(r.Context(), `UPDATE core.assignment SET valid_to = now() WHERE kind = 'device_datastream' AND org_id = $1::uuid AND from_id = $2::uuid AND to_id = $3::uuid AND valid_to IS NULL RETURNING id::text`, org, devID, dsID).Scan(&asgID); err != nil {
 		writeErr(w, 404, "current assignment not found")
 		return
 	}
 	if s.ing != nil {
 		s.ing.InvalidateDevice(devID)
 	}
-	s.audit(r, "assignment.close", "assignment", "", map[string]any{"device_id": devID, "datastream_id": dsID}, nil, reason)
+	s.audit(r, "assignment.close", "assignment", asgID, map[string]any{"device_id": devID, "datastream_id": dsID}, nil, reason)
 	writeJSON(w, 200, map[string]any{"ok": true})
 }

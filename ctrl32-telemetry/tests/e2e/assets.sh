@@ -87,6 +87,20 @@ req DELETE "/api/v1/alarm-rules/$R2ID?reason=e2e" >/dev/null; check "disable rul
 req DELETE "/api/v1/alarm-rules/$R2ID?reason=e2e" >/dev/null; check "disable twice -> 404" "$(st)" 404
 req GET "/api/v1/alarm-rules?datastream_id=$DSID" >/dev/null; grep -q '"type":"high"' "$TMP/b" && bad "rule still listed" || ok "no current rule after disable"
 
+echo "== list rows and the hierarchy (0.74.0)"
+jx()   { node -e 'const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); const r=eval(process.argv[2]); console.log(typeof r==="string"?r:JSON.stringify(r===undefined?null:r))' "$TMP/b" "$1" 2>/dev/null; }
+CH=$(req POST /api/v1/assets "{\"site_id\":\"$SID\",\"parent_id\":\"$AID\",\"type\":\"shelf\",\"name\":\"Shelf $SUF\",\"reason\":\"e2e\"}" | jget id); check "child asset" "$(st)" 201
+req GET "/api/v1/assets?site_id=$SID" >/dev/null; check "list of the site" "$(st)" 200
+check "fridge row: datastreams, devices, children, alarm" "$(jx "(a => [a.datastreams, a.devices, a.children, a.alarm].join())(j.find(a => a.id === '$AID'))")" "1,0,1,"
+check "child row names its parent" "$(jx "j.find(a => a.id === '$CH').parent_id")" "$AID"
+req GET "/api/v1/sites" >/dev/null; check "site row: assets, datastreams, devices" "$(jx "(s => [s.assets, s.datastreams, s.devices].join())(j.find(s => s.id === '$SID'))")" "2,1,0"
+req GET "/api/v1/assets/$CH" >/dev/null; check "asset page data" "$(st)" 200
+check "its ancestor" "$(jx 'j.path.map(p => p.id).join()')" "$AID"
+req PATCH "/api/v1/assets/$AID" "{\"parent_id\":\"$CH\",\"reason\":\"e2e\"}" >/dev/null; check "no cycles" "$(st)" 400
+req PATCH "/api/v1/assets/$CH" '{"parent_id":"","reason":"e2e top level"}' >/dev/null; check "child moved to the top level" "$(st)" 200
+req GET "/api/v1/sites/$SID" >/dev/null; check "site page data" "$(st)" 200
+check "site page lists its assets" "$(jx 'j.assets.length')" 2
+
 echo "== audit entries"
 req GET "/api/v1/export/audit?format=csv" >/dev/null
 for a in site.create site.update asset.create asset.update datastream.create datastream.update assignment.create assignment.close alarm_rule.create alarm_rule.close device.update; do grep -q "$a" "$TMP/b" && ok "audit $a" || bad "audit $a missing"; done

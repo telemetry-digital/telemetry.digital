@@ -1,0 +1,29 @@
+meta {
+  name: Every datastream of an asset
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/assets/:id/telemetry
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~from: 
+  ~to: 
+  ~children: 
+}
+
+docs {
+  Every datastream of an asset
+  
+  Like the Telemetry tab of a device: each datastream with the latest value, its quality and time, statistics over `from`–`to` (default the last 24 hours, at most 366 days; sensor faults counted in `faults`, not in min/max/avg) and a sparkline of the last 24 hours. `children=1` adds the datastreams of every asset below it.
+  
+  Requires permission `data.read`.
+}

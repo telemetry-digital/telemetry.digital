@@ -10,6 +10,13 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>
   dialog.wide { width: min(860px, calc(100vw - 32px)); }
+  .list-tools { gap: 10px; flex-wrap: wrap; align-items: end; }
+  .list-tools input[type=search] { min-width: 220px; }
+  table.list th[data-k] { cursor: pointer; white-space: nowrap; user-select: none; }
+  table.list td.num, table.list th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.list .tree { display: inline-block; color: var(--muted); margin-right: 4px; }
+  table.list td.wrap { white-space: normal; min-width: 110px; }
+  .pager { gap: 8px; align-items: center; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -25,20 +32,33 @@
 <section data-section="sites">
   <div class="page-head"><h1>Sites</h1><span class="grow"></span><button class="btn primary" id="newSiteBtn" type="button" hidden>New site</button></div>
   <div class="card">
-    <div class="table-wrap"><table id="siteTable"><thead><tr><th>Name</th><th>Time zone</th><th>Address</th><th>Assets</th><th>Created</th><th></th></tr></thead><tbody></tbody></table></div>
+    <div class="row list-tools"><input id="sSearch" type="search" placeholder="Search sites" aria-label="Search sites" autocomplete="off"><span class="grow"></span><span class="muted" id="sCount"></span></div>
+    <div class="table-wrap" style="margin-top:12px"><table id="siteTable" class="list"><thead><tr><th data-k="name">Name</th><th data-k="tz">Time zone</th><th data-k="address">Address</th><th data-k="assets" class="num">Assets</th><th data-k="devices" class="num">Devices</th><th data-k="alarm">Alarm</th><th data-k="created_at">Created</th><th></th></tr></thead><tbody></tbody></table></div>
+    <p class="muted" style="margin-bottom:0;font-size:12px">Click a site for its page: its assets, the devices that feed them, active alarms and its place on the map.</p>
   </div>
 </section>
 
 <section data-section="assets">
-  <div class="page-head"><h1>Assets</h1><label style="flex-direction:row;align-items:center;gap:8px;margin-left:12px">Site <select id="siteSel"></select></label><span class="muted" id="siteInfo"></span><span class="grow"></span><button class="btn primary" id="newAssetBtn" type="button" hidden>New asset</button></div>
-  <div id="assets" class="grid"></div>
+  <div class="page-head"><h1>Assets</h1><span class="grow"></span><button class="btn primary" id="newAssetBtn" type="button" hidden>New asset</button></div>
+  <div class="card">
+    <div class="row list-tools">
+      <input id="aSearch" type="search" placeholder="Search assets" aria-label="Search assets" autocomplete="off">
+      <label>Site <select id="aSite"><option value="">All sites</option></select></label>
+      <label>Type <select id="aType"><option value="">All types</option></select></label>
+      <button class="btn small" type="button" id="aTree" title="Show the assets in their hierarchy">Hierarchy</button>
+      <span class="grow"></span><span class="muted" id="aCount"></span>
+    </div>
+    <div class="table-wrap" style="margin-top:12px"><table id="assetTable" class="list"><thead><tr><th data-k="name">Name</th><th data-k="type">Type</th><th data-k="site">Site</th><th data-k="parent">Parent</th><th data-k="datastreams" class="num">Datastreams</th><th data-k="devices" class="num">Devices</th><th data-k="alarm">Alarm</th><th data-k="last_at">Last value</th></tr></thead><tbody><tr><td colspan="8" class="muted">…</td></tr></tbody></table></div>
+    <div class="row pager" id="aPager" hidden><button class="btn small" type="button" id="aPrev">Previous</button><span class="muted" id="aPage"></span><button class="btn small" type="button" id="aNext">Next</button></div>
+    <p class="muted" style="margin-bottom:0;font-size:12px">Click an asset for its page: overview, telemetry, datastreams, alarm rules and history. Click a column heading to sort; Hierarchy shows child assets under their parents.</p>
+  </div>
 </section>
 
 <section data-section="rules">
   <div class="page-head"><h1>Alarm rules</h1><span class="grow"></span><button class="btn primary" id="newRuleBtn" type="button" hidden>New rule</button></div>
   <div class="card">
     <div class="table-wrap"><table id="rules"><thead><tr><th>Asset</th><th>Datastream</th><th>Type</th><th>Warning</th><th>Action</th><th>Delay</th><th>Hysteresis</th><th>Version</th><th>Since</th></tr></thead><tbody></tbody></table></div>
-    <p class="muted" style="margin-bottom:0">Current versions only. Click a rule to open its datastream (new version, disable).</p>
+    <p class="muted" style="margin-bottom:0">Current versions only. Click a rule to open it on the page of its asset (new version, disable).</p>
   </div>
 </section>
 
@@ -67,33 +87,13 @@
 <dialog id="assetDlg">
   <form id="assetForm" class="form" method="dialog">
     <h2 style="margin-top:0">New asset</h2>
+    <label>Site <select name="site_id" required></select></label>
+    <label>Parent asset <select name="parent_id"><option value="">(top level)</option></select></label>
     <label>Type <input name="type" required maxlength="32" placeholder="fridge, room, meter, machine…" list="types"></label>
     <datalist id="types"><option value="fridge"><option value="freezer"><option value="room"><option value="meter"><option value="machine"><option value="building"><option value="vehicle"></datalist>
     <label>Name <input name="name" required maxlength="128"></label>
     <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
     <div class="err" id="assetErr"></div>
-    <div class="actions"><button class="btn primary" type="submit">Create</button><button class="btn" type="button" data-close>Cancel</button></div>
-  </form>
-</dialog>
-<dialog id="dsNewDlg">
-  <form id="dsForm" class="form" method="dialog">
-    <h2 style="margin-top:0">New datastream</h2>
-    <p class="muted" id="dsAssetName"></p>
-    <div class="row">
-      <label>Key (what the device publishes) <input name="key" required pattern="[a-z][a-z0-9_]{0,31}" maxlength="32" placeholder="temp"></label>
-      <label>Kind <select name="kind"><option value="gauge">gauge</option><option value="counter">counter</option><option value="state">state</option><option value="event">event</option></select></label>
-    </div>
-    <div class="row">
-      <label>Quantity <input name="quantity" required maxlength="64" placeholder="temperature" list="quantities"></label>
-      <datalist id="quantities"><option value="temperature"><option value="humidity"><option value="energy_active_import"><option value="power_active"><option value="pressure"><option value="state"><option value="co2"></datalist>
-      <label>Unit <input name="unit" maxlength="16" placeholder="°C"></label>
-    </div>
-    <div class="row">
-      <label>Expected interval (gap detection) <input name="expected_interval" placeholder="5 minutes" maxlength="32"></label>
-      <label>Required accuracy <input name="accuracy" type="number" step="any" placeholder="0.5"></label>
-    </div>
-    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
-    <div class="err" id="dsErr"></div>
     <div class="actions"><button class="btn primary" type="submit">Create</button><button class="btn" type="button" data-close>Cancel</button></div>
   </form>
 </dialog>
@@ -135,102 +135,106 @@
     <div class="actions"><button class="btn primary" type="submit" id="autoSubmit">Create rule</button><button class="btn" type="button" id="autoTestBtn">Test now</button><button class="btn" type="button" data-close>Cancel</button></div>
   </form>
 </dialog>
-<dialog id="dsDlg" class="wide"></dialog>
 
 <script src="/app.js"></script>
+<script src="/alarmrules.js"></script>
 <script>
 const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
-let SITES = [], ASSETS = [], DS = [], siteId = null;
+const {ruleTypeOpts, policyOpts, ruleHint, loadPols} = ctrl32Rules;
+let SITES = [], ASSETS = [], DS = [];
 const canCfg = () => ctrl32.can('config.write');
 for(const b of document.querySelectorAll('[data-close]')) b.onclick = () => b.closest('dialog').close();
+const SEV_RANK = {warning: 1, action: 2, critical: 3};
+// a time as "5 minutes ago" (the full time on hover): keeps the columns narrow
+function ago(t){ if(!t) return '<span class="muted">—</span>'; const s = (new Date(t).getTime() - Date.now()) / 1000, a = Math.abs(s), rtf = new Intl.RelativeTimeFormat(document.documentElement.lang || undefined, {numeric: 'auto'});
+  const txt = a < 60 ? rtf.format(Math.round(s), 'second') : a < 3600 ? rtf.format(Math.round(s / 60), 'minute') : a < 86400 ? rtf.format(Math.round(s / 3600), 'hour') : rtf.format(Math.round(s / 86400), 'day');
+  return `<span title="${esc(fmt(t))}" style="white-space:nowrap">${esc(txt)}</span>`; }
+function alarmBadge(a){ return a ? `<span class="badge ${a.severity === 'warning' ? 'warn' : 'bad'}" title="${esc(a.count + ' ' + ctrl32.t('active'))}">${esc(ctrl32.t(a.severity))}${a.count > 1 ? ' ×' + a.count : ''}${a.acknowledged ? ' ✓' : ''}</span>` : '<span class="muted">—</span>'; }
+// sortable list: click a heading to sort by it, again to reverse
+function sortKey(r, k){ if(k === 'alarm') return r.alarm ? SEV_RANK[r.alarm.severity] || 1 : 0; if(k === 'last_at' || k === 'created_at') return r[k] ? Date.parse(r[k]) : null; const v = r[k]; return v == null ? null : typeof v === 'number' ? v : String(v).toLowerCase(); }
+function sortRows(list, st){ if(!st.sort) return list; return list.slice().sort((a, b) => { const ka = sortKey(a, st.sort), kb = sortKey(b, st.sort); if(ka == null && kb == null) return 0; if(ka == null) return 1; if(kb == null) return -1; return (ka > kb ? 1 : ka < kb ? -1 : 0) * st.dir; }); }
+function wireSort(table, st, draw){ for(const th of document.querySelectorAll(table + ' th[data-k]')) th.onclick = () => { if(st.sort === th.dataset.k) st.dir = -st.dir; else { st.sort = th.dataset.k; st.dir = ['alarm', 'last_at', 'datastreams', 'devices', 'assets', 'created_at'].includes(th.dataset.k) ? -1 : 1; } st.page = 0; draw(); }; }
+function markSort(table, st){ for(const th of document.querySelectorAll(table + ' th[data-k]')){ th.dataset.label = th.dataset.label || th.textContent; th.textContent = th.dataset.label + (st.sort === th.dataset.k ? (st.dir > 0 ? ' ▲' : ' ▼') : ''); } }
 // ---- sites
-async function loadSitesTable(){
-  SITES = await api('GET','/api/v1/sites');
-  $('#siteTable tbody').innerHTML = SITES.map(s => `<tr><td><b>${esc(s.name)}</b></td><td>${esc(s.tz)}</td><td>${esc(s.address || '')}</td><td><a href="/assets?site=${s.id}">${s.assets} asset${s.assets === 1 ? '' : 's'}</a></td><td>${fmt(s.created_at)}</td><td>${canCfg() ? `<button class="btn small" type="button" data-edit="${s.id}">Edit</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">no sites yet — create the first one</td></tr>';
-  for(const b of document.querySelectorAll('[data-edit]')) b.onclick = () => openSiteDlg(SITES.find(x => x.id === b.dataset.edit));
+const SST = {sort: '', dir: 1, page: 0};
+async function loadSitesTable(){ SITES = await api('GET','/api/v1/sites'); drawSites(); }
+function drawSites(){
+  const q = ($('#sSearch').value || '').trim().toLowerCase();
+  const list = sortRows(SITES.filter(s => !q || [s.name, s.address, s.tz].some(x => x && x.toLowerCase().includes(q))), SST);
+  markSort('#siteTable', SST);
+  $('#sCount').textContent = list.length === SITES.length ? `${SITES.length}` : `${list.length} / ${SITES.length}`;
+  $('#siteTable tbody').innerHTML = list.map(s => `<tr class="clickable" data-id="${s.id}"><td class="notranslate"><a href="/assets/sites/${s.id}"><b>${esc(s.name)}</b></a></td><td>${esc(s.tz)}</td><td class="notranslate wrap">${esc(s.address || '')}</td><td class="num">${s.assets}</td><td class="num">${s.devices ?? 0}</td><td>${alarmBadge(s.alarm)}</td><td>${fmt(s.created_at)}</td><td>${canCfg() ? `<button class="btn small" type="button" data-edit="${s.id}">Edit</button>` : ''}</td></tr>`).join('') || `<tr><td colspan="8" class="muted">${esc(ctrl32.t(SITES.length ? 'nothing found' : 'no sites yet — create the first one'))}</td></tr>`;
+  for(const b of document.querySelectorAll('[data-edit]')) b.onclick = e => { e.stopPropagation(); openSiteDlg(SITES.find(x => x.id === b.dataset.edit)); };
+  for(const tr of document.querySelectorAll('#siteTable tr[data-id]')) tr.onclick = e => { if(e.target.closest('a,button')) return; location.href = '/assets/sites/' + tr.dataset.id; };
 }
-function openSiteDlg(site){ const f = $('#siteForm'); f.reset(); f.dataset.id = site ? site.id : ''; $('#siteDlgTitle').textContent = site ? 'Edit site' : 'New site'; if(site){ f.name.value = site.name; f.tz.value = site.tz; f.address.value = site.address || ''; } $('#siteErr').textContent=''; $('#siteDlg').showModal(); }
+$('#sSearch').oninput = drawSites; wireSort('#siteTable', SST, drawSites);
+function openSiteDlg(site){ const f = $('#siteForm'); f.reset(); f.dataset.id = site ? site.id : ''; $('#siteDlgTitle').textContent = ctrl32.t(site ? 'Edit site' : 'New site'); if(site){ f.name.value = site.name; f.tz.value = site.tz; f.address.value = site.address || ''; } $('#siteErr').textContent=''; $('#siteDlg').showModal(); }
 $('#newSiteBtn').onclick = () => openSiteDlg(null);
 $('#siteForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#siteErr').textContent=''; const body = {name: f.name.value, tz: f.tz.value, address: f.address.value, reason: f.reason.value};
   try{ if(f.dataset.id) await api('PATCH',`/api/v1/sites/${f.dataset.id}`, body); else await api('POST','/api/v1/sites', body); $('#siteDlg').close(); ctrl32.toast(f.dataset.id ? 'site updated' : 'site created','ok'); loadSitesTable(); }catch(x){ $('#siteErr').textContent = x.message; } };
-// ---- assets
-async function loadSiteSelect(){
-  SITES = await api('GET','/api/v1/sites');
-  const wanted = new URLSearchParams(location.search).get('site');
-  siteId = SITES.find(s => s.id === wanted) ? wanted : (SITES[0] && SITES[0].id);
-  $('#siteSel').innerHTML = SITES.map(s => `<option value="${s.id}" ${s.id === siteId ? 'selected' : ''}>${esc(s.name)}</option>`).join('') || '<option value="">no sites yet</option>';
-  $('#siteSel').onchange = () => { siteId = $('#siteSel').value; history.replaceState(null, '', '/assets?site=' + siteId); loadAssets(); };
-  loadAssets();
+// ---- assets: one table over every site, the hierarchy or sorted by a column
+const AST = {sort: '', dir: 1, page: 0}, PAGE = 50;
+// depth and order of the hierarchy: parents before their children, siblings by name
+function treeOrder(all){
+  const by = new Map(all.map(a => [a.id, a])), kids = new Map();
+  for(const a of all){ const p = a.parent_id && by.has(a.parent_id) ? a.parent_id : ''; if(!kids.has(p)) kids.set(p, []); kids.get(p).push(a); }
+  const out = [], seen = new Set();
+  const walk = (a, d) => { if(seen.has(a.id)) return; seen.add(a.id); a.depth = d; out.push(a); for(const c of (kids.get(a.id) || []).sort((x, y) => x.name.localeCompare(y.name))) walk(c, d + 1); };
+  for(const r of (kids.get('') || []).sort((x, y) => x.site.localeCompare(y.site) || x.name.localeCompare(y.name))) walk(r, 0);
+  for(const a of all) if(!seen.has(a.id)) walk(a, 0); // a cycle written into the database still shows
+  return out;
 }
 async function loadAssets(){
-  $('#newAssetBtn').hidden = !canCfg() || !siteId;
-  if(!siteId){ $('#assets').innerHTML = '<p class="muted">Create a site first (Assets → Sites).</p>'; return; }
-  const site = SITES.find(s => s.id === siteId); $('#siteInfo').textContent = site ? `${site.tz}${site.address ? ' · ' + site.address : ''}` : '';
-  [ASSETS, DS] = await Promise.all([api('GET',`/api/v1/assets?site_id=${siteId}`), api('GET','/api/v1/datastreams')]);
-  $('#assets').innerHTML = ASSETS.map(a => { const ds = DS.filter(d => d.asset_id === a.id); return `<div class="card" data-asset="${a.id}"><div class="row"><b>${esc(a.name)}</b><span class="badge">${esc(a.type)}</span><span class="grow"></span>${canCfg() ? `<button class="btn small" type="button" data-newds="${a.id}" data-name="${esc(a.name)}">+ datastream</button>` : ''}</div>
-    <div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>Key</th><th>Quantity</th><th>Kind</th><th>Interval</th></tr></thead><tbody>${ds.map(d => `<tr class="clickable" data-ds="${d.id}"><td><code>${esc(d.key)}</code></td><td>${esc(d.quantity)} [${esc(d.unit)}]</td><td>${esc(d.kind)}</td><td>${esc(d.expected_interval || '—')}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">no datastreams</td></tr>'}</tbody></table></div></div>`; }).join('') || '<p class="muted">No assets in this site yet.</p>';
-  for(const b of document.querySelectorAll('[data-newds]')) b.onclick = () => { const f = $('#dsForm'); f.reset(); f.dataset.asset = b.dataset.newds; $('#dsAssetName').textContent = 'Asset: ' + b.dataset.name; $('#dsErr').textContent=''; $('#dsNewDlg').showModal(); };
-  for(const tr of document.querySelectorAll('[data-ds]')) tr.onclick = () => openDS(tr.dataset.ds);
-  const want = new URLSearchParams(location.search);
-  if(want.get('asset')){ const c = document.querySelector(`[data-asset="${CSS.escape(want.get('asset'))}"]`); if(c){ c.scrollIntoView({block: 'center'}); c.style.outline = '2px solid var(--primary)'; } }
-  if(want.get('ds') && !loadAssets._opened){ loadAssets._opened = true; openDS(want.get('ds')); }
+  const p = new URLSearchParams(location.search);
+  [SITES, ASSETS] = await Promise.all([api('GET','/api/v1/sites'), api('GET','/api/v1/assets')]);
+  const byId = new Map(ASSETS.map(a => [a.id, a])); for(const a of ASSETS) a.parent = a.parent_id && byId.has(a.parent_id) ? byId.get(a.parent_id).name : '';
+  $('#aSite').innerHTML = `<option value="">${esc(ctrl32.t('All sites'))}</option>` + SITES.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  if(p.get('site') && SITES.some(s => s.id === p.get('site'))) $('#aSite').value = p.get('site');
+  const types = [...new Set(ASSETS.map(a => a.type))].sort();
+  $('#aType').innerHTML = `<option value="">${esc(ctrl32.t('All types'))}</option>` + types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  if(p.get('type') && types.includes(p.get('type'))) $('#aType').value = p.get('type');
+  if(p.get('q')) $('#aSearch').value = p.get('q');
+  $('#newAssetBtn').hidden = !canCfg() || !SITES.length;
+  drawAssets();
 }
-$('#newAssetBtn').onclick = () => { $('#assetForm').reset(); $('#assetErr').textContent=''; $('#assetDlg').showModal(); };
-$('#assetForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#assetErr').textContent=''; try{ await api('POST','/api/v1/assets',{site_id: siteId, type: f.type.value, name: f.name.value, reason: f.reason.value}); $('#assetDlg').close(); ctrl32.toast('asset created','ok'); loadAssets(); }catch(x){ $('#assetErr').textContent = x.message; } };
-$('#dsForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#dsErr').textContent=''; const body = {asset_id: f.dataset.asset, key: f.key.value, kind: f.kind.value, quantity: f.quantity.value, unit: f.unit.value, expected_interval: f.expected_interval.value, reason: f.reason.value}; if(f.accuracy.value !== '') body.accuracy = parseFloat(f.accuracy.value);
-  try{ await api('POST','/api/v1/datastreams', body); $('#dsNewDlg').close(); ctrl32.toast('datastream created','ok'); loadAssets(); }catch(x){ $('#dsErr').textContent = x.message; } };
+function assetFilterURL(){ const p = new URLSearchParams(); if($('#aSite').value) p.set('site', $('#aSite').value); if($('#aType').value) p.set('type', $('#aType').value); if($('#aSearch').value.trim()) p.set('q', $('#aSearch').value.trim()); const q = p.toString(); history.replaceState(null, '', '/assets' + (q ? '?' + q : '')); }
+function drawAssets(){
+  const q = ($('#aSearch').value || '').trim().toLowerCase(), site = $('#aSite').value, type = $('#aType').value;
+  const match = a => (!site || a.site_id === site) && (!type || a.type === type) && (!q || [a.name, a.type, a.site, a.parent].some(x => x && x.toLowerCase().includes(q)));
+  const list = AST.sort ? sortRows(ASSETS.filter(match), AST) : treeOrder(ASSETS).filter(match);
+  markSort('#assetTable', AST); $('#aTree').classList.toggle('primary', !AST.sort);
+  const pages = Math.max(1, Math.ceil(list.length / PAGE)); if(AST.page >= pages) AST.page = pages - 1;
+  const shown = list.slice(AST.page * PAGE, (AST.page + 1) * PAGE);
+  $('#aCount').textContent = list.length === ASSETS.length ? `${ASSETS.length}` : `${list.length} / ${ASSETS.length}`;
+  $('#aPager').hidden = pages < 2; $('#aPage').textContent = `${AST.page + 1} / ${pages}`; $('#aPrev').disabled = AST.page === 0; $('#aNext').disabled = AST.page >= pages - 1;
+  const indent = a => !AST.sort && a.depth ? `<span class="tree" style="padding-left:${(a.depth - 1) * 18}px">└ </span>` : '';
+  $('#assetTable tbody').innerHTML = shown.map(a => `<tr class="clickable" data-id="${a.id}"><td class="notranslate">${indent(a)}<a href="/assets/${a.id}"><b>${esc(a.name)}</b></a>${a.children ? ` <span class="muted" style="font-size:12px" title="${esc(ctrl32.t('child assets'))}">(${a.children})</span>` : ''}</td><td>${esc(a.type)}</td><td class="notranslate wrap"><a href="/assets/sites/${a.site_id}">${esc(a.site)}</a></td><td class="notranslate wrap">${a.parent_id && a.parent ? `<a href="/assets/${a.parent_id}">${esc(a.parent)}</a>` : '<span class="muted">—</span>'}</td><td class="num">${a.datastreams}</td><td class="num">${a.devices}</td><td>${alarmBadge(a.alarm)}</td><td>${ago(a.last_at)}</td></tr>`).join('')
+    || `<tr><td colspan="8" class="muted">${esc(ctrl32.t(!SITES.length ? 'Create a site first (Assets → Sites).' : ASSETS.length ? 'nothing found' : 'No assets yet.'))}</td></tr>`;
+  for(const tr of document.querySelectorAll('#assetTable tr[data-id]')) tr.onclick = e => { if(e.target.closest('a')) return; location.href = '/assets/' + tr.dataset.id; };
+}
+for(const id of ['#aSite', '#aType']) $(id).onchange = () => { AST.page = 0; assetFilterURL(); drawAssets(); };
+$('#aSearch').oninput = () => { AST.page = 0; assetFilterURL(); drawAssets(); };
+$('#aTree').onclick = () => { AST.sort = ''; AST.page = 0; drawAssets(); };
+$('#aPrev').onclick = () => { AST.page--; drawAssets(); }; $('#aNext').onclick = () => { AST.page++; drawAssets(); };
+wireSort('#assetTable', AST, drawAssets);
+function parentOpts(siteId, cur){ return `<option value="">${esc(ctrl32.t('(top level)'))}</option>` + treeOrder(ASSETS.filter(a => a.site_id === siteId)).map(a => `<option value="${a.id}" ${a.id === cur ? 'selected' : ''}>${'  '.repeat(a.depth || 0)}${esc(a.name)}</option>`).join(''); }
+$('#newAssetBtn').onclick = () => { const f = $('#assetForm'); f.reset(); $('#assetErr').textContent='';
+  f.site_id.innerHTML = SITES.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join(''); if($('#aSite').value) f.site_id.value = $('#aSite').value;
+  f.parent_id.innerHTML = parentOpts(f.site_id.value); f.site_id.onchange = () => { f.parent_id.innerHTML = parentOpts(f.site_id.value); }; $('#assetDlg').showModal(); };
+$('#assetForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#assetErr').textContent='';
+  try{ const r = await api('POST','/api/v1/assets',{site_id: f.site_id.value, parent_id: f.parent_id.value, type: f.type.value, name: f.name.value, reason: f.reason.value}); $('#assetDlg').close(); ctrl32.toast('asset created','ok'); location.href = '/assets/' + r.id; }catch(x){ $('#assetErr').textContent = x.message; } };
 // ---- rules
 async function loadRules(){
   $('#newRuleBtn').hidden = !canCfg();
   try{ const [rs, ds] = await Promise.all([api('GET','/api/v1/alarm-rules'), api('GET','/api/v1/datastreams')]); DS = ds;
-    $('#rules tbody').innerHTML = rs.map(r => `<tr class="clickable" data-ds="${r.datastream_id}"><td>${esc(r.asset)}</td><td><code>${esc(r.key)}</code></td><td>${esc(r.type)}</td><td>${r.warning ?? '—'}</td><td>${r.action ?? '—'}</td><td>${r.delay_seconds} s</td><td>${r.hysteresis}</td><td title="${esc(r.reason)}">v${r.version}</td><td>${fmt(r.valid_from)}</td></tr>`).join('') || '<tr><td colspan="9" class="muted">no alarm rules yet</td></tr>';
-    for(const tr of document.querySelectorAll('#rules tr.clickable')) tr.onclick = () => openDS(tr.dataset.ds);
+    $('#rules tbody').innerHTML = rs.map(r => `<tr class="clickable" data-asset="${r.asset_id}" data-ds="${r.datastream_id}"><td class="notranslate"><a href="/assets/${r.asset_id}">${esc(r.asset)}</a></td><td><code>${esc(r.key)}</code></td><td>${esc(r.type)}</td><td>${r.warning ?? '—'}</td><td>${r.action ?? '—'}</td><td>${r.delay_seconds} s</td><td>${r.hysteresis}</td><td title="${esc(r.reason)}">v${r.version}</td><td>${fmt(r.valid_from)}</td></tr>`).join('') || '<tr><td colspan="9" class="muted">no alarm rules yet</td></tr>';
+    for(const tr of document.querySelectorAll('#rules tr.clickable')) tr.onclick = e => { if(e.target.closest('a')) return; location.href = `/assets/${tr.dataset.asset}/rules?ds=${tr.dataset.ds}`; };
     $('#ruleNew').datastream_id.innerHTML = DS.map(d => `<option value="${d.id}">${esc(d.asset)} / ${esc(d.key)} [${esc(d.unit)}]</option>`).join('');
   }catch(x){ $('#rules tbody').innerHTML = `<tr><td colspan="9" class="muted">${esc(x.message)}</td></tr>`; }
 }
 $('#newRuleBtn').onclick = async () => { const f = $('#ruleNew'); f.reason.value=''; $('#ruleNewErr').textContent=''; await loadPols(); f.type.innerHTML = ruleTypeOpts(f.type.value || 'high'); f.policy.innerHTML = policyOpts(); ruleHint(f); f.type.onchange = () => ruleHint(f); $('#ruleDlg').showModal(); };
-$('#ruleNew').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#ruleNewErr').textContent=''; const body = {datastream_id: f.datastream_id.value, type: f.type.value, delay_seconds: parseFloat(f.delay.value || '0'), hysteresis: parseFloat(f.hysteresis.value || '0'), reason: f.reason.value}; if(f.warning.value !== '') body.warning = parseFloat(f.warning.value); if(f.action.value !== '') body.action = parseFloat(f.action.value); if(f.policy && f.policy.value) body.escalation_policy_id = f.policy.value;
-  try{ const r = await api('POST','/api/v1/alarm-rules', body); $('#ruleDlg').close(); ctrl32.toast(r.status === 'pending' ? 'change request recorded — waiting for approval by a second person' : `rule version ${r.version} active`, r.status === 'pending' ? 'bad' : 'ok'); loadRules(); }catch(x){ $('#ruleNewErr').textContent = x.message; } };
-// ---- alarm rule types (internal/alarm): what each one checks
-const RULE_TYPES = [['high', 'high (value above limits)', 'Warning and action limits: the value at or above them.'],
-  ['low', 'low (value below limits)', 'Warning and action limits: the value at or below them.'],
-  ['low_battery', 'low battery (battery level at or below the limits)', 'Warning and action limits in the unit of the datastream (%, V).'],
-  ['power_loss', 'power loss (value 0 = no power)', 'No limits: a value of 0 (false) raises the alarm, any other value clears it.'],
-  ['door_open', 'door open (value other than 0)', 'No limits: a value other than 0 (true) raises the alarm after the delay (how long the door may stay open).'],
-  ['comm_loss', 'communication loss (no new value)', 'Limits in seconds without a new value; empty = 1.5 × the expected interval of the datastream. A new value clears it.'],
-  ['sensor_fault', 'sensor fault (value marked as faulty)', 'No limits: a value the device flags as faulty, or outside the physical range of the datastream, raises the alarm; the next good value clears it.']];
-function ruleTypeOpts(cur){ return RULE_TYPES.map(([v, l]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${esc(l)}</option>`).join(''); }
-function policyOpts(cur){ return `<option value="">(none: global e-mail)</option>` + POLS.map(p => `<option value="${p.id}" ${p.id === cur ? 'selected' : ''}>${esc(p.name)}</option>`).join(''); }
-function ruleHint(f){ const t = RULE_TYPES.find(x => x[0] === f.type.value); const h = f.querySelector('.rule-hint'); if(h) h.textContent = t ? ctrl32.t(t[2]) : ''; const lim = !['power_loss', 'door_open', 'sensor_fault'].includes(f.type.value); f.warning.disabled = f.action.disabled = !lim; f.hysteresis.disabled = !lim || f.type.value === 'comm_loss'; if(!lim){ f.warning.value = f.action.value = ''; } if(f.hysteresis.disabled) f.hysteresis.value = '0'; }
-// ---- datastream detail
-let POLS = [];
-async function loadPols(){ if(ctrl32.can('config.write')){ try{ POLS = (await api('GET','/api/v1/escalation-policies')).filter(p => !p.revoked_at); }catch(_){ POLS = []; } } }
-async function openDS(id){
-  await loadPols();
-  const dlg = $('#dsDlg'); dlg.innerHTML = '<p class="muted">Loading…</p>'; dlg.showModal();
-  let d; try{ d = await api('GET',`/api/v1/datastreams/${id}`); }catch(x){ dlg.innerHTML = `<p class="err">${esc(x.message)}</p>`; return; }
-  const ds = d.datastream, cfg = canCfg();
-  dlg.innerHTML = `<div class="row"><h2 style="margin:0">${esc(d.asset.name)} / <code>${esc(ds.key)}</code></h2><span class="badge">${esc(ds.kind)}</span><span class="grow"></span><button class="btn ghost icon" id="dsClose" type="button" aria-label="Close">${ctrl32.ICON.close}</button></div>
-    <div class="two" style="margin-top:12px"><div>
-      <div class="kv"><b>Site</b><span>${esc(d.site.name)}</span><b>Quantity</b><span>${esc(ds.quantity)} [${esc(ds.unit)}]</span><b>Expected interval</b><span>${esc(ds.expected_interval || '— (no gap detection)')}</span><b>Accuracy</b><span>${ds.accuracy ?? '—'}</span><b>Physical range</b><span>${ds.range_min == null && ds.range_max == null ? '<span class="muted">not set</span>' : `${ds.range_min ?? '−∞'} … ${ds.range_max ?? '+∞'} ${esc(ds.unit)} <span class="muted">(outside = sensor fault)</span>`}</span><b>Source device</b><span>${d.device ? `<a href="/devices/${d.device.id}">${esc(d.device.external_id)}</a> <span class="muted">since ${fmt(d.device.since)}</span>` : '<span class="muted">none — assign one on the device page</span>'}</span><b>Last value</b><span>${d.last_observation ? `${d.last_observation.value ?? '—'} ${esc(ds.unit)} <span class="muted">${fmt(d.last_observation.measured_at)} · ${esc(d.last_observation.quality)}</span>` : '<span class="muted">no data yet</span>'}</span><b>Rules</b><span>${(d.rules || []).length ? d.rules.map(r => `<a href="/assets/automation">${esc(r.name)}</a> <span class="muted">${r.role === 'derive' ? 'derives this datastream' : 'reads it'}${r.status !== 'active' || !r.enabled ? ' · ' + (r.enabled ? esc(r.status) : 'disabled') : ''}</span>`).join('<br>') : '<span class="muted">none</span>'}</span><b>Id</b><code>${esc(ds.id)}</code></div>
-      ${cfg ? `<form id="dsEdit" class="form" style="margin-top:12px"><h3 style="margin:0">Edit</h3><div class="row"><label>Unit <input name="unit" value="${esc(ds.unit)}" maxlength="16"></label><label>Expected interval <input name="expected_interval" value="${esc(ds.expected_interval)}" maxlength="32" placeholder="5 minutes"></label></div><div class="row"><label>Physical range from <input name="range_min" type="number" step="any" value="${ds.range_min ?? ''}"></label><label>to <input name="range_max" type="number" step="any" value="${ds.range_max ?? ''}"></label></div><p class="muted" style="margin:0;font-size:12px">What the sensor can measure at all. A value outside it is stored with the quality sensor fault. Empty = no limit.</p><label>Reason <input name="reason" required maxlength="200"></label><div class="err" id="dsEditErr"></div><div><button class="btn small primary" type="submit">Save</button></div></form>` : ''}
-    </div><div>
-      <h3 style="margin-top:0">Alarm rules (current versions)</h3>
-      <div class="table-wrap"><table><thead><tr><th>Type</th><th>Warning</th><th>Action</th><th>Delay</th><th>Hyst.</th><th>v</th><th></th></tr></thead><tbody>${d.alarm_rules.map(r => `<tr><td>${esc(r.type)}</td><td>${r.warning ?? '—'}</td><td>${r.action ?? '—'}</td><td>${r.delay_seconds} s</td><td>${r.hysteresis}</td><td title="${esc(r.reason)}">${r.version}</td><td>${cfg ? `<button class="btn small" type="button" data-close-rule="${r.id}">Disable</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">no rules</td></tr>'}</tbody></table></div>
-      ${cfg ? `<form id="ruleForm" class="form" style="margin-top:12px"><h3 style="margin:0">New rule version</h3><div class="row"><label>Type <select name="type">${ruleTypeOpts((d.alarm_rules[0] || {}).type)}</select></label><label>Warning limit <input name="warning" type="number" step="any"></label><label>Action limit <input name="action" type="number" step="any"></label></div><div class="row"><label>Delay (s) <input name="delay" type="number" min="0" value="0"></label><label>Hysteresis <input name="hysteresis" type="number" step="any" min="0" value="0"></label><label>Escalation policy <select name="policy">${policyOpts()}</select></label></div><p class="muted rule-hint" style="margin:0;font-size:12px"></p><label>Reason <input name="reason" required maxlength="200"></label><div class="err" id="ruleErr"></div><div><button class="btn small primary" type="submit">Save as new version</button></div></form>` : ''}
-    </div></div>`;
-  $('#dsClose').onclick = () => { dlg.close(); if($('[data-section="rules"]').classList.contains('active')) loadRules(); else loadAssets(); };
-  if(cfg){
-    $('#dsEdit').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#dsEditErr').textContent=''; const rng = v => v === '' ? null : parseFloat(v);
-      try{ await api('PATCH',`/api/v1/datastreams/${id}`,{unit: f.unit.value, expected_interval: f.expected_interval.value, range: {min: rng(f.range_min.value), max: rng(f.range_max.value)}, reason: f.reason.value}); ctrl32.toast('saved','ok'); openDS(id); }catch(x){ $('#dsEditErr').textContent = x.message; } };
-    // the form starts from the current version of the chosen type (limits, delay, hysteresis, escalation policy)
-    const rf = $('#ruleForm'), fill = () => { const cur = d.alarm_rules.find(r => r.type === rf.type.value); rf.warning.value = cur && cur.warning != null ? cur.warning : ''; rf.action.value = cur && cur.action != null ? cur.action : ''; rf.delay.value = cur ? cur.delay_seconds : 0; rf.hysteresis.value = cur ? cur.hysteresis : 0; rf.policy.innerHTML = policyOpts(cur && cur.escalation_policy_id); ruleHint(rf); };
-    rf.type.onchange = fill; fill();
-    $('#ruleForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#ruleErr').textContent=''; const body = {datastream_id: id, type: f.type.value, delay_seconds: parseFloat(f.delay.value || '0'), hysteresis: parseFloat(f.hysteresis.value || '0'), reason: f.reason.value}; if(f.warning.value !== '') body.warning = parseFloat(f.warning.value); if(f.action.value !== '') body.action = parseFloat(f.action.value); if(f.policy.value) body.escalation_policy_id = f.policy.value;
-      try{ const r = await api('POST','/api/v1/alarm-rules', body); ctrl32.toast(r.status === 'pending' ? 'change request recorded — waiting for approval by a second person' : `rule version ${r.version} active`, r.status === 'pending' ? 'bad' : 'ok'); openDS(id); }catch(x){ $('#ruleErr').textContent = x.message; } };
-    for(const b of document.querySelectorAll('[data-close-rule]')) b.onclick = async () => { const reason = ctrl32.ask('Reason for disabling this rule:'); if(!reason) return; try{ const r = await api('DELETE',`/api/v1/alarm-rules/${b.dataset.closeRule}?reason=${encodeURIComponent(reason)}`); if(r.status === 'pending') ctrl32.toast('change request recorded — waiting for approval by a second person','bad'); openDS(id); }catch(x){ ctrl32.toast(x.message,'bad'); } };
-  }
-}
+$('#ruleNew').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#ruleNewErr').textContent='';
+  try{ const r = await api('POST','/api/v1/alarm-rules', ctrl32Rules.ruleBody(f, f.datastream_id.value)); $('#ruleDlg').close(); ctrl32Rules.ruleSaved(r); loadRules(); }catch(x){ $('#ruleNewErr').textContent = x.message; } };
 // ---- automation rules (URS C-09)
 let RULES = [], DEVS = [], CHANS = [], APOLS = [], ED = null;
 const OPS = ['>', '>=', '<', '<=', '==', '!=', 'stale'];
@@ -315,13 +319,17 @@ $('#autoForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $
     if(f.dataset.id) r = await api('PUT',`/api/v1/rules/${f.dataset.id}`, body); else r = await api('POST','/api/v1/rules', body);
     $('#autoDlg').close(); ctrl32.toast(r.status === 'pending' ? 'rule saved — waiting for approval by a second person' : `rule version ${r.version} active`, r.status === 'pending' ? 'bad' : 'ok'); loadAutomation(); }
   catch(x){ $('#autoErr').textContent = x.message; } };
-ctrl32.ready({requireAuth: true}).then(() => {
+ctrl32.ready({requireAuth: true}).then(async () => {
+  // links of earlier versions: an asset card or a datastream of the assets screen now open the asset page
+  const p = new URLSearchParams(location.search);
+  if(p.get('asset')){ location.replace('/assets/' + encodeURIComponent(p.get('asset'))); return; }
+  if(p.get('ds')){ try{ const d = await api('GET', '/api/v1/datastreams/' + encodeURIComponent(p.get('ds'))); location.replace(`/assets/${d.asset.id}/datastreams?ds=${d.datastream.id}`); return; }catch(_){ /* unknown: the list */ } }
   const sec = ctrl32.section('assets', ['sites', 'assets', 'rules', 'automation']);
-  document.title = {sites: 'Sites', assets: 'Assets', rules: 'Alarm rules', automation: 'Automation'}[sec] + ' — ctrl32 telemetry';
+  document.title = ctrl32.t({sites: 'Sites', assets: 'Assets', rules: 'Alarm rules', automation: 'Automation'}[sec]) + ' — ctrl32 telemetry';
   if(sec === 'sites'){ $('#newSiteBtn').hidden = !canCfg(); loadSitesTable().catch(x => ctrl32.toast(x.message,'bad')); }
   else if(sec === 'rules') loadRules();
   else if(sec === 'automation') loadAutomation();
-  else loadSiteSelect().catch(x => ctrl32.toast(x.message,'bad'));
+  else loadAssets().catch(x => ctrl32.toast(x.message,'bad'));
 });
 </script>
 </body>

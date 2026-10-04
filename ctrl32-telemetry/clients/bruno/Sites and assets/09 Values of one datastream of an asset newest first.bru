@@ -1,0 +1,31 @@
+meta {
+  name: Values of one datastream of an asset newest first
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/assets/:id/telemetry/values
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  datastream_id: 
+  ~from: 
+  ~to: 
+  ~cursor: 
+  ~limit: 
+}
+
+docs {
+  Values of one datastream of an asset, newest first
+  
+  Paged by `cursor` (from `next_cursor`), at most 500 a page (default 50).
+  
+  Requires permission `data.read`.
+}

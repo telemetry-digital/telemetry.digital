@@ -35,7 +35,7 @@ var searchKinds = []searchKind{
 		func(c []string) searchHit {
 			return searchHit{ID: c[0], Title: c[1], Subtitle: c[2] + " · " + c[3], URL: "/devices/" + c[0]}
 		}},
-	{"datastream", "data.read", `SELECT ds.id::text, a.name || ' / ' || ds.key, st.name, ds.quantity, ds.unit, st.id::text FROM core.datastream ds
+	{"datastream", "data.read", `SELECT ds.id::text, a.name || ' / ' || ds.key, st.name, ds.quantity, ds.unit, a.id::text FROM core.datastream ds
 		JOIN core.asset a ON a.id = ds.asset_id JOIN core.site st ON st.id = a.site_id WHERE ds.org_id = $1::uuid
 		AND (ds.key ILIKE $2 OR a.name ILIKE $2 OR (a.name || ' / ' || ds.key) ILIKE $2 OR ds.quantity ILIKE $2 OR COALESCE(ds.attributes->>'name', '') ILIKE $2)
 		ORDER BY (ds.key ILIKE $3 OR a.name ILIKE $3) DESC, a.name, ds.key LIMIT $4`,
@@ -44,17 +44,17 @@ var searchKinds = []searchKind{
 			if c[4] != "" {
 				sub += " [" + c[4] + "]"
 			}
-			return searchHit{ID: c[0], Title: c[1], Subtitle: sub, URL: "/assets?site=" + c[5] + "&ds=" + c[0]}
+			return searchHit{ID: c[0], Title: c[1], Subtitle: sub, URL: "/assets/" + c[5] + "/datastreams?ds=" + c[0]}
 		}},
 	{"asset", "data.read", `SELECT a.id::text, a.name, a.type, st.name, st.id::text FROM core.asset a JOIN core.site st ON st.id = a.site_id
 		WHERE a.org_id = $1::uuid AND (a.name ILIKE $2 OR a.type ILIKE $2) ORDER BY (a.name ILIKE $3) DESC, a.name LIMIT $4`,
 		func(c []string) searchHit {
-			return searchHit{ID: c[0], Title: c[1], Subtitle: c[2] + " · " + c[3], URL: "/assets?site=" + c[4] + "&asset=" + c[0]}
+			return searchHit{ID: c[0], Title: c[1], Subtitle: c[2] + " · " + c[3], URL: "/assets/" + c[0]}
 		}},
 	{"site", "data.read", `SELECT id::text, name, COALESCE(address, '') FROM core.site WHERE org_id = $1::uuid AND (name ILIKE $2 OR COALESCE(address, '') ILIKE $2)
 		ORDER BY (name ILIKE $3) DESC, name LIMIT $4`,
 		func(c []string) searchHit {
-			return searchHit{ID: c[0], Title: c[1], Subtitle: c[2], URL: "/assets?site=" + c[0]}
+			return searchHit{ID: c[0], Title: c[1], Subtitle: c[2], URL: "/assets/sites/" + c[0]}
 		}},
 	{"dashboard", "data.read", `SELECT id::text, name, slug, COALESCE(spec->>'kind', 'dashboard') FROM core.dashboard WHERE org_id = $1::uuid AND valid_to IS NULL
 		AND (name ILIKE $2 OR slug ILIKE $2) ORDER BY (name ILIKE $3) DESC, name LIMIT $4`,

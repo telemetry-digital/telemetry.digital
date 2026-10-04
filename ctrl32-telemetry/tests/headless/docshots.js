@@ -212,9 +212,28 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await page("devices-device-telemetry", `/devices/${t2}/telemetry`, { wait: 4000 });
   await page("devices-device-telemetry-chart", `/devices/${t2}/telemetry`, { wait: 4000, before: telRow("datastream:temp"), afterWait: 3000, clip: "#telDetail", pad: 4 });
   await page("devices-device-telemetry-unassigned", `/devices/${t2}/telemetry`, { wait: 4000, before: telRow("unassigned:door"), afterWait: 3000, clip: "#telDetail", pad: 4 });
-  await page("devices-sites", "/assets/sites");
+  await page("devices-sites", "/assets/sites", { wait: 3000 });
   await page("devices-assets", "/assets", { wait: 3000 });
   await page("devices-new-asset-dialog", "/assets", { wait: 3000, click: "#newAssetBtn" });
+  // the asset and site pages (0.74.0; docs.py tree): the store room of the pharmacy with the fridges in it
+  const assetsAll = (await api("/api/v1/assets")) || [];
+  const assetId = (n) => (assetsAll.find((a) => a.name === n) || {}).id;
+  const room = assetId("Medicine store – room"), fr2 = assetId("Medicine fridge 2");
+  const pharmacy = (assetsAll.find((a) => a.name === "Medicine fridge 2") || {}).site_id;
+  if (room) {
+    await page("devices-asset-overview", `/assets/${room}`, { wait: 4000, full: true, maxH: 2000 });
+    await page("devices-asset-attributes", `/assets/${room}`, { wait: 4000, click: "#attrEdit", clip: "js:document.querySelector('#attrForm').closest('.card')", pad: 4 });
+    await page("devices-asset-telemetry", `/assets/${room}/telemetry`, { wait: 4000, before: "(() => { const c = document.querySelector('#telKids'); if (!c) return false; c.checked = true; c.dispatchEvent(new Event('change')); return true; })()", afterWait: 3000 });
+  }
+  if (fr2) {
+    await page("devices-asset-telemetry-chart", `/assets/${fr2}/telemetry`, { wait: 4000, before: "(() => { const tr = document.querySelector('#telTable tr[data-row]'); if (tr) tr.click(); return !!tr; })()", afterWait: 3500, clip: "#telDetail", pad: 4 });
+    await page("devices-asset-datastreams", `/assets/${fr2}/datastreams`, { wait: 3500 });
+    const dsF2 = ((await api("/api/v1/datastreams")) || []).find((d) => d.asset_id === fr2 && d.key === "temp");
+    if (dsF2) await page("devices-asset-datastream-dialog", `/assets/${fr2}/datastreams?ds=${dsF2.id}`, { wait: 5000, clip: "#dsDlg", pad: -2 });
+    await page("devices-asset-rules", `/assets/${fr2}/rules`, { wait: 3500 });
+    await page("devices-asset-history", `/assets/${fr2}/history`, { wait: 3500 });
+  }
+  if (pharmacy) await page("devices-site-page", `/assets/sites/${pharmacy}`, { wait: 4500, full: true, maxH: 2200 });
   await page("devices-home", "/home", { wait: 4000 });
   for (const s of ["add", "inbox", "provisioning", "sources"]) await page(`devices-smarthome-${s}`, `/smarthome#${s}`, { wait: 3000 });
   await page("devices-firmware", "/fota");
@@ -232,8 +251,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   if (wanted("automation-rule-version")) {
     const dss = (await api("/api/v1/datastreams")) || [];
     const f2 = dss.find((d) => /fridge 2/i.test(d.asset || "") && d.key === "temp") || dss.find((d) => d.unit) || dss[0];
-    await go("/assets/rules", 3000);
-    if (f2) { await ev(`openDS(${JSON.stringify(f2.id)})`); await sleep(3000); await ev("(() => { const f = document.querySelector('#ruleForm'); if (!f) return false; f.type.value = 'high'; f.type.dispatchEvent(new Event('change')); return true; })()"); await sleep(500); }
+    if (f2) { await go(`/assets/${f2.asset_id}/datastreams?ds=${f2.id}`, 5000); await ev("(() => { const f = document.querySelector('#ruleForm'); if (!f) return false; f.type.value = 'high'; f.type.dispatchEvent(new Event('change')); return true; })()"); await sleep(500); }
     await shot("automation-rule-version", { clip: "#ruleForm", pad: 12 });
   }
   // the Alarms widget with the Acknowledge button (the cold chain dashboard; needs an active alarm)

@@ -21,6 +21,18 @@ export type AccountRequest = {
   message?: string;
 };
 
+export type ActiveAlarm = {
+  asset?: string;
+  asset_id?: string;
+  datastream_id?: string;
+  id?: string;
+  key?: string;
+  raised_at?: string;
+  severity?: string;
+  state?: string;
+  value?: number | null;
+};
+
 export type Alarm = {
   cleared_at?: string | null;
   datastream_id?: string | null;
@@ -38,6 +50,7 @@ export type Alarm = {
 export type AlarmRule = {
   action?: number | null;
   asset?: string;
+  asset_id?: string;
   datastream_id?: string;
   delay_seconds?: number;
   escalation_policy_id?: string | null;
@@ -49,6 +62,14 @@ export type AlarmRule = {
   valid_from?: string;
   version?: number;
   warning?: number | null;
+};
+
+export type AlarmSummary = {
+  /** all acknowledged */
+  acknowledged?: boolean;
+  count?: number;
+  /** worst active alarm */
+  severity?: "warning" | "action" | "critical";
 };
 
 export type Annotation = {
@@ -67,15 +88,34 @@ export type Annotation = {
 };
 
 export type Asset = {
+  alarm?: AlarmSummary;
   attributes?: Record<string, unknown>;
+  /** child assets */
+  children?: number;
   created_at?: string;
   datastreams?: number;
+  /** devices feeding its datastreams now */
+  devices?: number;
   id?: string;
+  /** newest value of its datastreams */
+  last_at?: string | null;
   name?: string;
   parent_id?: string | null;
   site?: string;
   site_id?: string;
   type?: string;
+};
+
+export type AssetDevice = {
+  connected?: boolean;
+  external_id?: string;
+  id?: string;
+  keys?: string[];
+  last_seen?: string | null;
+  location?: unknown;
+  name?: string;
+  revoked_at?: string | null;
+  transport?: string;
 };
 
 export type Branding = {
@@ -377,6 +417,10 @@ export type Datastream = {
 };
 
 export type Device = {
+  assets?: ({
+    id?: string;
+    name?: string;
+  })[];
   /** MQTT session open */
   connected?: boolean;
   external_id?: string;
@@ -1248,10 +1292,18 @@ export type Share = {
 
 export type Site = {
   address?: string;
+  alarm?: AlarmSummary;
   assets?: number;
   created_at?: string;
   customer_id?: string | null;
+  datastreams?: number;
+  /** devices feeding its datastreams now */
+  devices?: number;
   id?: string;
+  location?: {
+    lat?: number;
+    lon?: number;
+  } | null;
   name?: string;
   tz?: string;
 };
@@ -1269,7 +1321,11 @@ export type StreamInfo = {
 
 export type TelemetryKey = {
   asset?: string;
+  asset_id?: string;
   datastream_id?: string;
+  device?: string;
+  /** asset page: the device feeding it now */
+  device_id?: string;
   key?: string;
   kind?: string;
   last?: {
@@ -1619,7 +1675,7 @@ export class Ctrl32Client {
   /** Current alarm rules
    *
    * Requires permission `data.read`. */
-  getAlarmRules(query?: { datastream_id?: string; /** only rules of this datastream */ }): Promise<AlarmRule[]> {
+  getAlarmRules(query?: { datastream_id?: string; /** only rules of this datastream */ asset_id?: string; /** only rules of the datastreams of this asset */ }): Promise<AlarmRule[]> {
     return this.request<AlarmRule[]>('GET', `/api/v1/alarm-rules`, query, undefined, false);
   }
 
@@ -1731,6 +1787,8 @@ export class Ctrl32Client {
 
   /** List assets
    *
+   * Each asset with the number of its datastreams, of the devices feeding them now and of its child assets, its worst active alarm and the time of its newest value.
+   * 
    * Requires permission `data.read`. */
   getAssets(query?: { site_id?: string; /** only assets of this site */ }): Promise<Asset[]> {
     return this.request<Asset[]>('GET', `/api/v1/assets`, query, undefined, false);
@@ -1754,17 +1812,225 @@ export class Ctrl32Client {
     return this.request<Asset>('POST', `/api/v1/assets`, undefined, body, false);
   }
 
+  /** An asset with everything around it
+   *
+   * The asset (as in the list), its site, its ancestors (the top-level asset first), its child assets, its datastreams with the latest value (quality stale when older than the expected interval allows), the source device and the number of current alarm rules, the devices feeding it, the active alarms and its map position (its own, else the site's).
+   * 
+   * Requires permission `data.read`. */
+  getAssetsId(id: string): Promise<{
+    alarms?: ActiveAlarm[];
+    asset?: Asset;
+    children?: Asset[];
+    datastreams?: (Record<string, unknown>)[];
+    devices?: AssetDevice[];
+    location?: {
+      lat?: number;
+      lon?: number;
+      /** asset | site */
+      source?: string;
+    } | null;
+    path?: ({
+      id?: string;
+      name?: string;
+      type?: string;
+    })[];
+    site?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    alarms?: ActiveAlarm[];
+    asset?: Asset;
+    children?: Asset[];
+    datastreams?: (Record<string, unknown>)[];
+    devices?: AssetDevice[];
+    location?: {
+      lat?: number;
+      lon?: number;
+      /** asset | site */
+      source?: string;
+    } | null;
+    path?: ({
+      id?: string;
+      name?: string;
+      type?: string;
+    })[];
+    site?: Record<string, unknown>;
+  }>('GET', `/api/v1/assets/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
   /** Update an asset
    *
+   * `parent_id` moves it under another asset of the same site ("" = top level; never under itself or an asset below it); `location` sets its map position (kept in the attributes as lat, lon), `clear_location` removes it.
+   * 
    * Requires permission `config.write`. */
   patchAssetsId(id: string, body: {
+    /** replaces the attributes */
     attributes?: Record<string, unknown>;
+    clear_location?: boolean;
+    location?: {
+      lat?: number;
+      lon?: number;
+    };
     name?: string;
+    /** parent asset, empty = top level */
+    parent_id?: string;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
     type?: string;
   }): Promise<Asset> {
     return this.request<Asset>('PATCH', `/api/v1/assets/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Audit history of an asset
+   *
+   * Audit entries of the asset, its datastreams, their alarm rules and device assignments, newest first; page with `before` = `next_before`.
+   * 
+   * Requires permission `audit.read`. */
+  getAssetsIdHistory(id: string, query?: { before?: string; /** sequence number */ limit?: number; /** at most 200, default 50 */ }): Promise<{
+    entries?: ({
+      action?: string;
+      actor?: string;
+      entity_id?: string;
+      entity_type?: string;
+      new_value?: unknown;
+      old_value?: unknown;
+      reason?: string;
+      seq?: number;
+      ts?: string;
+    })[];
+    /** empty on the last page */
+    next_before?: string;
+  }> {
+    return this.request<{
+    entries?: ({
+      action?: string;
+      actor?: string;
+      entity_id?: string;
+      entity_type?: string;
+      new_value?: unknown;
+      old_value?: unknown;
+      reason?: string;
+      seq?: number;
+      ts?: string;
+    })[];
+    /** empty on the last page */
+    next_before?: string;
+  }>('GET', `/api/v1/assets/${encodeURIComponent(id)}/history`, query, undefined, false);
+  }
+
+  /** Every datastream of an asset
+   *
+   * Like the Telemetry tab of a device: each datastream with the latest value, its quality and time, statistics over `from`–`to` (default the last 24 hours, at most 366 days; sensor faults counted in `faults`, not in min/max/avg) and a sparkline of the last 24 hours. `children=1` adds the datastreams of every asset below it.
+   * 
+   * Requires permission `data.read`. */
+  getAssetsIdTelemetry(id: string, query?: { from?: string; /** RFC 3339 */ to?: string; /** RFC 3339 */ children?: string; /** 1 = include the assets below */ }): Promise<{
+    asset_id?: string;
+    /** assets included */
+    assets?: number;
+    children?: boolean;
+    from?: string;
+    generated_at?: string;
+    keys?: TelemetryKey[];
+    to?: string;
+  }> {
+    return this.request<{
+    asset_id?: string;
+    /** assets included */
+    assets?: number;
+    children?: boolean;
+    from?: string;
+    generated_at?: string;
+    keys?: TelemetryKey[];
+    to?: string;
+  }>('GET', `/api/v1/assets/${encodeURIComponent(id)}/telemetry`, query, undefined, false);
+  }
+
+  /** Export the values of one datastream of an asset
+   *
+   * CSV or Excel, oldest first, at most 100 000 rows; the same columns as the device export. Audited against the asset.
+   * 
+   * Requires permission `data.export`. */
+  getAssetsIdTelemetryExport(id: string, query: { datastream_id: string; from?: string; /** RFC 3339 */ to?: string; /** RFC 3339 */ format?: string; /** csv (default) | xlsx */ }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/assets/${encodeURIComponent(id)}/telemetry/export`, query, undefined, true);
+  }
+
+  /** Chart of one datastream of an asset
+   *
+   * As `GET /api/v1/devices/{id}/telemetry/series` for a datastream of the asset or of an asset below it.
+   * 
+   * Requires permission `data.read`. */
+  getAssetsIdTelemetrySeries(id: string, query: { datastream_id: string; from?: string; /** RFC 3339 */ to?: string; /** RFC 3339 */ agg?: string; /** auto | none | avg | min | max */ bucket?: number; /** seconds, 0 = automatic */ }): Promise<{
+    annotations?: Annotation[];
+    /** 0 = raw points */
+    bucket_s?: number;
+    datastream_id?: string;
+    from?: string;
+    key?: string;
+    points?: ({
+      max?: number;
+      min?: number;
+      n?: number;
+      quality?: string;
+      t?: string;
+      v?: number | null;
+    })[];
+    source?: string;
+    stats?: TelemetryStats;
+    to?: string;
+    unit?: string;
+  }> {
+    return this.request<{
+    annotations?: Annotation[];
+    /** 0 = raw points */
+    bucket_s?: number;
+    datastream_id?: string;
+    from?: string;
+    key?: string;
+    points?: ({
+      max?: number;
+      min?: number;
+      n?: number;
+      quality?: string;
+      t?: string;
+      v?: number | null;
+    })[];
+    source?: string;
+    stats?: TelemetryStats;
+    to?: string;
+    unit?: string;
+  }>('GET', `/api/v1/assets/${encodeURIComponent(id)}/telemetry/series`, query, undefined, false);
+  }
+
+  /** Values of one datastream of an asset, newest first
+   *
+   * Paged by `cursor` (from `next_cursor`), at most 500 a page (default 50).
+   * 
+   * Requires permission `data.read`. */
+  getAssetsIdTelemetryValues(id: string, query: { datastream_id: string; from?: string; /** RFC 3339 */ to?: string; /** RFC 3339 */ cursor?: string; limit?: number; }): Promise<{
+    /** empty on the last page */
+    next_cursor?: string;
+    rows?: ({
+      annotation?: string;
+      at?: string;
+      quality?: string;
+      received_at?: string;
+      time_source?: string;
+      value?: number | null;
+      value_json?: unknown;
+    })[];
+  }> {
+    return this.request<{
+    /** empty on the last page */
+    next_cursor?: string;
+    rows?: ({
+      annotation?: string;
+      at?: string;
+      quality?: string;
+      received_at?: string;
+      time_source?: string;
+      value?: number | null;
+      value_json?: unknown;
+    })[];
+  }>('GET', `/api/v1/assets/${encodeURIComponent(id)}/telemetry/values`, query, undefined, false);
   }
 
   /** Audit trail of the organization
@@ -7839,11 +8105,61 @@ export class Ctrl32Client {
     return this.request<Site>('POST', `/api/v1/sites`, undefined, body, false);
   }
 
+  /** A site with its assets, devices and alarms
+   *
+   * The site (with its map position), every asset of it as in the assets list, the devices that feed its datastreams now and the active alarms of its datastreams.
+   * 
+   * Requires permission `data.read`. */
+  getSitesId(id: string): Promise<{
+    alarms?: ActiveAlarm[];
+    assets?: Asset[];
+    datastreams?: number;
+    devices?: AssetDevice[];
+    site?: {
+      address?: string;
+      attributes?: Record<string, unknown>;
+      created_at?: string;
+      id?: string;
+      location?: {
+        lat?: number;
+        lon?: number;
+      } | null;
+      name?: string;
+      tz?: string;
+    };
+  }> {
+    return this.request<{
+    alarms?: ActiveAlarm[];
+    assets?: Asset[];
+    datastreams?: number;
+    devices?: AssetDevice[];
+    site?: {
+      address?: string;
+      attributes?: Record<string, unknown>;
+      created_at?: string;
+      id?: string;
+      location?: {
+        lat?: number;
+        lon?: number;
+      } | null;
+      name?: string;
+      tz?: string;
+    };
+  }>('GET', `/api/v1/sites/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
   /** Update a site
    *
+   * `location` sets the map position of the site (kept in its attributes as lat, lon); `clear_location` removes it.
+   * 
    * Requires permission `config.write`. */
   patchSitesId(id: string, body: {
     address?: string;
+    clear_location?: boolean;
+    location?: {
+      lat?: number;
+      lon?: number;
+    };
     name?: string;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;

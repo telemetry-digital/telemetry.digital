@@ -1,0 +1,31 @@
+meta {
+  name: Chart of one datastream of an asset
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/assets/:id/telemetry/series
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  datastream_id: 
+  ~from: 
+  ~to: 
+  ~agg: 
+  ~bucket: 
+}
+
+docs {
+  Chart of one datastream of an asset
+  
+  As `GET /api/v1/devices/{id}/telemetry/series` for a datastream of the asset or of an asset below it.
+  
+  Requires permission `data.read`.
+}

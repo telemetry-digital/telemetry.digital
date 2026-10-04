@@ -62,6 +62,13 @@ check "widgets of the main state carry no state" "$(jx 'j.spec.widgets.filter(w=
 check "widgets of the detail state" "$(jx 'j.spec.widgets.filter(w=>w.state==="device").map(w=>w.id).join()')" "trend,devs,note"
 check "actions kept" "$(jx 'j.spec.widgets[1].actions.map(a=>a.event+":"+a.action+":"+(a.target||"")+":"+(a.pass||"")).join()')" "row:state:device:device,row_button:device::,button:dashboard:overview:"
 check "the value filter" "$(jx 'JSON.stringify(j.spec.filters[0])')" '{"default":"5","key":"limit","kind":"value","label":"Limit","public":true}'
+ASPEC=${SPEC/'"row_button","action":"device"'/'"row_button","action":"asset"'}
+req POST /api/v1/dashboards "{\"name\":\"Sta asset page $SUF\",\"spec\":$ASPEC,\"reason\":\"e2e\"}" >/dev/null; check "action: open the asset page (0.74.0)" "$(st)" 201
+check "asset action kept" "$(jx 'j.spec.widgets[1].actions[1].action')" "asset"
+req DELETE "/api/v1/dashboards/$(jx 'j.slug')?reason=e2e" >/dev/null
+ASPEC=${SPEC/'"row_button","action":"device"'/'"row_button","action":"asset","target":"x"'}
+req POST /api/v1/dashboards "{\"name\":\"Sta asset target $SUF\",\"spec\":$ASPEC,\"reason\":\"e2e\"}" >/dev/null
+[[ "$(st)" == 400 && "$(cat "$TMP/b")" == *"takes no target"* ]] && ok "the asset page takes no target" || bad "the asset page takes no target (got $(st) $(head -c 160 "$TMP/b"))"
 for BAD in '"target\":\"device\",\"pass\":\"device\"|"target\":\"device\",\"pass\":\"site\"|pass must be' \
            '"event\":\"marker\"|"event\":\"hover\"|event must be' \
            '"target\":\"overview\"|"target\":\"Over view\"|slug' \

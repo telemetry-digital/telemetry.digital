@@ -204,6 +204,7 @@
     if (a.action === 'state') { if (nav && nav.go) { nav.go(a.target, ent); return true; } return false; }
     if (PUBLIC) return false; // a public link never leaves the dashboard
     if (a.action === 'device') { const id = ent && (ent.type === 'device' ? ent.id : null) || (e && (e.type === 'device' ? e.id : e.device_id)); if (!id) { if (window.ctrl32 && ctrl32.toast) ctrl32.toast(TR('No device for this row'), 'warn'); return false; } location.href = '/devices/' + encodeURIComponent(id); return true; }
+    if (a.action === 'asset') { const id = ent && (ent.type === 'asset' ? ent.id : null) || (e && (e.type === 'asset' ? e.id : e.asset_id)); if (!id) { if (window.ctrl32 && ctrl32.toast) ctrl32.toast(TR('No asset for this row'), 'warn'); return false; } location.href = '/assets/' + encodeURIComponent(id); return true; }
     if (a.action === 'dashboard') { location.href = '/dashboards/' + encodeURIComponent(a.target) + (ent ? '?st=' + encodeURIComponent('.' + ent.type + '.' + ent.id + '.' + (ent.name || '')) : ''); return true; }
     return false;
   }
@@ -369,7 +370,7 @@
     el.innerHTML = `<div class="map-box" style="height:100%;min-height:200px;border-radius:var(--radius);overflow:hidden"></div>`;
     const map = makeMap(el.querySelector('.map-box'), cfg); const pts = [];
     const markerAct = ctx.actions && ctx.actions('marker').length && !ctx.edit;
-    for (const d of devs) { const [s, , c] = devState(d); const ll = [d.location.lat, d.location.lon]; pts.push(ll); const mk = L.circleMarker(ll, { radius: 8, color: '#fff', weight: 2, fillColor: c, fillOpacity: 0.95 }).addTo(map); if (markerAct) { mk.bindTooltip(esc(d.name || d.external_id)); mk.on('click', () => ctx.act('marker', { type: 'device', id: d.id, name: d.name || d.external_id, device_id: d.id, device: d.name || d.external_id })); continue; } mk.bindPopup(`<b>${esc(d.name || d.external_id)}</b><br>${s} · ${d.last_seen ? esc(fmt(d.last_seen)) : 'never'}<br><span style="font-size:11px">${d.location.source === 'fixed' ? 'fixed position' : 'reported ' + (d.location.updated_at ? esc(fmt(d.location.updated_at)) : '')}</span><br><a href="/devices/${d.id}">open device</a>`); }
+    for (const d of devs) { const [s, , c] = devState(d); const ll = [d.location.lat, d.location.lon]; pts.push(ll); const mk = L.circleMarker(ll, { radius: 8, color: '#fff', weight: 2, fillColor: c, fillOpacity: 0.95 }).addTo(map); if (markerAct) { mk.bindTooltip(esc(d.name || d.external_id)); mk.on('click', () => ctx.act('marker', { type: 'device', id: d.id, name: d.name || d.external_id, device_id: d.id, device: d.name || d.external_id })); continue; } mk.bindPopup(`<b>${esc(d.name || d.external_id)}</b><br>${s} · ${d.last_seen ? esc(fmt(d.last_seen)) : 'never'}<br><span style="font-size:11px">${d.location.source === 'fixed' ? 'fixed position' : 'reported ' + (d.location.updated_at ? esc(fmt(d.location.updated_at)) : '')}</span><br><a href="/devices/${d.id}">open device</a>${(d.assets || []).map((a) => `<br><a href="/assets/${esc(a.id)}">${esc(a.name)}</a>`).join('')}`); }
     if (pts.length) map.fitBounds(pts, { padding: [24, 24], maxZoom: 15 }); else map.setView([cfg.center_lat || 48.7, cfg.center_lon || 19.5], p.zoom || cfg.zoom || 7);
     setTimeout(() => map.invalidateSize(), 50);
   };

@@ -34,7 +34,7 @@ var (
 	dynFroms     = setOf("filter", "self", "current", "org")
 	alarmValues  = setOf("any", "warning", "action", "critical")
 	actionEvents = setOf("row", "row_button", "marker", "chart", "click", "button")
-	actionKinds  = setOf("state", "device", "dashboard")
+	actionKinds  = setOf("state", "device", "asset", "dashboard")
 	passKinds    = setOf("self", "device", "asset")
 	// control widgets send commands to one bound device: they never take entities from an alias
 	noAliasGroups = setOf("control")
@@ -594,7 +594,7 @@ func validateActions(i int, raw []map[string]any, states map[string]bool) ([]map
 		}
 		act, _ := a["action"].(string)
 		if !actionKinds[act] {
-			return nil, fmt.Errorf("%s: action must be state, device or dashboard", what)
+			return nil, fmt.Errorf("%s: action must be state, device, asset or dashboard", what)
 		}
 		e := map[string]any{"event": ev, "action": act}
 		tgt, _ := a["target"].(string)
@@ -611,7 +611,7 @@ func validateActions(i int, raw []map[string]any, states map[string]bool) ([]map
 			e["target"] = tgt
 		default:
 			if tgt != "" {
-				return nil, fmt.Errorf("%s: opening the device page takes no target", what)
+				return nil, fmt.Errorf("%s: opening the device or asset page takes no target", what)
 			}
 		}
 		if p, _ := a["pass"].(string); p != "" && p != "self" {

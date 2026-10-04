@@ -72,6 +72,9 @@ type telKey struct {
 	Source       string       `json:"source"` // datastream | unassigned | status
 	DatastreamID string       `json:"datastream_id,omitempty"`
 	Asset        string       `json:"asset,omitempty"`
+	AssetID      string       `json:"asset_id,omitempty"`
+	DeviceID     string       `json:"device_id,omitempty"` // asset page: the device feeding the datastream now
+	Device       string       `json:"device,omitempty"`
 	Quantity     string       `json:"quantity,omitempty"`
 	Unit         string       `json:"unit"`
 	Kind         string       `json:"kind,omitempty"`
@@ -242,13 +245,14 @@ func telRange(w http.ResponseWriter, r *http.Request) (time.Time, time.Time, boo
 // assignedKeys returns the current datastream assignments of a device: telemetry key -> datastream (the datastream
 // key and, when it was normalized, the original key the device publishes).
 type telDS struct {
-	ID, Key, SourceKey, Quantity, Unit, Kind, Asset string
-	Since                                           time.Time
+	ID, Key, SourceKey, Quantity, Unit, Kind, Asset, AssetID string
+	DeviceID, Device                                         string // asset page: the current source device
+	Since                                                    time.Time
 }
 
 func (s *Server) assignedDatastreams(r *http.Request, org, devID string) ([]telDS, error) {
 	rows, err := s.pool.Query(r.Context(), `
-		SELECT d.id::text, d.key, coalesce(d.attributes->>'source_key', ''), d.quantity, d.unit, d.kind, ast.name, a.valid_from
+		SELECT d.id::text, d.key, coalesce(d.attributes->>'source_key', ''), d.quantity, d.unit, d.kind, ast.name, ast.id::text, a.valid_from
 		FROM core.assignment a JOIN core.datastream d ON d.id = a.to_id JOIN core.asset ast ON ast.id = d.asset_id
 		WHERE a.kind = 'device_datastream' AND a.from_id = $1::uuid AND a.org_id = $2::uuid AND a.valid_to IS NULL
 		ORDER BY d.key LIMIT 1000`, devID, org)
@@ -259,7 +263,7 @@ func (s *Server) assignedDatastreams(r *http.Request, org, devID string) ([]telD
 	var out []telDS
 	for rows.Next() {
 		var d telDS
-		if err := rows.Scan(&d.ID, &d.Key, &d.SourceKey, &d.Quantity, &d.Unit, &d.Kind, &d.Asset, &d.Since); err != nil {
+		if err := rows.Scan(&d.ID, &d.Key, &d.SourceKey, &d.Quantity, &d.Unit, &d.Kind, &d.Asset, &d.AssetID, &d.Since); err != nil {
 			return nil, err
 		}
 		out = append(out, d)
@@ -277,7 +281,6 @@ func (s *Server) deviceTelemetry(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ctx := r.Context()
 	now := time.Now().UTC()
 	sparkFrom := now.Add(-24 * time.Hour).Truncate(telSparkBucket)
 	dss, err := s.assignedDatastreams(r, org, devID)
@@ -285,100 +288,17 @@ func (s *Server) deviceTelemetry(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "query failed")
 		return
 	}
-	keys := []*telKey{}
-	byDS := map[string]*telKey{}
 	assigned := map[string]bool{}
-	ids := make([]string, 0, len(dss))
 	for _, d := range dss {
-		since := d.Since
-		k := &telKey{Key: d.Key, Source: "datastream", DatastreamID: d.ID, Asset: d.Asset, Quantity: d.Quantity, Unit: d.Unit, Kind: d.Kind, Since: &since, Spark: [][2]float64{}}
-		keys = append(keys, k)
-		byDS[d.ID] = k
 		assigned[d.Key] = true
 		if d.SourceKey != "" {
 			assigned[d.SourceKey] = true
 		}
-		ids = append(ids, d.ID)
 	}
-	if len(ids) > 0 {
-		// latest value of each datastream: one index probe per datastream
-		rows, err := s.pool.Query(ctx, `
-			SELECT d.id::text, l.measured_at, l.received_at, l.value::float8, l.value_json, l.quality,
-			       COALESCE((SELECT EXTRACT(EPOCH FROM ds.expected_interval) FROM core.datastream ds WHERE ds.id = d.id), 0)::float8
-			FROM unnest($1::uuid[]) AS d(id)
-			JOIN LATERAL (SELECT measured_at, received_at, value, value_json, quality FROM core.observation o
-			              WHERE o.datastream_id = d.id ORDER BY o.measured_at DESC LIMIT 1) l ON true`, ids)
-		if err != nil {
-			writeErr(w, 500, "query failed")
-			return
-		}
-		for rows.Next() {
-			var id string
-			var v telValue
-			var rAt time.Time
-			var expected float64
-			if err := rows.Scan(&id, &v.At, &rAt, &v.Value, &v.ValueJSON, &v.Quality, &expected); err != nil {
-				rows.Close()
-				writeErr(w, 500, "scan failed")
-				return
-			}
-			v.ReceivedAt = &rAt
-			if q, st := liveQuality(v.Quality, v.At, expected, time.Now()); st {
-				v.Stale = true
-				if q != v.Quality {
-					v.StoredQuality, v.Quality = v.Quality, q
-				}
-			}
-			if k := byDS[id]; k != nil {
-				k.Last = &v
-			}
-		}
-		rows.Close()
-		// statistics over the chosen range; values from a faulty sensor are counted, not averaged
-		rows, err = s.pool.Query(ctx, `
-			SELECT datastream_id::text,
-			       min(value) FILTER (WHERE quality <> 'sensor_fault')::float8, max(value) FILTER (WHERE quality <> 'sensor_fault')::float8,
-			       avg(value) FILTER (WHERE quality <> 'sensor_fault')::float8, count(*), count(*) FILTER (WHERE quality = 'sensor_fault')
-			FROM core.observation WHERE datastream_id = ANY($1::uuid[]) AND measured_at >= $2 AND measured_at < $3 GROUP BY 1`, ids, from, to)
-		if err != nil {
-			writeErr(w, 500, "query failed")
-			return
-		}
-		for rows.Next() {
-			var id string
-			var st telStats
-			if err := rows.Scan(&id, &st.Min, &st.Max, &st.Avg, &st.N, &st.Faults); err != nil {
-				rows.Close()
-				writeErr(w, 500, "scan failed")
-				return
-			}
-			if k := byDS[id]; k != nil {
-				k.Stats = st
-			}
-		}
-		rows.Close()
-		// sparkline: averages per 30 minutes of the last 24 hours
-		rows, err = s.pool.Query(ctx, `
-			SELECT datastream_id::text, extract(epoch FROM date_bin('30 minutes', measured_at, $2::timestamptz))::float8, avg(value)::float8
-			FROM core.observation WHERE datastream_id = ANY($1::uuid[]) AND measured_at >= $2 AND measured_at < $3
-			  AND value IS NOT NULL AND quality <> 'sensor_fault' GROUP BY 1, 2 ORDER BY 1, 2`, ids, sparkFrom, now.Add(time.Minute))
-		if err != nil {
-			writeErr(w, 500, "query failed")
-			return
-		}
-		for rows.Next() {
-			var id string
-			var t, v float64
-			if err := rows.Scan(&id, &t, &v); err != nil {
-				rows.Close()
-				writeErr(w, 500, "scan failed")
-				return
-			}
-			if k := byDS[id]; k != nil {
-				k.Spark = append(k.Spark, [2]float64{t, v})
-			}
-		}
-		rows.Close()
+	keys, err := s.datastreamKeys(r, dss, from, to, sparkFrom, now)
+	if err != nil {
+		writeErr(w, 500, "query failed")
+		return
 	}
 
 	// keys without a datastream, from the raw messages that carried them
@@ -415,6 +335,102 @@ func (s *Server) deviceTelemetry(w http.ResponseWriter, r *http.Request) {
 	keys = append(keys, s.statusKeys(r, org, devID, status, from, to, sparkFrom, now)...)
 	writeJSON(w, 200, map[string]any{"device_id": devID, "from": from, "to": to, "generated_at": now, "keys": keys,
 		"raw_window_days": int(telRawWindow.Hours() / 24)})
+}
+
+// datastreamKeys is the summary of datastreams: the latest value (with the computed stale quality), statistics over
+// from–to (faulty values counted, not averaged) and the 24-hour sparkline. Three bounded queries for all of them:
+// one index probe per datastream for the latest value, the (datastream_id, measured_at) index for the rest.
+func (s *Server) datastreamKeys(r *http.Request, dss []telDS, from, to, sparkFrom, now time.Time) ([]*telKey, error) {
+	ctx := r.Context()
+	keys := []*telKey{}
+	byDS := map[string]*telKey{}
+	ids := make([]string, 0, len(dss))
+	for _, d := range dss {
+		k := &telKey{Key: d.Key, Source: "datastream", DatastreamID: d.ID, Asset: d.Asset, AssetID: d.AssetID, Quantity: d.Quantity, Unit: d.Unit, Kind: d.Kind,
+			DeviceID: d.DeviceID, Device: d.Device, Spark: [][2]float64{}}
+		if !d.Since.IsZero() {
+			since := d.Since
+			k.Since = &since
+		}
+		keys = append(keys, k)
+		byDS[d.ID] = k
+		ids = append(ids, d.ID)
+	}
+	if len(ids) == 0 {
+		return keys, nil
+	}
+	// latest value of each datastream: one index probe per datastream
+	rows, err := s.pool.Query(ctx, `
+		SELECT d.id::text, l.measured_at, l.received_at, l.value::float8, l.value_json, l.quality,
+		       COALESCE((SELECT EXTRACT(EPOCH FROM ds.expected_interval) FROM core.datastream ds WHERE ds.id = d.id), 0)::float8
+		FROM unnest($1::uuid[]) AS d(id)
+		JOIN LATERAL (SELECT measured_at, received_at, value, value_json, quality FROM core.observation o
+		              WHERE o.datastream_id = d.id ORDER BY o.measured_at DESC LIMIT 1) l ON true`, ids)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var id string
+		var v telValue
+		var rAt time.Time
+		var expected float64
+		if err := rows.Scan(&id, &v.At, &rAt, &v.Value, &v.ValueJSON, &v.Quality, &expected); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		v.ReceivedAt = &rAt
+		if q, st := liveQuality(v.Quality, v.At, expected, time.Now()); st {
+			v.Stale = true
+			if q != v.Quality {
+				v.StoredQuality, v.Quality = v.Quality, q
+			}
+		}
+		if k := byDS[id]; k != nil {
+			k.Last = &v
+		}
+	}
+	rows.Close()
+	// statistics over the chosen range; values from a faulty sensor are counted, not averaged
+	rows, err = s.pool.Query(ctx, `
+		SELECT datastream_id::text,
+		       min(value) FILTER (WHERE quality <> 'sensor_fault')::float8, max(value) FILTER (WHERE quality <> 'sensor_fault')::float8,
+		       avg(value) FILTER (WHERE quality <> 'sensor_fault')::float8, count(*), count(*) FILTER (WHERE quality = 'sensor_fault')
+		FROM core.observation WHERE datastream_id = ANY($1::uuid[]) AND measured_at >= $2 AND measured_at < $3 GROUP BY 1`, ids, from, to)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var id string
+		var st telStats
+		if err := rows.Scan(&id, &st.Min, &st.Max, &st.Avg, &st.N, &st.Faults); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if k := byDS[id]; k != nil {
+			k.Stats = st
+		}
+	}
+	rows.Close()
+	// sparkline: averages per 30 minutes of the last 24 hours
+	rows, err = s.pool.Query(ctx, `
+		SELECT datastream_id::text, extract(epoch FROM date_bin('30 minutes', measured_at, $2::timestamptz))::float8, avg(value)::float8
+		FROM core.observation WHERE datastream_id = ANY($1::uuid[]) AND measured_at >= $2 AND measured_at < $3
+		  AND value IS NOT NULL AND quality <> 'sensor_fault' GROUP BY 1, 2 ORDER BY 1, 2`, ids, sparkFrom, now.Add(time.Minute))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var t, v float64
+		if err := rows.Scan(&id, &t, &v); err != nil {
+			return nil, err
+		}
+		if k := byDS[id]; k != nil {
+			k.Spark = append(k.Spark, [2]float64{t, v})
+		}
+	}
+	return keys, rows.Err()
 }
 
 // scanRawTelemetry walks the telemetry raw messages of a device with keys without a datastream (decode status
@@ -635,6 +651,11 @@ func (s *Server) deviceTelemetrySeries(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	s.telSeries(w, r, org, devID, src)
+}
+
+// telSeries answers the chart of one key (device page) or one datastream (asset page: devID empty, src.DS set).
+func (s *Server) telSeries(w http.ResponseWriter, r *http.Request, org, devID string, src telSrc) {
 	from, to, ok := telRange(w, r)
 	if !ok {
 		return
@@ -903,6 +924,10 @@ func (s *Server) deviceTelemetryValues(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	s.telValues(w, r, org, devID, src)
+}
+
+func (s *Server) telValues(w http.ResponseWriter, r *http.Request, org, devID string, src telSrc) {
 	from, to, ok := telRange(w, r)
 	if !ok {
 		return
@@ -1019,6 +1044,13 @@ func (s *Server) deviceTelemetryExport(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	var ext string
+	_ = s.pool.QueryRow(r.Context(), `SELECT external_id FROM core.device WHERE id = $1::uuid`, devID).Scan(&ext)
+	s.telExport(w, r, org, devID, src, "device", devID, ext, "device_telemetry")
+}
+
+// telExport writes the values of one key (or datastream) as CSV or XLSX and audits the export against the entity.
+func (s *Server) telExport(w http.ResponseWriter, r *http.Request, org, devID string, src telSrc, entityType, entityID, filePrefix, exportName string) {
 	from, to, ok := telRange(w, r)
 	if !ok {
 		return
@@ -1031,8 +1063,6 @@ func (s *Server) deviceTelemetryExport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "format must be csv or xlsx")
 		return
 	}
-	var ext string
-	_ = s.pool.QueryRow(r.Context(), `SELECT external_id FROM core.device WHERE id = $1::uuid`, devID).Scan(&ext)
 	rows, _, err := s.telRows(r, org, devID, src, from, to, "", telExportMaxRows)
 	if err != nil {
 		writeErr(w, 500, "query failed")
@@ -1047,7 +1077,7 @@ func (s *Server) deviceTelemetryExport(w http.ResponseWriter, r *http.Request) {
 		unit = src.DS.Unit
 	}
 	header := []string{"measured_at", "received_at", "value", "value_json", "unit", "quality", "time_source", "annotation"}
-	name := fmt.Sprintf("%s_%s_%s_%s", safeFile(ext), src.Source, src.Key, time.Now().UTC().Format("20060102T150405Z"))
+	name := fmt.Sprintf("%s_%s_%s_%s", safeFile(filePrefix), src.Source, src.Key, time.Now().UTC().Format("20060102T150405Z"))
 	cellsOf := func(row telRow) []string {
 		rAt := ""
 		if row.ReceivedAt != nil {
@@ -1096,7 +1126,11 @@ func (s *Server) deviceTelemetryExport(w http.ResponseWriter, r *http.Request) {
 		}
 		cw.Flush()
 	}
-	s.audit(r, "export.read", "device", devID, nil, map[string]any{"export": "device_telemetry", "format": format, "rows": len(rows), "source": src.Source, "key": src.Key, "from": from, "to": to}, "")
+	detail := map[string]any{"export": exportName, "format": format, "rows": len(rows), "source": src.Source, "key": src.Key, "from": from, "to": to}
+	if src.DS != nil {
+		detail["datastream_id"] = src.DS.ID
+	}
+	s.audit(r, "export.read", entityType, entityID, nil, detail, "")
 }
 
 // decimalsOf picks up to 6 decimals so a number keeps its digits in a spreadsheet.

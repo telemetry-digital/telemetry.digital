@@ -849,3 +849,18 @@ dialog.gs-dlg { width: min(640px, calc(100vw - 32px)); padding: 0; border: 1px s
 .df-val input { width: 90px; min-height: 0; padding: 3px 6px; font-size: 13px; }
 .ed-states { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 8px; }
 .ed-states .tab { padding: 3px 10px; }
+/* telemetry panel of the device and asset pages (telemetry.js) */
+.tel-tools { gap: 10px; flex-wrap: wrap; align-items: end; }
+.tel-tools input[type=search] { min-width: 220px; }
+#telTable td { vertical-align: middle; }
+#telTable td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#telTable tr.sel td { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+#telTable .key { font-family: var(--mono); font-weight: 600; }
+#telTable .sub { font-size: 11px; color: var(--muted); }
+.tel-val { font-size: 15px; font-weight: 600; white-space: nowrap; }
+.tel-rng { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.tel-rng .btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+#telChart { position: relative; min-height: 260px; }
+#telChart svg { display: block; width: 100%; height: 260px; }
+#telHover { font-size: 12px; min-height: 18px; color: var(--muted); }
+.tel-ann { font-size: 13px; padding: 4px 0; border-top: 1px solid var(--line); }

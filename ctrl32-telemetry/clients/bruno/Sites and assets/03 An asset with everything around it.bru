@@ -1,0 +1,23 @@
+meta {
+  name: An asset with everything around it
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/assets/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  An asset with everything around it
+  
+  The asset (as in the list), its site, its ancestors (the top-level asset first), its child assets, its datastreams with the latest value (quality stale when older than the expected interval allows), the source device and the number of current alarm rules, the devices feeding it, the active alarms and its map position (its own, else the site's).
+  
+  Requires permission `data.read`.
+}
