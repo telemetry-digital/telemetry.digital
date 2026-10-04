@@ -27,6 +27,7 @@
   <a href="/server/backups" data-section="backups">Backups</a>
   <a href="/server/redundancy" data-section="redundancy">Redundant database</a>
   <a href="/server/updates" data-section="updates">Updates</a>
+  <a href="/server/email" data-section="email">E-mail (SMTP)</a>
   <a href="/server/license" data-section="license">License</a>
 </nav>
 
@@ -175,19 +176,115 @@
 </section>
 
 <section data-section="updates">
-  <div class="page-head"><h1>Updates</h1></div>
+  <div class="page-head"><h1>Updates</h1><span class="grow"></span><button class="btn" id="updCheckBtn" type="button">Check now</button></div>
   <div class="card agent-off" id="agentNoteUpd" hidden></div>
-  <div class="card">
-    <dl class="kv" id="kvUpd"></dl>
-    <form id="updForm" class="form" style="margin-top:12px">
-      <label>Version to install <input name="version" required placeholder="0.10.0"></label>
-      <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
-      <div class="muted">The agent downloads the release from the distribution point, verifies its SHA-256 checksum, runs the schema migrations and restarts the service. Make a database backup first for major upgrades.</div>
-      <div class="muted">With a licence, versions released after the updates included in the licence ended are not installed; the running system is not changed. Without a licence every version can be installed.</div>
-      <div class="err" id="updErr"></div>
-      <div class="muted" id="updMsg"></div>
-      <div><button class="btn primary" type="submit" id="updSubmit">Install update</button></div>
-    </form>
+  <div class="grid">
+    <div class="card"><h2>Status</h2><dl class="kv" id="kvUpd"></dl></div>
+    <div class="card">
+      <h2>Update mode</h2>
+      <form id="updModeForm" class="form">
+        <label class="inline"><input type="radio" name="mode" value="manual"><span><b>Manual</b> — nothing happens by itself</span></label>
+        <label class="inline"><input type="radio" name="mode" value="notify"><span><b>Notify</b> — a daily check, a banner for system administrators and an e-mail to the server administrators</span></label>
+        <label class="inline"><input type="radio" name="mode" value="auto"><span><b>Automatic</b> — install in a maintenance window, with a backup first and automatic rollback</span></label>
+        <div id="updAutoFields">
+          <div class="two">
+            <label>Day <select name="weekday" id="updWeekday"></select></label>
+            <label>Start of the one-hour window <input name="time" type="time" value="03:00" required></label>
+          </div>
+          <label>Time zone <input name="tz" list="tzList" placeholder="server time zone" autocomplete="off"></label>
+          <datalist id="tzList"></datalist>
+          <label class="inline"><input type="checkbox" name="include_minor"><span>Also install minor versions automatically (patch versions always; major versions never)</span></label>
+        </div>
+        <label>Roll back when the new version is not healthy within (minutes) <input name="rollback_minutes" type="number" min="2" max="60" value="10"></label>
+        <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+        <div class="err" id="updModeErr"></div>
+        <div><button class="btn primary" type="submit">Save mode</button></div>
+      </form>
+    </div>
+  </div>
+  <div class="grid" style="margin-top:16px">
+    <div class="card">
+      <h2>Install from the distribution point</h2>
+      <form id="updForm" class="form">
+        <label>Version to install <input name="version" required placeholder="0.76.0"></label>
+        <label class="inline"><input type="checkbox" name="backup" checked><span>Back up the database and the configuration first</span></label>
+        <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+        <div class="muted">Only a release signed with a key built into this version is installed; every file must match the signed manifest. When the new version does not answer healthy after the restart, the previous one returns automatically.</div>
+        <div class="muted">With a licence, versions released after the updates included in the licence ended are not installed; the running system is not changed. Without a licence every version can be installed.</div>
+        <div class="err" id="updErr"></div>
+        <div class="muted" id="updMsg"></div>
+        <div><button class="btn primary" type="submit" id="updSubmit">Install update</button></div>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Upload package</h2>
+      <p class="muted">For servers without the Internet: the offline package of a release (ctrl32-telemetry-VERSION-offline.zip from the download page). The agent verifies its signature and every file before anything is kept, then installs it like an online update. Detector parts in the package serve the object counting detector installation.</p>
+      <form id="pkgForm" class="form">
+        <label>Package (.zip) <input name="file" type="file" accept=".zip,application/zip" required></label>
+        <label class="inline"><input type="checkbox" name="backup" checked><span>Back up the database and the configuration first</span></label>
+        <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+        <div class="two">
+          <label>Your password <input name="password" type="password" autocomplete="current-password" required></label>
+          <label>Authenticator code (if enabled) <input name="code" inputmode="numeric" autocomplete="one-time-code"></label>
+        </div>
+        <progress id="pkgProgress" max="100" value="0" hidden style="width:100%"></progress>
+        <div class="err" id="pkgErr"></div>
+        <div class="muted" id="pkgMsg"></div>
+        <div><button class="btn primary" type="submit" id="pkgSubmit">Upload and install</button></div>
+      </form>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px"><h2>History</h2>
+    <div class="table-wrap"><table id="updHist"><thead><tr><th>Started</th><th>Version</th><th>Mode</th><th>Source</th><th>Result</th><th>Backup</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</section>
+
+<section data-section="email">
+  <div class="page-head"><h1>E-mail (SMTP)</h1></div>
+  <div class="card agent-off" id="smtpNote" hidden></div>
+  <div class="grid">
+    <div class="card">
+      <h2>Outgoing e-mail</h2>
+      <p class="muted">Used for alarm notifications, scheduled reports, password reset links and the notices of this server. Settings saved here take precedence over [smtp] in config.toml.</p>
+      <form id="smtpForm" class="form">
+        <div class="two">
+          <label>SMTP server <input name="host" required placeholder="smtp.example.com" autocomplete="off"></label>
+          <label>Port <input name="port" type="number" min="1" max="65535" placeholder="587"></label>
+        </div>
+        <label>Security <select name="security">
+          <option value="starttls">STARTTLS (port 587)</option>
+          <option value="tls">SSL/TLS (port 465)</option>
+          <option value="none">None — only for a relay on this server or in the local network</option>
+        </select></label>
+        <div class="err" id="smtpNoneWarn" hidden>Without encryption the messages and the password travel in plain text. Use it only for a relay on this server or in the local network.</div>
+        <div class="two">
+          <label>User name <input name="user" autocomplete="off"></label>
+          <label>Password <input name="password" type="password" autocomplete="new-password" placeholder="leave empty to keep the stored password"></label>
+        </div>
+        <label class="inline"><input type="checkbox" name="clear_password"><span>Remove the stored password</span></label>
+        <div class="two">
+          <label>Sender address <input name="from" type="email" required placeholder="telemetry@example.com"></label>
+          <label>Sender name <input name="from_name" maxlength="100" placeholder="ctrl32 telemetry"></label>
+        </div>
+        <label>Reply-to address (optional) <input name="reply_to" type="email"></label>
+        <label>Alarm recipients (comma separated, optional) <input name="to"></label>
+        <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+        <div class="err" id="smtpErr"></div>
+        <div class="muted" id="smtpMsg"></div>
+        <div class="actions"><button class="btn primary" type="submit" id="smtpSave">Save</button><button class="btn" type="button" id="smtpReset">Use config.toml</button></div>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Send test e-mail</h2>
+      <p class="muted">Sends a test message with the values of the form (also before saving them). The conversation with the SMTP server is shown below, also when it fails.</p>
+      <form id="smtpTestForm" class="form">
+        <label>Recipient <input name="to" type="email" required></label>
+        <div><button class="btn" type="submit" id="smtpTestBtn">Send test e-mail</button></div>
+        <div class="err" id="smtpTestErr"></div>
+        <div class="muted" id="smtpTestMsg"></div>
+        <pre class="conf" id="smtpTranscript" hidden></pre>
+      </form>
+    </div>
   </div>
 </section>
 
@@ -239,7 +336,7 @@
 <script src="/analytics-check.js"></script>
 <script>
 const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
-const TITLES = {overview: 'Server', domain: 'Domain and TLS', backups: 'Backups', redundancy: 'Redundant database', updates: 'Updates', license: 'License'};
+const TITLES = {overview: 'Server', domain: 'Domain and TLS', backups: 'Backups', redundancy: 'Redundant database', updates: 'Updates', email: 'E-mail (SMTP)', license: 'License'};
 let INFO = null;
 function kv(el, rows){ el.innerHTML = rows.filter(r => r).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v == null || v === '' ? '<span class="muted">—</span>' : v}</dd>`).join(''); }
 function dur(s){ if(!s && s !== 0) return ''; const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60); return (d ? d + ' d ' : '') + (h ? h + ' h ' : '') + m + ' min'; }
@@ -278,11 +375,6 @@ function renderDomain(){
   $('#caddyfile').textContent = c.caddyfile || '';
   const f = $('#caddyForm'); if(!f.dataset.filled){ f.domain.value = c.domain || ''; f.extra_domains.value = (c.extra_domains||[]).join(', '); f.email.value = c.email || ''; f.dns_provider.value = c.dns_provider || ''; f.dataset.filled = '1'; $('#cfTokenRow').hidden = f.dns_provider.value !== 'cloudflare'; }
 }
-function renderUpdates(){
-  const u = INFO.update, newer = u.available && u.available !== u.current;
-  kv($('#kvUpd'), [['Installed', esc(u.current) + (u.release_date ? ' · ' + esc(ctrl32.t('release date')) + ' ' + day(u.release_date) : '')], ['Updates', updatesText({valid: true, updates_until: u.updates_until, updates_ended: u.updates_ended})], ['Available', u.available ? esc(u.available) + (newer ? ' <span class="badge primary">update available</span>' : ' <span class="badge ok">up to date</span>') : '<span class="muted">' + esc(u.error || 'unknown') + '</span>'], ['Distribution point', esc(u.url)], ['Checked', fmt(u.checked_at)]]);
-  if(newer && !$('#updForm').version.value) $('#updForm').version.value = u.available;
-}
 let reasonCb = null;
 function askReason(title, hint, cb){ reasonCb = cb; $('#reasonTitle').textContent = title; $('#reasonHint').textContent = hint; $('#reasonForm').reset(); $('#reasonErr').textContent=''; $('#reasonDlg').showModal(); }
 $('#reasonForm').onsubmit = async e => { e.preventDefault(); $('#reasonErr').textContent=''; try{ await reasonCb(e.target.reason.value); $('#reasonDlg').close(); }catch(x){ $('#reasonErr').textContent = x.message; } };
@@ -292,9 +384,91 @@ $('#caddyForm').dns_provider.onchange = e => { $('#cfTokenRow').hidden = e.targe
 $('#caddyForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#caddyErr').textContent=''; $('#caddyMsg').textContent = 'Applying… building the Caddy image with the DNS module can take a few minutes.'; $('#caddySubmit').disabled = true;
   try{ const r = await api('PUT','/api/v1/server/caddy',{domain: f.domain.value.trim().toLowerCase(), extra_domains: f.extra_domains.value.split(',').map(s => s.trim()).filter(Boolean), email: f.email.value.trim(), dns_provider: f.dns_provider.value, cloudflare_token: f.cloudflare_token.value, reason: f.reason.value}); $('#caddyMsg').textContent = r.message || 'applied'; f.cloudflare_token.value=''; f.reason.value=''; ctrl32.toast('domain configured','ok'); setTimeout(load, 3000); }
   catch(x){ $('#caddyErr').textContent = x.message; $('#caddyMsg').textContent=''; } finally { $('#caddySubmit').disabled = false; } };
-$('#updForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#updErr').textContent=''; $('#updMsg').textContent = 'Downloading and verifying…'; $('#updSubmit').disabled = true;
-  try{ const r = await api('POST','/api/v1/server/update',{version: f.version.value.trim(), reason: f.reason.value}); $('#updMsg').textContent = r.message + ' (SHA-256 ' + r.sha256.slice(0, 16) + '…). Reloading in 10 s.'; setTimeout(() => location.reload(), 10000); }
+// ---- updates (ADR-0024): status, mode, install, offline package, history
+let UPD = null;
+const PHASES = {installing: 'installing', restarting: 'waiting for the new version', rolling_back: 'rolling back', done: 'installed', rolled_back: 'rolled back', failed: 'failed'};
+function weekdayName(d){ return new Date(2026, 9, 4 + d).toLocaleDateString(document.documentElement.lang || undefined, {weekday: 'long'}); }
+function phaseBadge(p){ const cls = p === 'done' ? 'ok' : (p === 'rolled_back' || p === 'failed') ? 'bad' : 'warn'; return `<span class="badge ${cls}">${esc(ctrl32.t(PHASES[p] || p))}</span>`; }
+async function renderUpdates(refresh){
+  UPD = await api(refresh ? 'POST' : 'GET', refresh ? '/api/v1/server/updates/check' : '/api/v1/server/updates', refresh ? {} : undefined);
+  const u = UPD, a = u.available || {}, st = u.state || {}, set = u.settings || {};
+  const avail = a.version ? esc(a.version) + (a.released ? ' · ' + esc(ctrl32.t('release date')) + ' ' + day(a.released) : '') + ' ' + (u.newer ? '<span class="badge primary">' + esc(ctrl32.t('update available')) + '</span>' : '<span class="badge ok">' + esc(ctrl32.t('up to date')) + '</span>')
+    : '<span class="muted">' + esc(a.error || ctrl32.t('unknown')) + '</span>';
+  const sig = a.version ? (a.signed ? '<span class="badge ok">' + esc(ctrl32.t('signed')) + '</span> ' + esc(a.key_id || '') : '<span class="badge warn">' + esc(ctrl32.t('not signed')) + '</span> ' + esc(a.error || ctrl32.t('a release before 0.76.0 or a mirror without the manifest; this server installs only signed releases'))) : '';
+  const rows = [['Installed', esc(u.current) + (u.release_date ? ' · ' + esc(ctrl32.t('release date')) + ' ' + day(u.release_date) : '')],
+    ['Updates', updatesText({valid: true, updates_until: u.updates_until, updates_ended: u.updates_ended})],
+    ['Available', avail], a.version ? ['Signature', sig] : null,
+    u.newer ? ['Step', esc(ctrl32.t(u.change || '')) + (u.licence_ok === false ? ' · <span class="badge warn">' + esc(ctrl32.t('not included in the licence')) + '</span>' : '')] : null,
+    ['Distribution point', esc(u.url)], ['Checked', fmt(a.checked_at)], u.next_check ? ['Next check', fmt(u.next_check)] : null,
+    set.mode === 'auto' && u.next_window ? ['Next maintenance window', fmt(u.next_window) + (u.newer && !u.auto_allowed ? ' · <span class="muted">' + esc(ctrl32.t(u.auto_note || '')) + '</span>' : '')] : null,
+    ['Trusted release keys', esc((st.trusted_keys || []).join(', ')) + (st.test_build ? ' <span class="badge warn">' + esc(ctrl32.t('test build')) + '</span>' : '') + (st.require_signature === false ? ' <span class="badge bad">' + esc(ctrl32.t('unsigned releases allowed (development build)')) + '</span>' : '')],
+    st.staged ? ['Staged package', esc(st.staged.version) + ' · ' + esc(st.staged.files) + ' ' + esc(ctrl32.t('files')) + (st.staged.detector && st.staged.detector.length ? ' · ' + esc(ctrl32.t('detector parts')) + ' ' + st.staged.detector.length : '')] : null];
+  kv($('#kvUpd'), rows);
+  const f = $('#updModeForm');
+  if(!f.dataset.filled){
+    if(!$('#updWeekday').options.length) $('#updWeekday').innerHTML = [1,2,3,4,5,6,0].map(d => `<option value="${d}">${esc(weekdayName(d))}</option>`).join('');
+    const zones = [u.server_tz, u.org_tz, 'UTC', 'Europe/Bratislava', 'Europe/Prague', 'Europe/Vienna', 'Europe/Berlin', 'Europe/London', 'America/New_York'].filter((z, i, l) => z && z !== 'Local' && l.indexOf(z) === i);
+    $('#tzList').innerHTML = zones.map(z => `<option value="${esc(z)}">`).join('');
+    for(const r of f.querySelectorAll('input[name="mode"]')) r.checked = r.value === set.mode;
+    f.weekday.value = String(set.weekday ?? 0); f.time.value = set.time || '03:00'; f.tz.value = set.tz || ''; f.include_minor.checked = !!set.include_minor; f.rollback_minutes.value = set.rollback_minutes || 10;
+    f.dataset.filled = '1';
+  }
+  $('#updAutoFields').hidden = (f.querySelector('input[name="mode"]:checked') || {}).value !== 'auto';
+  const uf = $('#updForm'); if(u.newer && !uf.version.value) uf.version.value = a.version;
+  const hist = st.history || [];
+  $('#updHist tbody').innerHTML = hist.map(h => `<tr><td>${fmt(h.started_at)}</td><td>${esc(h.from)} → <b>${esc(h.to)}</b></td><td>${esc(ctrl32.t(h.mode))}${h.actor ? ' <span class="muted">' + esc(h.actor) + '</span>' : ''}</td><td>${esc(ctrl32.t(h.source))}${h.key_id ? ' <span class="muted">' + esc(h.key_id) + '</span>' : ''}</td><td>${phaseBadge(h.phase)}${h.error ? '<div class="muted">' + esc(h.error) + '</div>' : ''}</td><td>${esc(h.backup || '')}</td></tr>`).join('')
+    || '<tr><td colspan="6" class="muted">' + esc(ctrl32.t('no installations yet')) + '</td></tr>';
+}
+$('#updModeForm').onchange = e => { if(e.target.name === 'mode') $('#updAutoFields').hidden = e.target.value !== 'auto'; };
+$('#updModeForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#updModeErr').textContent='';
+  const mode = (f.querySelector('input[name="mode"]:checked') || {}).value;
+  try{ await api('PUT','/api/v1/server/updates',{mode, weekday: +f.weekday.value, time: f.time.value, tz: f.tz.value.trim(), include_minor: f.include_minor.checked, rollback_minutes: +f.rollback_minutes.value || 10, reason: f.reason.value}); f.reason.value=''; ctrl32.toast('update mode saved','ok'); renderUpdates(); }
+  catch(x){ $('#updModeErr').textContent = x.message; } };
+$('#updCheckBtn').onclick = () => renderUpdates(true).catch(x => ctrl32.toast(x.message,'bad'));
+$('#updForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#updErr').textContent=''; $('#updMsg').textContent = ctrl32.t(f.backup.checked ? 'Backing up, downloading and verifying…' : 'Downloading and verifying…'); $('#updSubmit').disabled = true;
+  try{ const r = await api('POST','/api/v1/server/update',{version: f.version.value.trim(), backup: f.backup.checked, reason: f.reason.value}); $('#updMsg').textContent = r.message + ' (SHA-256 ' + r.sha256.slice(0, 16) + '…). ' + ctrl32.t('Reloading in 15 s.'); setTimeout(() => location.reload(), 15000); }
   catch(x){ $('#updErr').textContent = x.message; $('#updMsg').textContent=''; } finally { $('#updSubmit').disabled = false; } };
+$('#pkgForm').onsubmit = e => { e.preventDefault(); const f = e.target; $('#pkgErr').textContent=''; $('#pkgMsg').textContent='';
+  const file = f.file.files[0]; if(!file) return;
+  const max = ((UPD && UPD.state && UPD.state.max_package_mb) || 2048) * 1048576;
+  if(file.size > max){ $('#pkgErr').textContent = ctrl32.t('The package is larger than the limit of the server') + ' (' + bytes(max) + ').'; return; }
+  const fd = new FormData(); fd.append('reason', f.reason.value); fd.append('password', f.password.value); fd.append('code', f.code.value.trim()); fd.append('backup', f.backup.checked ? '1' : '0'); fd.append('install', '1'); fd.append('file', file);
+  const xhr = new XMLHttpRequest(), bar = $('#pkgProgress'); bar.hidden = false; bar.value = 0; $('#pkgSubmit').disabled = true;
+  xhr.upload.onprogress = ev => { if(ev.lengthComputable){ bar.value = Math.round(ev.loaded / ev.total * 100); $('#pkgMsg').textContent = ctrl32.t('Uploading') + ' ' + bytes(ev.loaded) + ' / ' + bytes(ev.total); } };
+  xhr.upload.onload = () => { $('#pkgMsg').textContent = ctrl32.t('Verifying the signature and the files, then installing…'); };
+  xhr.onloadend = () => { $('#pkgSubmit').disabled = false; bar.hidden = true; let r = {}; try{ r = JSON.parse(xhr.responseText || '{}'); }catch(_){}
+    if(xhr.status !== 200){ $('#pkgErr').textContent = r.error || ('HTTP ' + xhr.status); $('#pkgMsg').textContent=''; return; }
+    f.password.value=''; f.code.value='';
+    const p = r.package || {};
+    if(r.update){ $('#pkgMsg').textContent = ctrl32.t('Verified') + ' ' + p.version + ' (' + (p.key_id || '') + '). ' + r.update.message + ' ' + ctrl32.t('Reloading in 15 s.'); setTimeout(() => location.reload(), 15000); }
+    else { $('#pkgMsg').textContent = ctrl32.t('Verified and staged') + ' ' + p.version + (p.has_binary ? '' : ' — ' + ctrl32.t('the package has no server binary for this platform; its detector parts are ready for the detector installation')); renderUpdates(); } };
+  xhr.open('POST', '/api/v1/server/update/package'); if(ctrl32.csrf) xhr.setRequestHeader('X-CSRF-Token', ctrl32.csrf); xhr.send(fd); };
+
+// ---- e-mail (SMTP)
+let SMTP = null;
+async function renderEmail(){
+  SMTP = await api('GET','/api/v1/server/smtp');
+  const s = SMTP.settings || {}, f = $('#smtpForm'), note = $('#smtpNote');
+  const src = {ui: 'Saved on this page (takes precedence over config.toml).', config: 'From [smtp] in config.toml — nothing saved on this page yet.', none: 'Not configured: the server sends no e-mail.'}[SMTP.source] || '';
+  note.hidden = false; note.innerHTML = esc(ctrl32.t(src)) + (SMTP.override ? ' <b>' + esc(ctrl32.t('[smtp] override = true in config.toml: the settings are managed in the file and cannot be changed here.')) + '</b>' : '');
+  f.host.value = s.host || ''; f.port.value = s.port || ''; f.security.value = s.security || (s.port === 465 ? 'tls' : 'starttls'); f.user.value = s.user || ''; f.from.value = s.from || ''; f.from_name.value = s.from_name || ''; f.reply_to.value = s.reply_to || ''; f.to.value = (s.to || []).join(', ');
+  f.password.value = ''; f.password.placeholder = ctrl32.t(SMTP.has_password ? 'leave empty to keep the stored password' : 'no password stored'); f.clear_password.checked = false;
+  $('#smtpNoneWarn').hidden = f.security.value !== 'none';
+  for(const el of f.elements) el.disabled = !!SMTP.override;
+  $('#smtpReset').hidden = SMTP.source !== 'ui';
+  const me = ctrl32.me; if(me && me.email && !$('#smtpTestForm').to.value) $('#smtpTestForm').to.value = me.email;
+}
+function smtpValues(f){ return {host: f.host.value.trim(), port: +f.port.value || 0, security: f.security.value, user: f.user.value.trim(), password: f.password.value, from: f.from.value.trim(), from_name: f.from_name.value.trim(), reply_to: f.reply_to.value.trim(), to: f.to.value.split(',').map(x => x.trim()).filter(Boolean)}; }
+$('#smtpForm').security.onchange = e => { $('#smtpNoneWarn').hidden = e.target.value !== 'none'; const p = $('#smtpForm').port; if(!p.value || p.value === '587' || p.value === '465') p.value = e.target.value === 'tls' ? 465 : (e.target.value === 'starttls' ? 587 : p.value); };
+$('#smtpForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#smtpErr').textContent=''; $('#smtpMsg').textContent='';
+  try{ const r = await api('PUT','/api/v1/server/smtp',{...smtpValues(f), clear_password: f.clear_password.checked, reason: f.reason.value}); f.reason.value=''; $('#smtpMsg').textContent = (r.warnings || []).map(w => ctrl32.t(w)).join(' '); ctrl32.toast('e-mail settings saved','ok'); renderEmail(); }
+  catch(x){ $('#smtpErr').textContent = x.message; } };
+$('#smtpReset').onclick = () => askReason(ctrl32.t('Use config.toml'), ctrl32.t('The settings saved on this page are removed; [smtp] of config.toml applies again.'), async reason => { await api('DELETE','/api/v1/server/smtp',{reason}); ctrl32.toast('e-mail settings removed','ok'); renderEmail(); });
+$('#smtpTestForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#smtpTestErr').textContent=''; $('#smtpTestMsg').textContent = ctrl32.t('Sending…'); $('#smtpTestBtn').disabled = true; const tr = $('#smtpTranscript');
+  try{ const sf = $('#smtpForm'); const body = {to: f.to.value.trim()}; if(!SMTP.override && sf.host.value.trim()) body.settings = smtpValues(sf);
+    const r = await api('POST','/api/v1/server/smtp/test', body); tr.hidden = false; tr.textContent = r.transcript || '';
+    if(r.ok){ $('#smtpTestMsg').textContent = ctrl32.t('The SMTP server accepted the test e-mail.'); } else { $('#smtpTestMsg').textContent=''; $('#smtpTestErr').textContent = r.error; } }
+  catch(x){ $('#smtpTestErr').textContent = x.message; $('#smtpTestMsg').textContent=''; } finally { $('#smtpTestBtn').disabled = false; } };
 $('#refreshBtn').onclick = () => load();
 let BK = null, bkTimer = null;
 function hhmm(h, m){ return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); }
@@ -407,7 +581,7 @@ $('#licRenew').onclick = async () => { const reason = ctrl32.ask('Reason for ren
 $('#licRemove').onclick = async () => { const reason = prompt(ctrl32.t('Reason for removing the license (audit trail)')); if(!reason) return;
   try{ await api('DELETE','/api/v1/server/license?reason=' + encodeURIComponent(reason)); ctrl32.toast(ctrl32.t('license removed'),'ok'); renderLicense(); }catch(x){ $('#licErr').textContent = x.message; } };
 let SEC = 'overview';
-async function load(){ if(SEC === 'license') return renderLicense(); INFO = await api('GET','/api/v1/server'); agentNote(); ({overview: renderOverview, domain: renderDomain, backups: renderBackups, redundancy: renderRedundancy, updates: renderUpdates})[SEC](); }
+async function load(){ if(SEC === 'license') return renderLicense(); if(SEC === 'email') return renderEmail(); INFO = await api('GET','/api/v1/server'); agentNote(); ({overview: renderOverview, domain: renderDomain, backups: renderBackups, redundancy: renderRedundancy, updates: () => renderUpdates()})[SEC](); }
 ctrl32.ready({requireAuth: true, requirePerm: 'system.admin'}).then(() => { SEC = ctrl32.section('overview', Object.keys(TITLES)); document.title = TITLES[SEC] + ' — Server'; load().catch(x => ctrl32.toast(x.message,'bad')); });
 </script>
 </body>

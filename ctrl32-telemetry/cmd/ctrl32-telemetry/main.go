@@ -98,6 +98,8 @@ func main() {
 		err = cmdCameraRelay(args)
 	case "verify-evidence":
 		err = cmdVerifyEvidence(args)
+	case "update": // offline packages, mirrors and the rollback guard (ADR-0024)
+		err = cmdUpdate(args)
 	case "cameras":
 		err = cmdCameras(args)
 	case "analytics-worker": // object counting (spec 029): started by the server per camera, or -bench on a clip
@@ -127,7 +129,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: ctrl32-telemetry <serve|agent|migrate|audit verify|service <action>|admin bootstrap|admin reset-password|admin seed-dashboard|dev seed|replica attach|status|promote|camera-relay|cameras export|cameras import|verify-evidence|analytics-worker [-selfcheck]|version> [-config path]")
+	fmt.Fprintln(os.Stderr, "usage: ctrl32-telemetry <serve|agent|migrate|audit verify|service <action>|admin bootstrap|admin reset-password|admin seed-dashboard|dev seed|replica attach|status|promote|camera-relay|cameras export|cameras import|update --file|update mirror|update verify|verify-evidence|analytics-worker [-selfcheck]|version> [-config path]")
 }
 
 func loadConfig(args []string) (*config.Config, string, error) {
@@ -710,6 +712,7 @@ func cmdAgent(args []string) error {
 	}
 	srv := agent.NewServer(sock, path, version, cfg.Agent.UpdateURL, logger.With("component", "agent"))
 	srv.SetDBTools(cfg.Agent.PgDump, cfg.Agent.PgContainer)
+	srv.SetUpdatePolicy(cfg.Agent.MaxPackageMB, cfg.Agent.AllowUnsignedUpdates)
 	if cfg.Agent.VPNSimulate != "" {
 		logger.Warn("VPN simulation: nothing is applied to this host (agent.vpn_simulate)", "dir", cfg.Agent.VPNSimulate)
 		srv.SetSimulation(cfg.Agent.VPNSimulate)

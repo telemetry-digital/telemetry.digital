@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/iam"
-	"github.com/telemetry-digital/ctrl32-telemetry/internal/notify"
 )
 
 // Self-service flows kept off the sign-in form (URS H-*): forgotten password by e-mail link, account requests.
@@ -28,7 +27,7 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	login := strings.ToLower(strings.TrimSpace(in.Login))
-	nf := notify.New(s.cfg.SMTP, s.log)
+	nf := s.mailer()
 	resp := map[string]any{"ok": true, "mail_configured": nf.Available()}
 	if login == "" {
 		writeJSON(w, 200, resp)
@@ -111,7 +110,7 @@ func (s *Server) registerRequest(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "could not store the request")
 		return
 	}
-	nf := notify.New(s.cfg.SMTP, s.log)
+	nf := s.mailer()
 	if nf.Configured() {
 		_, _ = nf.Send(r.Context(), s.productName(r, "")+" — account request", "Account request from "+in.FullName+" <"+in.Email+">\n\n"+in.Message+"\n\nHandle it under Users on "+s.cfg.HTTP.BaseURL+"/users\n")
 	}

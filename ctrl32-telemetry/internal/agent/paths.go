@@ -61,4 +61,5 @@ func derivePaths() {
 	wgRulesFile = filepath.Join(wgDir, "vpn-rules.txt") // userspace hub (Windows): the rules it enforces, for review
 	deriveUplinkPaths()
 	backupStateFile = filepath.Join(etcDir, "backup.json")
+	updateStateFile = filepath.Join(etcDir, "update.json")
 }

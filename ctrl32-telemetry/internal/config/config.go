@@ -94,6 +94,12 @@ type AgentConfig struct {
 	PgDump      string `toml:"pg_dump"`      // Windows: path to pg_dump.exe (default: bundled PostgreSQL next to the binary)
 	PgContainer string `toml:"pg_container"` // Docker container of PostgreSQL for backups (default ctrl32-telemetry-postgres)
 	UpdateURL   string `toml:"update_url"`   // where the agent downloads releases; default https://portal.telemetry.digital/dl
+	// MaxPackageMB caps an uploaded offline update package (System → Updates, `ctrl32-telemetry update --file`);
+	// default 2048
+	MaxPackageMB int `toml:"max_package_mb"`
+	// AllowUnsignedUpdates lets a DEVELOPMENT build (no release date in the binary) install releases without a signed
+	// manifest. Release builds ignore it: they install only releases signed with a trusted key (ADR-0024).
+	AllowUnsignedUpdates bool `toml:"allow_unsigned_updates"`
 	// VPNSimulate (development and tests only): the agent renders the VPN files into this directory instead of applying
 	// them to the host and serves only the VPN operations (internal/agent/vpn.go). Never set on a server.
 	VPNSimulate string `toml:"vpn_simulate"`
@@ -144,13 +150,23 @@ type DBConfig struct {
 	AppPassword string `toml:"app_password"` // if set, `migrate` sets the ctrl32_app role password
 }
 
+// SMTPConfig is the outgoing e-mail. Since 0.76.0 a system administrator can set it in System → Server → E-mail
+// (SMTP); the settings saved there take precedence over this section, unless Override is true (then this section
+// applies and the page is read-only). Without saved settings this section applies as before.
 type SMTPConfig struct {
 	Host     string   `toml:"host"`
 	Port     int      `toml:"port"`
 	User     string   `toml:"user"`
 	Password string   `toml:"password"`
 	From     string   `toml:"from"`
-	To       []string `toml:"to"` // PoC: static alarm recipients
+	To       []string `toml:"to"` // static alarm recipients
+	// Security: "starttls" (default for port 587 and others), "tls" (implicit TLS, port 465) or "none" (unencrypted;
+	// only for a relay on this host or in the local network). Empty: implicit TLS on port 465, STARTTLS otherwise.
+	Security string `toml:"security"`
+	FromName string `toml:"from_name"` // display name of the sender (optional)
+	ReplyTo  string `toml:"reply_to"`  // Reply-To address (optional)
+	// Override: this section wins over the settings saved in the user interface (which then cannot be changed there)
+	Override bool `toml:"override"`
 }
 
 type LogConfig struct {

@@ -1,0 +1,26 @@
+meta {
+  name: Send a test e-mail
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{baseUrl}}/api/v1/server/smtp/test
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "settings": {},
+    "to": "string"
+  }
+}
+
+docs {
+  Send a test e-mail
+  
+  Sends a test message to `to` with the settings of the form (`settings`, unsaved; an empty password takes the stored one) or the ones in use, and returns the SMTP conversation (authentication redacted) also when it fails. Logged in the delivery log and audited as server.smtp_test.
+  
+  Requires permission `system.admin`.
+}

@@ -265,9 +265,9 @@ func TestVPNSimulation(t *testing.T) {
 		}
 	}
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("POST", "/update", strings.NewReader(`{"version":"9.9.9"}`)))
+	h.ServeHTTP(rec, httptest.NewRequest("POST", "/restart", strings.NewReader(`{"unit":"app"}`)))
 	if rec.Code != 501 {
-		t.Errorf("update in simulation: %d", rec.Code)
+		t.Errorf("restart in simulation: %d", rec.Code)
 	}
 	if !strings.Contains(readFile(filepath.Join(dir, "commands.log")), "wg --version") {
 		t.Error("simulated commands not logged")

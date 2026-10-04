@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
-# Build release binaries and publish them with the installer to a host running ctrl32 telemetry behind Caddy:
-#   https://<host>/install.sh, /install-relay.sh (+ .ps1) and  https://<host>/dl/ctrl32-telemetry-linux-{amd64,arm64} (+ SHA256SUMS)
+# Build a signed release and publish it with the installer to a host running ctrl32 telemetry behind Caddy:
+#   https://<host>/install.sh, /install-relay.sh (+ .ps1) and https://<host>/dl/ with
+#   ctrl32-telemetry-linux-{amd64,arm64,arm}, ctrl32-telemetry-windows-amd64.exe, SHA256SUMS, VERSION,
+#   release.json + release.json.sig (the signed manifest, ADR-0024), analytics/ (the pinned parts of the object
+#   counting detector) and ctrl32-telemetry-<version>-offline.zip (everything for a server without the Internet)
 # Usage (from the repository root, Go on PATH):
-#   deploy/publish.sh 0.4.0 root@2.29.5.17 [-i ~/.ssh/key]
+#   deploy/publish.sh 0.76.0 root@2.29.5.17 [-i ~/.ssh/key]
+# The release signing key never enters the repository: it is read from CTRL32_RELEASE_KEY (default
+# ~/.ctrl32-release/release-signing.key, created with `go run ./tools/relsign keygen`); without it nothing is
+# published. NO_DETECTOR=1 leaves the detector parts out (smaller offline package).
+# SHA256SUMS stays published for servers before 0.76.0, whose agent checks only it; from 0.76.0 on the agent installs
+# only releases whose manifest carries a valid signature of a trusted key.
 # The host directory /var/www/ctrl32 is served read-only by the Caddy container that install.sh configures.
 set -euo pipefail
 GOBIN_DIR="$(go env GOPATH)/bin"; command -v cygpath >/dev/null 2>&1 && GOBIN_DIR="$(cygpath -u "$GOBIN_DIR")"   # Git Bash: C:\… → /c/…
@@ -11,7 +19,10 @@ VERSION=${1:?version}
 TARGET=${2:?user@host}
 shift 2
 SSH_OPTS=("$@")
+KEY=${CTRL32_RELEASE_KEY:-$HOME/.ctrl32-release/release-signing.key}
+[[ -f "$KEY" ]] || { echo "release signing key not found: $KEY (go run ./tools/relsign keygen; it lives outside the repository)" >&2; exit 1; }
 OUT=dist/$VERSION
+rm -rf "$OUT"
 mkdir -p "$OUT"
 # release date in the binary: the licence includes updates released until its updates_until date (internal/release)
 RELEASED=${RELEASED:-$(date -u +%Y-%m-%d)}
@@ -27,7 +38,7 @@ if [[ -n "${CTRL32_SIGN_PFX:-}" ]]; then
   "$SIGNTOOL" sign /f "$CTRL32_SIGN_PFX" /p "${CTRL32_SIGN_PASS:-}" /fd sha256 /tr http://timestamp.digicert.com /td sha256 /d "ctrl32 telemetry" "$OUT/ctrl32-telemetry-windows-amd64.exe"
   echo "signed windows binary"
 else
-  echo "note: CTRL32_SIGN_PFX not set — windows binary is unsigned"
+  echo "note: CTRL32_SIGN_PFX not set — windows binary is unsigned (Authenticode; the release manifest is signed regardless)"
 fi
 # Supply-chain evidence (URS H-16): govulncheck result and a CycloneDX SBOM are published next to the binaries.
 if command -v govulncheck >/dev/null 2>&1; then
@@ -41,13 +52,27 @@ else echo "note: cyclonedx-gomod not installed (go install github.com/CycloneDX/
 cp deploy/install.sh "$OUT/install.sh"
 cp deploy/install.ps1 "$OUT/install.ps1"
 cp deploy/install-relay.sh deploy/install-relay.ps1 "$OUT/"
+printf '%s\n' "$VERSION" > "$OUT/VERSION"
+# the detector parts for servers without the Internet (pinned, unmodified, with their licences)
+if [[ "${NO_DETECTOR:-}" != 1 ]]; then go run ./tools/relsign fetch-detector -out "$OUT/analytics"; fi
+# the signed manifest over every file, then the offline package, then a check of both with the keys of this source
+go run ./tools/relsign sign -dir "$OUT" -version "$VERSION" -released "$RELEASED" -key "$KEY"
+PKG=ctrl32-telemetry-$VERSION-offline.zip
+go run ./tools/relsign package -dir "$OUT" -out "$OUT/$PKG"
+go run ./tools/relsign verify -dir "$OUT"
+go run ./tools/relsign verify -file "$OUT/$PKG"
 echo "built $(ls "$OUT")"
-ssh "${SSH_OPTS[@]}" "$TARGET" 'install -d -m 0755 /var/www/ctrl32/dl'
+ssh "${SSH_OPTS[@]}" "$TARGET" 'install -d -m 0755 /var/www/ctrl32/dl /var/www/ctrl32/dl/analytics'
+# the files first, the manifest, its signature and VERSION last: a server never sees a release whose files are not there
 scp "${SSH_OPTS[@]}" "$OUT"/ctrl32-telemetry-* "$OUT/SHA256SUMS" "$TARGET:/var/www/ctrl32/dl/"
 for f in "$OUT"/sbom-* "$OUT"/govulncheck-*; do [[ -e "$f" ]] && scp "${SSH_OPTS[@]}" "$f" "$TARGET:/var/www/ctrl32/dl/"; done
+if [[ -d "$OUT/analytics" ]]; then scp "${SSH_OPTS[@]}" "$OUT"/analytics/* "$TARGET:/var/www/ctrl32/dl/analytics/"; fi
 scp "${SSH_OPTS[@]}" "$OUT/install.sh" "$TARGET:/var/www/ctrl32/install.sh"
 scp "${SSH_OPTS[@]}" "$OUT/install.ps1" "$TARGET:/var/www/ctrl32/install.ps1"
 scp "${SSH_OPTS[@]}" "$OUT/install-relay.sh" "$OUT/install-relay.ps1" "$TARGET:/var/www/ctrl32/"
-ssh "${SSH_OPTS[@]}" "$TARGET" "chmod 0644 /var/www/ctrl32/install.sh /var/www/ctrl32/install.ps1 /var/www/ctrl32/install-relay.sh /var/www/ctrl32/install-relay.ps1 /var/www/ctrl32/dl/*; printf '%s\n' '$VERSION' > /var/www/ctrl32/dl/VERSION"
+# the manifest lists install.sh & co. too: the copies under /dl/ keep the mirror complete
+scp "${SSH_OPTS[@]}" "$OUT/install.sh" "$OUT/install.ps1" "$OUT/install-relay.sh" "$OUT/install-relay.ps1" "$TARGET:/var/www/ctrl32/dl/"
+scp "${SSH_OPTS[@]}" "$OUT/release.json" "$OUT/release.json.sig" "$OUT/VERSION" "$TARGET:/var/www/ctrl32/dl/"
+ssh "${SSH_OPTS[@]}" "$TARGET" "chmod 0644 /var/www/ctrl32/install.sh /var/www/ctrl32/install.ps1 /var/www/ctrl32/install-relay.sh /var/www/ctrl32/install-relay.ps1; find /var/www/ctrl32/dl -type f -exec chmod 0644 {} +; find /var/www/ctrl32/dl -maxdepth 1 -name 'ctrl32-telemetry-*-offline.zip' ! -name '$PKG' -delete"
 bash deploy/homeassistant/publish-addon.sh "$VERSION" "$TARGET" "${SSH_OPTS[@]}"
-echo "published $VERSION to $TARGET (/install.sh, /dl/, /dl/ha-addons.git)"
+echo "published $VERSION to $TARGET (/install.sh, /dl/ with the signed manifest and $PKG, /dl/ha-addons.git)"

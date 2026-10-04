@@ -202,12 +202,84 @@ type UpdateRequest struct {
 	// UpdatesUntil (YYYY-MM-DD) is the last release date the server's licence includes updates for; empty = no limit
 	// (no licence, or a licence issued without the limit). The agent refuses a binary released later.
 	UpdatesUntil string `json:"updates_until,omitempty"`
+	// Mode: manual (System → Updates), auto (maintenance window), cli (ctrl32-telemetry update --file); for the history
+	Mode string `json:"mode,omitempty"`
+	// Source: "" = the distribution point (update_url), "package" = the staged offline package
+	Source string `json:"source,omitempty"`
+	// Backup: a backup (database, configuration) before anything changes; the automatic mode always asks for it
+	Backup bool `json:"backup,omitempty"`
+	// RollbackMinutes: how long the new version has to answer healthy before the previous binary returns (default 10)
+	RollbackMinutes int    `json:"rollback_minutes,omitempty"`
+	Actor           string `json:"actor,omitempty"`  // who asked (user name, "automatic", "cli"), for the history
+	Reason          string `json:"reason,omitempty"` // the reason of the audit trail, for the history
 }
 
 type UpdateResult struct {
+	ID      string `json:"id"`
 	Version string `json:"version"`
 	SHA256  string `json:"sha256"`
+	KeyID   string `json:"key_id,omitempty"` // the trusted key that verified the release ("" = unsigned, development only)
+	Backup  string `json:"backup,omitempty"`
 	Message string `json:"message"`
+}
+
+// UpdateRecord is one installation in the agent's history (update.json). Phases: installing, restarting (the guard
+// waits for the new version to answer healthy), done, rolled_back, failed.
+type UpdateRecord struct {
+	ID         string    `json:"id"`
+	From       string    `json:"from"`
+	To         string    `json:"to"`
+	Mode       string    `json:"mode"`
+	Source     string    `json:"source"`
+	KeyID      string    `json:"key_id,omitempty"`
+	SHA256     string    `json:"sha256,omitempty"`
+	Actor      string    `json:"actor,omitempty"`
+	Reason     string    `json:"reason,omitempty"`
+	Phase      string    `json:"phase"`
+	Backup     string    `json:"backup,omitempty"`
+	Error      string    `json:"error,omitempty"`
+	RolledBack string    `json:"rolled_back,omitempty"` // "binary" or "binary and database"
+	StartedAt  time.Time `json:"started_at"`
+	Deadline   time.Time `json:"deadline,omitzero"`
+	FinishedAt time.Time `json:"finished_at,omitzero"`
+	Audited    bool      `json:"audited,omitempty"` // the server wrote the result into its audit trail
+}
+
+// PackageInfo describes a verified offline package staged on the server.
+type PackageInfo struct {
+	Version   string    `json:"version"`
+	Released  string    `json:"released"`
+	KeyID     string    `json:"key_id,omitempty"`
+	Files     int       `json:"files"`
+	Bytes     int64     `json:"bytes"`
+	Platform  string    `json:"platform"`
+	HasBinary bool      `json:"has_binary"` // the package carries the server binary of this platform
+	Detector  []string  `json:"detector,omitempty"`
+	StagedAt  time.Time `json:"staged_at"`
+}
+
+// UpdateState is what GET /update/state answers.
+type UpdateState struct {
+	Current          *UpdateRecord  `json:"current,omitempty"` // the installation in progress or the last one
+	History          []UpdateRecord `json:"history"`
+	Staged           *PackageInfo   `json:"staged,omitempty"`
+	TrustedKeys      []string       `json:"trusted_keys"`
+	RequireSignature bool           `json:"require_signature"`
+	TestBuild        bool           `json:"test_build,omitempty"`
+	UpdateURL        string         `json:"update_url"`
+	MaxPackageMB     int            `json:"max_package_mb"`
+	Simulated        bool           `json:"simulated,omitempty"`
+}
+
+// PackageResult answers an upload: the staged package and, when it was installed, the installation.
+type PackageResult struct {
+	Package *PackageInfo  `json:"package"`
+	Update  *UpdateResult `json:"update,omitempty"`
+}
+
+// AckRequest marks records of the history as written into the server's audit trail.
+type AckRequest struct {
+	IDs []string `json:"ids"`
 }
 
 // Result is the generic acknowledgement.

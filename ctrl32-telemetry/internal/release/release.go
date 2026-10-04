@@ -9,9 +9,9 @@
 // Builds without it (development, source builds) fall back to the commit time Go stamps into the binary (vcs.time);
 // without either the date is unknown.
 //
-// Limitation: the update channel publishes VERSION, SHA256SUMS and the binaries without a signature of their own, so
-// the release date is only as trustworthy as the downloaded binary itself (HTTPS from the distribution point plus the
-// SHA-256 checksum from the same place). There is no separately signed release metadata.
+// Since 0.76.0 every release carries a signed manifest (manifest.go, ADR-0024) with the version, the release date and
+// the size and SHA-256 of every file; the agent installs only signed releases and takes the release date for the
+// licence check from the signed manifest. SHA256SUMS stays published for servers before 0.76.0, which check only it.
 package release
 
 import (

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/vpn"
@@ -160,10 +161,61 @@ func (c *Client) DisconnectUplink(ctx context.Context) (*WireGuardState, error) 
 	return &st, err
 }
 
-func (c *Client) Update(ctx context.Context, version, updatesUntil string) (*UpdateResult, error) {
+// Update installs a release from the distribution point (or, with in.Source "package", the staged package). With a
+// backup the request may take as long as the backup.
+func (c *Client) Update(ctx context.Context, in UpdateRequest) (*UpdateResult, error) {
 	var r UpdateResult
-	err := c.do(ctx, "POST", "/update", UpdateRequest{Version: version, UpdatesUntil: updatesUntil}, &r, 10*time.Minute)
+	timeout := 10 * time.Minute
+	if in.Backup {
+		timeout = 50 * time.Minute
+	}
+	err := c.do(ctx, "POST", "/update", in, &r, timeout)
 	return &r, err
+}
+
+// UpdateState is the history of the installations, the staged package and the signature policy.
+func (c *Client) UpdateState(ctx context.Context) (*UpdateState, error) {
+	var st UpdateState
+	if err := c.do(ctx, "GET", "/update/state", nil, &st, 20*time.Second); err != nil {
+		return nil, err
+	}
+	return &st, nil
+}
+
+// AckUpdates marks results as written into the audit trail.
+func (c *Client) AckUpdates(ctx context.Context, ids []string) error {
+	return c.do(ctx, "POST", "/update/ack", AckRequest{IDs: ids}, nil, 20*time.Second)
+}
+
+// UploadPackage streams an offline package to the agent, which verifies and stages it (and installs it with
+// q install=1).
+func (c *Client) UploadPackage(ctx context.Context, body io.Reader, size int64, q url.Values) (*PackageResult, error) {
+	if !c.Configured() {
+		return nil, ErrNoAgent
+	}
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Minute)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "POST", "http://agent/update/package?"+q.Encode(), body)
+	if err != nil {
+		return nil, err
+	}
+	req.ContentLength = size
+	req.Header.Set("Content-Type", "application/zip")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("agent unreachable: %w", err)
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if resp.StatusCode >= 300 {
+		var e struct{ Error, Code string }
+		if json.Unmarshal(data, &e) == nil && e.Error != "" {
+			return nil, &CodedError{Status: resp.StatusCode, Code: e.Code, Msg: e.Error}
+		}
+		return nil, fmt.Errorf("agent returned %d", resp.StatusCode)
+	}
+	var r PackageResult
+	return &r, json.Unmarshal(data, &r)
 }
 
 func (c *Client) Backups(ctx context.Context) (*BackupsState, error) {

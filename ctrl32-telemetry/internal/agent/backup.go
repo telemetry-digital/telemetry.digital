@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/user"
@@ -380,6 +381,167 @@ func (a *Server) runScheduler(ctx context.Context) {
 			backupMu.Unlock()
 			backupRunning.Store(false)
 		}
+	}
+}
+
+// restoreDatabase restores the database from a backup of this agent: the rollback of an update whose migrations
+// failed (update.go). The service is stopped while pg_restore replaces the schema and the data in one transaction, and
+// started again afterwards (with the binary the caller has put back).
+func (a *Server) restoreDatabase(ctx context.Context, name string) error {
+	if a.simulate {
+		a.log.Info("simulation: the database restore is not run", "backup", name)
+		return nil
+	}
+	if !backupNameRe.MatchString(name) {
+		return errors.New("invalid backup name")
+	}
+	file := filepath.Join(BackupDir, name)
+	work, err := os.MkdirTemp(BackupDir, ".restore-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(work)
+	rctx, cancel := context.WithTimeout(ctx, 60*time.Minute)
+	defer cancel()
+	bundle := file
+	if strings.HasSuffix(name, ".enc") {
+		pass := a.backupLoad().Passphrase
+		if pass == "" {
+			return errors.New("the backup is encrypted and no passphrase is stored")
+		}
+		bundle = filepath.Join(work, "bundle.tar.gz")
+		c := exec.CommandContext(rctx, "openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2", "-iter", "200000", "-in", file, "-out", bundle, "-pass", "env:CTRL32_BACKUP_PASS")
+		c.Env = append(os.Environ(), "CTRL32_BACKUP_PASS="+pass)
+		if out, err := c.CombinedOutput(); err != nil {
+			return fmt.Errorf("decryption failed: %s", firstLine(strings.TrimSpace(string(out))))
+		}
+	}
+	dump := filepath.Join(work, "db.dump")
+	if err := extractFromBundle(bundle, "db.dump", dump); err != nil {
+		return err
+	}
+	// The dump is restored into a new database first; only when that succeeded is it swapped in for the old one (the
+	// service is stopped meanwhile). pg_restore --clean on the live database fails on partitioned tables, and a failed
+	// restore must never leave the server without a database.
+	db := dbName
+	mode := a.dbMode(rctx)
+	if isWindows() {
+		u, err := url.Parse(a.adminURL())
+		if err != nil || a.adminURL() == "" {
+			return errors.New("db.admin_url missing in the configuration")
+		}
+		db = strings.TrimPrefix(u.Path, "/")
+	}
+	tmpDB, oldDB := db+"_restore", db+"_before_restore"
+	sql := func(statement string) error {
+		var cmd *exec.Cmd
+		switch {
+		case mode == "docker":
+			cmd = exec.CommandContext(rctx, "docker", "exec", "-i", a.pgContainer, "psql", "-U", dbAdmin, "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-c", statement)
+		case mode == "native" && isWindows():
+			cmd = exec.CommandContext(rctx, strings.Replace(findPgDump(a.pgDump), "pg_dump.exe", "psql.exe", 1), "--dbname", withDB(a.adminURL(), "postgres"), "-v", "ON_ERROR_STOP=1", "-c", statement)
+		case mode == "native":
+			cmd = exec.CommandContext(rctx, "runuser", "-u", "postgres", "--", "psql", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-c", statement)
+		default:
+			return errors.New("no PostgreSQL found (neither the Docker container nor psql)")
+		}
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("%s: %s", statement, firstLine(strings.TrimSpace(string(out))))
+		}
+		return nil
+	}
+	if err := sql(`DROP DATABASE IF EXISTS "` + tmpDB + `" WITH (FORCE)`); err != nil {
+		return err
+	}
+	if err := sql(`CREATE DATABASE "` + tmpDB + `" OWNER "` + dbAdmin + `"`); err != nil {
+		return err
+	}
+	var cmd *exec.Cmd
+	args := []string{"--no-owner", "--exit-on-error", "--single-transaction"}
+	switch {
+	case mode == "docker":
+		cmd = exec.CommandContext(rctx, "docker", append([]string{"exec", "-i", a.pgContainer, "pg_restore", "-U", dbAdmin, "-d", tmpDB}, args...)...)
+	case isWindows():
+		cmd = exec.CommandContext(rctx, strings.Replace(findPgDump(a.pgDump), "pg_dump.exe", "pg_restore.exe", 1), append([]string{"--dbname", withDB(a.adminURL(), tmpDB)}, args...)...)
+	default:
+		// the objects belong to the database administrator of the installation, as the migrations created them
+		cmd = exec.CommandContext(rctx, "runuser", append([]string{"-u", "postgres", "--", "pg_restore", "-d", tmpDB, "--role=" + dbAdmin}, args...)...)
+	}
+	in, err := os.Open(dump)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	var stderr bytes.Buffer
+	cmd.Stdin, cmd.Stderr = in, &stderr
+	if err := cmd.Run(); err != nil {
+		_ = sql(`DROP DATABASE IF EXISTS "` + tmpDB + `" WITH (FORCE)`)
+		return fmt.Errorf("pg_restore failed (the database was not changed): %s", firstLine(strings.TrimSpace(stderr.String())))
+	}
+	stopApp(rctx)
+	defer startApp(rctx)
+	if err := sql(`DROP DATABASE IF EXISTS "` + oldDB + `" WITH (FORCE)`); err != nil {
+		return err
+	}
+	if err := sql(`ALTER DATABASE "` + db + `" RENAME TO "` + oldDB + `"`); err != nil {
+		// sessions still open (a replica, a console): close them and try once more
+		_ = sql(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '` + db + `' AND pid <> pg_backend_pid()`)
+		if err := sql(`ALTER DATABASE "` + db + `" RENAME TO "` + oldDB + `"`); err != nil {
+			return err
+		}
+	}
+	if err := sql(`ALTER DATABASE "` + tmpDB + `" RENAME TO "` + db + `"`); err != nil {
+		_ = sql(`ALTER DATABASE "` + oldDB + `" RENAME TO "` + db + `"`)
+		return err
+	}
+	_ = sql(`DROP DATABASE IF EXISTS "` + oldDB + `" WITH (FORCE)`)
+	a.log.Info("database restored", "backup", name)
+	return nil
+}
+
+// withDB replaces the database of a PostgreSQL URL.
+func withDB(raw, db string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	u.Path = "/" + db
+	return u.String()
+}
+
+// extractFromBundle copies one member of a backup bundle (.tar.gz) to dst.
+func extractFromBundle(bundle, member, dst string) error {
+	f, err := os.Open(bundle)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return err
+	}
+	tr := tar.NewReader(gz)
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			return fmt.Errorf("%s is not in the backup", member)
+		}
+		if err != nil {
+			return err
+		}
+		if h.Name != member {
+			continue
+		}
+		out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(out, tr); err != nil {
+			out.Close()
+			return err
+		}
+		return out.Close()
 	}
 }
 
