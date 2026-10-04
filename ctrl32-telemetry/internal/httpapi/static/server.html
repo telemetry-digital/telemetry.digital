@@ -386,7 +386,7 @@ $('#caddyForm').onsubmit = async e => { e.preventDefault(); const f = e.target; 
   catch(x){ $('#caddyErr').textContent = x.message; $('#caddyMsg').textContent=''; } finally { $('#caddySubmit').disabled = false; } };
 // ---- updates (ADR-0024): status, mode, install, offline package, history
 let UPD = null;
-const PHASES = {installing: 'installing', restarting: 'waiting for the new version', done: 'installed', rolled_back: 'rolled back', failed: 'failed'};
+const PHASES = {installing: 'installing', restarting: 'waiting for the new version', rolling_back: 'rolling back', done: 'installed', rolled_back: 'rolled back', failed: 'failed'};
 function weekdayName(d){ return new Date(2026, 9, 4 + d).toLocaleDateString(document.documentElement.lang || undefined, {weekday: 'long'}); }
 function phaseBadge(p){ const cls = p === 'done' ? 'ok' : (p === 'rolled_back' || p === 'failed') ? 'bad' : 'warn'; return `<span class="badge ${cls}">${esc(ctrl32.t(PHASES[p] || p))}</span>`; }
 async function renderUpdates(refresh){

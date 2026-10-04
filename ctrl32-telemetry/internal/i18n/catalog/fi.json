@@ -3453,5 +3453,6 @@
  "is available": "on saatavilla",
  "installs automatically in the maintenance window": "asennetaan automaattisesti huoltoikkunassa",
  "Open Updates": "Avaa Päivitykset",
- "Later": "Myöhemmin"
+ "Later": "Myöhemmin",
+ "rolling back": "palautetaan"
 }

@@ -3453,5 +3453,6 @@
  "is available": "elérhető",
  "installs automatically in the maintenance window": "automatikusan települ a karbantartási ablakban",
  "Open Updates": "Frissítések megnyitása",
- "Later": "Később"
+ "Later": "Később",
+ "rolling back": "visszaállítás folyamatban"
 }

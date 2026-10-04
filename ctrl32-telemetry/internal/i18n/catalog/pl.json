@@ -3453,5 +3453,6 @@
  "is available": "jest dostępna",
  "installs automatically in the maintenance window": "zainstaluje się automatycznie w oknie serwisowym",
  "Open Updates": "Otwórz Aktualizacje",
- "Later": "Później"
+ "Later": "Później",
+ "rolling back": "wycofywanie"
 }

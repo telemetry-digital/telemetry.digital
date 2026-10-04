@@ -592,6 +592,9 @@ func (s *Server) serverUpdate(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, status, map[string]string{"error": ce.Msg, "code": ce.Code})
 			return
 		}
+		if !errors.Is(err, agent.ErrNoAgent) {
+			s.audit(r, "server.update", "server", in.Version, map[string]any{"version": s.version}, map[string]any{"version": in.Version, "source": in.Source, "refused": err.Error()}, in.Reason)
+		}
 		s.agentErr(w, err)
 		return
 	}

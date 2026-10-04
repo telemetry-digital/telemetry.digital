@@ -3453,5 +3453,6 @@
  "is available": "е налична",
  "installs automatically in the maintenance window": "ще се инсталира автоматично в прозореца за поддръжка",
  "Open Updates": "Отвори Обновявания",
- "Later": "По-късно"
+ "Later": "По-късно",
+ "rolling back": "връщане назад"
 }

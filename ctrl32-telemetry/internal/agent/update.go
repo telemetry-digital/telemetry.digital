@@ -150,7 +150,7 @@ func busy(now time.Time) *UpdateRecord {
 		return nil
 	}
 	switch c.Phase {
-	case "installing":
+	case "installing", "rolling_back":
 		if now.Sub(c.StartedAt) < 2*time.Hour {
 			return c
 		}
@@ -394,6 +394,8 @@ func (a *Server) install(ctx context.Context, in UpdateRequest, src releaseSourc
 		a.seedSimulatedBinary()
 	}
 	p, e := a.prepare(ctx, src, in.Version, in.UpdatesUntil)
+	// from here on a closed connection of the caller must not interrupt the backup, the migrations or a rollback
+	ctx = context.WithoutCancel(ctx)
 	if e != nil {
 		return nil, e
 	}
@@ -435,7 +437,9 @@ func (a *Server) install(ctx context.Context, in UpdateRequest, src releaseSourc
 		if out == "" {
 			msg = "migration failed: " + err.Error()
 		}
-		a.rollbackNow(ctx, &rec, msg)
+		if a.rollbackNow(ctx, &rec, msg) {
+			return nil, uerr(500, "rolled_back", "%s; the previous version is back, the database is being restored from %s and the service restarts — see the history", msg, rec.Backup)
+		}
 		return nil, uerr(500, "rolled_back", "%s", rec.Error)
 	}
 	rec.Phase = "restarting"
@@ -530,8 +534,11 @@ func rollbackPlan(migrationsFailed bool, backup string) (binary, database bool) 
 	return true, migrationsFailed && backup != ""
 }
 
-// rollbackNow undoes an installation whose migrations failed: the previous binary, and the database from the backup.
-func (a *Server) rollbackNow(ctx context.Context, rec *UpdateRecord, why string) {
+// rollbackNow undoes an installation whose migrations failed: the previous binary at once, and the database from the
+// backup. The database restore stops the web service — the one that is waiting for this answer — so it runs in the
+// background (returns true) unless this process is the command line, which waits for it.
+func (a *Server) rollbackNow(ctx context.Context, rec *UpdateRecord, why string) bool {
+	ctx = context.WithoutCancel(ctx)
 	_, restoreDB := rollbackPlan(true, rec.Backup)
 	rec.Error = why
 	err := restoreBinary(binPath + ".prev")
@@ -539,18 +546,33 @@ func (a *Server) rollbackNow(ctx context.Context, rec *UpdateRecord, why string)
 	if err != nil {
 		rec.Error += "; restoring the previous binary failed: " + err.Error()
 	}
-	if restoreDB {
-		if derr := a.restoreDatabase(ctx, rec.Backup); derr != nil {
-			rec.Error += "; restoring the database from " + rec.Backup + " failed: " + derr.Error()
+	finish := func() {
+		if restoreDB {
+			if derr := a.restoreDatabase(ctx, rec.Backup); derr != nil {
+				rec.Error += "; restoring the database from " + rec.Backup + " failed: " + derr.Error()
+			} else {
+				rec.RolledBack = "binary and database"
+				rec.Error += "; the database was restored from " + rec.Backup
+			}
 		} else {
-			rec.RolledBack = "binary and database"
+			rec.Error += "; no backup was taken before the update: the database may hold a part of the new schema — restore a backup if the service does not start"
 		}
-	} else {
-		rec.Error += "; no backup was taken before the update: the database may hold a part of the new schema — restore a backup if the service does not start"
+		rec.Phase, rec.FinishedAt = "rolled_back", time.Now().UTC()
+		saveRecord(*rec)
+		a.log.Error("update rolled back", "id", rec.ID, "to", rec.To, "err", rec.Error)
 	}
-	rec.Phase, rec.FinishedAt = "rolled_back", time.Now().UTC()
-	saveRecord(*rec)
-	a.log.Error("update rolled back", "id", rec.ID, "to", rec.To, "err", rec.Error)
+	if restoreDB && !a.direct && !a.simulate {
+		rec.Phase = "rolling_back"
+		saveRecord(*rec)
+		go func() {
+			a.mu.Lock() // no other operation of the agent while the database is replaced
+			defer a.mu.Unlock()
+			finish()
+		}()
+		return true
+	}
+	finish()
+	return false
 }
 
 // preUpdateBackup takes a backup with the passphrase of the schedule (the simulation writes a stand-in).

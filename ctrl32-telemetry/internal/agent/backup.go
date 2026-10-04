@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/user"
@@ -419,24 +420,53 @@ func (a *Server) restoreDatabase(ctx context.Context, name string) error {
 	if err := extractFromBundle(bundle, "db.dump", dump); err != nil {
 		return err
 	}
-	var cmd *exec.Cmd
-	args := []string{"--clean", "--if-exists", "--no-owner", "--single-transaction"}
-	switch a.dbMode(rctx) {
-	case "docker":
-		cmd = exec.CommandContext(rctx, "docker", append([]string{"exec", "-i", a.pgContainer, "pg_restore", "-U", dbAdmin, "-d", dbName}, args...)...)
-	case "native":
-		if isWindows() {
-			pr := strings.Replace(findPgDump(a.pgDump), "pg_dump.exe", "pg_restore.exe", 1)
-			url := a.adminURL()
-			if url == "" {
-				return errors.New("db.admin_url missing in the configuration")
-			}
-			cmd = exec.CommandContext(rctx, pr, append([]string{"--dbname", url}, args...)...)
-		} else {
-			cmd = exec.CommandContext(rctx, "runuser", append([]string{"-u", "postgres", "--", "pg_restore", "-d", dbName}, args...)...)
+	// The dump is restored into a new database first; only when that succeeded is it swapped in for the old one (the
+	// service is stopped meanwhile). pg_restore --clean on the live database fails on partitioned tables, and a failed
+	// restore must never leave the server without a database.
+	db := dbName
+	mode := a.dbMode(rctx)
+	if isWindows() {
+		u, err := url.Parse(a.adminURL())
+		if err != nil || a.adminURL() == "" {
+			return errors.New("db.admin_url missing in the configuration")
 		}
+		db = strings.TrimPrefix(u.Path, "/")
+	}
+	tmpDB, oldDB := db+"_restore", db+"_before_restore"
+	sql := func(statement string) error {
+		var cmd *exec.Cmd
+		switch {
+		case mode == "docker":
+			cmd = exec.CommandContext(rctx, "docker", "exec", "-i", a.pgContainer, "psql", "-U", dbAdmin, "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-c", statement)
+		case mode == "native" && isWindows():
+			cmd = exec.CommandContext(rctx, strings.Replace(findPgDump(a.pgDump), "pg_dump.exe", "psql.exe", 1), "--dbname", withDB(a.adminURL(), "postgres"), "-v", "ON_ERROR_STOP=1", "-c", statement)
+		case mode == "native":
+			cmd = exec.CommandContext(rctx, "runuser", "-u", "postgres", "--", "psql", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-c", statement)
+		default:
+			return errors.New("no PostgreSQL found (neither the Docker container nor psql)")
+		}
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("%s: %s", statement, firstLine(strings.TrimSpace(string(out))))
+		}
+		return nil
+	}
+	if err := sql(`DROP DATABASE IF EXISTS "` + tmpDB + `" WITH (FORCE)`); err != nil {
+		return err
+	}
+	if err := sql(`CREATE DATABASE "` + tmpDB + `" OWNER "` + dbAdmin + `"`); err != nil {
+		return err
+	}
+	var cmd *exec.Cmd
+	args := []string{"--no-owner", "--exit-on-error", "--single-transaction"}
+	switch {
+	case mode == "docker":
+		cmd = exec.CommandContext(rctx, "docker", append([]string{"exec", "-i", a.pgContainer, "pg_restore", "-U", dbAdmin, "-d", tmpDB}, args...)...)
+	case isWindows():
+		cmd = exec.CommandContext(rctx, strings.Replace(findPgDump(a.pgDump), "pg_dump.exe", "pg_restore.exe", 1), append([]string{"--dbname", withDB(a.adminURL(), tmpDB)}, args...)...)
 	default:
-		return errors.New("no PostgreSQL found (neither the Docker container nor pg_restore)")
+		// the objects belong to the database administrator of the installation, as the migrations created them
+		cmd = exec.CommandContext(rctx, "runuser", append([]string{"-u", "postgres", "--", "pg_restore", "-d", tmpDB, "--role=" + dbAdmin}, args...)...)
 	}
 	in, err := os.Open(dump)
 	if err != nil {
@@ -445,14 +475,39 @@ func (a *Server) restoreDatabase(ctx context.Context, name string) error {
 	defer in.Close()
 	var stderr bytes.Buffer
 	cmd.Stdin, cmd.Stderr = in, &stderr
-	stopApp(rctx)
-	err = cmd.Run()
-	startApp(rctx)
-	if err != nil {
-		return fmt.Errorf("pg_restore failed: %s", firstLine(strings.TrimSpace(stderr.String())))
+	if err := cmd.Run(); err != nil {
+		_ = sql(`DROP DATABASE IF EXISTS "` + tmpDB + `" WITH (FORCE)`)
+		return fmt.Errorf("pg_restore failed (the database was not changed): %s", firstLine(strings.TrimSpace(stderr.String())))
 	}
+	stopApp(rctx)
+	defer startApp(rctx)
+	if err := sql(`DROP DATABASE IF EXISTS "` + oldDB + `" WITH (FORCE)`); err != nil {
+		return err
+	}
+	if err := sql(`ALTER DATABASE "` + db + `" RENAME TO "` + oldDB + `"`); err != nil {
+		// sessions still open (a replica, a console): close them and try once more
+		_ = sql(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '` + db + `' AND pid <> pg_backend_pid()`)
+		if err := sql(`ALTER DATABASE "` + db + `" RENAME TO "` + oldDB + `"`); err != nil {
+			return err
+		}
+	}
+	if err := sql(`ALTER DATABASE "` + tmpDB + `" RENAME TO "` + db + `"`); err != nil {
+		_ = sql(`ALTER DATABASE "` + oldDB + `" RENAME TO "` + db + `"`)
+		return err
+	}
+	_ = sql(`DROP DATABASE IF EXISTS "` + oldDB + `" WITH (FORCE)`)
 	a.log.Info("database restored", "backup", name)
 	return nil
+}
+
+// withDB replaces the database of a PostgreSQL URL.
+func withDB(raw, db string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	u.Path = "/" + db
+	return u.String()
 }
 
 // extractFromBundle copies one member of a backup bundle (.tar.gz) to dst.
