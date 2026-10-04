@@ -332,8 +332,8 @@
       <a class="brand" href="${esc(home())}"><img id="logo" data-logo alt="telemetry.digital" src="${esc(logoURL())}">${me || app ? `<span id="orgname" class="${app ? 'notranslate' : ''}">${esc(app ? app.name : (brand.org_name || brand.product))}</span>` : ''}</a>
       <span class="grow"></span>
       ${me ? '' : (brand.public_read ? '<span class="badge warn" title="http.public_read is enabled: anyone can read data without signing in. Demo instances only.">Read-only demo · sign in to change anything</span>' : '')}
-      ${me && !locked() ? `<button class="btn ghost icon only-mobile" id="gsBtnM" type="button" title="Search (Ctrl+K)" aria-label="Search">${ICON.search}</button>` : ''}
-      ${locked() ? '' : bugButton(me ? 'only-mobile' : '')}
+      ${me && !app ? `<button class="btn ghost icon only-mobile" id="gsBtnM" type="button" title="Search (Ctrl+K)" aria-label="Search">${ICON.search}</button>` : ''}
+      ${app ? '' : bugButton(me ? 'only-mobile' : '')}
       ${me ? '' : langSwitcher('langTop')}
     </div>`;
     // a locked app shows no in-page links out of it either (sub-navigation of a page, e.g. My account)
@@ -341,8 +341,8 @@
     // page tabs follow the menu: a tab whose sub-page the menu hides for this user is hidden too
     if (me) { const denied = deniedPages(); for (const a of document.querySelectorAll('.subnav:not(#tabs) a[href]')) if (denied.has(a.getAttribute('href'))) a.hidden = true; }
     // Desktop: the bug button lives in its own strip at the top of the page (in flow, sticky), never over page buttons.
-    if (me && !locked() && !$('#bugBtnDesk')) { const host = $('main'); const strip = document.createElement('div'); strip.className = 'top-strip only-desktop'; const b = document.createElement('a'); b.id = 'bugBtnDesk'; b.className = 'btn ghost icon bug-btn'; b.href = '#'; b.title = 'Report a bug (opens your mail client, info@telemetry.digital)'; b.setAttribute('aria-label', 'Report a bug'); b.innerHTML = ICON.bug; b.onclick = (e) => { e.preventDefault(); location.href = bugMailto(); }; const gs = document.createElement('button'); gs.type = 'button'; gs.className = 'gs-field'; gs.id = 'gsBtn'; gs.title = 'Search (Ctrl+K)'; gs.innerHTML = ICON.search + '<span>Search…</span><kbd>Ctrl K</kbd>'; strip.appendChild(gs); const sp = document.createElement('span'); sp.style.flex = '1'; strip.appendChild(sp); strip.appendChild(b); if (host) { host.prepend(strip); document.body.classList.add('has-strip'); } else document.body.appendChild(strip); }
-    if (me && !locked()) { for (const id of ['gsBtn', 'gsBtnM']) { const el = $('#' + id); if (el) el.onclick = () => openSearch(); } }
+    if (me && !app && !$('#bugBtnDesk')) { const host = $('main'); const strip = document.createElement('div'); strip.className = 'top-strip only-desktop'; const b = document.createElement('a'); b.id = 'bugBtnDesk'; b.className = 'btn ghost icon bug-btn'; b.href = '#'; b.title = 'Report a bug (opens your mail client, info@telemetry.digital)'; b.setAttribute('aria-label', 'Report a bug'); b.innerHTML = ICON.bug; b.onclick = (e) => { e.preventDefault(); location.href = bugMailto(); }; const gs = document.createElement('button'); gs.type = 'button'; gs.className = 'gs-field'; gs.id = 'gsBtn'; gs.title = 'Search (Ctrl+K)'; gs.innerHTML = ICON.search + '<span>Search…</span><kbd>Ctrl K</kbd>'; strip.appendChild(gs); const sp = document.createElement('span'); sp.style.flex = '1'; strip.appendChild(sp); strip.appendChild(b); if (host) { host.prepend(strip); document.body.classList.add('has-strip'); } else document.body.appendChild(strip); }
+    if (me && !app) { for (const id of ['gsBtn', 'gsBtnM']) { const el = $('#' + id); if (el) el.onclick = () => openSearch(); } }
     wireBug();
     if (me) {
       document.body.classList.add('has-sidebar');
@@ -455,7 +455,7 @@
     }
     list.innerHTML = h; const first = list.querySelector('a.gs-item'); if (first) first.classList.add('on');
   }
-  document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) { if (!me || locked()) return; e.preventDefault(); openSearch(); } });
+  document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) { if (!me || app) return; e.preventDefault(); openSearch(); } });
 
   function footer() {
     if ($('.footer')) return;

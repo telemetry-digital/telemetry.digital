@@ -45,7 +45,7 @@ async function settingsApps() {
   const slugOf = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
   const PRESETS = {
     // a phone app for the cameras: only the cameras, no page zoom, one camera per row
-    cameras: () => ({ name: t('Cameras'), short_name: t('Cameras'), slug: 'cameras', start_url: '/video', sections: ['cameras'], locked: true, page_zoom: false, camera_layout: 'single' }),
+    cameras: () => ({ name: t('Cameras'), short_name: t('Cameras'), slug: 'cam', start_url: '/video', sections: ['cameras'], locked: true, page_zoom: false, camera_layout: 'single' }),
     wall: () => { const w = APP_OPTS.start_pages.find((p) => p.group === 'Video walls'); return { name: w ? w.label : t('Video wall'), short_name: t('Video wall'), slug: w ? slugOf(w.label) || 'wall' : 'wall', start_url: w ? w.url : '/video/walls', sections: ['cameras'] }; },
     dashboards: () => ({ name: t('Dashboards'), short_name: t('Dashboards'), slug: 'dashboards', start_url: '/dashboards', sections: ['dashboards'] }),
     smarthome: () => ({ name: t('Smart home'), short_name: t('Home'), slug: 'home', start_url: '/home', sections: ['home', 'energy'] }),

@@ -81,6 +81,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   let how = "home-screen launch";
   if ((await ev(`location.pathname`)) !== "/video") { how = "launch=1"; await go(`/app/${slug}?launch=1`, 3000); }
   expect("start page opened (" + how + ")", await ev(`location.pathname`), "/video");
+  expect("app: no search field and no bug button", await ev(`["gsBtn","gsBtnM","bugBtn","bugBtnDesk"].filter(id => { const e = document.getElementById(id); return e && e.offsetParent !== null; }).join(",")`), "");
   expect("app name in the header", await until(`(document.querySelector('.side-org span') || {}).textContent === 'Cameras'`), true);
   expect("logo leads to the start page", await ev(`document.querySelector('#sidebar .side-brand').getAttribute('href')`), "/video");
   expect("menu restricted to Cameras and My account", await ev(topMenu + `.join()`), "/video,/account");
