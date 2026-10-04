@@ -41,7 +41,7 @@ one-time password of `admin` is in `admin-bootstrap.txt` in the data directory (
 
 1. Sign in at `https://kamery.zakaznik.sk`, set up two-factor sign-in, add the cameras (*Cameras → Camera management*;
    *Find cameras* scans the local network).
-2. *Settings → Apps → New app → Cameras* creates a phone app `https://kamery.zakaznik.sk/app/kamery` (locked to the
+2. *Settings → Apps → New app → Cameras* creates a phone app `https://kamery.zakaznik.sk/app/cam` (locked to the
    cameras, one camera per row). Open it on the phone and install it (Android: Install, iPhone: Share → Add to Home
    Screen), or scan the QR code on the install page.
 3. Users of the customer: *Users*, each with their own account and, if needed, camera groups.

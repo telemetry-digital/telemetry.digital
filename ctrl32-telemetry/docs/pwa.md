@@ -91,5 +91,5 @@ user's own organization.
 
 ```bash
 curl -X POST https://server/api/v1/pwa-apps -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"slug":"cameras","name":"Cameras","short_name":"Cameras","start_url":"/video","sections":["cameras"],"reason":"gate phones"}'
+  -d '{"slug":"cam","name":"Cameras","short_name":"Cameras","start_url":"/video","sections":["cameras"],"reason":"gate phones"}'
 ```
