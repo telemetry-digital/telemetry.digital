@@ -148,6 +148,20 @@ func (a *Server) Serve(ctx context.Context) error {
 	return nil
 }
 
+// backupRoutes: backups, the offsite target and the restore test (backup*.go).
+func (a *Server) backupRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /backups", a.hBackups)
+	mux.HandleFunc("POST /backups", a.hCreateBackup)
+	mux.HandleFunc("DELETE /backups/{name}", a.hDeleteBackup)
+	mux.HandleFunc("PUT /backups/schedule", a.hBackupSchedule)
+	mux.HandleFunc("PUT /backups/offsite", a.hSetOffsite)
+	mux.HandleFunc("POST /backups/offsite/test", a.hOffsiteTest)
+	mux.HandleFunc("POST /backups/offsite/sync", a.hOffsiteSync)
+	mux.HandleFunc("PUT /backups/restore-test", a.hRestoreTestSchedule)
+	mux.HandleFunc("POST /backups/restore-test", a.hRunRestoreTest)
+	mux.HandleFunc("POST /backups/ack", a.hBackupAck)
+}
+
 // routes is the closed list of operations (ADR-0012). The VPN simulation of development and tests (vpn_simulate)
 // serves only the VPN operations and refuses everything else, so it can never touch services, Caddy or updates.
 func (a *Server) routes() http.Handler {
@@ -160,6 +174,7 @@ func (a *Server) routes() http.Handler {
 		a.uplinkRoutes(mux)
 		a.analyticsRoutes(mux) // stand-in downloads into the simulation directory (setup.SimulatedArtifacts)
 		a.updateRoutes(mux)    // installs into the simulation directory; no restart, no database restore
+		a.backupRoutes(mux)    // backups in the simulation directory with a stand-in dump; no database restore
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 501, "not available in the VPN simulation of the agent (vpn_simulate)")
 		})
@@ -174,10 +189,7 @@ func (a *Server) routes() http.Handler {
 	a.uplinkRoutes(mux)
 	a.analyticsRoutes(mux)
 	a.updateRoutes(mux)
-	mux.HandleFunc("GET /backups", a.hBackups)
-	mux.HandleFunc("POST /backups", a.hCreateBackup)
-	mux.HandleFunc("DELETE /backups/{name}", a.hDeleteBackup)
-	mux.HandleFunc("PUT /backups/schedule", a.hBackupSchedule)
+	a.backupRoutes(mux)
 	mux.HandleFunc("POST /replica/promote", a.hReplicaPromote)
 	return mux
 }

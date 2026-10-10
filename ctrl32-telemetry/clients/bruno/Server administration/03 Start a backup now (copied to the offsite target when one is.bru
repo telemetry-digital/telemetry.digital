@@ -1,0 +1,25 @@
+meta {
+  name: Start a backup now (copied to the offsite target when one is
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/server/backups
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "passphrase": "string",
+    "reason": "string",
+    "use_stored": true
+  }
+}
+
+docs {
+  Start a backup now (copied to the offsite target when one is enabled)
+  
+  Requires permission `system.admin`.
+}

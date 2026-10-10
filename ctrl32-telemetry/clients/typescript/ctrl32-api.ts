@@ -7969,70 +7969,1272 @@ export class Ctrl32Client {
     return this.request<Record<string, unknown>>('GET', `/api/v1/server`, undefined, undefined, false);
   }
 
-  /** Backups and schedule
+  /** Backups, schedule, offsite target, restore test and the history of runs
    *
    * Requires permission `system.admin`. */
   getServerBackups(): Promise<{
+    /** docker, native, unknown or simulated */
+    db_mode?: string;
     dir?: string;
     files?: ({
       created_at?: string;
       encrypted?: boolean;
       name?: string;
+      /** present at the offsite target */
+      offsite?: boolean;
+      /** from the checksum file */
+      sha256?: string;
       size_bytes?: number;
     })[];
+    history?: ({
+      actor?: string;
+      /** written into the audit trail */
+      audited?: boolean;
+      error?: string;
+      file?: string;
+      finished_at?: string;
+      id?: string;
+      /** backup, offsite_sync or restore_test */
+      kind?: string;
+      ok?: boolean;
+      running?: boolean;
+      size_bytes?: number;
+      /** restore test: offsite or local */
+      source?: string;
+      started_at?: string;
+      steps?: ({
+        detail?: string;
+        ms?: number;
+        /** dump, bundle, encrypt, checksum, upload, verify, sync, prune, prune_offsite, connect, select, fetch, manifest, restore, checks, cleanup */
+        name?: string;
+        ok?: boolean;
+      })[];
+      /** offsite target */
+      target?: string;
+      /** schedule, manual or update */
+      trigger?: string;
+    })[];
+    offsite?: {
+      /** the target without secrets (has_password, has_private_key, has_secret_key) */
+      config?: Record<string, unknown>;
+      describe?: string;
+      files?: ({
+        modified?: string;
+        name?: string;
+        size?: number;
+      })[];
+      list_error?: string;
+      listed_at?: string;
+    };
+    restore_running?: boolean;
+    restore_test?: {
+      day?: number;
+      enabled?: boolean;
+      hour?: number;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+      source?: string;
+    };
     running?: boolean;
-    schedule?: Record<string, unknown>;
+    schedule?: {
+      enabled?: boolean;
+      has_passphrase?: boolean;
+      hour?: number;
+      keep?: number;
+      keep_monthly?: number;
+      keep_weekly?: number;
+      last_error?: string;
+      last_file?: string;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+    };
   }> {
     return this.request<{
+    /** docker, native, unknown or simulated */
+    db_mode?: string;
     dir?: string;
     files?: ({
       created_at?: string;
       encrypted?: boolean;
       name?: string;
+      /** present at the offsite target */
+      offsite?: boolean;
+      /** from the checksum file */
+      sha256?: string;
       size_bytes?: number;
     })[];
+    history?: ({
+      actor?: string;
+      /** written into the audit trail */
+      audited?: boolean;
+      error?: string;
+      file?: string;
+      finished_at?: string;
+      id?: string;
+      /** backup, offsite_sync or restore_test */
+      kind?: string;
+      ok?: boolean;
+      running?: boolean;
+      size_bytes?: number;
+      /** restore test: offsite or local */
+      source?: string;
+      started_at?: string;
+      steps?: ({
+        detail?: string;
+        ms?: number;
+        /** dump, bundle, encrypt, checksum, upload, verify, sync, prune, prune_offsite, connect, select, fetch, manifest, restore, checks, cleanup */
+        name?: string;
+        ok?: boolean;
+      })[];
+      /** offsite target */
+      target?: string;
+      /** schedule, manual or update */
+      trigger?: string;
+    })[];
+    offsite?: {
+      /** the target without secrets (has_password, has_private_key, has_secret_key) */
+      config?: Record<string, unknown>;
+      describe?: string;
+      files?: ({
+        modified?: string;
+        name?: string;
+        size?: number;
+      })[];
+      list_error?: string;
+      listed_at?: string;
+    };
+    restore_running?: boolean;
+    restore_test?: {
+      day?: number;
+      enabled?: boolean;
+      hour?: number;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+      source?: string;
+    };
     running?: boolean;
-    schedule?: Record<string, unknown>;
+    schedule?: {
+      enabled?: boolean;
+      has_passphrase?: boolean;
+      hour?: number;
+      keep?: number;
+      keep_monthly?: number;
+      keep_weekly?: number;
+      last_error?: string;
+      last_file?: string;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+    };
   }>('GET', `/api/v1/server/backups`, undefined, undefined, false);
   }
 
-  /** Start a backup now
+  /** Start a backup now (copied to the offsite target when one is enabled)
    *
    * Requires permission `system.admin`. */
-  postServerBackups(body: Record<string, unknown>): Promise<{
-    encrypted?: boolean;
+  postServerBackups(body: {
+    /** encrypt this backup (blank: unencrypted, it then stays on the server) */
+    passphrase?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** encrypt with the passphrase of the schedule */
+    use_stored?: boolean;
+  }): Promise<{
+    /** docker, native, unknown or simulated */
+    db_mode?: string;
+    dir?: string;
+    files?: ({
+      created_at?: string;
+      encrypted?: boolean;
+      name?: string;
+      /** present at the offsite target */
+      offsite?: boolean;
+      /** from the checksum file */
+      sha256?: string;
+      size_bytes?: number;
+    })[];
+    history?: ({
+      actor?: string;
+      /** written into the audit trail */
+      audited?: boolean;
+      error?: string;
+      file?: string;
+      finished_at?: string;
+      id?: string;
+      /** backup, offsite_sync or restore_test */
+      kind?: string;
+      ok?: boolean;
+      running?: boolean;
+      size_bytes?: number;
+      /** restore test: offsite or local */
+      source?: string;
+      started_at?: string;
+      steps?: ({
+        detail?: string;
+        ms?: number;
+        /** dump, bundle, encrypt, checksum, upload, verify, sync, prune, prune_offsite, connect, select, fetch, manifest, restore, checks, cleanup */
+        name?: string;
+        ok?: boolean;
+      })[];
+      /** offsite target */
+      target?: string;
+      /** schedule, manual or update */
+      trigger?: string;
+    })[];
+    offsite?: {
+      /** the target without secrets (has_password, has_private_key, has_secret_key) */
+      config?: Record<string, unknown>;
+      describe?: string;
+      files?: ({
+        modified?: string;
+        name?: string;
+        size?: number;
+      })[];
+      list_error?: string;
+      listed_at?: string;
+    };
+    restore_running?: boolean;
+    restore_test?: {
+      day?: number;
+      enabled?: boolean;
+      hour?: number;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+      source?: string;
+    };
+    running?: boolean;
+    schedule?: {
+      enabled?: boolean;
+      has_passphrase?: boolean;
+      hour?: number;
+      keep?: number;
+      keep_monthly?: number;
+      keep_weekly?: number;
+      last_error?: string;
+      last_file?: string;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+    };
   }> {
     return this.request<{
-    encrypted?: boolean;
+    /** docker, native, unknown or simulated */
+    db_mode?: string;
+    dir?: string;
+    files?: ({
+      created_at?: string;
+      encrypted?: boolean;
+      name?: string;
+      /** present at the offsite target */
+      offsite?: boolean;
+      /** from the checksum file */
+      sha256?: string;
+      size_bytes?: number;
+    })[];
+    history?: ({
+      actor?: string;
+      /** written into the audit trail */
+      audited?: boolean;
+      error?: string;
+      file?: string;
+      finished_at?: string;
+      id?: string;
+      /** backup, offsite_sync or restore_test */
+      kind?: string;
+      ok?: boolean;
+      running?: boolean;
+      size_bytes?: number;
+      /** restore test: offsite or local */
+      source?: string;
+      started_at?: string;
+      steps?: ({
+        detail?: string;
+        ms?: number;
+        /** dump, bundle, encrypt, checksum, upload, verify, sync, prune, prune_offsite, connect, select, fetch, manifest, restore, checks, cleanup */
+        name?: string;
+        ok?: boolean;
+      })[];
+      /** offsite target */
+      target?: string;
+      /** schedule, manual or update */
+      trigger?: string;
+    })[];
+    offsite?: {
+      /** the target without secrets (has_password, has_private_key, has_secret_key) */
+      config?: Record<string, unknown>;
+      describe?: string;
+      files?: ({
+        modified?: string;
+        name?: string;
+        size?: number;
+      })[];
+      list_error?: string;
+      listed_at?: string;
+    };
+    restore_running?: boolean;
+    restore_test?: {
+      day?: number;
+      enabled?: boolean;
+      hour?: number;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+      source?: string;
+    };
+    running?: boolean;
+    schedule?: {
+      enabled?: boolean;
+      has_passphrase?: boolean;
+      hour?: number;
+      keep?: number;
+      keep_monthly?: number;
+      keep_weekly?: number;
+      last_error?: string;
+      last_file?: string;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+    };
   }>('POST', `/api/v1/server/backups`, undefined, body, false);
   }
 
-  /** Set the backup schedule
+  /** Set or remove the offsite target (folder, SFTP, S3); an enabled target is tested first. Browser session only, with the password (and authenticator code) again
+   *
+   * Requires permission `system.admin`. */
+  putServerBackupsOffsite(body: {
+    /** authenticator code (two-factor sign-in) */
+    code?: string;
+    config: {
+      /** s3 */
+      access_key?: string;
+      /** s3 */
+      bucket?: string;
+      enabled?: boolean;
+      /** s3: https URL */
+      endpoint?: string;
+      /** sftp */
+      host?: string;
+      /** sftp: pinned SHA256:… fingerprint (required) */
+      host_key?: string;
+      /** folder, sftp or s3 (blank removes the target) */
+      kind?: string;
+      /** sftp, write-only */
+      password?: string;
+      /** folder: absolute path (a mounted SMB/NFS share or a UNC path); sftp: remote directory; s3: key prefix */
+      path?: string;
+      /** s3: https://endpoint/bucket/key */
+      path_style?: boolean;
+      /** sftp, default 22 */
+      port?: number;
+      /** sftp, unencrypted OpenSSH/PEM key, write-only */
+      private_key?: string;
+      /** s3 */
+      region?: string;
+      /** s3, write-only */
+      secret_key?: string;
+      /** sftp */
+      user?: string;
+    };
+    /** the caller's password */
+    password: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** docker, native, unknown or simulated */
+    db_mode?: string;
+    dir?: string;
+    files?: ({
+      created_at?: string;
+      encrypted?: boolean;
+      name?: string;
+      /** present at the offsite target */
+      offsite?: boolean;
+      /** from the checksum file */
+      sha256?: string;
+      size_bytes?: number;
+    })[];
+    history?: ({
+      actor?: string;
+      /** written into the audit trail */
+      audited?: boolean;
+      error?: string;
+      file?: string;
+      finished_at?: string;
+      id?: string;
+      /** backup, offsite_sync or restore_test */
+      kind?: string;
+      ok?: boolean;
+      running?: boolean;
+      size_bytes?: number;
+      /** restore test: offsite or local */
+      source?: string;
+      started_at?: string;
+      steps?: ({
+        detail?: string;
+        ms?: number;
+        /** dump, bundle, encrypt, checksum, upload, verify, sync, prune, prune_offsite, connect, select, fetch, manifest, restore, checks, cleanup */
+        name?: string;
+        ok?: boolean;
+      })[];
+      /** offsite target */
+      target?: string;
+      /** schedule, manual or update */
+      trigger?: string;
+    })[];
+    offsite?: {
+      /** the target without secrets (has_password, has_private_key, has_secret_key) */
+      config?: Record<string, unknown>;
+      describe?: string;
+      files?: ({
+        modified?: string;
+        name?: string;
+        size?: number;
+      })[];
+      list_error?: string;
+      listed_at?: string;
+    };
+    restore_running?: boolean;
+    restore_test?: {
+      day?: number;
+      enabled?: boolean;
+      hour?: number;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+      source?: string;
+    };
+    running?: boolean;
+    schedule?: {
+      enabled?: boolean;
+      has_passphrase?: boolean;
+      hour?: number;
+      keep?: number;
+      keep_monthly?: number;
+      keep_weekly?: number;
+      last_error?: string;
+      last_file?: string;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+    };
+  }> {
+    return this.request<{
+    /** docker, native, unknown or simulated */
+    db_mode?: string;
+    dir?: string;
+    files?: ({
+      created_at?: string;
+      encrypted?: boolean;
+      name?: string;
+      /** present at the offsite target */
+      offsite?: boolean;
+      /** from the checksum file */
+      sha256?: string;
+      size_bytes?: number;
+    })[];
+    history?: ({
+      actor?: string;
+      /** written into the audit trail */
+      audited?: boolean;
+      error?: string;
+      file?: string;
+      finished_at?: string;
+      id?: string;
+      /** backup, offsite_sync or restore_test */
+      kind?: string;
+      ok?: boolean;
+      running?: boolean;
+      size_bytes?: number;
+      /** restore test: offsite or local */
+      source?: string;
+      started_at?: string;
+      steps?: ({
+        detail?: string;
+        ms?: number;
+        /** dump, bundle, encrypt, checksum, upload, verify, sync, prune, prune_offsite, connect, select, fetch, manifest, restore, checks, cleanup */
+        name?: string;
+        ok?: boolean;
+      })[];
+      /** offsite target */
+      target?: string;
+      /** schedule, manual or update */
+      trigger?: string;
+    })[];
+    offsite?: {
+      /** the target without secrets (has_password, has_private_key, has_secret_key) */
+      config?: Record<string, unknown>;
+      describe?: string;
+      files?: ({
+        modified?: string;
+        name?: string;
+        size?: number;
+      })[];
+      list_error?: string;
+      listed_at?: string;
+    };
+    restore_running?: boolean;
+    restore_test?: {
+      day?: number;
+      enabled?: boolean;
+      hour?: number;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+      source?: string;
+    };
+    running?: boolean;
+    schedule?: {
+      enabled?: boolean;
+      has_passphrase?: boolean;
+      hour?: number;
+      keep?: number;
+      keep_monthly?: number;
+      keep_weekly?: number;
+      last_error?: string;
+      last_file?: string;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+    };
+  }>('PUT', `/api/v1/server/backups/offsite`, undefined, body, false);
+  }
+
+  /** Copy the backups the offsite target misses and apply the retention there (in the background)
+   *
+   * Requires permission `system.admin`. */
+  postServerBackupsOffsiteSync(body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** docker, native, unknown or simulated */
+    db_mode?: string;
+    dir?: string;
+    files?: ({
+      created_at?: string;
+      encrypted?: boolean;
+      name?: string;
+      /** present at the offsite target */
+      offsite?: boolean;
+      /** from the checksum file */
+      sha256?: string;
+      size_bytes?: number;
+    })[];
+    history?: ({
+      actor?: string;
+      /** written into the audit trail */
+      audited?: boolean;
+      error?: string;
+      file?: string;
+      finished_at?: string;
+      id?: string;
+      /** backup, offsite_sync or restore_test */
+      kind?: string;
+      ok?: boolean;
+      running?: boolean;
+      size_bytes?: number;
+      /** restore test: offsite or local */
+      source?: string;
+      started_at?: string;
+      steps?: ({
+        detail?: string;
+        ms?: number;
+        /** dump, bundle, encrypt, checksum, upload, verify, sync, prune, prune_offsite, connect, select, fetch, manifest, restore, checks, cleanup */
+        name?: string;
+        ok?: boolean;
+      })[];
+      /** offsite target */
+      target?: string;
+      /** schedule, manual or update */
+      trigger?: string;
+    })[];
+    offsite?: {
+      /** the target without secrets (has_password, has_private_key, has_secret_key) */
+      config?: Record<string, unknown>;
+      describe?: string;
+      files?: ({
+        modified?: string;
+        name?: string;
+        size?: number;
+      })[];
+      list_error?: string;
+      listed_at?: string;
+    };
+    restore_running?: boolean;
+    restore_test?: {
+      day?: number;
+      enabled?: boolean;
+      hour?: number;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+      source?: string;
+    };
+    running?: boolean;
+    schedule?: {
+      enabled?: boolean;
+      has_passphrase?: boolean;
+      hour?: number;
+      keep?: number;
+      keep_monthly?: number;
+      keep_weekly?: number;
+      last_error?: string;
+      last_file?: string;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+    };
+  }> {
+    return this.request<{
+    /** docker, native, unknown or simulated */
+    db_mode?: string;
+    dir?: string;
+    files?: ({
+      created_at?: string;
+      encrypted?: boolean;
+      name?: string;
+      /** present at the offsite target */
+      offsite?: boolean;
+      /** from the checksum file */
+      sha256?: string;
+      size_bytes?: number;
+    })[];
+    history?: ({
+      actor?: string;
+      /** written into the audit trail */
+      audited?: boolean;
+      error?: string;
+      file?: string;
+      finished_at?: string;
+      id?: string;
+      /** backup, offsite_sync or restore_test */
+      kind?: string;
+      ok?: boolean;
+      running?: boolean;
+      size_bytes?: number;
+      /** restore test: offsite or local */
+      source?: string;
+      started_at?: string;
+      steps?: ({
+        detail?: string;
+        ms?: number;
+        /** dump, bundle, encrypt, checksum, upload, verify, sync, prune, prune_offsite, connect, select, fetch, manifest, restore, checks, cleanup */
+        name?: string;
+        ok?: boolean;
+      })[];
+      /** offsite target */
+      target?: string;
+      /** schedule, manual or update */
+      trigger?: string;
+    })[];
+    offsite?: {
+      /** the target without secrets (has_password, has_private_key, has_secret_key) */
+      config?: Record<string, unknown>;
+      describe?: string;
+      files?: ({
+        modified?: string;
+        name?: string;
+        size?: number;
+      })[];
+      list_error?: string;
+      listed_at?: string;
+    };
+    restore_running?: boolean;
+    restore_test?: {
+      day?: number;
+      enabled?: boolean;
+      hour?: number;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+      source?: string;
+    };
+    running?: boolean;
+    schedule?: {
+      enabled?: boolean;
+      has_passphrase?: boolean;
+      hour?: number;
+      keep?: number;
+      keep_monthly?: number;
+      keep_weekly?: number;
+      last_error?: string;
+      last_file?: string;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+    };
+  }>('POST', `/api/v1/server/backups/offsite/sync`, undefined, body, false);
+  }
+
+  /** Test an offsite target: a probe file is written, read back and deleted (stored secrets fill blank ones for the same place)
+   *
+   * Requires permission `system.admin`. */
+  postServerBackupsOffsiteTest(body: {
+    config: {
+      /** s3 */
+      access_key?: string;
+      /** s3 */
+      bucket?: string;
+      enabled?: boolean;
+      /** s3: https URL */
+      endpoint?: string;
+      /** sftp */
+      host?: string;
+      /** sftp: pinned SHA256:… fingerprint (required) */
+      host_key?: string;
+      /** folder, sftp or s3 (blank removes the target) */
+      kind?: string;
+      /** sftp, write-only */
+      password?: string;
+      /** folder: absolute path (a mounted SMB/NFS share or a UNC path); sftp: remote directory; s3: key prefix */
+      path?: string;
+      /** s3: https://endpoint/bucket/key */
+      path_style?: boolean;
+      /** sftp, default 22 */
+      port?: number;
+      /** sftp, unencrypted OpenSSH/PEM key, write-only */
+      private_key?: string;
+      /** s3 */
+      region?: string;
+      /** s3, write-only */
+      secret_key?: string;
+      /** sftp */
+      user?: string;
+    };
+  }): Promise<{
+    detail?: string;
+    /** SFTP: the fingerprint the server presented (pin it after comparing) */
+    host_key?: string;
+    ok?: boolean;
+  }> {
+    return this.request<{
+    detail?: string;
+    /** SFTP: the fingerprint the server presented (pin it after comparing) */
+    host_key?: string;
+    ok?: boolean;
+  }>('POST', `/api/v1/server/backups/offsite/test`, undefined, body, false);
+  }
+
+  /** Run a restore test now: the newest backup into a temporary database, compared with its manifest (in the background)
+   *
+   * Requires permission `system.admin`. */
+  postServerBackupsRestoreTest(body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** offsite or local */
+    source?: string;
+  }): Promise<{
+    /** docker, native, unknown or simulated */
+    db_mode?: string;
+    dir?: string;
+    files?: ({
+      created_at?: string;
+      encrypted?: boolean;
+      name?: string;
+      /** present at the offsite target */
+      offsite?: boolean;
+      /** from the checksum file */
+      sha256?: string;
+      size_bytes?: number;
+    })[];
+    history?: ({
+      actor?: string;
+      /** written into the audit trail */
+      audited?: boolean;
+      error?: string;
+      file?: string;
+      finished_at?: string;
+      id?: string;
+      /** backup, offsite_sync or restore_test */
+      kind?: string;
+      ok?: boolean;
+      running?: boolean;
+      size_bytes?: number;
+      /** restore test: offsite or local */
+      source?: string;
+      started_at?: string;
+      steps?: ({
+        detail?: string;
+        ms?: number;
+        /** dump, bundle, encrypt, checksum, upload, verify, sync, prune, prune_offsite, connect, select, fetch, manifest, restore, checks, cleanup */
+        name?: string;
+        ok?: boolean;
+      })[];
+      /** offsite target */
+      target?: string;
+      /** schedule, manual or update */
+      trigger?: string;
+    })[];
+    offsite?: {
+      /** the target without secrets (has_password, has_private_key, has_secret_key) */
+      config?: Record<string, unknown>;
+      describe?: string;
+      files?: ({
+        modified?: string;
+        name?: string;
+        size?: number;
+      })[];
+      list_error?: string;
+      listed_at?: string;
+    };
+    restore_running?: boolean;
+    restore_test?: {
+      day?: number;
+      enabled?: boolean;
+      hour?: number;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+      source?: string;
+    };
+    running?: boolean;
+    schedule?: {
+      enabled?: boolean;
+      has_passphrase?: boolean;
+      hour?: number;
+      keep?: number;
+      keep_monthly?: number;
+      keep_weekly?: number;
+      last_error?: string;
+      last_file?: string;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+    };
+  }> {
+    return this.request<{
+    /** docker, native, unknown or simulated */
+    db_mode?: string;
+    dir?: string;
+    files?: ({
+      created_at?: string;
+      encrypted?: boolean;
+      name?: string;
+      /** present at the offsite target */
+      offsite?: boolean;
+      /** from the checksum file */
+      sha256?: string;
+      size_bytes?: number;
+    })[];
+    history?: ({
+      actor?: string;
+      /** written into the audit trail */
+      audited?: boolean;
+      error?: string;
+      file?: string;
+      finished_at?: string;
+      id?: string;
+      /** backup, offsite_sync or restore_test */
+      kind?: string;
+      ok?: boolean;
+      running?: boolean;
+      size_bytes?: number;
+      /** restore test: offsite or local */
+      source?: string;
+      started_at?: string;
+      steps?: ({
+        detail?: string;
+        ms?: number;
+        /** dump, bundle, encrypt, checksum, upload, verify, sync, prune, prune_offsite, connect, select, fetch, manifest, restore, checks, cleanup */
+        name?: string;
+        ok?: boolean;
+      })[];
+      /** offsite target */
+      target?: string;
+      /** schedule, manual or update */
+      trigger?: string;
+    })[];
+    offsite?: {
+      /** the target without secrets (has_password, has_private_key, has_secret_key) */
+      config?: Record<string, unknown>;
+      describe?: string;
+      files?: ({
+        modified?: string;
+        name?: string;
+        size?: number;
+      })[];
+      list_error?: string;
+      listed_at?: string;
+    };
+    restore_running?: boolean;
+    restore_test?: {
+      day?: number;
+      enabled?: boolean;
+      hour?: number;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+      source?: string;
+    };
+    running?: boolean;
+    schedule?: {
+      enabled?: boolean;
+      has_passphrase?: boolean;
+      hour?: number;
+      keep?: number;
+      keep_monthly?: number;
+      keep_weekly?: number;
+      last_error?: string;
+      last_file?: string;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+    };
+  }>('POST', `/api/v1/server/backups/restore-test`, undefined, body, false);
+  }
+
+  /** Schedule the automatic restore test (a day of the month)
+   *
+   * Requires permission `system.admin`. */
+  putServerBackupsRestoreTest(body: {
+    /** 1–28 */
+    day: number;
+    enabled?: boolean;
+    hour: number;
+    minute: number;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** offsite or local (blank: offsite when a target is enabled) */
+    source?: string;
+  }): Promise<{
+    /** docker, native, unknown or simulated */
+    db_mode?: string;
+    dir?: string;
+    files?: ({
+      created_at?: string;
+      encrypted?: boolean;
+      name?: string;
+      /** present at the offsite target */
+      offsite?: boolean;
+      /** from the checksum file */
+      sha256?: string;
+      size_bytes?: number;
+    })[];
+    history?: ({
+      actor?: string;
+      /** written into the audit trail */
+      audited?: boolean;
+      error?: string;
+      file?: string;
+      finished_at?: string;
+      id?: string;
+      /** backup, offsite_sync or restore_test */
+      kind?: string;
+      ok?: boolean;
+      running?: boolean;
+      size_bytes?: number;
+      /** restore test: offsite or local */
+      source?: string;
+      started_at?: string;
+      steps?: ({
+        detail?: string;
+        ms?: number;
+        /** dump, bundle, encrypt, checksum, upload, verify, sync, prune, prune_offsite, connect, select, fetch, manifest, restore, checks, cleanup */
+        name?: string;
+        ok?: boolean;
+      })[];
+      /** offsite target */
+      target?: string;
+      /** schedule, manual or update */
+      trigger?: string;
+    })[];
+    offsite?: {
+      /** the target without secrets (has_password, has_private_key, has_secret_key) */
+      config?: Record<string, unknown>;
+      describe?: string;
+      files?: ({
+        modified?: string;
+        name?: string;
+        size?: number;
+      })[];
+      list_error?: string;
+      listed_at?: string;
+    };
+    restore_running?: boolean;
+    restore_test?: {
+      day?: number;
+      enabled?: boolean;
+      hour?: number;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+      source?: string;
+    };
+    running?: boolean;
+    schedule?: {
+      enabled?: boolean;
+      has_passphrase?: boolean;
+      hour?: number;
+      keep?: number;
+      keep_monthly?: number;
+      keep_weekly?: number;
+      last_error?: string;
+      last_file?: string;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+    };
+  }> {
+    return this.request<{
+    /** docker, native, unknown or simulated */
+    db_mode?: string;
+    dir?: string;
+    files?: ({
+      created_at?: string;
+      encrypted?: boolean;
+      name?: string;
+      /** present at the offsite target */
+      offsite?: boolean;
+      /** from the checksum file */
+      sha256?: string;
+      size_bytes?: number;
+    })[];
+    history?: ({
+      actor?: string;
+      /** written into the audit trail */
+      audited?: boolean;
+      error?: string;
+      file?: string;
+      finished_at?: string;
+      id?: string;
+      /** backup, offsite_sync or restore_test */
+      kind?: string;
+      ok?: boolean;
+      running?: boolean;
+      size_bytes?: number;
+      /** restore test: offsite or local */
+      source?: string;
+      started_at?: string;
+      steps?: ({
+        detail?: string;
+        ms?: number;
+        /** dump, bundle, encrypt, checksum, upload, verify, sync, prune, prune_offsite, connect, select, fetch, manifest, restore, checks, cleanup */
+        name?: string;
+        ok?: boolean;
+      })[];
+      /** offsite target */
+      target?: string;
+      /** schedule, manual or update */
+      trigger?: string;
+    })[];
+    offsite?: {
+      /** the target without secrets (has_password, has_private_key, has_secret_key) */
+      config?: Record<string, unknown>;
+      describe?: string;
+      files?: ({
+        modified?: string;
+        name?: string;
+        size?: number;
+      })[];
+      list_error?: string;
+      listed_at?: string;
+    };
+    restore_running?: boolean;
+    restore_test?: {
+      day?: number;
+      enabled?: boolean;
+      hour?: number;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+      source?: string;
+    };
+    running?: boolean;
+    schedule?: {
+      enabled?: boolean;
+      has_passphrase?: boolean;
+      hour?: number;
+      keep?: number;
+      keep_monthly?: number;
+      keep_weekly?: number;
+      last_error?: string;
+      last_file?: string;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+    };
+  }>('PUT', `/api/v1/server/backups/restore-test`, undefined, body, false);
+  }
+
+  /** Set the backup schedule and the retention (grandfather–father–son)
    *
    * Requires permission `system.admin`. */
   putServerBackupsSchedule(body: {
+    /** remove the passphrase (refused while an offsite target is enabled) */
+    clear_passphrase?: boolean;
     enabled?: boolean;
     hour?: number;
-    /** files to keep */
+    /** daily: the newest N backups (1–365) */
     keep?: number;
+    /** plus the newest of each of the last N months (0–120) */
+    keep_monthly?: number;
+    /** plus the newest of each of the last N weeks (0–104) */
+    keep_weekly?: number;
     minute?: number;
     /** encrypt backups (blank keeps the stored one) */
     passphrase?: string;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
   }): Promise<{
-    enabled?: boolean;
-    hour?: number;
-    keep?: number;
-    minute?: number;
-    passphrase_changed?: boolean;
+    /** docker, native, unknown or simulated */
+    db_mode?: string;
+    dir?: string;
+    files?: ({
+      created_at?: string;
+      encrypted?: boolean;
+      name?: string;
+      /** present at the offsite target */
+      offsite?: boolean;
+      /** from the checksum file */
+      sha256?: string;
+      size_bytes?: number;
+    })[];
+    history?: ({
+      actor?: string;
+      /** written into the audit trail */
+      audited?: boolean;
+      error?: string;
+      file?: string;
+      finished_at?: string;
+      id?: string;
+      /** backup, offsite_sync or restore_test */
+      kind?: string;
+      ok?: boolean;
+      running?: boolean;
+      size_bytes?: number;
+      /** restore test: offsite or local */
+      source?: string;
+      started_at?: string;
+      steps?: ({
+        detail?: string;
+        ms?: number;
+        /** dump, bundle, encrypt, checksum, upload, verify, sync, prune, prune_offsite, connect, select, fetch, manifest, restore, checks, cleanup */
+        name?: string;
+        ok?: boolean;
+      })[];
+      /** offsite target */
+      target?: string;
+      /** schedule, manual or update */
+      trigger?: string;
+    })[];
+    offsite?: {
+      /** the target without secrets (has_password, has_private_key, has_secret_key) */
+      config?: Record<string, unknown>;
+      describe?: string;
+      files?: ({
+        modified?: string;
+        name?: string;
+        size?: number;
+      })[];
+      list_error?: string;
+      listed_at?: string;
+    };
+    restore_running?: boolean;
+    restore_test?: {
+      day?: number;
+      enabled?: boolean;
+      hour?: number;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+      source?: string;
+    };
+    running?: boolean;
+    schedule?: {
+      enabled?: boolean;
+      has_passphrase?: boolean;
+      hour?: number;
+      keep?: number;
+      keep_monthly?: number;
+      keep_weekly?: number;
+      last_error?: string;
+      last_file?: string;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+    };
   }> {
     return this.request<{
-    enabled?: boolean;
-    hour?: number;
-    keep?: number;
-    minute?: number;
-    passphrase_changed?: boolean;
+    /** docker, native, unknown or simulated */
+    db_mode?: string;
+    dir?: string;
+    files?: ({
+      created_at?: string;
+      encrypted?: boolean;
+      name?: string;
+      /** present at the offsite target */
+      offsite?: boolean;
+      /** from the checksum file */
+      sha256?: string;
+      size_bytes?: number;
+    })[];
+    history?: ({
+      actor?: string;
+      /** written into the audit trail */
+      audited?: boolean;
+      error?: string;
+      file?: string;
+      finished_at?: string;
+      id?: string;
+      /** backup, offsite_sync or restore_test */
+      kind?: string;
+      ok?: boolean;
+      running?: boolean;
+      size_bytes?: number;
+      /** restore test: offsite or local */
+      source?: string;
+      started_at?: string;
+      steps?: ({
+        detail?: string;
+        ms?: number;
+        /** dump, bundle, encrypt, checksum, upload, verify, sync, prune, prune_offsite, connect, select, fetch, manifest, restore, checks, cleanup */
+        name?: string;
+        ok?: boolean;
+      })[];
+      /** offsite target */
+      target?: string;
+      /** schedule, manual or update */
+      trigger?: string;
+    })[];
+    offsite?: {
+      /** the target without secrets (has_password, has_private_key, has_secret_key) */
+      config?: Record<string, unknown>;
+      describe?: string;
+      files?: ({
+        modified?: string;
+        name?: string;
+        size?: number;
+      })[];
+      list_error?: string;
+      listed_at?: string;
+    };
+    restore_running?: boolean;
+    restore_test?: {
+      day?: number;
+      enabled?: boolean;
+      hour?: number;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+      source?: string;
+    };
+    running?: boolean;
+    schedule?: {
+      enabled?: boolean;
+      has_passphrase?: boolean;
+      hour?: number;
+      keep?: number;
+      keep_monthly?: number;
+      keep_weekly?: number;
+      last_error?: string;
+      last_file?: string;
+      last_ok?: string;
+      last_run?: string;
+      minute?: number;
+    };
   }>('PUT', `/api/v1/server/backups/schedule`, undefined, body, false);
   }
 

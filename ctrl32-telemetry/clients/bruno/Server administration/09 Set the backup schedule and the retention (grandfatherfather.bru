@@ -1,0 +1,31 @@
+meta {
+  name: Set the backup schedule and the retention (grandfatherfather
+  type: http
+  seq: 9
+}
+
+put {
+  url: {{baseUrl}}/api/v1/server/backups/schedule
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "clear_passphrase": true,
+    "enabled": true,
+    "hour": 1,
+    "keep": 1,
+    "keep_monthly": 1,
+    "keep_weekly": 1,
+    "minute": 1,
+    "passphrase": "string",
+    "reason": "string"
+  }
+}
+
+docs {
+  Set the backup schedule and the retention (grandfather–father–son)
+  
+  Requires permission `system.admin`.
+}

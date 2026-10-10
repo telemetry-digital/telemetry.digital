@@ -1,0 +1,27 @@
+meta {
+  name: Delete a backup archive
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/v1/server/backups/:name/delete
+  body: json
+  auth: inherit
+}
+
+params:path {
+  name: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Delete a backup archive
+  
+  Requires permission `system.admin`.
+}

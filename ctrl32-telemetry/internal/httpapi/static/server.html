@@ -15,6 +15,13 @@
   .qr { display: block; width: 260px; height: 260px; background: #fff; padding: 8px; border-radius: var(--radius); }
   pre.conf { font-size: 12px; white-space: pre-wrap; word-break: break-all; margin: 0; }
   .agent-off { border-left: 3px solid var(--warn, #e0a800); }
+  .three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  @media (max-width: 600px) { .three { grid-template-columns: 1fr; } }
+  #bkRuns tbody tr { cursor: pointer; }
+  #runDlg { width: min(960px, 96vw); }
+  #runSteps td:nth-child(3), #bkRuns td:nth-child(5) .muted { white-space: normal; word-break: break-word; }
+  #runSteps td:nth-child(3) { min-width: 260px; }
+  p.small { font-size: 13px; margin: 0; }
 </style>
 </head>
 <body>
@@ -77,23 +84,26 @@
 
 
 <section data-section="backups">
-  <div class="page-head"><h1>Backups</h1><span class="grow"></span><button class="btn primary" id="backupNowBtn" type="button">Back up now</button></div>
+  <div class="page-head"><h1>Backups</h1><span class="grow"></span><button class="btn" id="restoreTestBtn" type="button">Run a restore test</button><button class="btn primary" id="backupNowBtn" type="button">Back up now</button></div>
   <div class="card agent-off" id="agentNoteBk" hidden></div>
   <div class="grid">
     <div class="card">
       <h2>State</h2>
       <dl class="kv" id="kvBk"></dl>
-      <p class="muted">A backup bundles the database dump (pg_dump), the configuration with its secrets, and the proxy and VPN state. Store it encrypted and away from this server. Restore instructions are inside the bundle (RESTORE.txt).</p>
+      <p class="muted">A backup bundles the database dump (pg_dump), the configuration with its secrets, and the proxy and VPN state, with a manifest and a checksum. Keep a copy away from this server: set an offsite target below. Restore instructions are inside the bundle (RESTORE.txt).</p>
     </div>
     <div class="card">
       <h2>Daily schedule</h2>
       <form id="bkForm" class="form">
         <label class="inline"><input type="checkbox" name="enabled"><span>Enabled</span></label>
-        <div class="two">
-          <label>Time (server time) <input name="time" type="time" value="02:30" required></label>
-          <label>Keep last <input name="keep" type="number" min="1" max="365" value="14"></label>
+        <label>Time (server time) <input name="time" type="time" value="02:30" required></label>
+        <div class="three">
+          <label>Keep daily <input name="keep" type="number" min="1" max="365" value="14"></label>
+          <label>Weekly <input name="keep_weekly" type="number" min="0" max="104" value="4"></label>
+          <label>Monthly <input name="keep_monthly" type="number" min="0" max="120" value="12"></label>
         </div>
-        <label>Passphrase for encryption (optional) <input name="passphrase" type="password" autocomplete="new-password" placeholder="leave empty to keep the stored one"></label>
+        <p class="muted small">The newest daily backups, plus the newest backup of each of the last weeks and months (grandfather–father–son). The same rule applies at the offsite target.</p>
+        <label>Passphrase for encryption <input name="passphrase" type="password" autocomplete="new-password" placeholder="leave empty to keep the stored one"></label>
         <label class="inline"><input type="checkbox" name="clear_passphrase"><span>Remove the stored passphrase (scheduled backups unencrypted)</span></label>
         <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
         <div class="err" id="bkErr"></div>
@@ -101,17 +111,85 @@
       </form>
     </div>
   </div>
+  <div class="grid" style="margin-top:16px">
+    <div class="card">
+      <h2>Offsite copy</h2>
+      <p class="muted">After every backup the encrypted bundle and its checksum go to this target and are read back; a copy counts only when it matches. Unencrypted backups never leave the server. At the target only the backups of this server are ever deleted.</p>
+      <form id="offForm" class="form">
+        <label>Target <select name="kind"><option value="">none</option><option value="folder">Folder (disk, mounted SMB/NFS share, UNC path)</option><option value="sftp">SFTP server</option><option value="s3">S3-compatible storage</option></select></label>
+        <div data-kind="folder"><label>Path <input name="path_folder" placeholder="/mnt/backup"></label></div>
+        <div data-kind="sftp">
+          <div class="two"><label>Host <input name="host" placeholder="nas.example.com"></label><label>Port <input name="port" type="number" min="1" max="65535" placeholder="22"></label></div>
+          <div class="two"><label>User <input name="user" autocomplete="off"></label><label>Directory <input name="path_sftp" placeholder="backups"></label></div>
+          <label>Password <input name="password_sftp" type="password" autocomplete="new-password" placeholder="leave empty to keep the stored one"></label>
+          <label>Private key (instead of a password) <textarea name="private_key" rows="3" placeholder="leave empty to keep the stored one"></textarea></label>
+          <label>Host key fingerprint <input name="host_key" placeholder="SHA256:… (Test shows the server's key)"></label>
+        </div>
+        <div data-kind="s3">
+          <label>Endpoint <input name="endpoint" placeholder="https://s3.eu-central-1.amazonaws.com"></label>
+          <div class="two"><label>Bucket <input name="bucket"></label><label>Region <input name="region" placeholder="eu-central-1"></label></div>
+          <div class="two"><label>Access key <input name="access_key" autocomplete="off"></label><label>Secret key <input name="secret_key" type="password" autocomplete="new-password" placeholder="leave empty to keep the stored one"></label></div>
+          <label>Prefix (folder in the bucket) <input name="path_s3" placeholder="server-a"></label>
+          <label class="inline"><input type="checkbox" name="path_style"><span>Path-style addresses (MinIO and some providers)</span></label>
+        </div>
+        <label class="inline" data-kind="any"><input type="checkbox" name="enabled"><span>Copy every backup to this target</span></label>
+        <div class="muted" id="offTestMsg"></div>
+        <div class="err" id="offErr"></div>
+        <div class="actions"><button class="btn" type="button" id="offTestBtn">Test</button><button class="btn" type="button" id="offPinBtn" hidden>Pin this host key</button><button class="btn primary" type="submit">Save target…</button><button class="btn" type="button" id="offSyncBtn">Send missing backups now</button></div>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Restore test</h2>
+      <p class="muted">The newest backup — from the offsite target when one is set — is checked against its checksum, decrypted, checked against its manifest, restored into a temporary database and compared with the figures it recorded. The live database is never touched. A failure opens an incident.</p>
+      <dl class="kv" id="kvRt"></dl>
+      <form id="rtForm" class="form" style="margin-top:12px">
+        <label class="inline"><input type="checkbox" name="enabled"><span>Monthly restore test</span></label>
+        <div class="three">
+          <label>Day of the month <input name="day" type="number" min="1" max="28" value="1"></label>
+          <label>Time <input name="time" type="time" value="04:30"></label>
+          <label>Source <select name="source"><option value="">automatic</option><option value="offsite">offsite copy</option><option value="local">this server</option></select></label>
+        </div>
+        <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+        <div class="err" id="rtErr"></div>
+        <div><button class="btn primary" type="submit">Save restore test</button></div>
+      </form>
+    </div>
+  </div>
   <div class="card" style="margin-top:16px"><h2>Stored backups</h2>
-    <div class="table-wrap"><table id="bkFiles"><thead><tr><th>File</th><th>Size</th><th>Created</th><th>Encrypted</th><th></th></tr></thead><tbody></tbody></table></div>
+    <div class="table-wrap"><table id="bkFiles"><thead><tr><th>File</th><th>Size</th><th>Created</th><th>Encrypted</th><th>Checksum</th><th>Offsite</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <div class="card" style="margin-top:16px"><h2>Protocol</h2>
+    <p class="muted">Every backup, offsite copy and restore test with its steps. The results are also in the audit trail.</p>
+    <div class="table-wrap"><table id="bkRuns"><thead><tr><th>Started</th><th>Run</th><th>By</th><th>File</th><th>Result</th></tr></thead><tbody></tbody></table></div>
   </div>
   <dialog id="bkDlg">
     <form id="bkNow" class="form" method="dialog">
       <h2 style="margin-top:0">Back up now</h2>
-      <label>Passphrase (optional, encrypts the bundle) <input name="passphrase" type="password" autocomplete="new-password"></label>
+      <label class="inline"><input type="checkbox" name="stored" checked><span>Encrypt with the stored passphrase</span></label>
+      <label>Another passphrase (without one the backup is not encrypted and stays on this server) <input name="passphrase" type="password" autocomplete="new-password"></label>
       <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
       <div class="err" id="bkNowErr"></div>
       <div class="actions"><button class="btn primary" type="submit">Start backup</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
     </form>
+  </dialog>
+  <dialog id="offDlg">
+    <form id="offSave" class="form" method="dialog">
+      <h2 style="margin-top:0">Save the offsite target</h2>
+      <p class="muted">Copies of the database and of the configuration with its secrets will be sent to this target. Confirm with your password.</p>
+      <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+      <label>Your password <input name="password" type="password" autocomplete="current-password" required></label>
+      <label>Authenticator code (if enabled) <input name="code" inputmode="numeric" autocomplete="one-time-code"></label>
+      <div class="err" id="offSaveErr"></div>
+      <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button></div>
+    </form>
+  </dialog>
+  <dialog id="runDlg">
+    <div class="form">
+      <h2 style="margin-top:0" id="runTitle"></h2>
+      <dl class="kv" id="runKv"></dl>
+      <div class="table-wrap" style="margin-top:12px"><table id="runSteps"><thead><tr><th>Step</th><th>Result</th><th>Detail</th><th>Time</th></tr></thead><tbody></tbody></table></div>
+      <div class="actions"><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+    </div>
   </dialog>
 </section>
 
@@ -470,24 +548,80 @@ $('#smtpTestForm').onsubmit = async e => { e.preventDefault(); const f = e.targe
     if(r.ok){ $('#smtpTestMsg').textContent = ctrl32.t('The SMTP server accepted the test e-mail.'); } else { $('#smtpTestMsg').textContent=''; $('#smtpTestErr').textContent = r.error; } }
   catch(x){ $('#smtpTestErr').textContent = x.message; $('#smtpTestMsg').textContent=''; } finally { $('#smtpTestBtn').disabled = false; } };
 $('#refreshBtn').onclick = () => load();
-let BK = null, bkTimer = null;
+let BK = null, bkTimer = null, OFF_SEEN = '';
 function hhmm(h, m){ return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); }
+function never(t){ return !t || t.startsWith('0001'); }
+const RUN_KIND = {backup: 'Backup', offsite_sync: 'Offsite copy', restore_test: 'Restore test'};
+const RUN_TRIGGER = {schedule: 'scheduled', manual: 'manual', update: 'before an update'};
+const STEP = {dump: 'Database dump', bundle: 'Bundle and manifest', encrypt: 'Encryption', checksum: 'Checksum', upload: 'Copy to the target', verify: 'Read back and compare',
+  sync: 'Copy earlier backups', prune: 'Retention on this server', prune_offsite: 'Retention at the target', connect: 'Connection', select: 'Newest backup',
+  fetch: 'Download', manifest: 'Decryption and manifest', restore: 'Restore into a temporary database', checks: 'Comparison with the backup', cleanup: 'Temporary database dropped'};
+function tx(s){ return esc(ctrl32.t(s)); }
+function runBadge(r){ return r.running ? '<span class="badge warn">' + tx('running…') + '</span>' : (r.ok ? '<span class="badge ok">' + tx('ok') + '</span>' : '<span class="badge bad">' + tx('failed') + '</span>'); }
+function offFields(kind){ for(const d of document.querySelectorAll('#offForm [data-kind]')) d.hidden = !(d.dataset.kind === kind || (d.dataset.kind === 'any' && kind)); }
 async function renderBackups(){
-  if(!INFO.agent.connected){ kv($('#kvBk'), [['Backups', '<span class="muted">needs the server agent</span>']]); $('#bkFiles tbody').innerHTML = '<tr><td colspan="5" class="muted">needs the server agent</td></tr>'; return; }
-  BK = await api('GET','/api/v1/server/backups'); const s = BK.schedule;
-  kv($('#kvBk'), [['Database', esc(BK.db_mode === 'docker' ? 'PostgreSQL in Docker' : (BK.db_mode === 'native' ? 'native PostgreSQL' : 'not found'))], ['Directory', esc(BK.dir)], ['Running now', BK.running ? '<span class="badge warn">backup in progress…</span>' : 'no'],
-    ['Schedule', s.enabled ? `daily at ${hhmm(s.hour, s.minute)}, keep ${s.keep}` + (s.has_passphrase ? ', encrypted' : ', unencrypted') : 'disabled'],
-    ['Last run', s.last_run && !s.last_run.startsWith('0001') ? fmt(s.last_run) + (s.last_error ? ` <span class="badge bad">${esc(s.last_error)}</span>` : (s.last_file ? ` <span class="badge ok">${esc(s.last_file)}</span>` : '')) : '<span class="muted">never</span>'], ['Stored', BK.files.length]]);
-  const f = $('#bkForm'); if(!f.dataset.filled){ f.enabled.checked = s.enabled; f.time.value = hhmm(s.hour, s.minute); f.keep.value = s.keep; f.dataset.filled = '1'; }
-  $('#bkFiles tbody').innerHTML = BK.files.map(b => `<tr><td><code>${esc(b.name)}</code></td><td>${bytes(b.size_bytes)}</td><td>${fmt(b.created_at)}</td><td>${b.encrypted ? '<span class="badge ok">yes</span>' : '<span class="badge warn">no</span>'}</td><td style="white-space:nowrap"><a class="btn small" href="/api/v1/server/backups/${encodeURIComponent(b.name)}" download>Download</a> <button class="btn small danger" data-bkdel="${esc(b.name)}" type="button">Delete</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">no backups yet</td></tr>';
-  for(const b of document.querySelectorAll('[data-bkdel]')) b.onclick = () => askReason('Delete backup ' + b.dataset.bkdel, 'The file is removed from the server. Records in the database are not affected.', async reason => { await api('POST',`/api/v1/server/backups/${encodeURIComponent(b.dataset.bkdel)}/delete`,{reason}); ctrl32.toast('backup deleted','ok'); renderBackups(); });
-  clearTimeout(bkTimer); if(BK.running) bkTimer = setTimeout(renderBackups, 3000);
+  if(!INFO.agent.connected){ kv($('#kvBk'), [['Backups', '<span class="muted">' + tx('needs the server agent') + '</span>']]); $('#bkFiles tbody').innerHTML = '<tr><td colspan="7" class="muted">' + tx('needs the server agent') + '</td></tr>'; return; }
+  BK = await api('GET','/api/v1/server/backups'); const s = BK.schedule, o = BK.offsite, rt = BK.restore_test, oc = o.config || {};
+  const lastRt = (BK.history || []).find(r => r.kind === 'restore_test' && !r.running);
+  const nev = '<span class="muted">' + tx('never') + '</span>';
+  kv($('#kvBk'), [['Database', tx({docker: 'PostgreSQL in Docker', native: 'native PostgreSQL', simulated: 'simulation'}[BK.db_mode] || 'not found')], ['Directory', esc(BK.dir)],
+    ['Running now', BK.running ? '<span class="badge warn">' + tx('backup in progress…') + '</span>' : (BK.restore_running ? '<span class="badge warn">' + tx('restore test in progress…') + '</span>' : tx('no'))],
+    ['Schedule', s.enabled ? tx('daily at') + ' ' + hhmm(s.hour, s.minute) + ', ' + tx('keep') + ` ${s.keep} / ${s.keep_weekly} / ${s.keep_monthly}, ` + tx(s.has_passphrase ? 'encrypted' : 'unencrypted') : tx('disabled')],
+    ['Last completed', never(s.last_ok) ? nev : fmt(s.last_ok)],
+    ['Last run', never(s.last_run) ? nev : fmt(s.last_run) + (s.last_error ? ` <span class="badge bad">${esc(s.last_error)}</span>` : (s.last_file ? ` <span class="badge ok">${esc(s.last_file)}</span>` : ''))],
+    ['Offsite copy', oc.kind ? esc(o.describe) + ' ' + (oc.enabled ? '<span class="badge ok">' + tx('on') + '</span>' : '<span class="badge">' + tx('off') + '</span>') + (o.list_error ? ` <span class="badge bad">${esc(o.list_error)}</span>` : '') : '<span class="badge warn">' + tx('none — the backups are only on this server') + '</span>'],
+    ['Last restore test', lastRt ? fmt(lastRt.started_at) + ' ' + runBadge(lastRt) : nev],
+    ['Stored', BK.files.length]]);
+  const f = $('#bkForm'); if(!f.dataset.filled){ f.enabled.checked = s.enabled; f.time.value = hhmm(s.hour, s.minute); f.keep.value = s.keep; f.keep_weekly.value = s.keep_weekly; f.keep_monthly.value = s.keep_monthly; f.dataset.filled = '1'; }
+  const of = $('#offForm'); if(!of.dataset.filled){ of.kind.value = oc.kind || ''; of.enabled.checked = !!oc.enabled; of.path_folder.value = oc.kind === 'folder' ? oc.path || '' : ''; of.path_sftp.value = oc.kind === 'sftp' ? oc.path || '' : ''; of.path_s3.value = oc.kind === 's3' ? oc.path || '' : '';
+    of.host.value = oc.host || ''; of.port.value = oc.port || ''; of.user.value = oc.user || ''; of.host_key.value = oc.host_key || ''; of.endpoint.value = oc.endpoint || ''; of.bucket.value = oc.bucket || ''; of.region.value = oc.region || ''; of.access_key.value = oc.access_key || ''; of.path_style.checked = !!oc.path_style;
+    of.password_sftp.placeholder = ctrl32.t(oc.has_password ? 'leave empty to keep the stored one' : 'password'); of.secret_key.placeholder = ctrl32.t(oc.has_secret_key ? 'leave empty to keep the stored one' : 'secret key');
+    offFields(of.kind.value); of.dataset.filled = '1'; }
+  $('#offSyncBtn').hidden = !oc.enabled;
+  kv($('#kvRt'), [['Schedule', rt.enabled ? tx('monthly on day') + ` ${rt.day}, ` + hhmm(rt.hour, rt.minute) : tx('disabled')], ['Last passed', never(rt.last_ok) ? nev : fmt(rt.last_ok)],
+    ['Last run', lastRt ? fmt(lastRt.started_at) + ' ' + runBadge(lastRt) + (lastRt.error ? `<div class="muted">${esc(lastRt.error)}</div>` : '') : nev]]);
+  const rf = $('#rtForm'); if(!rf.dataset.filled){ rf.enabled.checked = rt.enabled; rf.day.value = rt.day; rf.time.value = hhmm(rt.hour, rt.minute); rf.source.value = rt.source || ''; rf.dataset.filled = '1'; }
+  const yes = '<span class="badge ok">' + tx('yes') + '</span>', no = '<span class="badge warn">' + tx('no') + '</span>';
+  $('#bkFiles tbody').innerHTML = BK.files.map(b => `<tr><td><code>${esc(b.name)}</code></td><td>${bytes(b.size_bytes)}</td><td>${fmt(b.created_at)}</td><td>${b.encrypted ? yes : no}</td><td>${b.sha256 ? `<code title="SHA-256 ${esc(b.sha256)}">${esc(b.sha256.slice(0, 12))}…</code>` : '<span class="muted">—</span>'}</td><td>${oc.kind ? (b.offsite ? yes : no) : '<span class="muted">—</span>'}</td><td style="white-space:nowrap"><a class="btn small" href="/api/v1/server/backups/${encodeURIComponent(b.name)}" download>${tx('Download')}</a> <button class="btn small danger" data-bkdel="${esc(b.name)}" type="button">${tx('Delete')}</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">' + tx('no backups yet') + '</td></tr>';
+  for(const b of document.querySelectorAll('[data-bkdel]')) b.onclick = () => askReason(ctrl32.t('Delete backup') + ' ' + b.dataset.bkdel, ctrl32.t('The file is removed from this server (not from the offsite target). Records in the database are not affected.'), async reason => { await api('POST',`/api/v1/server/backups/${encodeURIComponent(b.dataset.bkdel)}/delete`,{reason}); ctrl32.toast(ctrl32.t('backup deleted'),'ok'); renderBackups(); });
+  const runs = BK.history || [];
+  $('#bkRuns tbody').innerHTML = runs.map((r, i) => `<tr data-run="${i}"><td>${fmt(r.started_at)}</td><td>${tx(RUN_KIND[r.kind] || r.kind)}${r.source ? ' <span class="muted">' + tx(r.source === 'offsite' ? 'from the offsite copy' : 'from this server') + '</span>' : ''}</td><td>${tx(RUN_TRIGGER[r.trigger] || r.trigger)}${r.actor ? ' <span class="muted">' + esc(r.actor) + '</span>' : ''}</td><td>${r.file ? '<code>' + esc(r.file) + '</code>' : ''}</td><td>${runBadge(r)}${r.error ? '<div class="muted">' + esc(r.error) + '</div>' : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">' + tx('no runs yet') + '</td></tr>';
+  for(const tr of document.querySelectorAll('#bkRuns tr[data-run]')) tr.onclick = () => showRun(runs[+tr.dataset.run]);
+  clearTimeout(bkTimer); if(BK.running || BK.restore_running || runs.some(r => r.running)) bkTimer = setTimeout(renderBackups, 3000);
 }
-$('#backupNowBtn').onclick = () => { const f = $('#bkNow'); f.reset(); $('#bkNowErr').textContent=''; $('#bkDlg').showModal(); };
+function showRun(r){
+  $('#runTitle').textContent = ctrl32.t(RUN_KIND[r.kind] || r.kind) + ' — ' + fmt(r.started_at);
+  kv($('#runKv'), [['Result', runBadge(r)], ['Started', fmt(r.started_at)], ['Finished', never(r.finished_at) ? '' : fmt(r.finished_at)], ['By', tx(RUN_TRIGGER[r.trigger] || r.trigger) + (r.actor ? ' · ' + esc(r.actor) : '')],
+    ['File', r.file ? '<code>' + esc(r.file) + '</code>' + (r.size_bytes ? ' ' + bytes(r.size_bytes) : '') : ''], ['Target', esc(r.target || '')], ['Error', r.error ? '<span class="badge bad">' + esc(r.error) + '</span>' : '']]);
+  $('#runSteps tbody').innerHTML = (r.steps || []).map(st => `<tr><td>${tx(STEP[st.name] || st.name)}</td><td>${st.ok ? '<span class="badge ok">' + tx('ok') + '</span>' : '<span class="badge bad">' + tx('failed') + '</span>'}</td><td>${esc(st.detail || '')}</td><td>${st.ms ? (st.ms >= 1000 ? (st.ms / 1000).toFixed(1) + ' s' : st.ms + ' ms') : ''}</td></tr>`).join('');
+  $('#runDlg').showModal();
+}
+$('#backupNowBtn').onclick = () => { const f = $('#bkNow'); f.reset(); const has = !!(BK && BK.schedule.has_passphrase); f.stored.checked = has; f.stored.closest('label').hidden = !has; $('#bkNowErr').textContent=''; $('#bkDlg').showModal(); };
 $('#bkNow').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#bkNowErr').textContent='';
-  try{ await api('POST','/api/v1/server/backups',{passphrase: f.passphrase.value, reason: f.reason.value}); $('#bkDlg').close(); ctrl32.toast('backup started','ok'); renderBackups(); }catch(x){ $('#bkNowErr').textContent = x.message; } };
+  try{ await api('POST','/api/v1/server/backups',{passphrase: f.passphrase.value, use_stored: f.stored.checked && !f.passphrase.value, reason: f.reason.value}); $('#bkDlg').close(); ctrl32.toast(ctrl32.t('backup started'),'ok'); renderBackups(); }catch(x){ $('#bkNowErr').textContent = x.message; } };
 $('#bkForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#bkErr').textContent=''; const [h, m] = f.time.value.split(':').map(x => parseInt(x, 10));
-  try{ await api('PUT','/api/v1/server/backups/schedule',{enabled: f.enabled.checked, hour: h, minute: m, keep: parseInt(f.keep.value, 10) || 14, passphrase: f.passphrase.value, clear_passphrase: f.clear_passphrase.checked, reason: f.reason.value}); f.passphrase.value=''; f.clear_passphrase.checked=false; f.reason.value=''; f.dataset.filled=''; ctrl32.toast('schedule saved','ok'); renderBackups(); }catch(x){ $('#bkErr').textContent = x.message; } };
+  try{ await api('PUT','/api/v1/server/backups/schedule',{enabled: f.enabled.checked, hour: h, minute: m, keep: parseInt(f.keep.value, 10) || 14, keep_weekly: parseInt(f.keep_weekly.value, 10) || 0, keep_monthly: parseInt(f.keep_monthly.value, 10) || 0, passphrase: f.passphrase.value, clear_passphrase: f.clear_passphrase.checked, reason: f.reason.value}); f.passphrase.value=''; f.clear_passphrase.checked=false; f.reason.value=''; f.dataset.filled=''; ctrl32.toast(ctrl32.t('schedule saved'),'ok'); renderBackups(); }catch(x){ $('#bkErr').textContent = x.message; } };
+function offConfig(){ const f = $('#offForm'), k = f.kind.value;
+  const c = {kind: k, enabled: f.enabled.checked};
+  if(k === 'folder') c.path = f.path_folder.value.trim();
+  if(k === 'sftp') Object.assign(c, {host: f.host.value.trim(), port: parseInt(f.port.value, 10) || 0, user: f.user.value.trim(), path: f.path_sftp.value.trim(), password: f.password_sftp.value, private_key: f.private_key.value.trim() ? f.private_key.value.trim() + '\n' : '', host_key: f.host_key.value.trim()});
+  if(k === 's3') Object.assign(c, {endpoint: f.endpoint.value.trim(), bucket: f.bucket.value.trim(), region: f.region.value.trim(), access_key: f.access_key.value.trim(), secret_key: f.secret_key.value, path: f.path_s3.value.trim(), path_style: f.path_style.checked});
+  return c; }
+$('#offForm').kind.onchange = e => { offFields(e.target.value); $('#offTestMsg').textContent=''; $('#offErr').textContent=''; $('#offPinBtn').hidden = true; };
+$('#offTestBtn').onclick = async () => { $('#offErr').textContent=''; $('#offPinBtn').hidden = true; const c = offConfig(); if(!c.kind) return; $('#offTestMsg').textContent = ctrl32.t('Testing…');
+  try{ const r = await api('POST','/api/v1/server/backups/offsite/test',{config: c});
+    if(r.ok){ $('#offTestMsg').textContent = '✓ ' + r.detail; } else { $('#offTestMsg').textContent=''; $('#offErr').textContent = r.detail; }
+    if(r.host_key && r.host_key !== c.host_key){ OFF_SEEN = r.host_key; $('#offPinBtn').hidden = false; $('#offPinBtn').textContent = ctrl32.t('Pin this host key') + ' ' + r.host_key; } }
+  catch(x){ $('#offTestMsg').textContent=''; $('#offErr').textContent = x.message; } };
+$('#offPinBtn').onclick = () => { $('#offForm').host_key.value = OFF_SEEN; $('#offPinBtn').hidden = true; $('#offErr').textContent=''; $('#offTestMsg').textContent = ctrl32.t('Compare the fingerprint with the server before you save; then test again.'); };
+$('#offForm').onsubmit = e => { e.preventDefault(); $('#offSave').reset(); $('#offSaveErr').textContent=''; $('#offDlg').showModal(); };
+$('#offSave').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#offSaveErr').textContent='';
+  try{ await api('PUT','/api/v1/server/backups/offsite',{config: offConfig(), reason: f.reason.value, password: f.password.value, code: f.code.value.trim()}); $('#offDlg').close(); const of = $('#offForm'); of.dataset.filled=''; of.password_sftp.value=''; of.secret_key.value=''; of.private_key.value=''; ctrl32.toast(ctrl32.t('offsite target saved'),'ok'); renderBackups(); }
+  catch(x){ $('#offSaveErr').textContent = x.message; } };
+$('#offSyncBtn').onclick = () => askReason(ctrl32.t('Send missing backups now'), ctrl32.t('The encrypted backups the target misses are copied and read back; the retention rule is applied at the target.'), async reason => { await api('POST','/api/v1/server/backups/offsite/sync',{reason}); ctrl32.toast(ctrl32.t('copy started'),'ok'); renderBackups(); });
+$('#rtForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#rtErr').textContent=''; const [h, m] = f.time.value.split(':').map(x => parseInt(x, 10));
+  try{ await api('PUT','/api/v1/server/backups/restore-test',{enabled: f.enabled.checked, day: parseInt(f.day.value, 10) || 1, hour: h, minute: m, source: f.source.value, reason: f.reason.value}); f.reason.value=''; f.dataset.filled=''; ctrl32.toast(ctrl32.t('restore test saved'),'ok'); renderBackups(); }catch(x){ $('#rtErr').textContent = x.message; } };
+$('#restoreTestBtn').onclick = () => askReason(ctrl32.t('Run a restore test'), ctrl32.t('The newest backup is restored into a temporary database and compared; the live database is not touched. It may take a while.'), async reason => { await api('POST','/api/v1/server/backups/restore-test',{reason}); ctrl32.toast(ctrl32.t('restore test started'),'ok'); renderBackups(); });
 // ---- redundant database (spec 003) ----------------------------------------------------------------
 const MODE_LABEL = {copy: 'One-time copy', continuous: 'Continuous replica', standby: 'Hot standby'};
 const STATE_BADGE = {in_sync: 'ok', detached: 'ok', copying: 'warn', pairing: '', lagging: 'warn', disconnected: 'bad', lost: 'bad', failed: 'bad', detaching: 'warn', dropped: ''};

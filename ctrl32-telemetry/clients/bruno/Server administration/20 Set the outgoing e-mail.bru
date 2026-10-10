@@ -1,0 +1,37 @@
+meta {
+  name: Set the outgoing e-mail
+  type: http
+  seq: 20
+}
+
+put {
+  url: {{baseUrl}}/api/v1/server/smtp
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "clear_password": true,
+    "from": "string",
+    "from_name": "string",
+    "host": "string",
+    "password": "string",
+    "port": 1,
+    "reason": "string",
+    "reply_to": "string",
+    "security": "starttls",
+    "to": [
+      "string"
+    ],
+    "user": "string"
+  }
+}
+
+docs {
+  Set the outgoing e-mail
+  
+  Security: `starttls` (port 587), `tls` (implicit TLS, port 465) or `none` — only for a relay on this server or in the local network (localhost, a private address or a name without a public domain). The password is write-only and stored encrypted with the server's secret key; an empty password keeps the stored one, clear_password removes it. An AI assistant cannot set the password. Applies without a restart; audited as server.smtp (without the password).
+  
+  Requires permission `system.admin`.
+}

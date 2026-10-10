@@ -1,0 +1,39 @@
+meta {
+  name: Test an offsite target a probe file is written read back and
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/server/backups/offsite/test
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "config": {
+      "access_key": "string",
+      "bucket": "string",
+      "enabled": true,
+      "endpoint": "string",
+      "host": "string",
+      "host_key": "string",
+      "kind": "string",
+      "password": "string",
+      "path": "string",
+      "path_style": true,
+      "port": 1,
+      "private_key": "string",
+      "region": "string",
+      "secret_key": "string",
+      "user": "string"
+    }
+  }
+}
+
+docs {
+  Test an offsite target: a probe file is written, read back and deleted (stored secrets fill blank ones for the same place)
+  
+  Requires permission `system.admin`.
+}

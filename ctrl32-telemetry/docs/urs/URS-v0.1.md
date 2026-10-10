@@ -225,10 +225,10 @@
 
 | ID | Požiadavka | Prio | GxP | Fáza | Zdroj |
 |---|---|---|---|---|---|
-| K-01 | Zálohovací modul: plán (GFS), cieľ mimo servera (SMB/NFS/S3/SFTP), šifrovanie, kontrola integrity. | M | áno | 1 | P-09 |
-| K-02 | Automatizovaný test obnovy do dočasnej DB podľa plánu (predvolene mesačne) s protokolom; výsledok viditeľný v UI. | M | áno | 1 | P-09 |
-| K-03 | Zlyhanie zálohy alebo testu obnovy vytvára alarm správcovi a bezpečnostnú udalosť. | M | áno | 1 | I-08 |
-| K-04 | Zálohy obsahujú aj konfiguráciu a verziu aplikácie (obnova = konzistentný stav). | M | áno | 1 | draft 16.5 |
+| K-01 | Zálohovací modul: plán (GFS), cieľ mimo servera (SMB/NFS/S3/SFTP), šifrovanie, kontrola integrity. | M | áno | 1 | P-09 · 0.77.0 (spec 032): GFS denné/týždenné/mesačné lokálne aj na cieli (na cieli len vlastné súbory), cieľ priečinok (pripojené SMB/NFS, UNC), SFTP s pripnutým kľúčom, S3 (SigV4); mimo servera len šifrované, kópia načítaná späť a porovnaná SHA-256; manifest a `.sha256` · unit `offsite`, `agent`; e2e `backups`; headless `backups`; skutočne Docker (Debian 13, PostgreSQL 18, atmoz/sftp, Versity S3) |
+| K-02 | Automatizovaný test obnovy do dočasnej DB podľa plánu (predvolene mesačne) s protokolom; výsledok viditeľný v UI. | M | áno | 1 | P-09 · 0.77.0: mesačne (1. deň 04:30) z cieľa mimo servera, kroky výber–stiahnutie–súčet–dešifrovanie a manifest–`pg_restore` do `ctrl32_restoretest`–porovnanie–zmazanie; protokol na stránke Zálohy a v audite · e2e `backups`, skutočne PostgreSQL 18 |
+| K-03 | Zlyhanie zálohy alebo testu obnovy vytvára alarm správcovi a bezpečnostnú udalosť. | M | áno | 1 | I-08 · 0.77.0: incident `backup_failed` (záloha, kópia mimo servera, test obnovy; aj žiadna dokončená záloha 26 h) s upozornením správcov, vyriešený ďalším úspechom; záznam `security` v logu a výsledok v audite · e2e `backups` |
+| K-04 | Zálohy obsahujú aj konfiguráciu a verziu aplikácie (obnova = konzistentný stav). | M | áno | 1 | draft 16.5 · konfigurácia v balíku od K-14; 0.77.0 `manifest.json` (verzia aplikácie, migrácie, počty, SHA-256 členov) · unit, skutočne |
 | K-05 | Obnova zo zálohy je zdokumentovaný postup s kontrolou hash-reťazca po obnove. | M | áno | 1 | ADR-0005 |
 | K-06 | Retenčné odpojenie partícií (nie výmaz) je možné len po archivácii s checksumom a je auditované. | S | áno | 2 | draft 17.2 |
 | K-07 | Inštalátor pre Windows Server (podpísaný certifikátom ctrl32): pribalený PostgreSQL 18 alebo existujúci, Typst, služba, sprievodca prvým spustením (správca, TLS, NTP, SMTP, zálohy, profil). 0.32.0: agent ako služba `ctrl32-telemetry-agent` (zálohy cez pg_dump.exe, aktualizácie výmenou exe, reštarty cez SCM), `install.ps1` ho registruje; podpis binárky čaká na certifikát. | M | — | 1 | 0.15.0: `deploy/install.ps1` (PostgreSQL 18 z EDB binárok, Typst, služba, firewall, bootstrap; podpis cez signtool keď je certifikát) — reálny beh na čistom Windows Server ešte čaká |

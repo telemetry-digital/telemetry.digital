@@ -180,6 +180,7 @@ func (s *Server) serverSetWireGuard(w http.ResponseWriter, r *http.Request) {
 var backupNameRe = regexp.MustCompile(`^ctrl32-\d{8}-\d{6}\.tar\.gz(\.enc)?$`)
 
 func (s *Server) serverBackups(w http.ResponseWriter, r *http.Request) {
+	s.auditBackupResults(r.Context()) // results finished since the last tick are in the trail before they are shown
 	st, err := s.agent.Backups(r.Context())
 	if err != nil {
 		s.agentErr(w, err)
@@ -189,7 +190,11 @@ func (s *Server) serverBackups(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) serverBackupCreate(w http.ResponseWriter, r *http.Request) {
-	var in struct{ Passphrase, Reason string }
+	var in struct {
+		Passphrase string `json:"passphrase"`
+		UseStored  bool   `json:"use_stored"` // encrypt with the passphrase of the schedule
+		Reason     string `json:"reason"`
+	}
 	if err := decodeJSON(r, &in, 4096); err != nil {
 		writeErr(w, 400, err.Error())
 		return
@@ -198,12 +203,12 @@ func (s *Server) serverBackupCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "reason required")
 		return
 	}
-	res, err := s.agent.CreateBackup(r.Context(), in.Passphrase)
+	res, err := s.agent.CreateBackup(r.Context(), in.Passphrase, in.UseStored, actorOf(r))
 	if err != nil {
 		s.agentErr(w, err)
 		return
 	}
-	s.audit(r, "server.backup_create", "server", "backup", nil, map[string]any{"encrypted": in.Passphrase != ""}, in.Reason)
+	s.audit(r, "server.backup_create", "server", "backup", nil, map[string]any{"encrypted": in.Passphrase != "" || in.UseStored && res.Schedule.HasPassphrase}, in.Reason)
 	writeJSON(w, 202, res)
 }
 
@@ -246,7 +251,7 @@ func (s *Server) serverBackupSchedule(w http.ResponseWriter, r *http.Request) {
 		s.agentErr(w, err)
 		return
 	}
-	s.audit(r, "server.backup_schedule", "server", "backup", nil, map[string]any{"enabled": in.Enabled, "hour": in.Hour, "minute": in.Minute, "keep": in.Keep, "passphrase_changed": in.Passphrase != "" || in.ClearPassphrase}, in.Reason)
+	s.audit(r, "server.backup_schedule", "server", "backup", nil, map[string]any{"enabled": in.Enabled, "hour": in.Hour, "minute": in.Minute, "keep": in.Keep, "keep_weekly": in.KeepWeekly, "keep_monthly": in.KeepMonthly, "passphrase_changed": in.Passphrase != "" || in.ClearPassphrase}, in.Reason)
 	writeJSON(w, 200, st)
 }
 

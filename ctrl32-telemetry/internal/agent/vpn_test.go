@@ -258,8 +258,8 @@ func TestVPNSimulation(t *testing.T) {
 	if !st.Simulated || !st.Running || !st.Firewall.Applied || st.Firewall.Rules != 2 || !strings.Contains(st.Firewall.Ruleset, "table inet ctrl32_vpn") {
 		t.Fatalf("simulated state %+v", st.Firewall)
 	}
-	// everything except the VPN is refused
-	for _, p := range []string{"/caddy", "/backups/schedule"} {
+	// host operations are refused (the VPN, the detector, updates and backups are simulated in dir)
+	for _, p := range []string{"/caddy"} {
 		if w := put(p, `{}`); w.Code != 501 {
 			t.Errorf("%s in simulation: %d", p, w.Code)
 		}
