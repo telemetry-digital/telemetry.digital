@@ -1,0 +1,28 @@
+meta {
+  name: Upload an offline update package
+  type: http
+  seq: 24
+}
+
+post {
+  url: {{baseUrl}}/api/v1/server/update/package
+  body: multipartForm
+  auth: inherit
+}
+
+body:multipart-form {
+  backup: 
+  code: 
+  file: @file()
+  install: 
+  password: 
+  reason: 
+}
+
+docs {
+  Upload an offline update package
+  
+  multipart/form-data, the fields before the file. A package of deploy/publish.sh (`ctrl32-telemetry-<version>-offline.zip`: the signed manifest, the binaries of every platform, optionally the parts of the object counting detector) is streamed to the agent, which verifies the signature and every member (no member outside the manifest, sizes and SHA-256) before anything is kept, stages it and — unless install=0 — installs it exactly like an online release (license check, backup, migrations, rollback). The detector installation then takes its parts from the staged package. At most [agent] max_package_mb (default 2048 MB). Asks for the password (and authenticator code) again, from a browser session only (not an API token or an AI assistant); audited as server.update_package (also refusals).
+  
+  Requires permission `system.admin`.
+}

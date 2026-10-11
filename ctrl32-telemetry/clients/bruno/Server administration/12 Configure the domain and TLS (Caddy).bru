@@ -1,0 +1,30 @@
+meta {
+  name: Configure the domain and TLS (Caddy)
+  type: http
+  seq: 12
+}
+
+put {
+  url: {{baseUrl}}/api/v1/server/caddy
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "dns_provider": "string",
+    "domain": "string",
+    "email": "string",
+    "extra_domains": [
+      "string"
+    ],
+    "reason": "string",
+    "token": "string"
+  }
+}
+
+docs {
+  Configure the domain and TLS (Caddy)
+  
+  Requires permission `system.admin`.
+}

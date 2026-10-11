@@ -66,7 +66,8 @@ type vpnStored struct {
 }
 
 // SetSimulation makes the agent a VPN simulation for development and tests: state and rendered files live in dir,
-// nothing on the host changes, and only the VPN, detector and update operations are served (routes). An update in the
+// nothing on the host changes, and only the VPN, detector, update and backup operations are served (routes; backups
+// with a stand-in dump and without a database restore). An update in the
 // simulation verifies the release exactly like a real one and installs its binary into dir/bin (it runs that binary's
 // `version` and `migrate`, never restarts a service and never restores a database).
 func (a *Server) SetSimulation(dir string) {

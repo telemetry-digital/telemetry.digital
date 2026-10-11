@@ -280,7 +280,8 @@ func TestUpdateConfig(t *testing.T) {
 	src := []byte("profile = \"intranet\"\n\n[http]\nlisten = \":8080\"\n")
 	out := UpdateConfig(src, p, "written by the server agent")
 	a := decode(out)
-	if a.FFmpeg != "C:/Program Files/ctrl32-telemetry/analytics/ffmpeg-x-lgpl/bin/ffmpeg.exe" || a.ModelTiny != p.ModelTiny || a.Threads != 1 || a.MaxCameras != 4 || a.NanoSHA256 != p.NanoSHA256 {
+	// Windows writes forward slashes; elsewhere a backslash is an ordinary character of a name and stays
+	if a.FFmpeg != filepath.ToSlash(p.FFmpeg) || a.ModelTiny != p.ModelTiny || a.Threads != 1 || a.MaxCameras != 4 || a.NanoSHA256 != p.NanoSHA256 {
 		t.Errorf("new section: %+v\n%s", a, out)
 	}
 	if !strings.Contains(string(out), "listen = \":8080\"") {

@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/vpn"
+
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/offsite"
 )
 
 // Client talks to the agent over its Unix socket. A zero socket path means "no agent" (Windows, development).
@@ -226,10 +228,51 @@ func (c *Client) Backups(ctx context.Context) (*BackupsState, error) {
 	return &st, nil
 }
 
-func (c *Client) CreateBackup(ctx context.Context, passphrase string) (*BackupInfo, error) {
-	var r BackupInfo
-	err := c.do(ctx, "POST", "/backups", BackupRequest{Passphrase: passphrase}, &r, 35*time.Minute)
+// CreateBackup starts a backup in the background (the state shows it running; the history gets the result).
+func (c *Client) CreateBackup(ctx context.Context, passphrase string, useStored bool, actor string) (*BackupsState, error) {
+	var st BackupsState
+	err := c.do(ctx, "POST", "/backups", BackupRequest{Passphrase: passphrase, UseStored: useStored, Actor: actor}, &st, 60*time.Second)
+	return &st, err
+}
+
+// SetOffsite stores the offsite target (an enabled target is tested first); Kind "" removes it.
+func (c *Client) SetOffsite(ctx context.Context, cfg offsite.Config) (*BackupsState, error) {
+	var st BackupsState
+	err := c.do(ctx, "PUT", "/backups/offsite", OffsiteRequest{Config: cfg}, &st, 90*time.Second)
+	return &st, err
+}
+
+// TestOffsite writes, reads back and deletes a probe file at the target (stored secrets fill empty ones).
+func (c *Client) TestOffsite(ctx context.Context, cfg offsite.Config) (*OffsiteTestResult, error) {
+	var r OffsiteTestResult
+	err := c.do(ctx, "POST", "/backups/offsite/test", OffsiteRequest{Config: cfg}, &r, 90*time.Second)
 	return &r, err
+}
+
+// SyncOffsite copies the missing backups to the target and prunes it (in the background).
+func (c *Client) SyncOffsite(ctx context.Context, actor string) (*BackupsState, error) {
+	var st BackupsState
+	err := c.do(ctx, "POST", "/backups/offsite/sync", RunRequest{Actor: actor}, &st, 60*time.Second)
+	return &st, err
+}
+
+func (c *Client) SetRestoreTest(ctx context.Context, in RestoreTestRequest) (*BackupsState, error) {
+	var st BackupsState
+	err := c.do(ctx, "PUT", "/backups/restore-test", in, &st, 30*time.Second)
+	return &st, err
+}
+
+// RunRestoreTest starts a restore test now (in the background).
+func (c *Client) RunRestoreTest(ctx context.Context, source, actor string) (*BackupsState, error) {
+	var st BackupsState
+	err := c.do(ctx, "POST", "/backups/restore-test", RunRequest{Source: source, Actor: actor}, &st, 60*time.Second)
+	return &st, err
+}
+
+// AckBackups marks runs of the history as written into the audit trail.
+func (c *Client) AckBackups(ctx context.Context, ids []string) error {
+	var r Result
+	return c.do(ctx, "POST", "/backups/ack", AckRequest{IDs: ids}, &r, 30*time.Second)
 }
 
 func (c *Client) DeleteBackup(ctx context.Context, name string) (*Result, error) {

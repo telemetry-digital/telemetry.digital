@@ -7,6 +7,7 @@ package agent
 import (
 	"time"
 
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/offsite"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/uptunnel"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/vpn"
 )
@@ -288,36 +289,102 @@ type Result struct {
 	Message string `json:"message,omitempty"`
 }
 
-// ---- backups (URS K-14)
+// ---- backups (URS K-01..K-04, K-14)
 
 type BackupInfo struct {
 	Name      string    `json:"name"`
 	SizeBytes int64     `json:"size_bytes"`
 	CreatedAt time.Time `json:"created_at"`
 	Encrypted bool      `json:"encrypted"`
+	// SHA256 of the file from its checksum file (<name>.sha256); empty for bundles made before 0.77.0
+	SHA256 string `json:"sha256,omitempty"`
+	// Offsite: the file is at the offsite target (as of the last listing of the target)
+	Offsite bool `json:"offsite"`
 }
 
 type BackupSchedule struct {
 	Enabled       bool      `json:"enabled"`
 	Hour          int       `json:"hour"`
 	Minute        int       `json:"minute"`
-	Keep          int       `json:"keep"`
+	Keep          int       `json:"keep"`         // daily: the newest N backups
+	KeepWeekly    int       `json:"keep_weekly"`  // plus the newest of each of the last N weeks
+	KeepMonthly   int       `json:"keep_monthly"` // plus the newest of each of the last N months
 	HasPassphrase bool      `json:"has_passphrase"`
 	LastRun       time.Time `json:"last_run,omitempty"`
 	LastError     string    `json:"last_error,omitempty"`
 	LastFile      string    `json:"last_file,omitempty"`
+	LastOK        time.Time `json:"last_ok,omitempty"` // last backup that completed (including the offsite copy)
+}
+
+// RestoreTestSchedule: the automatic restore test (URS K-02), by default once a month.
+type RestoreTestSchedule struct {
+	Enabled bool      `json:"enabled"`
+	Day     int       `json:"day"` // day of the month, 1–28
+	Hour    int       `json:"hour"`
+	Minute  int       `json:"minute"`
+	Source  string    `json:"source"` // offsite (the default when a target is set) or local
+	LastRun time.Time `json:"last_run,omitempty"`
+	LastOK  time.Time `json:"last_ok,omitempty"`
+}
+
+// OffsiteState is the offsite target without secrets and the last listing of it.
+type OffsiteState struct {
+	Config    map[string]any  `json:"config"` // offsite.Config.Redacted(); {"enabled":false} when none
+	Describe  string          `json:"describe,omitempty"`
+	Files     []OffsiteObject `json:"files"`
+	ListedAt  time.Time       `json:"listed_at,omitempty"`
+	ListError string          `json:"list_error,omitempty"`
+}
+
+type OffsiteObject struct {
+	Name     string    `json:"name"`
+	Size     int64     `json:"size"`
+	Modified time.Time `json:"modified"`
+}
+
+// BackupRun is one backup, offsite synchronisation or restore test with its steps (the protocol, URS K-02). The web
+// service writes finished runs into the audit trail once and acknowledges them (Audited).
+type BackupRun struct {
+	ID         string       `json:"id"`
+	Kind       string       `json:"kind"`    // backup, offsite_sync, restore_test
+	Trigger    string       `json:"trigger"` // schedule, manual, update
+	Actor      string       `json:"actor,omitempty"`
+	StartedAt  time.Time    `json:"started_at"`
+	FinishedAt time.Time    `json:"finished_at,omitempty"`
+	Running    bool         `json:"running,omitempty"`
+	OK         bool         `json:"ok"`
+	File       string       `json:"file,omitempty"`
+	SizeBytes  int64        `json:"size_bytes,omitempty"`
+	Source     string       `json:"source,omitempty"` // restore test: offsite or local
+	Target     string       `json:"target,omitempty"` // offsite target description
+	Steps      []BackupStep `json:"steps"`
+	Error      string       `json:"error,omitempty"`
+	Audited    bool         `json:"audited,omitempty"`
+}
+
+type BackupStep struct {
+	Name   string `json:"name"` // dump, bundle, encrypt, checksum, upload, verify, prune, prune_offsite, select, fetch, decrypt, manifest, restore, checks, cleanup
+	OK     bool   `json:"ok"`
+	Detail string `json:"detail,omitempty"`
+	Ms     int64  `json:"ms"`
 }
 
 type BackupsState struct {
-	Dir      string         `json:"dir"`
-	Running  bool           `json:"running"`
-	DBMode   string         `json:"db_mode"` // docker, native, unknown
-	Files    []BackupInfo   `json:"files"`
-	Schedule BackupSchedule `json:"schedule"`
+	Dir            string              `json:"dir"`
+	Running        bool                `json:"running"`
+	RestoreRunning bool                `json:"restore_running"`
+	DBMode         string              `json:"db_mode"` // docker, native, unknown, simulated
+	Files          []BackupInfo        `json:"files"`
+	Schedule       BackupSchedule      `json:"schedule"`
+	Offsite        OffsiteState        `json:"offsite"`
+	RestoreTest    RestoreTestSchedule `json:"restore_test"`
+	History        []BackupRun         `json:"history"` // newest first
 }
 
 type BackupRequest struct {
 	Passphrase string `json:"passphrase"`
+	UseStored  bool   `json:"use_stored,omitempty"` // encrypt with the passphrase of the schedule (Passphrase empty)
+	Actor      string `json:"actor,omitempty"`
 }
 
 type ScheduleRequest struct {
@@ -325,6 +392,34 @@ type ScheduleRequest struct {
 	Hour            int    `json:"hour"`
 	Minute          int    `json:"minute"`
 	Keep            int    `json:"keep"`
+	KeepWeekly      int    `json:"keep_weekly"`
+	KeepMonthly     int    `json:"keep_monthly"`
 	Passphrase      string `json:"passphrase"`       // empty keeps the stored one
 	ClearPassphrase bool   `json:"clear_passphrase"` // true removes it (scheduled backups unencrypted)
+}
+
+// OffsiteRequest sets (or tests) the offsite target; empty secrets keep the stored ones for the same place.
+type OffsiteRequest struct {
+	Config offsite.Config `json:"config"`
+}
+
+// OffsiteTestResult is the result of a connection test: a probe file written, read back and deleted.
+type OffsiteTestResult struct {
+	OK      bool   `json:"ok"`
+	Detail  string `json:"detail"`
+	HostKey string `json:"host_key,omitempty"` // SFTP: the fingerprint the server presented
+}
+
+type RestoreTestRequest struct {
+	Enabled bool   `json:"enabled"`
+	Day     int    `json:"day"`
+	Hour    int    `json:"hour"`
+	Minute  int    `json:"minute"`
+	Source  string `json:"source"`
+}
+
+// RunRequest starts an offsite synchronisation or a restore test now.
+type RunRequest struct {
+	Actor  string `json:"actor,omitempty"`
+	Source string `json:"source,omitempty"` // restore test: offsite or local (default: the schedule's)
 }

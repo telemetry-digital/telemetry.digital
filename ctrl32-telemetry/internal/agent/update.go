@@ -588,7 +588,7 @@ func (a *Server) preUpdateBackup(ctx context.Context) (string, error) {
 	defer backupRunning.Store(false)
 	backupMu.Lock()
 	defer backupMu.Unlock()
-	info, err := a.createBackup(ctx, a.backupLoad().Passphrase)
+	info, err := a.createBackup(ctx, a.backupLoad().Passphrase, nil)
 	if err != nil {
 		return "", err
 	}

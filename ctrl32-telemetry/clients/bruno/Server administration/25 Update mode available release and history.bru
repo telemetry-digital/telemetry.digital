@@ -1,0 +1,19 @@
+meta {
+  name: Update mode available release and history
+  type: http
+  seq: 25
+}
+
+get {
+  url: {{baseUrl}}/api/v1/server/updates
+  body: none
+  auth: inherit
+}
+
+docs {
+  Update mode, available release and history
+  
+  The update mode (manual, notify — the default — or auto with a weekly maintenance window), the latest release of the distribution point (`available`: version, signed release date, the key that signed it), the kind of step (patch, minor, major), whether the automatic mode may install it and the license covers it, the next window and check, and the agent's history of installations (with rollbacks), the staged offline package and the trusted keys.
+  
+  Requires permission `system.admin`.
+}

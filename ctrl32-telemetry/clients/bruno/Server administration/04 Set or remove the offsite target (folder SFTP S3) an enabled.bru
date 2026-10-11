@@ -1,0 +1,42 @@
+meta {
+  name: Set or remove the offsite target (folder SFTP S3) an enabled
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/api/v1/server/backups/offsite
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "code": "string",
+    "config": {
+      "access_key": "string",
+      "bucket": "string",
+      "enabled": true,
+      "endpoint": "string",
+      "host": "string",
+      "host_key": "string",
+      "kind": "string",
+      "password": "string",
+      "path": "string",
+      "path_style": true,
+      "port": 1,
+      "private_key": "string",
+      "region": "string",
+      "secret_key": "string",
+      "user": "string"
+    },
+    "password": "string",
+    "reason": "string"
+  }
+}
+
+docs {
+  Set or remove the offsite target (folder, SFTP, S3); an enabled target is tested first. Browser session only, with the password (and authenticator code) again
+  
+  Requires permission `system.admin`.
+}

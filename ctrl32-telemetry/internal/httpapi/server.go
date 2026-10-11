@@ -506,6 +506,11 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("PUT /api/v1/server/backups/schedule", s.require("system.admin", s.serverBackupSchedule))
 	mux.Handle("GET /api/v1/server/backups/{name}", s.require("system.admin", s.serverBackupDownload))
 	mux.Handle("POST /api/v1/server/backups/{name}/delete", s.require("system.admin", s.serverBackupDelete))
+	mux.Handle("PUT /api/v1/server/backups/offsite", s.require("system.admin", s.serverBackupOffsite))
+	mux.Handle("POST /api/v1/server/backups/offsite/test", s.require("system.admin", s.serverBackupOffsiteTest))
+	mux.Handle("POST /api/v1/server/backups/offsite/sync", s.require("system.admin", s.serverBackupOffsiteSync))
+	mux.Handle("PUT /api/v1/server/backups/restore-test", s.require("system.admin", s.serverRestoreTestSchedule))
+	mux.Handle("POST /api/v1/server/backups/restore-test", s.require("system.admin", s.serverRestoreTestRun))
 
 	// data model configuration (config.write)
 	mux.Handle("GET /api/v1/sites", s.require("data.read", s.listSites))

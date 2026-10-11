@@ -1,0 +1,17 @@
+meta {
+  name: Backups schedule offsite target restore test and the history
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/server/backups
+  body: none
+  auth: inherit
+}
+
+docs {
+  Backups, schedule, offsite target, restore test and the history of runs
+  
+  Requires permission `system.admin`.
+}

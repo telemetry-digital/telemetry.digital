@@ -1,0 +1,19 @@
+meta {
+  name: Outgoing e-mail (SMTP)
+  type: http
+  seq: 19
+}
+
+get {
+  url: {{baseUrl}}/api/v1/server/smtp
+  body: none
+  auth: inherit
+}
+
+docs {
+  Outgoing e-mail (SMTP)
+  
+  The settings in use and their source: `ui` (saved on this page), `config` ([smtp] of config.toml) or `none`. Settings saved here take precedence over config.toml unless [smtp] override = true. The password is never returned (`has_password`).
+  
+  Requires permission `system.admin`.
+}

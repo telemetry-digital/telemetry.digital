@@ -288,6 +288,7 @@ func (s *Server) updatesLoop() {
 
 func (s *Server) updateTick(ctx context.Context, now time.Time) {
 	s.auditUpdateResults(ctx)
+	s.auditBackupResults(ctx)
 	st := s.loadUpdateSettings(ctx)
 	if st.Mode == "manual" {
 		return

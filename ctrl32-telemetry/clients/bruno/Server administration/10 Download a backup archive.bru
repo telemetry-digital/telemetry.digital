@@ -1,0 +1,21 @@
+meta {
+  name: Download a backup archive
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/v1/server/backups/:name
+  body: none
+  auth: inherit
+}
+
+params:path {
+  name: 
+}
+
+docs {
+  Download a backup archive
+  
+  Requires permission `system.admin`.
+}

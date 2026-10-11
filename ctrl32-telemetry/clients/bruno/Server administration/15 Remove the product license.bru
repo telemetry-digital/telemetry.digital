@@ -1,0 +1,23 @@
+meta {
+  name: Remove the product license
+  type: http
+  seq: 15
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/server/license
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~reason: 
+}
+
+docs {
+  Remove the product license
+  
+  Also forgets the stored order number, so nothing is renewed.
+  
+  Requires permission `system.admin`.
+}

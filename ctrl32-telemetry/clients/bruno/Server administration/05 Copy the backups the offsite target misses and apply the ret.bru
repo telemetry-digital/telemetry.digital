@@ -1,0 +1,23 @@
+meta {
+  name: Copy the backups the offsite target misses and apply the ret
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/server/backups/offsite/sync
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Copy the backups the offsite target misses and apply the retention there (in the background)
+  
+  Requires permission `system.admin`.
+}

@@ -1,0 +1,27 @@
+meta {
+  name: Enable or configure WireGuard
+  type: http
+  seq: 30
+}
+
+put {
+  url: {{baseUrl}}/api/v1/server/wireguard
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "address": "string",
+    "enabled": true,
+    "endpoint": "string",
+    "listen_port": 1,
+    "reason": "string"
+  }
+}
+
+docs {
+  Enable or configure WireGuard
+  
+  Requires permission `system.admin`.
+}

@@ -1,0 +1,28 @@
+meta {
+  name: Schedule the automatic restore test (a day of the month)
+  type: http
+  seq: 8
+}
+
+put {
+  url: {{baseUrl}}/api/v1/server/backups/restore-test
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "day": 1,
+    "enabled": true,
+    "hour": 1,
+    "minute": 1,
+    "reason": "string",
+    "source": "string"
+  }
+}
+
+docs {
+  Schedule the automatic restore test (a day of the month)
+  
+  Requires permission `system.admin`.
+}
