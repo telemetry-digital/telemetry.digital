@@ -201,12 +201,28 @@ const dbCheckQuery = `SELECT (SELECT count(*) FROM public.schema_migration) || '
 	`(SELECT count(*) FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog', 'information_schema')) || '|' || ` +
 	`(SELECT count(*) FROM core.organization) || '|' || (SELECT count(*) FROM core.user_account) || '|' || (SELECT count(*) FROM core.audit_trail)`
 
+// dbSchemaQuery tells whether the tables of the figures exist.
+const dbSchemaQuery = `SELECT to_regclass('public.schema_migration') IS NOT NULL AND to_regclass('core.organization') IS NOT NULL AND ` +
+	`to_regclass('core.user_account') IS NOT NULL AND to_regclass('core.audit_trail') IS NOT NULL`
+
 var dbCheckKeys = []string{"migrations", "last_migration", "tables", "organizations", "users", "audit_entries"}
 
 // dbChecks reads the figures of the manifest from a database.
 func (a *Server) dbChecks(ctx context.Context, db string) (map[string]string, error) {
 	if a.simulate {
 		return map[string]string{"migrations": "54", "last_migration": "0054_server_settings.sql", "tables": "180", "organizations": "1", "users": "1", "audit_entries": "10"}, nil
+	}
+	// a database without the schema (a fresh or a foreign one) has nothing to count: its backup is still valid
+	have, err := a.psql(ctx, db, dbSchemaQuery)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(have) != "t" {
+		tables, err := a.psql(ctx, db, `SELECT count(*) FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog', 'information_schema')`)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]string{"migrations": "0", "last_migration": "", "tables": strings.TrimSpace(tables), "organizations": "0", "users": "0", "audit_entries": "0"}, nil
 	}
 	out, err := a.psql(ctx, db, dbCheckQuery)
 	if err != nil {
