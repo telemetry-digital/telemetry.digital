@@ -14,6 +14,10 @@
   const store = (k, v) => { try { localStorage.setItem('ctrl32.counting.' + k, v); } catch (e) { /* private mode */ } };
   const stored = (k) => { try { return localStorage.getItem('ctrl32.counting.' + k); } catch (e) { return null; } };
   const liveOn = () => stored('editorLive') !== '0'; // the live picture is the default, a still picture on request
+  // the picture fits the window height by default (a tall 4:3 camera otherwise needs scrolling); vh, 0 = full width
+  const SIZES = { small: 35, fit: 55, large: 0 };
+  const size = () => (SIZES[stored('editorSize')] != null ? stored('editorSize') : 'fit');
+  function sizeEd() { const v = SIZES[size()], ed = $('#ocEd'); if (ed) ed.style.maxWidth = v ? `calc(${v}vh * ${RATIO})` : ''; }
   const badge = (st) => { const s = STATE[st.state] || [st.state, '']; return `<span class="badge ${s[1]}">${esc(t(s[0]))}</span>`; };
   const uid = () => Math.random().toString(36).slice(2, 8);
 
@@ -46,6 +50,7 @@
             <button class="btn small" type="button" id="ocPicBtn"${liveOn() ? ' hidden' : ''}>Refresh picture</button>
             ${editable ? '<button class="btn small" type="button" id="ocAdd">Add line</button><button class="btn small" type="button" id="ocAddSpeed">Add speed section</button>' : ''}
             <label class="oc-check"><input type="checkbox" id="ocBoxes" ${SHOW_BOXES ? 'checked' : ''}> Show detected objects</label>
+            <label class="oc-check">Size <select id="ocSize"><option value="small">small</option><option value="fit">fit to the screen</option><option value="large">full width</option></select></label>
           </div>
         </div>
         <div class="kv" id="ocStatus"></div>
@@ -67,6 +72,8 @@
     if (!editable) for (const el of f.elements) el.disabled = el.id !== 'ocClose';
     $('#ocClose').onclick = () => { card.hidden = true; CAM = null; clearInterval(POLL); stopLive(); history.replaceState(null, '', '/counting/cameras'); };
     $('#ocBoxes').onchange = (e) => { SHOW_BOXES = e.target.checked; draw(); };
+    $('#ocSize').value = size();
+    $('#ocSize').onchange = (e) => { store('editorSize', e.target.value); sizeEd(); };
     $('#ocPicBtn').onclick = grab;
     $('#ocLiveOn').onchange = (e) => { store('editorLive', e.target.checked ? '1' : '0'); $('#ocPicBtn').hidden = e.target.checked; picture(); };
     if (editable) {
@@ -81,7 +88,7 @@
     }
     history.replaceState(null, '', '/counting/cameras?camera=' + id);
     FLASH = {}; LAST = Date.now(); HAVE_PIC = false;
-    tables(); draw(); status(c.status); picture();
+    sizeEd(); tables(); draw(); status(c.status); picture();
     clearInterval(POLL);
     // with the live video the detected objects and the crossings follow it closely; with a still picture less often
     let n = 0;
@@ -127,7 +134,7 @@
       if (m && +m[2]) {
         if (!HAVE_PIC) hint('');
         HAVE_PIC = true; RATIO = +m[1] / +m[2];
-        $('#ocEd').style.aspectRatio = `${m[1]} / ${m[2]}`;
+        $('#ocEd').style.aspectRatio = `${m[1]} / ${m[2]}`; sizeEd();
         $('#ocSvg').setAttribute('viewBox', `0 0 ${W} ${H()}`);
         draw();
       }
@@ -159,7 +166,7 @@
         const img = $('#ocPic');
         img.src = c.toDataURL('image/jpeg', 0.85); img.hidden = false;
         RATIO = c.width / c.height || 16 / 9;
-        $('#ocEd').style.aspectRatio = `${c.width} / ${c.height}`;
+        $('#ocEd').style.aspectRatio = `${c.width} / ${c.height}`; sizeEd();
         $('#ocSvg').setAttribute('viewBox', `0 0 ${W} ${H()}`);
         hint(''); finish(true); draw();
       } else if (tries > 40) { clearInterval(tick); finish(false); }
