@@ -3550,5 +3550,8 @@
  "Stay signed in on this device": "Rămâi conectat pe acest dispozitiv",
  "Stay signed in on a device (days, 0 = not allowed)": "Rămâi conectat pe un dispozitiv (zile, 0 = nepermis)",
  "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.": "Peste 0, pagina de autentificare oferă „Rămâi conectat pe acest dispozitiv”: o astfel de autentificare durează atâtea zile, și după închiderea browserului sau a aplicației instalate (PWA). Autentificarea în doi pași rămâne obligatorie la autentificarea propriu-zisă; deconectarea, dezactivarea utilizatorului sau 0 aici o încheie. Folosiți doar pe dispozitive personale cu blocarea ecranului.",
- "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Fără aceasta, o autentificare se încheie după {idle} min de inactivitate, cel târziu după {abs} h."
+ "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Fără aceasta, o autentificare se încheie după {idle} min de inactivitate, cel târziu după {abs} h.",
+ "View only — no pages for configuring": "Doar vizualizare — fără pagini de configurare",
+ "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "Pentru vizionare, comandă și redare: aplicația omite gestionarea camerelor, setările camerelor și configurarea numărării obiectelor. Limitează ecranele aplicației, nu drepturile utilizatorului.",
+ "view only": "doar vizualizare"
 }

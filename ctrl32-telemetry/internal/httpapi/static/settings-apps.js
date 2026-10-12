@@ -15,7 +15,7 @@ async function settingsApps() {
       <td><b class="notranslate">${esc(a.name)}</b><div class="muted notranslate" style="font-size:12px">${esc(a.short_name)} · v${a.version}</div></td>
       <td><a class="notranslate" href="${esc(a.install_url)}" target="_blank" rel="noopener">${esc(a.install_url)}</a></td>
       <td class="notranslate">${esc(pageLabel(a.start_url))}</td>
-      <td>${a.sections.map((k) => esc(secLabel(k))).join(', ')}${a.locked ? ` <span class="badge" title="${esc(t('No way into the full application'))}">${esc(t('locked'))}</span>` : ''}${a.page_zoom === false ? ` <span class="badge">${esc(t('no page zoom'))}</span>` : ''}</td>
+      <td>${a.sections.map((k) => esc(secLabel(k))).join(', ')}${a.locked ? ` <span class="badge" title="${esc(t('No way into the full application'))}">${esc(t('locked'))}</span>` : ''}${a.view_only ? ` <span class="badge">${esc(t('view only'))}</span>` : ''}${a.page_zoom === false ? ` <span class="badge">${esc(t('no page zoom'))}</span>` : ''}</td>
       <td>${a.enabled ? '<span class="badge ok">' + esc(t('enabled')) + '</span>' : '<span class="badge">' + esc(t('disabled')) + '</span>'}</td>
       <td style="white-space:nowrap"><a class="btn small" href="${esc(a.install_url)}" target="_blank" rel="noopener">${esc(t('Install page'))}</a>
         <button class="btn small" type="button" data-app-edit="${esc(a.slug)}">${esc(t('Edit'))}</button>
@@ -44,8 +44,8 @@ async function settingsApps() {
   }
   const slugOf = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
   const PRESETS = {
-    // a phone app for the cameras: only the cameras, no page zoom, one camera per row
-    cameras: () => ({ name: t('Cameras'), short_name: t('Cameras'), slug: 'cam', start_url: '/video', sections: ['cameras'], locked: true, page_zoom: false, camera_layout: 'single' }),
+    // a phone app for the cameras: only the cameras, for watching (no settings pages), no page zoom, one camera per row
+    cameras: () => ({ name: t('Cameras'), short_name: t('Cameras'), slug: 'cam', start_url: '/video', sections: ['cameras'], locked: true, view_only: true, page_zoom: false, camera_layout: 'single' }),
     wall: () => { const w = APP_OPTS.start_pages.find((p) => p.group === 'Video walls'); return { name: w ? w.label : t('Video wall'), short_name: t('Video wall'), slug: w ? slugOf(w.label) || 'wall' : 'wall', start_url: w ? w.url : '/video/walls', sections: ['cameras'] }; },
     dashboards: () => ({ name: t('Dashboards'), short_name: t('Dashboards'), slug: 'dashboards', start_url: '/dashboards', sections: ['dashboards'] }),
     smarthome: () => ({ name: t('Smart home'), short_name: t('Home'), slug: 'home', start_url: '/home', sections: ['home', 'energy'] }),
@@ -53,7 +53,7 @@ async function settingsApps() {
   function put(a) {
     f.name.value = a.name || ''; f.short_name.value = (a.short_name || '').slice(0, 24); f.slug.value = a.slug || '';
     fillStart(a.start_url || '/video'); fillSections(a.sections || []);
-    f.locked.checked = !!a.locked; f.page_zoom.checked = a.page_zoom !== false; f.camera_layout.value = a.camera_layout || 'auto';
+    f.locked.checked = !!a.locked; f.view_only.checked = !!a.view_only; f.page_zoom.checked = a.page_zoom !== false; f.camera_layout.value = a.camera_layout || 'auto';
     f.own_colour.checked = !!a.theme_color; f.theme_color.value = a.theme_color || (ctrl32.brand.theme && ctrl32.brand.theme.primary) || '#e30613';
   }
   function open(a) {
@@ -76,7 +76,7 @@ async function settingsApps() {
     $('#appErr').textContent = '';
     const body = { name: f.name.value, short_name: f.short_name.value, start_url: f.start.value === 'custom' ? f.custom.value.trim() : f.start.value,
       sections: [...f.querySelectorAll('input[name=sec]:checked')].map((c) => c.value), theme_color: f.own_colour.checked ? f.theme_color.value : '',
-      locked: f.locked.checked, page_zoom: f.page_zoom.checked, camera_layout: f.camera_layout.value,
+      locked: f.locked.checked, view_only: f.view_only.checked, page_zoom: f.page_zoom.checked, camera_layout: f.camera_layout.value,
       enabled: f.enabled.checked, reason: f.reason.value };
     try {
       let r;

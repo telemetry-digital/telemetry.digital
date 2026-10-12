@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"regexp"
 	"slices"
@@ -268,5 +270,22 @@ func TestPWAInstallPageLocked(t *testing.T) {
 	_ = pwaPage.Execute(&sb, data)
 	if !strings.Contains(sb.String(), "/?full=1") {
 		t.Error("unlocked app: install page lost the link to the full application")
+	}
+}
+
+// View only (0.80.0): part of the checksum only when set, so the versions saved before it keep a valid checksum.
+func TestPWAAppViewOnlyChecksum(t *testing.T) {
+	a := PWAApp{Slug: "cam", Name: "Cameras", StartURL: "/video", Sections: []string{"cameras"}, Enabled: true, CameraLayout: "auto"}
+	before := a.checksum()
+	b, _ := json.Marshal([]any{a.Slug, a.Name, a.ShortName, a.StartURL, a.Sections, a.ThemeColor, a.Enabled, a.Locked, a.PageZoom, a.CameraLayout})
+	if sum := sha256.Sum256(b); before != hex.EncodeToString(sum[:]) {
+		t.Error("checksum of an app without view_only changed")
+	}
+	a.ViewOnly = true
+	if a.checksum() == before {
+		t.Error("checksum ignores view_only")
+	}
+	if a.out()["view_only"] != true {
+		t.Error("view_only missing in the output")
 	}
 }

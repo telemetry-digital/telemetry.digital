@@ -902,6 +902,8 @@ export type PWAApp = {
   /** #rrggbb or empty (the organization's colour) */
   theme_color?: string;
   version?: number;
+  /** the app leaves out the pages that configure: camera management, camera settings, the setup of object counting (UI confinement, not a permission boundary) */
+  view_only?: boolean;
   warnings?: string[];
 };
 
@@ -927,6 +929,8 @@ export type PWAAppInput = {
   start_url: string;
   /** #rrggbb or empty */
   theme_color?: string;
+  /** default false; omitted on update keeps the value */
+  view_only?: boolean;
 };
 
 export type PeriodCell = {
@@ -6757,7 +6761,7 @@ export class Ctrl32Client {
 
   /** Create an app profile
    *
-   * `start_url` must be a path of this application (`/video`, `/video/walls/{id}`, `/dashboards/{slug}` …): no other site, no `//`, no `javascript:`, not `/api/v1/` or `/app/`. `sections`: keys from `GET /api/v1/pwa-apps/options`, at least one. `warnings` names a short name longer than 12 characters, and the start page of a locked app outside its sections. `locked`, `page_zoom`, `camera_layout` (auto, single, grid): see the PWAApp schema.
+   * `start_url` must be a path of this application (`/video`, `/video/walls/{id}`, `/dashboards/{slug}` …): no other site, no `//`, no `javascript:`, not `/api/v1/` or `/app/`. `sections`: keys from `GET /api/v1/pwa-apps/options`, at least one. `warnings` names a short name longer than 12 characters, and the start page of a locked app outside its sections. `locked`, `page_zoom`, `camera_layout` (auto, single, grid), `view_only`: see the PWAApp schema.
    * 
    * Requires permission `content.write`. */
   postPwaApps(body: PWAAppInput): Promise<PWAApp> {
@@ -6843,6 +6847,7 @@ export class Ctrl32Client {
     slug?: string;
     start_url?: string;
     theme_color?: string;
+    view_only?: boolean;
   }> {
     return this.request<{
     camera_layout?: "auto" | "single" | "grid";
@@ -6854,6 +6859,7 @@ export class Ctrl32Client {
     slug?: string;
     start_url?: string;
     theme_color?: string;
+    view_only?: boolean;
   }>('GET', `/api/v1/pwa-apps/${encodeURIComponent(slug)}/launch`, undefined, undefined, false);
   }
 

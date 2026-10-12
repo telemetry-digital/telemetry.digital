@@ -3550,5 +3550,8 @@
  "Stay signed in on this device": "Forbliv logget ind på denne enhed",
  "Stay signed in on a device (days, 0 = not allowed)": "Forbliv logget ind på en enhed (dage, 0 = ikke tilladt)",
  "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.": "Over 0 tilbyder login-siden \"Forbliv logget ind på denne enhed\": et sådant login gælder så mange dage, også efter at browseren eller den installerede app (PWA) er lukket. To-faktor-godkendelse kræves stadig ved selve login; log ud, deaktivering af brugeren eller 0 her afslutter det. Brug kun på personlige enheder med skærmlås.",
- "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Uden det slutter et login efter {idle} min uden aktivitet, senest efter {abs} t."
+ "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Uden det slutter et login efter {idle} min uden aktivitet, senest efter {abs} t.",
+ "View only — no pages for configuring": "Kun visning — ingen sider til opsætning",
+ "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "Til at se, styre og afspille: appen udelader kamerastyring, kameraindstillinger og opsætning af objekttælling. Det begrænser appens skærme, ikke brugerens rettigheder.",
+ "view only": "kun visning"
 }

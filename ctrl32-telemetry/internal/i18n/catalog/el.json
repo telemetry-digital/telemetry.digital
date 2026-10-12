@@ -3550,5 +3550,8 @@
  "Stay signed in on this device": "Παραμονή σύνδεσης σε αυτή τη συσκευή",
  "Stay signed in on a device (days, 0 = not allowed)": "Παραμονή σύνδεσης σε συσκευή (ημέρες, 0 = δεν επιτρέπεται)",
  "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.": "Πάνω από 0, η σελίδα σύνδεσης προσφέρει «Παραμονή σύνδεσης σε αυτή τη συσκευή»: μια τέτοια σύνδεση ισχύει τόσες ημέρες, ακόμη και αφού κλείσει το πρόγραμμα περιήγησης ή η εγκατεστημένη εφαρμογή (PWA). Ο έλεγχος ταυτότητας δύο παραγόντων απαιτείται ακόμη στην ίδια τη σύνδεση· η αποσύνδεση, η απενεργοποίηση του χρήστη ή η τιμή 0 εδώ την τερματίζουν. Χρησιμοποιήστε μόνο σε προσωπικές συσκευές με κλείδωμα οθόνης.",
- "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Χωρίς αυτό, η σύνδεση λήγει μετά από {idle} λεπτά αδράνειας, το αργότερο μετά από {abs} ώρες."
+ "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Χωρίς αυτό, η σύνδεση λήγει μετά από {idle} λεπτά αδράνειας, το αργότερο μετά από {abs} ώρες.",
+ "View only — no pages for configuring": "Μόνο προβολή — χωρίς σελίδες ρυθμίσεων",
+ "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "Για προβολή, έλεγχο και αναπαραγωγή: η εφαρμογή παραλείπει τη διαχείριση καμερών, τις ρυθμίσεις καμερών και τη ρύθμιση της καταμέτρησης αντικειμένων. Περιορίζει τις οθόνες της εφαρμογής, όχι τα δικαιώματα του χρήστη.",
+ "view only": "μόνο προβολή"
 }

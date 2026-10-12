@@ -3550,5 +3550,8 @@
  "Stay signed in on this device": "Оставане в профила на това устройство",
  "Stay signed in on a device (days, 0 = not allowed)": "Оставане в профила на устройство (дни, 0 = не е разрешено)",
  "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.": "При стойност над 0 страницата за вход предлага „Оставане в профила на това устройство“: такъв вход важи толкова дни, и след затваряне на браузъра или инсталираното приложение (PWA). Двуфакторното удостоверяване все още се изисква при самия вход; изходът, блокирането на потребителя или стойност 0 тук го прекратяват. Използвайте само на лични устройства със заключване на екрана.",
- "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Без това входът изтича след {idle} мин неактивност, най-късно след {abs} ч."
+ "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Без това входът изтича след {idle} мин неактивност, най-късно след {abs} ч.",
+ "View only — no pages for configuring": "Само за преглед — без страници за настройка",
+ "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "За преглед, управление и възпроизвеждане: приложението пропуска управлението на камерите, настройките на камерите и настройката на преброяването на обекти. Това ограничава екраните на приложението, не правата на потребителя.",
+ "view only": "само за преглед"
 }

@@ -3550,5 +3550,8 @@
  "Stay signed in on this device": "Stay signed in on this device",
  "Stay signed in on a device (days, 0 = not allowed)": "Stay signed in on a device (days, 0 = not allowed)",
  "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.": "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.",
- "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h."
+ "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.",
+ "View only — no pages for configuring": "View only — no pages for configuring",
+ "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.",
+ "view only": "view only"
 }

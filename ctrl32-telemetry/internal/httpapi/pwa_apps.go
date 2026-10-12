@@ -9,7 +9,7 @@ package httpapi
 //	GET    /api/v1/pwa-apps                 content.write  current profiles of the organization
 //	GET    /api/v1/pwa-apps/options         content.write  menu sections and start pages to choose from
 //	POST   /api/v1/pwa-apps                 content.write  {slug, name, short_name, start_url, sections, theme_color, enabled,
-//	                                                        locked, page_zoom, camera_layout, reason}
+//	                                                        locked, page_zoom, camera_layout, view_only, reason}
 //	GET    /api/v1/pwa-apps/{slug}          content.write  one profile
 //	PUT    /api/v1/pwa-apps/{slug}          content.write  new version
 //	DELETE /api/v1/pwa-apps/{slug}?reason=  content.write  retire
@@ -45,12 +45,15 @@ type PWAApp struct {
 	Enabled    bool     `json:"enabled"`
 	// Locked keeps the app window on its sections: no way into the full application (UI confinement, not a
 	// permission boundary). PageZoom false stops pinch and double-tap zoom of the page. CameraLayout: auto, single, grid.
-	Locked       bool      `json:"locked"`
-	PageZoom     bool      `json:"page_zoom"`
-	CameraLayout string    `json:"camera_layout"`
-	Version      int       `json:"version,omitempty"`
-	CreatedAt    time.Time `json:"created_at,omitzero"`
-	orgID        string
+	Locked       bool   `json:"locked"`
+	PageZoom     bool   `json:"page_zoom"`
+	CameraLayout string `json:"camera_layout"`
+	// ViewOnly leaves out the pages that configure (camera management, camera settings, the setup of object counting):
+	// an app for watching, controlling and playing back. UI confinement like Locked, not a permission boundary.
+	ViewOnly  bool      `json:"view_only"`
+	Version   int       `json:"version,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitzero"`
+	orgID     string
 }
 
 // pwaSection is a top-level menu group an app may show (keys match the `sec` of navItems() in app.js).
@@ -216,7 +219,11 @@ func pwaSectionIndex(key string) int {
 }
 
 func (a *PWAApp) checksum() string {
-	b, _ := json.Marshal([]any{a.Slug, a.Name, a.ShortName, a.StartURL, a.Sections, a.ThemeColor, a.Enabled, a.Locked, a.PageZoom, a.CameraLayout})
+	v := []any{a.Slug, a.Name, a.ShortName, a.StartURL, a.Sections, a.ThemeColor, a.Enabled, a.Locked, a.PageZoom, a.CameraLayout}
+	if a.ViewOnly { // appended only when set, so the checksums of the versions before 0.80.0 stay valid
+		v = append(v, "view_only")
+	}
+	b, _ := json.Marshal(v)
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
 }
@@ -224,15 +231,15 @@ func (a *PWAApp) checksum() string {
 func (a *PWAApp) out() map[string]any {
 	return map[string]any{"id": a.ID, "slug": a.Slug, "name": a.Name, "short_name": a.ShortName, "start_url": a.StartURL,
 		"sections": a.Sections, "theme_color": a.ThemeColor, "enabled": a.Enabled, "locked": a.Locked, "page_zoom": a.PageZoom,
-		"camera_layout": a.CameraLayout, "version": a.Version, "created_at": a.CreatedAt,
+		"camera_layout": a.CameraLayout, "view_only": a.ViewOnly, "version": a.Version, "created_at": a.CreatedAt,
 		"install_url": "/app/" + a.Slug, "manifest_url": "/app/" + a.Slug + "/manifest.webmanifest"}
 }
 
-const pwaCols = `id::text, org_id::text, slug, name, short_name, start_url, sections, theme_color, enabled, locked, page_zoom, camera_layout, version, created_at`
+const pwaCols = `id::text, org_id::text, slug, name, short_name, start_url, sections, theme_color, enabled, locked, page_zoom, camera_layout, view_only, version, created_at`
 
 func scanPWAApp(row pgx.Row) (*PWAApp, error) {
 	a := &PWAApp{}
-	err := row.Scan(&a.ID, &a.orgID, &a.Slug, &a.Name, &a.ShortName, &a.StartURL, &a.Sections, &a.ThemeColor, &a.Enabled, &a.Locked, &a.PageZoom, &a.CameraLayout, &a.Version, &a.CreatedAt)
+	err := row.Scan(&a.ID, &a.orgID, &a.Slug, &a.Name, &a.ShortName, &a.StartURL, &a.Sections, &a.ThemeColor, &a.Enabled, &a.Locked, &a.PageZoom, &a.CameraLayout, &a.ViewOnly, &a.Version, &a.CreatedAt)
 	if a.Sections == nil {
 		a.Sections = []string{}
 	}
@@ -352,6 +359,7 @@ func (s *Server) savePWAApp(w http.ResponseWriter, r *http.Request, create bool)
 		Enabled  *bool  `json:"enabled"`
 		Locked   *bool  `json:"locked"`
 		PageZoom *bool  `json:"page_zoom"`
+		ViewOnly *bool  `json:"view_only"`
 		Reason   string `json:"reason"`
 	}
 	if err := decodeJSON(r, &in, 16<<10); err != nil {
@@ -368,6 +376,7 @@ func (s *Server) savePWAApp(w http.ResponseWriter, r *http.Request, create bool)
 	a.Enabled = in.Enabled == nil || *in.Enabled
 	a.Locked = in.Locked != nil && *in.Locked
 	a.PageZoom = in.PageZoom == nil || *in.PageZoom
+	a.ViewOnly = in.ViewOnly != nil && *in.ViewOnly
 	tx, err := s.pool.Begin(r.Context())
 	if err != nil {
 		writeErr(w, 500, "begin failed")
@@ -396,6 +405,9 @@ func (s *Server) savePWAApp(w http.ResponseWriter, r *http.Request, create bool)
 		if in.PageZoom == nil {
 			a.PageZoom = prev.PageZoom
 		}
+		if in.ViewOnly == nil {
+			a.ViewOnly = prev.ViewOnly
+		}
 		if strings.TrimSpace(a.CameraLayout) == "" {
 			a.CameraLayout = prev.CameraLayout
 		}
@@ -417,10 +429,10 @@ func (s *Server) savePWAApp(w http.ResponseWriter, r *http.Request, create bool)
 		}
 	}
 	if err := tx.QueryRow(r.Context(), `INSERT INTO core.pwa_app (org_id, slug, name, short_name, start_url, sections, theme_color, enabled,
-		locked, page_zoom, camera_layout, version, checksum, created_by, reason)
-		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NULLIF($14,'')::uuid, $15) RETURNING id::text, created_at`,
+		locked, page_zoom, camera_layout, view_only, version, checksum, created_by, reason)
+		VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NULLIF($15,'')::uuid, $16) RETURNING id::text, created_at`,
 		org, a.Slug, a.Name, a.ShortName, a.StartURL, a.Sections, a.ThemeColor, a.Enabled, a.Locked, a.PageZoom, a.CameraLayout,
-		a.Version, a.checksum(), p.UserID, in.Reason).Scan(&a.ID, &a.CreatedAt); err != nil {
+		a.ViewOnly, a.Version, a.checksum(), p.UserID, in.Reason).Scan(&a.ID, &a.CreatedAt); err != nil {
 		writeErr(w, 500, "insert failed")
 		return
 	}
@@ -444,7 +456,7 @@ func (s *Server) savePWAApp(w http.ResponseWriter, r *http.Request, create bool)
 func pwaAudit(a *PWAApp) map[string]any {
 	return map[string]any{"slug": a.Slug, "name": a.Name, "short_name": a.ShortName, "start_url": a.StartURL, "sections": a.Sections,
 		"theme_color": a.ThemeColor, "enabled": a.Enabled, "locked": a.Locked, "page_zoom": a.PageZoom, "camera_layout": a.CameraLayout,
-		"version": a.Version}
+		"view_only": a.ViewOnly, "version": a.Version}
 }
 
 func (s *Server) createPWAApp(w http.ResponseWriter, r *http.Request) { s.savePWAApp(w, r, true) }
@@ -469,7 +481,7 @@ func (s *Server) deletePWAApp(w http.ResponseWriter, r *http.Request) {
 }
 
 // pwaAppLaunch gives app.js what the app mode needs: name, start page, sections and the options (locked, page zoom,
-// camera layout). No data of the organization.
+// camera layout, view only). No data of the organization.
 func (s *Server) pwaAppLaunch(w http.ResponseWriter, r *http.Request) {
 	a, ok := s.publicPWAApp(r, r.PathValue("slug"))
 	if !ok {
@@ -477,7 +489,7 @@ func (s *Server) pwaAppLaunch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"slug": a.Slug, "name": a.Name, "short_name": a.ShortName, "start_url": a.StartURL, "sections": a.Sections, "theme_color": a.ThemeColor,
-		"locked": a.Locked, "page_zoom": a.PageZoom, "camera_layout": a.CameraLayout})
+		"locked": a.Locked, "page_zoom": a.PageZoom, "camera_layout": a.CameraLayout, "view_only": a.ViewOnly})
 }
 
 // ---- manifest and install page --------------------------------------------------------------------------------------

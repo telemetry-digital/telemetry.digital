@@ -3550,5 +3550,8 @@
  "Stay signed in on this device": "Rester connecté sur cet appareil",
  "Stay signed in on a device (days, 0 = not allowed)": "Rester connecté sur un appareil (jours, 0 = non autorisé)",
  "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.": "Au-dessus de 0, la page de connexion propose « Rester connecté sur cet appareil » : une telle connexion dure ce nombre de jours, même après la fermeture du navigateur ou de l’application installée (PWA). L’authentification à deux facteurs reste exigée lors de la connexion elle-même ; la déconnexion, la désactivation de l’utilisateur ou 0 ici y mettent fin. À utiliser uniquement sur des appareils personnels avec verrouillage de l’écran.",
- "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Sans cela, une connexion se termine après {idle} min d’inactivité, au plus tard après {abs} h."
+ "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Sans cela, une connexion se termine après {idle} min d’inactivité, au plus tard après {abs} h.",
+ "View only — no pages for configuring": "Consultation seule — sans pages de configuration",
+ "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "Pour regarder, commander et relire : l’application omet la gestion des caméras, les réglages des caméras et la configuration du comptage d’objets. Cela limite les écrans de l’application, pas les droits de l’utilisateur.",
+ "view only": "consultation seule"
 }

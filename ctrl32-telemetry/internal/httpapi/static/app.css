@@ -105,6 +105,10 @@ code, pre { font-family: var(--mono); font-size: 0.85em; }
 @media (min-width: 1101px) {
   body.has-sidebar:not(.sb-icons):not(.sb-hidden) .subnav:not(#tabs) { display: none; }
 }
+/* an installed app (PWA) on a phone: its drawer menu lists the sub-pages, so the page tabs only take room */
+@media (max-width: 800px) {
+  body.app-mode.has-sidebar .subnav:not(#tabs) { display: none; }
+}
 @media (min-width: 801px) and (max-width: 1100px) {
   .sidebar { width: 68px; padding: 12px 8px; align-items: stretch; }
   .content { margin-left: 68px; }
