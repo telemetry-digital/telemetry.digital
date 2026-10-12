@@ -54,6 +54,21 @@ R=$(req -X POST "$BASE/api/v1/auth/mfa" -d "{\"pre_auth_token\":\"$PRE\",\"code\
 [ "$(echo "$R" | json ok)" = "true" ] && pass "mfa login ok" || fail "mfa: $R"
 ME=$(req "$BASE/api/v1/auth/me"); CSRF=$(echo "$ME" | json csrf_token)
 
+echo "5b. Stay signed in on this device (policy remember_device_days, off by default)"
+[ "$(req "$BASE/api/v1/settings/policy" | json remember_device_days)" = 0 ] && pass "off by default" || fail "remember_device_days should default to 0"
+[ "$(code -X PUT "$BASE/api/v1/settings/policy" -H "X-CSRF-Token: $CSRF" -d '{"remember_device_days":91,"reason":"e2e"}')" = 400 ] && pass "over 90 days rejected" || fail "91 days accepted"
+[ "$(code -X PUT "$BASE/api/v1/settings/policy" -H "X-CSRF-Token: $CSRF" -d '{"remember_device_days":30,"reason":"e2e stay signed in"}')" = 200 ] && pass "allowed for 30 days" || fail "policy put"
+RJ=/tmp/remember.jar; : > "$RJ"
+R=$(curl -s -b "$RJ" -c "$RJ" -H 'Content-Type: application/json' -X POST "$BASE/api/v1/auth/login" -d "{\"username\":\"$USER\",\"password\":\"$NEWPW\",\"remember\":true}")
+PRE=$(echo "$R" | json pre_auth_token)
+sleep $((30 - $(date +%s) % 30 + 1)); CODE=$(go run ./tools/totpcode -secret "$SECRET")
+H=$(curl -s -D - -o /tmp/remember.body -b "$RJ" -c "$RJ" -H 'Content-Type: application/json' -X POST "$BASE/api/v1/auth/mfa" -d "{\"pre_auth_token\":\"$PRE\",\"code\":\"$CODE\"}")
+grep -qi '^set-cookie: ctrl32_session=.*Max-Age=2592000' <<< "$H" && pass "remembered session: persistent cookie for 30 days after MFA" || fail "no persistent cookie: $H"
+[ "$(json remembered_days < /tmp/remember.body)" = 30 ] && pass "remembered_days=30" || fail "remembered_days: $(cat /tmp/remember.body)"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -b "$RJ" "$BASE/api/v1/auth/me")" = 200 ] && pass "remembered session authenticates" || fail "remembered session rejected"
+[ "$(code -X PUT "$BASE/api/v1/settings/policy" -H "X-CSRF-Token: $CSRF" -d '{"remember_device_days":0,"reason":"e2e restore"}')" = 200 ] && pass "switched off again" || fail "policy restore"
+req "$BASE/api/v1/audit?action=organization.policy&limit=5" | grep -q "remember_device_days" && pass "policy change audited" || fail "policy change not audited"
+
 echo "6. devices: create with claim, provision (unauthenticated), rotate, messages, revoke"
 D=$(req -X POST "$BASE/api/v1/devices" -H "X-CSRF-Token: $CSRF" -d '{"external_id":"e2e-dev-1","name":"E2E device","transport":"mqtt","reason":"e2e test"}')
 DEVID=$(echo "$D" | json id); CLAIM=$(echo "$D" | json claim_code); [ -n "$CLAIM" ] && pass "device created, claim $CLAIM" || fail "create device: $D"

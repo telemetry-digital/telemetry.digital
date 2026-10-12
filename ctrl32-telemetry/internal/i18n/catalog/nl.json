@@ -3546,5 +3546,9 @@
  "since the page was opened": "sinds de pagina is geopend",
  "not counting now": "telt nu niet",
  "Live video": "Live video",
- "fit to the screen": "aan scherm aanpassen"
+ "fit to the screen": "aan scherm aanpassen",
+ "Stay signed in on this device": "Aangemeld blijven op dit apparaat",
+ "Stay signed in on a device (days, 0 = not allowed)": "Aangemeld blijven op een apparaat (dagen, 0 = niet toegestaan)",
+ "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.": "Boven 0 biedt de aanmeldpagina „Aangemeld blijven op dit apparaat” aan: zo’n aanmelding duurt zoveel dagen, ook nadat de browser of de geïnstalleerde app (PWA) is gesloten. Tweestapsverificatie blijft vereist bij het aanmelden zelf; afmelden, de gebruiker uitschakelen of hier 0 instellen beëindigt het. Alleen gebruiken op persoonlijke apparaten met schermvergrendeling.",
+ "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Zonder dit eindigt een aanmelding na {idle} min zonder activiteit, uiterlijk na {abs} u."
 }

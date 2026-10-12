@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/iam"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/modbus"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/opcua"
 )
@@ -19,7 +21,7 @@ import (
 //	POST /api/v1/devices/{id}/commands/{cid}/approve {reason}   (device.command, not the issuer)
 //	POST /api/v1/devices/{id}/commands/{cid}/reject  {reason}   (device.command)
 //	GET  /api/v1/settings/policy                                (config.write)  {four_eyes_commands}
-//	PUT  /api/v1/settings/policy {four_eyes_commands, reason}   (user.admin)
+//	PUT  /api/v1/settings/policy {four_eyes_commands, …, remember_device_days, reason}   (user.admin)
 
 type cmdExec struct {
 	org, deviceID, ext, transport, cid, method string
@@ -224,10 +226,11 @@ func (s *Server) getPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pol := s.iam.Policy(r.Context(), org)
-	writeJSON(w, 200, map[string]any{"four_eyes_commands": pol.FourEyesCommands, "four_eyes_limits": pol.FourEyesLimits, "four_eyes_assignments": pol.FourEyesAssignments, "four_eyes_vpn": pol.FourEyesVPN, "mfa_required_all": pol.MFARequiredAll, "mfa_required_roles": pol.MFARequiredRoles, "password_min_length": pol.PasswordMinLength})
+	writeJSON(w, 200, map[string]any{"four_eyes_commands": pol.FourEyesCommands, "four_eyes_limits": pol.FourEyesLimits, "four_eyes_assignments": pol.FourEyesAssignments, "four_eyes_vpn": pol.FourEyesVPN, "mfa_required_all": pol.MFARequiredAll, "mfa_required_roles": pol.MFARequiredRoles, "password_min_length": pol.PasswordMinLength,
+		"session_idle_minutes": pol.SessionIdleMinutes, "session_absolute_hours": pol.SessionAbsoluteHours, "remember_device_days": pol.RememberDeviceDays})
 }
 
-// PUT /api/v1/settings/policy {four_eyes_commands?, four_eyes_limits?, four_eyes_assignments?, four_eyes_vpn?, reason}
+// PUT /api/v1/settings/policy {four_eyes_commands?, four_eyes_limits?, four_eyes_assignments?, four_eyes_vpn?, remember_device_days?, reason}
 func (s *Server) putPolicy(w http.ResponseWriter, r *http.Request) {
 	org, ok := s.mustOrg(w, r)
 	if !ok {
@@ -238,6 +241,7 @@ func (s *Server) putPolicy(w http.ResponseWriter, r *http.Request) {
 		Limits      *bool  `json:"four_eyes_limits"`
 		Assignments *bool  `json:"four_eyes_assignments"`
 		VPN         *bool  `json:"four_eyes_vpn"`
+		Remember    *int   `json:"remember_device_days"`
 		Reason      string `json:"reason"`
 	}
 	if err := decodeJSON(r, &in, 4096); err != nil {
@@ -260,8 +264,15 @@ func (s *Server) putPolicy(w http.ResponseWriter, r *http.Request) {
 	if in.VPN != nil {
 		set["four_eyes_vpn"] = *in.VPN
 	}
+	if in.Remember != nil {
+		if *in.Remember < 0 || *in.Remember > iam.MaxRememberDeviceDays {
+			writeErr(w, 400, fmt.Sprintf("remember_device_days must be 0 to %d", iam.MaxRememberDeviceDays))
+			return
+		}
+		set["remember_device_days"] = *in.Remember
+	}
 	if len(set) == 0 {
-		writeErr(w, 400, "four_eyes_commands, four_eyes_limits, four_eyes_assignments or four_eyes_vpn required")
+		writeErr(w, 400, "four_eyes_commands, four_eyes_limits, four_eyes_assignments, four_eyes_vpn or remember_device_days required")
 		return
 	}
 	old := s.iam.Policy(r.Context(), org)
@@ -270,7 +281,7 @@ func (s *Server) putPolicy(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "update failed")
 		return
 	}
-	s.audit(r, "organization.policy", "organization", org, map[string]any{"four_eyes_commands": old.FourEyesCommands, "four_eyes_limits": old.FourEyesLimits, "four_eyes_assignments": old.FourEyesAssignments, "four_eyes_vpn": old.FourEyesVPN}, set, in.Reason)
+	s.audit(r, "organization.policy", "organization", org, map[string]any{"four_eyes_commands": old.FourEyesCommands, "four_eyes_limits": old.FourEyesLimits, "four_eyes_assignments": old.FourEyesAssignments, "four_eyes_vpn": old.FourEyesVPN, "remember_device_days": old.RememberDeviceDays}, set, in.Reason)
 	pol := s.iam.Policy(r.Context(), org)
-	writeJSON(w, 200, map[string]any{"four_eyes_commands": pol.FourEyesCommands, "four_eyes_limits": pol.FourEyesLimits, "four_eyes_assignments": pol.FourEyesAssignments, "four_eyes_vpn": pol.FourEyesVPN})
+	writeJSON(w, 200, map[string]any{"four_eyes_commands": pol.FourEyesCommands, "four_eyes_limits": pol.FourEyesLimits, "four_eyes_assignments": pol.FourEyesAssignments, "four_eyes_vpn": pol.FourEyesVPN, "remember_device_days": pol.RememberDeviceDays})
 }

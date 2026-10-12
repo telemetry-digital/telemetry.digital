@@ -3546,5 +3546,9 @@
  "since the page was opened": "siden siden ble åpnet",
  "not counting now": "teller ikke nå",
  "Live video": "Direktevideo",
- "fit to the screen": "tilpass skjermen"
+ "fit to the screen": "tilpass skjermen",
+ "Stay signed in on this device": "Forbli pålogget på denne enheten",
+ "Stay signed in on a device (days, 0 = not allowed)": "Forbli pålogget på en enhet (dager, 0 = ikke tillatt)",
+ "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.": "Over 0 tilbyr påloggingssiden «Forbli pålogget på denne enheten»: en slik pålogging varer så mange dager, også etter at nettleseren eller den installerte appen (PWA) er lukket. Tofaktorautentisering kreves fortsatt ved selve påloggingen; utlogging, deaktivering av brukeren eller 0 her avslutter den. Bruk bare på personlige enheter med skjermlås.",
+ "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Uten dette avsluttes en pålogging etter {idle} min uten aktivitet, senest etter {abs} t."
 }

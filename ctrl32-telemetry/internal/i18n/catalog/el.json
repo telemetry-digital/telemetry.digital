@@ -3546,5 +3546,9 @@
  "since the page was opened": "από το άνοιγμα της σελίδας",
  "not counting now": "δεν μετρά τώρα",
  "Live video": "Ζωντανό βίντεο",
- "fit to the screen": "προσαρμογή στην οθόνη"
+ "fit to the screen": "προσαρμογή στην οθόνη",
+ "Stay signed in on this device": "Παραμονή σύνδεσης σε αυτή τη συσκευή",
+ "Stay signed in on a device (days, 0 = not allowed)": "Παραμονή σύνδεσης σε συσκευή (ημέρες, 0 = δεν επιτρέπεται)",
+ "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.": "Πάνω από 0, η σελίδα σύνδεσης προσφέρει «Παραμονή σύνδεσης σε αυτή τη συσκευή»: μια τέτοια σύνδεση ισχύει τόσες ημέρες, ακόμη και αφού κλείσει το πρόγραμμα περιήγησης ή η εγκατεστημένη εφαρμογή (PWA). Ο έλεγχος ταυτότητας δύο παραγόντων απαιτείται ακόμη στην ίδια τη σύνδεση· η αποσύνδεση, η απενεργοποίηση του χρήστη ή η τιμή 0 εδώ την τερματίζουν. Χρησιμοποιήστε μόνο σε προσωπικές συσκευές με κλείδωμα οθόνης.",
+ "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Χωρίς αυτό, η σύνδεση λήγει μετά από {idle} λεπτά αδράνειας, το αργότερο μετά από {abs} ώρες."
 }

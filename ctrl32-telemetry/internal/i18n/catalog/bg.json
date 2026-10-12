@@ -3546,5 +3546,9 @@
  "since the page was opened": "откакто страницата е отворена",
  "not counting now": "в момента не брои",
  "Live video": "Видео на живо",
- "fit to the screen": "по размера на екрана"
+ "fit to the screen": "по размера на екрана",
+ "Stay signed in on this device": "Оставане в профила на това устройство",
+ "Stay signed in on a device (days, 0 = not allowed)": "Оставане в профила на устройство (дни, 0 = не е разрешено)",
+ "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.": "При стойност над 0 страницата за вход предлага „Оставане в профила на това устройство“: такъв вход важи толкова дни, и след затваряне на браузъра или инсталираното приложение (PWA). Двуфакторното удостоверяване все още се изисква при самия вход; изходът, блокирането на потребителя или стойност 0 тук го прекратяват. Използвайте само на лични устройства със заключване на екрана.",
+ "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Без това входът изтича след {idle} мин неактивност, най-късно след {abs} ч."
 }

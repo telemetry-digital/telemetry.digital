@@ -3546,5 +3546,9 @@
  "since the page was opened": "od otvorenia stránky",
  "not counting now": "teraz nepočíta",
  "Live video": "Živé video",
- "fit to the screen": "prispôsobiť obrazovke"
+ "fit to the screen": "prispôsobiť obrazovke",
+ "Stay signed in on this device": "Zostať prihlásený na tomto zariadení",
+ "Stay signed in on a device (days, 0 = not allowed)": "Zostať prihlásený na zariadení (dni, 0 = nepovolené)",
+ "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.": "Ak je viac ako 0, prihlasovacia stránka ponúkne „Zostať prihlásený na tomto zariadení“: takéto prihlásenie platí toľko dní, aj po zatvorení prehliadača alebo nainštalovanej aplikácie (PWA). Dvojfaktorové overenie sa pri samotnom prihlásení vyžaduje aj naďalej; odhlásenie, zablokovanie používateľa alebo nastavenie 0 ho ukončí. Používajte len na osobných zariadeniach so zámkom obrazovky.",
+ "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Bez toho sa prihlásenie skončí po {idle} min nečinnosti, najneskôr po {abs} h."
 }

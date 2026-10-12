@@ -3546,5 +3546,9 @@
  "since the page was opened": "de la deschiderea paginii",
  "not counting now": "nu numără acum",
  "Live video": "Video în direct",
- "fit to the screen": "potrivit ecranului"
+ "fit to the screen": "potrivit ecranului",
+ "Stay signed in on this device": "Rămâi conectat pe acest dispozitiv",
+ "Stay signed in on a device (days, 0 = not allowed)": "Rămâi conectat pe un dispozitiv (zile, 0 = nepermis)",
+ "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.": "Peste 0, pagina de autentificare oferă „Rămâi conectat pe acest dispozitiv”: o astfel de autentificare durează atâtea zile, și după închiderea browserului sau a aplicației instalate (PWA). Autentificarea în doi pași rămâne obligatorie la autentificarea propriu-zisă; deconectarea, dezactivarea utilizatorului sau 0 aici o încheie. Folosiți doar pe dispozitive personale cu blocarea ecranului.",
+ "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Fără aceasta, o autentificare se încheie după {idle} min de inactivitate, cel târziu după {abs} h."
 }
