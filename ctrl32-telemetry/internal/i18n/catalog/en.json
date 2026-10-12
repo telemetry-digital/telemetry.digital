@@ -3545,5 +3545,6 @@
  "The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.": "The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.",
  "since the page was opened": "since the page was opened",
  "not counting now": "not counting now",
- "Live video": "Live video"
+ "Live video": "Live video",
+ "fit to the screen": "fit to the screen"
 }

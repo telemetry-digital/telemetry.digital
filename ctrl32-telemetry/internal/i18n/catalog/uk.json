@@ -3545,5 +3545,6 @@
  "The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.": "Живе зображення кожної камери, що рахує для цієї зони, з її лініями підрахунку; стрілка вказує всередину. Кожен перетин підсвічує лінію (всередину зеленим, назовні червоним) і з’являється у списку під зображенням, тож ви можете порівняти підрахунок із тим, що бачите. Зображення зазвичай надходить через секунду-дві після підрахунку.",
  "since the page was opened": "відколи відкрито сторінку",
  "not counting now": "зараз не рахує",
- "Live video": "Відео наживо"
+ "Live video": "Відео наживо",
+ "fit to the screen": "за розміром екрана"
 }

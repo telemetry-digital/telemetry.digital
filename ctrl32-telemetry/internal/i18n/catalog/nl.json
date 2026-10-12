@@ -3545,5 +3545,6 @@
  "The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.": "Het livebeeld van elke camera die voor dit gebied telt, met de tellijnen; de pijl wijst naar binnen. Elke passage laat de lijn oplichten (groen naar binnen, rood naar buiten) en verschijnt in de lijst onder het beeld, zodat u de tellingen kunt vergelijken met wat u ziet. Het beeld komt meestal een à twee seconden na de telling.",
  "since the page was opened": "sinds de pagina is geopend",
  "not counting now": "telt nu niet",
- "Live video": "Live video"
+ "Live video": "Live video",
+ "fit to the screen": "aan scherm aanpassen"
 }

@@ -170,7 +170,7 @@
       // the lines are fractions of the analysed sub-stream: show it in its own proportions, filled, so they match
       const fit = () => {
         const vp = stage.querySelector('.vp'), m = vp && /^(\d+)x(\d+)$/.exec(vp.dataset.size || '');
-        if (m && +m[2]) { c.ratio = +m[1] / +m[2]; stage.style.aspectRatio = `${m[1]} / ${m[2]}`; drawLive(c); }
+        if (m && +m[2]) { c.ratio = +m[1] / +m[2]; stage.style.aspectRatio = `${m[1]} / ${m[2]}`; stage.style.maxWidth = `calc(55vh * ${c.ratio})`; drawLive(c); }
       };
       LIVE.players.push(ctrl32Player(stage.querySelector('.oc-lc-video'), { url: `/api/v1/video/cameras/${c.camera_id}/live?quality=sub`, live: true, onState: () => setTimeout(fit, 0) }));
       drawLive(c);
