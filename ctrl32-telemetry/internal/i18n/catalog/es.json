@@ -3546,5 +3546,9 @@
  "since the page was opened": "desde que se abrió la página",
  "not counting now": "no está contando ahora",
  "Live video": "Vídeo en directo",
- "fit to the screen": "ajustar a la pantalla"
+ "fit to the screen": "ajustar a la pantalla",
+ "Stay signed in on this device": "Mantener la sesión en este dispositivo",
+ "Stay signed in on a device (days, 0 = not allowed)": "Mantener la sesión en un dispositivo (días, 0 = no permitido)",
+ "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.": "Con más de 0, la página de inicio de sesión ofrece «Mantener la sesión en este dispositivo»: ese inicio de sesión dura tantos días, también después de cerrar el navegador o la aplicación instalada (PWA). La autenticación de dos factores se sigue exigiendo al iniciar sesión; cerrar la sesión, desactivar el usuario o poner 0 aquí la termina. Úselo solo en dispositivos personales con bloqueo de pantalla.",
+ "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Sin ello, la sesión termina tras {idle} min de inactividad, como máximo tras {abs} h."
 }

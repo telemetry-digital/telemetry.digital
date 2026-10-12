@@ -21,12 +21,15 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusTooManyRequests, "too many attempts, try again later")
 		return
 	}
-	var in struct{ Username, Password string }
+	var in struct {
+		Username, Password string
+		Remember           bool `json:"remember"` // "Stay signed in on this device", if the organization policy allows it
+	}
 	if err := decodeJSON(r, &in, 4096); err != nil {
 		writeErr(w, 400, err.Error())
 		return
 	}
-	res, err := s.iam.Login(r.Context(), in.Username, in.Password, ip, r.UserAgent())
+	res, err := s.iam.Login(r.Context(), in.Username, in.Password, ip, r.UserAgent(), in.Remember)
 	switch {
 	case errors.Is(err, iam.ErrLocked):
 		writeErr(w, http.StatusLocked, "account temporarily locked")
@@ -43,8 +46,8 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"mfa_required": true, "pre_auth_token": res.PreAuthToken})
 		return
 	}
-	s.setSessionCookie(w, r, res.SessionToken, 0)
-	writeJSON(w, 200, map[string]any{"mfa_required": false, "must_change_password": res.MustChange, "user": res.User})
+	s.setSessionCookie(w, r, res.SessionToken, int(res.Remember.Seconds()))
+	writeJSON(w, 200, map[string]any{"mfa_required": false, "must_change_password": res.MustChange, "user": res.User, "remembered_days": int(res.Remember.Hours() / 24)})
 }
 
 // POST /api/v1/auth/mfa
@@ -62,13 +65,14 @@ func (s *Server) loginMFA(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err.Error())
 		return
 	}
-	token, err := s.iam.CompleteMFA(r.Context(), in.PreAuthToken, in.Code, ip, r.UserAgent())
+	token, remember, err := s.iam.CompleteMFA(r.Context(), in.PreAuthToken, in.Code, ip, r.UserAgent())
 	if err != nil {
 		writeErr(w, http.StatusUnauthorized, "invalid code")
 		return
 	}
-	s.setSessionCookie(w, r, token, 0)
-	writeJSON(w, 200, map[string]any{"ok": true})
+	// a remembered session gets a persistent cookie, so it survives closing the browser or the installed app
+	s.setSessionCookie(w, r, token, int(remember.Seconds()))
+	writeJSON(w, 200, map[string]any{"ok": true, "remembered_days": int(remember.Hours() / 24)})
 }
 
 // POST /api/v1/auth/logout

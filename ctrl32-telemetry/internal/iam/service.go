@@ -40,6 +40,21 @@ type Policy struct {
 	FourEyesLimits       bool     `json:"four_eyes_limits"`      // URS H-08: alarm rule changes become change requests
 	FourEyesAssignments  bool     `json:"four_eyes_assignments"` // URS H-08: device ↔ datastream assignments become change requests
 	FourEyesVPN          bool     `json:"four_eyes_vpn"`         // ADR-0018: VPN access of technicians (user peers) needs a second person's approval
+	// RememberDeviceDays allows "Stay signed in on this device" at login: such a session lasts this many days instead of
+	// the idle and absolute limits (0 = not allowed, the default). MFA is still required at the sign-in itself.
+	RememberDeviceDays int `json:"remember_device_days"`
+}
+
+// MaxRememberDeviceDays caps RememberDeviceDays.
+const MaxRememberDeviceDays = 90
+
+// sessionLimits returns the idle and absolute lifetime of a new session; remembered only when the policy allows it.
+func sessionLimits(pol Policy, remember bool) (idle, abs time.Duration, remembered bool) {
+	if remember && pol.RememberDeviceDays > 0 {
+		d := time.Duration(min(pol.RememberDeviceDays, MaxRememberDeviceDays)) * 24 * time.Hour
+		return d, d, true
+	}
+	return time.Duration(pol.SessionIdleMinutes) * time.Minute, time.Duration(pol.SessionAbsoluteHours) * time.Hour, false
 }
 
 func defaultPolicy() Policy {
@@ -391,10 +406,13 @@ type LoginResult struct {
 	MFAPending   bool
 	MustChange   bool
 	User         *User
+	// Remember is the lifetime of a remembered session (the cookie then outlives the browser); 0 = a normal session.
+	Remember time.Duration
 }
 
-// Login verifies username/password, applies lockout, and opens a session (or a pending-MFA session).
-func (s *Service) Login(ctx context.Context, username, password, ip, ua string) (*LoginResult, error) {
+// Login verifies username/password, applies lockout, and opens a session (or a pending-MFA session). remember asks for
+// a remembered session ("Stay signed in on this device"), granted only when the organization policy allows it.
+func (s *Service) Login(ctx context.Context, username, password, ip, ua string, remember bool) (*LoginResult, error) {
 	username = strings.ToLower(strings.TrimSpace(username))
 	var id, orgID, hash string
 	var disabled, lockedUntil, orgDisabled *time.Time
@@ -450,15 +468,16 @@ func (s *Service) Login(ctx context.Context, username, password, ip, ua string) 
 	if err != nil {
 		return nil, err
 	}
-	idle := time.Duration(pol.SessionIdleMinutes) * time.Minute
-	abs := time.Duration(pol.SessionAbsoluteHours) * time.Hour
+	idle, abs, remembered := sessionLimits(pol, remember)
 	if mfaEnabled {
-		// Pending session: 5 minutes to complete the TOTP step.
+		// Pending session: 5 minutes to complete the TOTP step; it carries the wish to be remembered to that step.
 		idle = 5 * time.Minute
+	} else if remembered {
+		res.Remember = abs
 	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO core.session (id, user_id, expires_at, absolute_expires_at, ip, user_agent, csrf_secret, mfa_pending)
-		VALUES ($1, $2::uuid, now() + $3::interval, now() + $4::interval, NULLIF($5,'')::inet, $6, $7, $8)`,
-		HashToken(raw), id, idle.String(), abs.String(), ipOnly(ip), truncate(ua, 300), csrf, mfaEnabled)
+	_, err = s.pool.Exec(ctx, `INSERT INTO core.session (id, user_id, expires_at, absolute_expires_at, ip, user_agent, csrf_secret, mfa_pending, remember)
+		VALUES ($1, $2::uuid, now() + $3::interval, now() + $4::interval, NULLIF($5,'')::inet, $6, $7, $8, $9)`,
+		HashToken(raw), id, idle.String(), abs.String(), ipOnly(ip), truncate(ua, 300), csrf, mfaEnabled, remembered)
 	if err != nil {
 		return nil, err
 	}
@@ -468,7 +487,7 @@ func (s *Service) Login(ctx context.Context, username, password, ip, ua string) 
 		s.access(ctx, orgID, id, username, "login_password_ok", true, ip, ua, map[string]any{"mfa_pending": true})
 	} else {
 		res.SessionToken = raw
-		s.access(ctx, orgID, id, username, "login_ok", true, ip, ua, map[string]any{"mfa": false, "mfa_required_but_missing": mfaRequired})
+		s.access(ctx, orgID, id, username, "login_ok", true, ip, ua, map[string]any{"mfa": false, "mfa_required_but_missing": mfaRequired, "remember": remembered})
 		if mfaRequired {
 			s.log.Warn("user without MFA logged in although policy requires it", "security", true, "user", username)
 		}
@@ -495,56 +514,62 @@ func (s *Service) mfaRequired(pol Policy, roles []string) bool {
 	return false
 }
 
-// CompleteMFA verifies a TOTP or recovery code for a pending session and activates it.
-func (s *Service) CompleteMFA(ctx context.Context, preAuthToken, code, ip, ua string) (string, error) {
+// CompleteMFA verifies a TOTP or recovery code for a pending session and activates it. It returns the session token
+// and, for a remembered session, its lifetime (0 otherwise).
+func (s *Service) CompleteMFA(ctx context.Context, preAuthToken, code, ip, ua string) (string, time.Duration, error) {
 	h := HashToken(preAuthToken)
 	var userID, orgID, username string
-	err := s.pool.QueryRow(ctx, `SELECT s.user_id::text, u.org_id::text, u.username FROM core.session s JOIN core.user_account u ON u.id = s.user_id
-		WHERE s.id = $1 AND s.mfa_pending AND s.revoked_at IS NULL AND s.expires_at > now()`, h).Scan(&userID, &orgID, &username)
+	var wantRemember bool
+	err := s.pool.QueryRow(ctx, `SELECT s.user_id::text, u.org_id::text, u.username, s.remember FROM core.session s JOIN core.user_account u ON u.id = s.user_id
+		WHERE s.id = $1 AND s.mfa_pending AND s.revoked_at IS NULL AND s.expires_at > now()`, h).Scan(&userID, &orgID, &username, &wantRemember)
 	if err != nil {
-		return "", ErrInvalidCredentials
+		return "", 0, ErrInvalidCredentials
 	}
 	ok, err := s.verifyTOTP(ctx, userID, code, true)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	method := "totp"
 	if !ok {
 		ok, err = s.useRecoveryCode(ctx, userID, code)
 		if err != nil {
-			return "", err
+			return "", 0, err
 		}
 		method = "recovery_code"
 	}
 	if !ok {
 		s.access(ctx, orgID, userID, username, "mfa_failed", false, ip, ua, nil)
-		return "", ErrInvalidCode
+		return "", 0, ErrInvalidCode
 	}
 	pol := s.policy(ctx, orgID)
 	// Rotate the session id on privilege change (OWASP): revoke the pending session, open the real one.
 	raw, err := RandomToken(32)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	csrf, _ := RandomToken(24)
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	defer tx.Rollback(ctx)
 	if _, err := tx.Exec(ctx, `UPDATE core.session SET revoked_at = now() WHERE id = $1`, h); err != nil {
-		return "", err
+		return "", 0, err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO core.session (id, user_id, expires_at, absolute_expires_at, ip, user_agent, csrf_secret, mfa_pending, mfa_at)
-		VALUES ($1, $2::uuid, now() + $3::interval, now() + $4::interval, NULLIF($5,'')::inet, $6, $7, false, now())`,
-		HashToken(raw), userID, (time.Duration(pol.SessionIdleMinutes) * time.Minute).String(), (time.Duration(pol.SessionAbsoluteHours) * time.Hour).String(), ipOnly(ip), truncate(ua, 300), csrf); err != nil {
-		return "", err
+	idle, abs, remembered := sessionLimits(pol, wantRemember)
+	if _, err := tx.Exec(ctx, `INSERT INTO core.session (id, user_id, expires_at, absolute_expires_at, ip, user_agent, csrf_secret, mfa_pending, mfa_at, remember)
+		VALUES ($1, $2::uuid, now() + $3::interval, now() + $4::interval, NULLIF($5,'')::inet, $6, $7, false, now(), $8)`,
+		HashToken(raw), userID, idle.String(), abs.String(), ipOnly(ip), truncate(ua, 300), csrf, remembered); err != nil {
+		return "", 0, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return "", err
+		return "", 0, err
 	}
-	s.access(ctx, orgID, userID, username, "login_ok", true, ip, ua, map[string]any{"mfa": true, "method": method})
-	return raw, nil
+	s.access(ctx, orgID, userID, username, "login_ok", true, ip, ua, map[string]any{"mfa": true, "method": method, "remember": remembered})
+	if remembered {
+		return raw, abs, nil
+	}
+	return raw, 0, nil
 }
 
 // ReauthPassword re-checks the password of the current user (for signing and sensitive actions).
@@ -579,15 +604,18 @@ func (s *Service) Authenticate(ctx context.Context, sessionToken string) (*Princ
 	}
 	h := HashToken(sessionToken)
 	var p Principal
-	var idleMin int
 	var orgSettings []byte
+	var remember bool
+	var created time.Time
 	err := s.pool.QueryRow(ctx, `
 		SELECT u.id::text, u.org_id::text, COALESCE(u.customer_id::text,''), u.username, u.full_name, u.must_change_password, u.mfa_enabled,
-		       s.mfa_at IS NOT NULL, s.csrf_secret, o.settings->'security', u.camera_groups IS NOT NULL, COALESCE(u.camera_groups, '{}')
+		       s.mfa_at IS NOT NULL, s.csrf_secret, o.settings->'security', u.camera_groups IS NOT NULL, COALESCE(u.camera_groups, '{}'),
+		       s.remember, s.created_at
 		FROM core.session s JOIN core.user_account u ON u.id = s.user_id JOIN core.organization o ON o.id = u.org_id
 		WHERE s.id = $1 AND s.revoked_at IS NULL AND NOT s.mfa_pending AND s.expires_at > now()
 		  AND (s.absolute_expires_at IS NULL OR s.absolute_expires_at > now()) AND u.disabled_at IS NULL`, h).
-		Scan(&p.UserID, &p.OrgID, &p.CustomerID, &p.Username, &p.FullName, &p.MustChange, &p.MFAEnabled, &p.MFAVerified, &p.CSRFSecret, &orgSettings, &p.CameraLimited, &p.CameraGroups)
+		Scan(&p.UserID, &p.OrgID, &p.CustomerID, &p.Username, &p.FullName, &p.MustChange, &p.MFAEnabled, &p.MFAVerified, &p.CSRFSecret, &orgSettings, &p.CameraLimited, &p.CameraGroups,
+			&remember, &created)
 	if err != nil {
 		return nil, ErrNoSession
 	}
@@ -595,7 +623,10 @@ func (s *Service) Authenticate(ctx context.Context, sessionToken string) (*Princ
 	if orgSettings != nil {
 		_ = json.Unmarshal(orgSettings, &pol)
 	}
-	idleMin = pol.SessionIdleMinutes
+	idle, err := sessionIdle(pol, remember, time.Since(created))
+	if err != nil {
+		return nil, err
+	}
 	p.SessionID = h
 	p.Roles, p.Permissions, err = s.permissionsFor(ctx, p.UserID)
 	if err != nil {
@@ -604,8 +635,30 @@ func (s *Service) Authenticate(ctx context.Context, sessionToken string) (*Princ
 	p.MFARequired = s.mfaRequired(pol, p.Roles)
 	// Slide idle expiry (at most once per minute to limit writes).
 	_, _ = s.pool.Exec(ctx, `UPDATE core.session SET last_seen_at = now(), expires_at = now() + $2::interval WHERE id = $1 AND last_seen_at < now() - interval '1 minute'`,
-		h, (time.Duration(idleMin) * time.Minute).String())
+		h, idle.String())
 	return &p, nil
+}
+
+// sessionIdle is the sliding idle lifetime of a session of the given age. A remembered session follows the policy as it
+// is now, so shortening or switching off "Stay signed in" applies to the sessions already open: switched off, it ends
+// like a normal one at the absolute limit (its idle limit slides back to the normal one).
+func sessionIdle(pol Policy, remember bool, age time.Duration) (time.Duration, error) {
+	idle := time.Duration(pol.SessionIdleMinutes) * time.Minute
+	if !remember {
+		return idle, nil
+	}
+	days := min(pol.RememberDeviceDays, MaxRememberDeviceDays)
+	if days <= 0 {
+		if age > time.Duration(pol.SessionAbsoluteHours)*time.Hour {
+			return 0, ErrNoSession
+		}
+		return idle, nil
+	}
+	life := time.Duration(days) * 24 * time.Hour
+	if age > life {
+		return 0, ErrNoSession
+	}
+	return life, nil
 }
 
 // --- API tokens ---------------------------------------------------------------------------------

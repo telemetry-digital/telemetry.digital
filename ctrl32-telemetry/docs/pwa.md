@@ -93,3 +93,13 @@ user's own organization.
 curl -X POST https://server/api/v1/pwa-apps -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"slug":"cam","name":"Cameras","short_name":"Cameras","start_url":"/video","sections":["cameras"],"reason":"gate phones"}'
 ```
+
+## Staying signed in
+
+A session ends after 30 minutes without activity (at the latest after 8 hours) and its cookie lives only as long as
+the browser, so an installed app asks for the password and the code again whenever it is reopened. The organization's
+security policy can allow **Stay signed in on this device** (`remember_device_days`, 1–90, default 0 = not allowed,
+`PUT /api/v1/settings/policy` with a reason). The sign-in page then offers the checkbox; a session opened with it
+(`remember: true` on `POST /api/v1/auth/login`, MFA still required) lasts that many days with a persistent cookie
+(`core.session.remember`). Logout, *Sign out everywhere*, disabling the user or lowering the setting end it; a lower
+value applies to sessions already open. The access log records `remember` on every sign-in.

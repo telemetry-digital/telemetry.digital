@@ -702,6 +702,8 @@ export type LoginResponse = {
   must_change_password?: boolean;
   /** for POST /api/v1/auth/mfa */
   pre_auth_token?: string;
+  /** days the session stays signed in on this device (Stay signed in); 0 = a normal session */
+  remembered_days?: number;
   user?: Me;
 };
 
@@ -2163,6 +2165,8 @@ export class Ctrl32Client {
   postAuthLogin(body: {
     /** Password */
     password: string;
+    /** Stay signed in on this device: when the organization policy allows it (`remember_device_days`), the session lasts that many days with a persistent cookie; the response then carries `remembered_days` */
+    remember?: boolean;
     /** Username */
     username: string;
   }): Promise<LoginResponse> {
@@ -9775,9 +9779,9 @@ export class Ctrl32Client {
     return this.request<Policy>('GET', `/api/v1/settings/policy`, undefined, undefined, false);
   }
 
-  /** Set the four-eyes policies
+  /** Set the four-eyes policies and Stay signed in
    *
-   * `four_eyes_commands`: commands wait for approval. `four_eyes_limits`: alarm rule changes become change requests. `four_eyes_assignments`: device ↔ datastream assignments become change requests. `four_eyes_vpn`: VPN access of technicians needs a grant approved by a second person. At least one field.
+   * `four_eyes_commands`: commands wait for approval. `four_eyes_limits`: alarm rule changes become change requests. `four_eyes_assignments`: device ↔ datastream assignments become change requests. `four_eyes_vpn`: VPN access of technicians needs a grant approved by a second person. `remember_device_days`: 0 (default) or up to 90 — the sign-in page offers *Stay signed in on this device*, such a session lasts this many days with a persistent cookie; lowering it applies to open sessions at once. At least one field.
    * 
    * Requires permission `user.admin`. */
   putSettingsPolicy(body: {
@@ -9787,17 +9791,21 @@ export class Ctrl32Client {
     four_eyes_vpn?: boolean;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
+    /** 0–90 */
+    remember_device_days?: number;
   }): Promise<{
     four_eyes_assignments?: boolean;
     four_eyes_commands?: boolean;
     four_eyes_limits?: boolean;
     four_eyes_vpn?: boolean;
+    remember_device_days?: number;
   }> {
     return this.request<{
     four_eyes_assignments?: boolean;
     four_eyes_commands?: boolean;
     four_eyes_limits?: boolean;
     four_eyes_vpn?: boolean;
+    remember_device_days?: number;
   }>('PUT', `/api/v1/settings/policy`, undefined, body, false);
   }
 

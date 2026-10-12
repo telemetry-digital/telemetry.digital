@@ -3546,5 +3546,9 @@
  "since the page was opened": "sivun avaamisesta lähtien",
  "not counting now": "ei laske nyt",
  "Live video": "Live-video",
- "fit to the screen": "sovita näyttöön"
+ "fit to the screen": "sovita näyttöön",
+ "Stay signed in on this device": "Pysy kirjautuneena tällä laitteella",
+ "Stay signed in on a device (days, 0 = not allowed)": "Pysy kirjautuneena laitteella (päivää, 0 = ei sallittu)",
+ "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.": "Kun arvo on yli 0, kirjautumissivu tarjoaa valinnan ”Pysy kirjautuneena tällä laitteella”: tällainen kirjautuminen on voimassa niin monta päivää, myös selaimen tai asennetun sovelluksen (PWA) sulkemisen jälkeen. Kaksivaiheinen tunnistautuminen vaaditaan edelleen itse kirjautumisessa; uloskirjautuminen, käyttäjän poistaminen käytöstä tai arvo 0 tässä päättää sen. Käytä vain henkilökohtaisissa laitteissa, joissa on näytön lukitus.",
+ "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Ilman sitä kirjautuminen päättyy {idle} min käyttämättömyyden jälkeen, viimeistään {abs} h kuluttua."
 }

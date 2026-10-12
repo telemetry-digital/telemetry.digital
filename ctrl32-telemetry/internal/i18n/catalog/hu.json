@@ -3546,5 +3546,9 @@
  "since the page was opened": "az oldal megnyitása óta",
  "not counting now": "most nem számlál",
  "Live video": "Élő videó",
- "fit to the screen": "képernyőhöz igazítás"
+ "fit to the screen": "képernyőhöz igazítás",
+ "Stay signed in on this device": "Maradjak bejelentkezve ezen az eszközön",
+ "Stay signed in on a device (days, 0 = not allowed)": "Bejelentkezve maradás eszközön (nap, 0 = nem engedélyezett)",
+ "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.": "0 felett a bejelentkezési oldal felkínálja a „Maradjak bejelentkezve ezen az eszközön” lehetőséget: az ilyen bejelentkezés ennyi napig érvényes, a böngésző vagy a telepített alkalmazás (PWA) bezárása után is. A kétlépcsős azonosítás magánál a bejelentkezésnél továbbra is kötelező; a kijelentkezés, a felhasználó letiltása vagy itt a 0 megszünteti. Csak képernyőzárral védett személyes eszközökön használja.",
+ "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Enélkül a bejelentkezés {idle} perc tétlenség után, legkésőbb {abs} óra után lejár."
 }
