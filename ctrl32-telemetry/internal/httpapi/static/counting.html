@@ -43,6 +43,18 @@
   .oc-check input[type=checkbox], label.check input[type=checkbox], .oc-cls input[type=checkbox] { width: auto; margin: 0; }
   .oc-hist { fill: #2563eb; } .oc-hist.over { fill: #dc2626; }
   @media (max-width: 900px) { .oc-ed-grid { grid-template-columns: 1fr; } }
+  .oc-live-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 12px; }
+  .oc-lc-stage { position: relative; background: #111; border-radius: var(--radius); overflow: hidden; aspect-ratio: 16 / 9; }
+  .oc-lc-stage .oc-lc-video, .oc-lc-stage .vp, .oc-lc-stage > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .oc-lc-stage .vp video, .oc-lc-stage .vp canvas { object-fit: fill; }
+  .oc-lc-stage > svg { pointer-events: none; }
+  .oc-line.in { stroke: #22c55e; stroke-width: 7; } .oc-line.out { stroke: #ef4444; stroke-width: 7; }
+  .oc-flash { font-size: 26px; font-weight: 700; paint-order: stroke; stroke: #000; stroke-width: 4px; }
+  .oc-flash.in { fill: #22c55e; } .oc-flash.out { fill: #ef4444; }
+  .oc-lc-counts { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 4px; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .oc-lc-list { list-style: none; margin: 0; padding: 0; font-size: 13px; max-height: 9.5em; overflow: auto; font-variant-numeric: tabular-nums; }
+  .oc-lc-list li { padding: 2px 0; border-bottom: 1px solid var(--line); }
+  .oc-lc-list .in { color: #16a34a; font-weight: 600; } .oc-lc-list .out { color: #dc2626; font-weight: 600; }
   .oc-cls label { display: inline-flex; gap: 3px; margin-right: 8px; font-size: 13px; align-items: center; }
   @media (max-width: 760px) { .oc-two { grid-template-columns: 1fr; } }
 </style>
@@ -94,6 +106,11 @@
         <h2 style="margin-top:0">Comparison of days</h2>
         <div id="dayChart" class="oc-chart"></div>
       </div>
+    </div>
+    <div class="card" id="liveCard" hidden>
+      <div class="page-head" style="margin:0"><h2 style="margin:0">Live check of the counting</h2><span class="grow"></span><label class="oc-check"><input type="checkbox" id="liveOn"> Show the cameras</label></div>
+      <p class="muted small">The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.</p>
+      <div class="oc-live-grid" id="liveGrid"></div>
     </div>
     <div id="speeds"></div>
     <div class="card">

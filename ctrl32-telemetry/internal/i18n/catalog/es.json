@@ -3539,5 +3539,10 @@
  "secret key": "clave secreta",
  "Last completed": "Última completada",
  "Last restore test": "Última prueba de restauración",
- "Last passed": "Último superado"
+ "Last passed": "Último superado",
+ "Live check of the counting": "Control del conteo en directo",
+ "Show the cameras": "Mostrar las cámaras",
+ "The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.": "La imagen en directo de cada cámara que cuenta para esta zona, con sus líneas de conteo; la flecha apunta hacia dentro. Cada paso hace destellar la línea (verde entrada, rojo salida) y aparece en la lista bajo la imagen, para comparar los conteos con lo que ve. La imagen suele llegar uno o dos segundos después del conteo.",
+ "since the page was opened": "desde que se abrió la página",
+ "not counting now": "no está contando ahora"
 }

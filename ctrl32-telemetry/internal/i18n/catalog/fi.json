@@ -3539,5 +3539,10 @@
  "secret key": "salainen avain",
  "Last completed": "Viimeksi valmistunut",
  "Last restore test": "Viimeisin palautustesti",
- "Last passed": "Viimeksi läpäisty"
+ "Last passed": "Viimeksi läpäisty",
+ "Live check of the counting": "Laskennan livetarkistus",
+ "Show the cameras": "Näytä kamerat",
+ "The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.": "Jokaisen tälle alueelle laskevan kameran livekuva laskentaviivoineen; nuoli osoittaa sisäänpäin. Jokainen ohitus välähdyttää viivaa (sisään vihreä, ulos punainen) ja näkyy kuvan alla olevassa luettelossa, joten voit verrata lukuja näkemääsi. Kuva saapuu yleensä sekunnin tai kaksi laskennan jälkeen.",
+ "since the page was opened": "sivun avaamisesta lähtien",
+ "not counting now": "ei laske nyt"
 }

@@ -165,6 +165,10 @@ viewing follow the camera's own rules (docs/video.md). Inform people about the c
   the occupancy, entrances with their shares, the days before, speed sections (count, average, maximum, over the limit,
   last vehicles, histogram), resets and corrections; sums per site when a site has several areas; export (period table
   of the area: Excel, CSV, PDF).
+- *Live check of the counting* (today, `video.view`, switched on per browser): the live sub-stream of every camera that
+  counts for the area with its lines; each crossing flashes its line (green in, red out) and is listed with its time,
+  line, direction and class, with counts per line since the page was opened. The crossings come from the camera's
+  counting status (`recent`: the last 30, kept in memory), so a person can check the counts by eye.
 - Widgets: *Occupancy*, *In and out per entrance*, *Share per entrance*, *Vehicle speeds* (bind a datastream of the area
   or the section); the occupancy also works with the value, gauge and chart widgets.
 - Period tables: the value `sum` adds passages per hour, day, week, month or year.

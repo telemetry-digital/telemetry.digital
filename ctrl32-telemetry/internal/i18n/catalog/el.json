@@ -3539,5 +3539,10 @@
  "secret key": "μυστικό κλειδί",
  "Last completed": "Τελευταία ολοκληρωμένη",
  "Last restore test": "Τελευταία δοκιμή επαναφοράς",
- "Last passed": "Τελευταία επιτυχής"
+ "Last passed": "Τελευταία επιτυχής",
+ "Live check of the counting": "Ζωντανός έλεγχος της καταμέτρησης",
+ "Show the cameras": "Εμφάνιση καμερών",
+ "The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.": "Η ζωντανή εικόνα κάθε κάμερας που μετρά για αυτή την περιοχή, με τις γραμμές καταμέτρησης· το βέλος δείχνει προς τα μέσα. Κάθε διέλευση αναβοσβήνει τη γραμμή (πράσινο μέσα, κόκκινο έξω) και εμφανίζεται στη λίστα κάτω από την εικόνα, ώστε να συγκρίνετε τις μετρήσεις με όσα βλέπετε. Η εικόνα φτάνει συνήθως ένα με δύο δευτερόλεπτα μετά την καταμέτρηση.",
+ "since the page was opened": "από το άνοιγμα της σελίδας",
+ "not counting now": "δεν μετρά τώρα"
 }

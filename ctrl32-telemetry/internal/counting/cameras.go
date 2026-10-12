@@ -63,8 +63,20 @@ type CameraStatus struct {
 	FPS     float64          `json:"fps,omitempty"`
 	Stream  string           `json:"stream,omitempty"` // codec and size analysed
 	Stats   *analytics.Stats `json:"stats,omitempty"`
+	Recent  []Passage        `json:"recent,omitempty"` // the last crossings, oldest first (live check on the overview)
 	Updated time.Time        `json:"updated,omitzero"`
 }
+
+// Passage is one crossing of a counting line, kept in memory for the live check of a camera.
+type Passage struct {
+	Line  string    `json:"line"`
+	Dir   string    `json:"dir"` // in | out
+	Class string    `json:"cls"`
+	At    time.Time `json:"t"`
+}
+
+// recentPassages is how many crossings a camera's status keeps.
+const recentPassages = 30
 
 type camSpec struct {
 	ID, OrgID, Name, Model string
@@ -486,6 +498,11 @@ func (e *Engine) handleEvent(s camSpec, ev analytics.Event) {
 		if c == nil {
 			return
 		}
+		e.setStatus(s.ID, func(st *CameraStatus) {
+			// a new slice every time: Status hands out copies that share the old one
+			keep := st.Recent[max(0, len(st.Recent)-recentPassages+1):]
+			st.Recent = append(append(make([]Passage, 0, len(keep)+1), keep...), Passage{Line: c.Line, Dir: c.Dir, Class: c.Class, At: c.At})
+		})
 		for _, l := range s.Cfg.Lines {
 			if l.ID == c.Line && l.EntranceID != "" {
 				if err := e.Record(ctx, l.EntranceID, GroupsOf(c.Class), c.Dir, 1, c.At); err != nil {

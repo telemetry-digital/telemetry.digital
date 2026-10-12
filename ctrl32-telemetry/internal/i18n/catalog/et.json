@@ -3539,5 +3539,10 @@
  "secret key": "salavõti",
  "Last completed": "Viimati lõpetatud",
  "Last restore test": "Viimane taastetest",
- "Last passed": "Viimati õnnestunud"
+ "Last passed": "Viimati õnnestunud",
+ "Live check of the counting": "Loenduse otsekontroll",
+ "Show the cameras": "Näita kaameraid",
+ "The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.": "Iga selle ala jaoks loendava kaamera otsepilt koos loendusjoontega; nool näitab sissepoole. Iga läbimine paneb joone vilkuma (sisse roheline, välja punane) ja ilmub pildi all olevasse loendisse, nii et saate arve võrrelda nähtuga. Pilt saabub tavaliselt sekund-paar pärast loendamist.",
+ "since the page was opened": "lehe avamisest saati",
+ "not counting now": "praegu ei loenda"
 }

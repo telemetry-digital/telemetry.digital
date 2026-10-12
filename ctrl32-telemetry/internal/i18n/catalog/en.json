@@ -3539,5 +3539,10 @@
  "secret key": "secret key",
  "Last completed": "Last completed",
  "Last restore test": "Last restore test",
- "Last passed": "Last passed"
+ "Last passed": "Last passed",
+ "Live check of the counting": "Live check of the counting",
+ "Show the cameras": "Show the cameras",
+ "The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.": "The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.",
+ "since the page was opened": "since the page was opened",
+ "not counting now": "not counting now"
 }
