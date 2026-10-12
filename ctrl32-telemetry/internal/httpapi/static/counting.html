@@ -29,8 +29,9 @@
   .oc-sites .badge { font-size: 13px; padding: 3px 10px; }
   .oc-over { color: var(--bad); font-weight: 600; }
   .oc-editor { position: relative; background: #111; border-radius: var(--radius); overflow: hidden; aspect-ratio: 16 / 9; user-select: none; touch-action: none; }
-  .oc-editor img, .oc-editor .oc-live { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
-  .oc-editor svg { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
+  .oc-editor > img, .oc-editor > .oc-live, .oc-editor .oc-live .vp { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
+  .oc-editor > .oc-live { pointer-events: none; } .oc-editor .oc-live .vp video, .oc-editor .oc-live .vp canvas { object-fit: fill; }
+  .oc-editor > svg { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
   .oc-editor .oc-hint { position: absolute; left: 8px; bottom: 8px; background: rgba(0,0,0,.6); color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 12px; pointer-events: none; }
   .oc-line { stroke: #facc15; stroke-width: 3; } .oc-line.sel { stroke: #22d3ee; stroke-width: 4; }
   .oc-end { fill: #fff; stroke: #111; stroke-width: 1.5; cursor: grab; }

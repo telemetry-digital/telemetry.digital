@@ -3544,5 +3544,6 @@
  "Show the cameras": "Zobraziť kamery",
  "The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.": "Živý obraz každej kamery, ktorá počíta pre túto oblasť, s jej čiarami počítania; šípka ukazuje dnu. Každý prechod rozsvieti čiaru (dnu zelene, von červene) a objaví sa v zozname pod obrazom, takže počty môžete porovnať s tým, čo vidíte. Obraz zvyčajne príde sekundu či dve po započítaní.",
  "since the page was opened": "od otvorenia stránky",
- "not counting now": "teraz nepočíta"
+ "not counting now": "teraz nepočíta",
+ "Live video": "Živé video"
 }

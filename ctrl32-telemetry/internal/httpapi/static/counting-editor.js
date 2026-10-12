@@ -9,7 +9,11 @@
   const STATE = { off: ['off', ''], not_installed: ['not installed', 'warn'], waiting: ['waiting for the picture', 'warn'], starting: ['starting', 'warn'], running: ['counting', 'ok'], error: ['error', 'bad'], limit: ['over the camera limit', 'warn'] };
   const VEHICLES = ['car', 'motorcycle', 'bus', 'truck'];
   let CTX = null, CAMS = [], CAM = null, CFG = null, SEL = -1, ADDING = null, POLL = null, RATIO = 16 / 9, SHOW_BOXES = true, BOXES = [];
+  let PLAYER = null, HAVE_PIC = false, FLASH = {}, LAST = 0;
   const W = 1000, H = () => W / RATIO;
+  const store = (k, v) => { try { localStorage.setItem('ctrl32.counting.' + k, v); } catch (e) { /* private mode */ } };
+  const stored = (k) => { try { return localStorage.getItem('ctrl32.counting.' + k); } catch (e) { return null; } };
+  const liveOn = () => stored('editorLive') !== '0'; // the live picture is the default, a still picture on request
   const badge = (st) => { const s = STATE[st.state] || [st.state, '']; return `<span class="badge ${s[1]}">${esc(t(s[0]))}</span>`; };
   const uid = () => Math.random().toString(36).slice(2, 8);
 
@@ -30,14 +34,16 @@
     CAM = c; CFG = JSON.parse(JSON.stringify(c.config || { lines: [] }));
     CFG.lines = CFG.lines || []; CFG.sections = CFG.sections || [];
     SEL = CFG.lines.length ? 0 : -1; ADDING = null;
+    stopLive();
     const card = $('#editorCard'); card.hidden = false;
     const editable = CTX.can('config.write');
     card.innerHTML = `<div class="page-head"><h2 style="margin:0"><span>Counting on</span> <span class="notranslate">${esc(c.camera)}</span></h2><span class="grow"></span>${badge(c.status)}</div>
       <div class="oc-ed-grid">
         <div>
-          <div class="oc-editor" id="ocEd"><img id="ocPic" alt="" hidden><svg id="ocSvg" viewBox="0 0 ${W} ${H()}" preserveAspectRatio="none"></svg><div class="oc-hint" id="ocHint"></div></div>
+          <div class="oc-editor" id="ocEd"><img id="ocPic" alt="" hidden><div class="oc-live" id="ocLive"></div><svg id="ocSvg" viewBox="0 0 ${W} ${H()}" preserveAspectRatio="none"></svg><div class="oc-hint" id="ocHint"></div></div>
           <div class="actions" style="margin-top:8px">
-            <button class="btn small" type="button" id="ocPicBtn">Refresh picture</button>
+            <label class="oc-check"><input type="checkbox" id="ocLiveOn" ${liveOn() ? 'checked' : ''}> Live video</label>
+            <button class="btn small" type="button" id="ocPicBtn"${liveOn() ? ' hidden' : ''}>Refresh picture</button>
             ${editable ? '<button class="btn small" type="button" id="ocAdd">Add line</button><button class="btn small" type="button" id="ocAddSpeed">Add speed section</button>' : ''}
             <label class="oc-check"><input type="checkbox" id="ocBoxes" ${SHOW_BOXES ? 'checked' : ''}> Show detected objects</label>
           </div>
@@ -59,9 +65,10 @@
         </form>`;
     const f = $('#ocForm'); f.model.value = c.model; f.anchor.value = CFG.anchor || 'bottom';
     if (!editable) for (const el of f.elements) el.disabled = el.id !== 'ocClose';
-    $('#ocClose').onclick = () => { card.hidden = true; CAM = null; clearInterval(POLL); history.replaceState(null, '', '/counting/cameras'); };
+    $('#ocClose').onclick = () => { card.hidden = true; CAM = null; clearInterval(POLL); stopLive(); history.replaceState(null, '', '/counting/cameras'); };
     $('#ocBoxes').onchange = (e) => { SHOW_BOXES = e.target.checked; draw(); };
     $('#ocPicBtn').onclick = grab;
+    $('#ocLiveOn').onchange = (e) => { store('editorLive', e.target.checked ? '1' : '0'); $('#ocPicBtn').hidden = e.target.checked; picture(); };
     if (editable) {
       $('#ocAdd').onclick = () => { ADDING = { pts: [] }; hint(t('Click the start (A) of the line on the picture')); };
       $('#ocAddSpeed').onclick = () => {
@@ -73,15 +80,27 @@
       f.onsubmit = save;
     }
     history.replaceState(null, '', '/counting/cameras?camera=' + id);
-    tables(); draw(); status(c.status); grab();
+    FLASH = {}; LAST = Date.now(); HAVE_PIC = false;
+    tables(); draw(); status(c.status); picture();
     clearInterval(POLL);
-    POLL = setInterval(async () => { if (document.hidden || !CAM) return; try { const s = await api('GET', `/api/v1/counting/cameras/${CAM.camera_id}`); status(s.status); } catch (e) { /* keep */ } }, 5000);
+    // with the live video the detected objects and the crossings follow it closely; with a still picture less often
+    let n = 0;
+    POLL = setInterval(async () => {
+      if (document.hidden || !CAM || (!PLAYER && n++ % 5)) return;
+      try { const s = await api('GET', `/api/v1/counting/cameras/${CAM.camera_id}`); if (CAM && s.camera_id === CAM.camera_id) status(s.status); } catch (e) { /* keep */ }
+    }, 1000);
     card.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function status(st) {
     const s = st.stats;
     BOXES = (s && s.boxes) || [];
+    for (const p of st.recent || []) { // crossings since the editor was opened light up their line
+      const at = new Date(p.t).getTime();
+      if (at <= LAST) continue;
+      LAST = at; FLASH[p.line] = { dir: p.dir === 'in' ? 'in' : 'out', at: Date.now() };
+      setTimeout(draw, 1600);
+    }
     const counts = s && s.counts ? Object.entries(s.counts).map(([k, v]) => `${t(CLASS_LABEL[k] || k)} ${nf(v.in || 0)}↓ ${nf(v.out || 0)}↑`).join(', ') : '';
     $('#ocStatus').innerHTML = `<b>State</b><span>${badge(st)} ${st.error ? `<span class="muted">${esc(st.error)}</span>` : ''}</span>` +
       (st.stream ? `<b>Stream analysed</b><span class="notranslate">${esc(st.stream)}</span>` : '') +
@@ -94,7 +113,34 @@
 
   function hint(s) { $('#ocHint').textContent = s || ''; $('#ocHint').hidden = !s; }
 
-  // a picture from the live sub-stream (masks of privacy zones are burnt in like in the player)
+  function picture() { if (liveOn()) live(); else { stopLive(); HAVE_PIC = !$('#ocPic').hidden; draw(); grab(); } }
+
+  // the lines are fractions of the analysed sub-stream: the live video is shown in its own proportions, filled, so
+  // they match; the lines are drawn and edited on top of it
+  function live() {
+    stopLive();
+    $('#ocPic').hidden = true; HAVE_PIC = false;
+    const host = $('#ocLive'), id = CAM.camera_id;
+    const fit = () => {
+      const vp = host.querySelector('.vp'), m = vp && /^(\d+)x(\d+)$/.exec(vp.dataset.size || '');
+      if (!CAM || CAM.camera_id !== id) return;
+      if (m && +m[2]) {
+        if (!HAVE_PIC) hint('');
+        HAVE_PIC = true; RATIO = +m[1] / +m[2];
+        $('#ocEd').style.aspectRatio = `${m[1]} / ${m[2]}`;
+        $('#ocSvg').setAttribute('viewBox', `0 0 ${W} ${H()}`);
+        draw();
+      }
+    };
+    hint(t('Loading the picture…'));
+    PLAYER = ctrl32Player(host, { url: `/api/v1/video/cameras/${id}/live?quality=sub`, live: true, onState: () => setTimeout(fit, 0) });
+  }
+  function stopLive() {
+    if (PLAYER) { try { PLAYER.close(); } catch (e) { /* closed */ } PLAYER = null; }
+    const host = $('#ocLive'); if (host) host.innerHTML = '';
+  }
+
+  // a still picture from the live sub-stream (masks of privacy zones are burnt in like in the player)
   function grab() {
     const host = document.createElement('div');
     host.style.cssText = 'position:absolute;left:-9999px;width:640px;height:360px';
@@ -107,8 +153,9 @@
     const tick = setInterval(() => {
       tries++;
       const c = p.snapshot && p.snapshot();
+      if (PLAYER) { clearInterval(tick); finish(true); return; } // switched to the live video meanwhile
       if (c && c.width) {
-        clearInterval(tick);
+        clearInterval(tick); HAVE_PIC = true;
         const img = $('#ocPic');
         img.src = c.toDataURL('image/jpeg', 0.85); img.hidden = false;
         RATIO = c.width / c.height || 16 / 9;
@@ -129,15 +176,17 @@
     const svg = $('#ocSvg'); if (!svg) return;
     const h = H();
     let g = '';
-    if ($('#ocPic').hidden) for (let i = 1; i < 10; i++) g += `<line x1="${i * W / 10}" y1="0" x2="${i * W / 10}" y2="${h}" stroke="#333"/><line x1="0" y1="${i * h / 10}" x2="${W}" y2="${i * h / 10}" stroke="#333"/>`;
+    const now = Date.now();
+    if (!HAVE_PIC) for (let i = 1; i < 10; i++) g += `<line x1="${i * W / 10}" y1="0" x2="${i * W / 10}" y2="${h}" stroke="#333"/><line x1="0" y1="${i * h / 10}" x2="${W}" y2="${i * h / 10}" stroke="#333"/>`;
     if (SHOW_BOXES) for (const b of BOXES) g += `<rect x="${b[1] * W}" y="${b[2] * h}" width="${(b[3] - b[1]) * W}" height="${(b[4] - b[2]) * h}" class="oc-box${VEHICLES.includes(b[0]) ? ' veh' : ''}"><title>${esc(t(CLASS_LABEL[b[0]] || b[0]))}</title></rect>`;
     CFG.lines.forEach((l, i) => {
       const ax = l.a.x * W, ay = l.a.y * h, bx = l.b.x * W, by = l.b.y * h, mx = (ax + bx) / 2, my = (ay + by) / 2;
       const dx = bx - ax, dy = by - ay, n = Math.hypot(dx, dy) || 1, s = l.in === 'right' ? 1 : -1;
       const nx = -dy / n * s, ny = dx / n * s; // towards the area (the "in" side)
       const tip = [mx + nx * 34, my + ny * 34], b1 = [mx + nx * 12 - dx / n * 10, my + ny * 12 - dy / n * 10], b2 = [mx + nx * 12 + dx / n * 10, my + ny * 12 + dy / n * 10];
-      const sel = i === SEL ? ' sel' : '';
-      g += `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" class="oc-line${sel}" data-line="${i}" style="cursor:pointer"/>`;
+      const sel = i === SEL ? ' sel' : '', f = FLASH[l.id], lit = f && now - f.at < 1500 ? ' ' + f.dir : '';
+      g += `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" class="oc-line${sel}${lit}" data-line="${i}" style="cursor:pointer"/>`;
+      if (lit) g += `<text x="${mx - nx * 40}" y="${my - ny * 40}" text-anchor="middle" class="oc-flash${lit}">${f.dir === 'in' ? '+1 ' + esc(t('in')) : '−1 ' + esc(t('out'))}</text>`;
       g += `<polygon points="${tip.join(',')} ${b1.join(',')} ${b2.join(',')}" class="oc-arrow${sel}"/>`;
       g += `<text x="${ax + 6}" y="${ay - 8}" class="oc-lbl">A · ${esc(l.name)}</text><text x="${bx + 6}" y="${by - 8}" class="oc-lbl">B</text><text x="${tip[0] + 4}" y="${tip[1] + 4}" class="oc-lbl">${esc(t('in'))}</text>`;
       g += `<circle cx="${ax}" cy="${ay}" r="8" class="oc-end" data-end="${i}:a"/><circle cx="${bx}" cy="${by}" r="8" class="oc-end" data-end="${i}:b"/>`;

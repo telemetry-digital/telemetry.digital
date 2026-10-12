@@ -3544,5 +3544,6 @@
  "Show the cameras": "Afficher les caméras",
  "The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.": "L'image en direct de chaque caméra qui compte pour cette zone, avec ses lignes de comptage ; la flèche indique l'intérieur. Chaque passage fait clignoter la ligne (vert entrée, rouge sortie) et s'affiche dans la liste sous l'image, pour comparer les comptes avec ce que vous voyez. L'image arrive en général une ou deux secondes après le comptage.",
  "since the page was opened": "depuis l'ouverture de la page",
- "not counting now": "ne compte pas actuellement"
+ "not counting now": "ne compte pas actuellement",
+ "Live video": "Vidéo en direct"
 }
