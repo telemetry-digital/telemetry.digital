@@ -1,4 +1,4 @@
-# Stav práce (aktualizované 13. 10. 2026, 0.79.0)
+# Stav práce (aktualizované 13. 10. 2026, 0.80.0)
 
 ## Hotové (vo vetve `main`, otestované)
 
@@ -53,6 +53,7 @@
 | 0.78.1 | **Živé video v editore čiar počítania.** *Počítanie objektov → Kamery → Nastaviť* ukazuje živý sub-stream kamery (masky ako v prehrávači) namiesto statickej fotky, čiary sa kreslia a posúvajú priamo nad videom, každý prechod rozsvieti čiaru; „Živé video“ sa dá vypnúť (statická fotka + Obnoviť obraz), voľba sa pamätá v prehliadači. Na žiadosť používateľa z BB | headless Chrome lokálne (camsim: video beží, záblesk, ťahanie bodu, prepnutie na fotku a späť, zatvorenie) |
 | 0.78.2 | **Veľkosť obrazu v editore čiar:** predvolene sa obraz zmestí na výšku okna (55 vh, aj 4:3 kamera bez posúvania stránky), voľba Veľkosť: malé / prispôsobiť obrazovke / celá šírka, pamätá sa v prehliadači; rovnaký limit výšky pre živú kontrolu na prehľade | headless Chrome lokálne (rozmery pre každú voľbu, zapamätanie po obnovení) |
 | 0.79.0 | **Zostať prihlásený na tomto zariadení.** Bezpečnostná politika `remember_device_days` (0 = nepovolené, predvolene; max. 90, s dôvodom, auditované); prihlasovacia stránka ponúkne zaškrtávacie políčko, takéto prihlásenie (MFA sa vyžaduje) platí N dní s trvalým cookie — PWA na mobile sa už neodhlasuje po zatvorení ani po 30 min. Odhlásenie, zablokovanie používateľa alebo zníženie hodnoty ho ukončí (aj pre otvorené relácie); prístupový log zaznamená `remember`. Migrácia 0055 (`core.session.remember`). Na žiadosť používateľa z BB | unit `iam` (nový test), e2e iam v linuxovom kontajneri (44 PASS vrátane MFA a trvalého cookie), headless Chrome lokálne (prihlasovacia stránka, nastavenie politiky) |
+| 0.80.0 | **Aplikácie (PWA): „Len na prezeranie“ a bez záložiek na mobile.** Voľba aplikácie `view_only` (migrácia 0056, predvolene vypnutá, predvoľba Kamery ju zapína): vynechá správu kamier, nastavenia kamier a nastavenie počítania (menu, záložky, odkazy, priamy prístup → úvodná stránka) aj úpravu video stien. Na mobile aplikácia nezobrazuje horné záložky stránky (sú v menu). Na žiadosť používateľa z BB | unit `httpapi` (kontrolný súčet starých verzií sa nemení), headless Chrome lokálne (390 px a 1000 px: záložky, menu, presmerovanie, video steny) |
 | 0.63.2 | Úvodná stránka portálu = prihlásenie s krátkou ukážkou možností (Zariadenia a dáta, Dashboardy a SCADA, Video NVR, Energie a reporty, Automatizácia a AI; 19 jazykov), menu bez zaoblení | headless `front_page`, e2e `landing`, `i18n_auth` |
 
 Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (`tests/run-all.sh`) pre 0.54.0 (27. 9. 2026): všetko prešlo okrem 3 kontrol času NTP v `ops`, ktoré potrebujú internet (v tomto kontajneri nedostupný) — nesúvisí s kódom.
