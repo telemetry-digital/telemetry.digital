@@ -242,7 +242,7 @@ function renderWalls() {
   $('#walls tbody').innerHTML = WALLS.map(w => `<tr><td class="notranslate"><a href="/video/walls/${w.id}">${esc(w.name)}</a></td>
     <td>${w.screens.map((s, i) => `<a href="/video/walls/${w.id}?screen=${i}" title="${esc(s.name || t('Screen') + ' ' + (i + 1))}">${preview(s)}</a> `).join('')}</td><td>${wallCams(w)}</td>
     <td class="actions-cell"><button class="btn small" data-open="${w.id}" type="button">Open on all monitors</button>
-    ${can('video.manage') ? `<button class="btn small" data-edit="${w.id}" type="button">Edit</button><button class="btn small" data-del="${w.id}" type="button">Delete</button>` : ''}</td></tr>`).join('');
+    ${can('video.manage') && !viewOnly() ? `<button class="btn small" data-edit="${w.id}" type="button">Edit</button><button class="btn small" data-del="${w.id}" type="button">Delete</button>` : ''}</td></tr>`).join('');
   for (const b of document.querySelectorAll('[data-open]')) b.onclick = () => openAll(WALLS.find(w => w.id === b.dataset.open));
   for (const b of document.querySelectorAll('[data-edit]')) b.onclick = () => wallDialog(WALLS.find(w => w.id === b.dataset.edit));
   for (const b of document.querySelectorAll('[data-del]')) b.onclick = async () => {
@@ -523,6 +523,8 @@ $('#wallForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $
     else await api('POST', '/api/v1/video/walls', {name: f.name.value, screens, reason: f.reason.value});
     $('#wallDlg').close(); ctrl32.toast(t('video wall saved'), 'ok'); load(); } catch (x) { $('#wallErr').textContent = x.message; } };
 
+// a view-only app (watching, controlling, playing back) offers no editing of walls and cameras
+const viewOnly = () => !!(ctrl32.app && ctrl32.app.view_only);
 // ---- evidence (spec 015) ----
 async function loadEvidence() {
   try {
@@ -606,12 +608,12 @@ ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(({me}) => {
   ME = me;
   applyLayout(); // the app profile is known now
   SECTION = ctrl32.section('live', ['live', 'walls', 'manage', 'evidence', 'settings']);
-  $('#manageTab').hidden = !can('video.manage');
-  $('#settingsTab').hidden = !can('video.manage');
+  $('#manageTab').hidden = !can('video.manage') || !ctrl32.appAllows('/video/manage'); // a view-only app leaves out the settings pages
+  $('#settingsTab').hidden = !can('video.manage') || !ctrl32.appAllows('/video/settings');
   $('#evidenceTab').hidden = !can('video.playback');
   $('#addCam').hidden = !(can('video.manage') && SECTION === 'manage');
   $('#invCred').hidden = !can('video.credentials_export');
-  $('#addWall').hidden = !(can('video.manage') && SECTION === 'walls');
+  $('#addWall').hidden = !(can('video.manage') && !viewOnly() && SECTION === 'walls');
   $('#addCam').onclick = () => camDialog(null);
   $('#addWall').onclick = () => wallDialog(null);
   load(); setInterval(() => { if (!document.hidden) refreshStatus(); }, 5000);

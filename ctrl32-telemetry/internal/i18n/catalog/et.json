@@ -3550,5 +3550,8 @@
  "Stay signed in on this device": "Jää selles seadmes sisselogituks",
  "Stay signed in on a device (days, 0 = not allowed)": "Jää seadmes sisselogituks (päevad, 0 = pole lubatud)",
  "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.": "Kui väärtus on üle 0, pakub sisselogimisleht valikut „Jää selles seadmes sisselogituks“: selline sisselogimine kehtib nii mitu päeva, ka pärast brauseri või paigaldatud rakenduse (PWA) sulgemist. Kaheastmeline autentimine on sisselogimisel endiselt nõutav; väljalogimine, kasutaja keelamine või siin 0 lõpetab selle. Kasutage ainult ekraanilukuga isiklikes seadmetes.",
- "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Ilma selleta lõpeb sisselogimine pärast {idle} min tegevusetust, hiljemalt {abs} h pärast."
+ "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Ilma selleta lõpeb sisselogimine pärast {idle} min tegevusetust, hiljemalt {abs} h pärast.",
+ "View only — no pages for configuring": "Ainult vaatamiseks — ilma seadistuslehtedeta",
+ "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "Vaatamiseks, juhtimiseks ja taasesituseks: rakendus jätab välja kaamerate halduse, kaamerate seaded ja objektide loendamise seadistuse. See piirab rakenduse ekraane, mitte kasutaja õigusi.",
+ "view only": "ainult vaatamiseks"
 }

@@ -3550,5 +3550,8 @@
  "Stay signed in on this device": "Залишатися в системі на цьому пристрої",
  "Stay signed in on a device (days, 0 = not allowed)": "Залишатися в системі на пристрої (дні, 0 = заборонено)",
  "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.": "Якщо більше 0, сторінка входу пропонує «Залишатися в системі на цьому пристрої»: такий вхід діє стільки днів, також після закриття браузера чи встановленого застосунку (PWA). Двофакторна автентифікація під час самого входу й надалі обов’язкова; вихід, вимкнення користувача або 0 тут його завершують. Використовуйте лише на особистих пристроях із блокуванням екрана.",
- "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Без цього вхід завершується після {idle} хв бездіяльності, не пізніше ніж через {abs} год."
+ "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Без цього вхід завершується після {idle} хв бездіяльності, не пізніше ніж через {abs} год.",
+ "View only — no pages for configuring": "Лише перегляд — без сторінок налаштування",
+ "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "Для перегляду, керування та відтворення: застосунок пропускає керування камерами, налаштування камер і налаштування підрахунку об’єктів. Це обмежує екрани застосунку, а не права користувача.",
+ "view only": "лише перегляд"
 }

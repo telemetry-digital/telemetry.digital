@@ -132,16 +132,20 @@
     reports: ['/reports'],
   };
   const APP_ALWAYS = ['/login', '/forgot', '/reset', '/account/security', '/license'];
+  // View-only app (0.80.0): the pages that configure are left out (for watching, controlling and playing back)
+  const APP_CONFIG = ['/video/manage', '/video/settings', '/counting/areas', '/counting/cameras', '/counting/sensors'];
   const pathIn = (p, list) => list.some((x) => p === x || (x !== '/' && p.startsWith(x + '/')));
   function appAllows(path) {
-    if (!app || !app.locked) return true;
+    if (!app) return true;
     path = path.replace(/\/+$/, '') || '/';
     if (path === (app.start_url || '/').split('?')[0] || path === '/app/' + app.slug || pathIn(path, APP_ALWAYS)) return true;
+    if (app.view_only && pathIn(path, APP_CONFIG)) return false;
+    if (!app.locked) return true;
     return (app.sections || []).some((s) => pathIn(path, APP_PATHS[s] || []));
   }
-  // a page outside a locked app: its start page instead (true when leaving)
+  // a page outside a locked app (or a settings page of a view-only one): its start page instead (true when leaving)
   function confine() {
-    if (!app || !app.locked || appAllows(location.pathname)) return false;
+    if (!app || appAllows(location.pathname)) return false;
     location.replace(app.start_url || '/');
     return true;
   }
@@ -173,9 +177,9 @@
   const inPlayer = (t) => !!(t && t.closest && t.closest('.vp'));
   for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => { if (noPageZoom() && !inPlayer(e.target)) e.preventDefault(); }, { passive: false });
   document.addEventListener('touchmove', (e) => { if (noPageZoom() && e.touches.length > 1 && !inPlayer(e.target)) e.preventDefault(); }, { passive: false });
-  // links out of a locked app go to its start page without loading the other page first
+  // links out of a locked app (or to a settings page of a view-only one) go to its start page without loading it first
   document.addEventListener('click', (e) => {
-    if (!app || !app.locked || e.defaultPrevented) return;
+    if (!app || e.defaultPrevented) return;
     const a = e.target.closest && e.target.closest('a[href]');
     if (!a || (a.target && a.target !== '_self')) return;
     let u; try { u = new URL(a.href, location.href); } catch (x) { return; }
@@ -352,7 +356,7 @@
       ${me ? '' : langSwitcher('langTop')}
     </div>`;
     // a locked app shows no in-page links out of it either (sub-navigation of a page, e.g. My account)
-    if (locked()) for (const a of document.querySelectorAll('.subnav a[href]')) if (!appAllows(new URL(a.href, location.href).pathname)) a.hidden = true;
+    if (app) for (const a of document.querySelectorAll('.subnav a[href]')) if (!appAllows(new URL(a.href, location.href).pathname)) a.hidden = true;
     // page tabs follow the menu: a tab whose sub-page the menu hides for this user is hidden too
     if (me) { const denied = deniedPages(); for (const a of document.querySelectorAll('.subnav:not(#tabs) a[href]')) if (denied.has(a.getAttribute('href'))) a.hidden = true; }
     // Desktop: the bug button lives in its own strip at the top of the page (in flow, sticky), never over page buttons.
@@ -616,7 +620,7 @@
   }
   if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyMode);
   applyMode();
-  window.ctrl32 = { ready, loadBranding, loadMe, api, logout, toggleMode, can, esc, section, t, ask, confirm: confirmAsk, setLocale, get locale() { return locale; }, get langs() { return langs; }, get brand() { return brand; }, get me() { return me; }, get csrf() { return csrf; }, get app() { return app; }, home, enterApp, ICON,
+  window.ctrl32 = { ready, loadBranding, loadMe, api, logout, toggleMode, can, esc, section, t, appAllows, ask, confirm: confirmAsk, setLocale, get locale() { return locale; }, get langs() { return langs; }, get brand() { return brand; }, get me() { return me; }, get csrf() { return csrf; }, get app() { return app; }, home, enterApp, ICON,
     fmt: (t) => (t ? new Date(t).toLocaleString(document.documentElement.lang || undefined) : '—'), toast, openSearch };
   function toast(msg, kind) {
     let t = $('#toast');

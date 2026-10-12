@@ -3550,5 +3550,8 @@
  "Stay signed in on this device": "Aangemeld blijven op dit apparaat",
  "Stay signed in on a device (days, 0 = not allowed)": "Aangemeld blijven op een apparaat (dagen, 0 = niet toegestaan)",
  "When above 0, the sign-in page offers “Stay signed in on this device”: such a sign-in lasts this many days, also after the browser or the installed app (PWA) is closed. Two-factor authentication is still required at the sign-in itself; signing out, disabling the user or setting 0 here ends it. Use only for personal devices with a screen lock.": "Boven 0 biedt de aanmeldpagina „Aangemeld blijven op dit apparaat” aan: zo’n aanmelding duurt zoveel dagen, ook nadat de browser of de geïnstalleerde app (PWA) is gesloten. Tweestapsverificatie blijft vereist bij het aanmelden zelf; afmelden, de gebruiker uitschakelen of hier 0 instellen beëindigt het. Alleen gebruiken op persoonlijke apparaten met schermvergrendeling.",
- "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Zonder dit eindigt een aanmelding na {idle} min zonder activiteit, uiterlijk na {abs} u."
+ "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Zonder dit eindigt een aanmelding na {idle} min zonder activiteit, uiterlijk na {abs} u.",
+ "View only — no pages for configuring": "Alleen bekijken — geen instellingspagina’s",
+ "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "Om te bekijken, te bedienen en af te spelen: de app laat het camerabeheer, de camera-instellingen en de inrichting van het tellen van objecten weg. Dit beperkt de schermen van de app, niet de rechten van de gebruiker.",
+ "view only": "alleen bekijken"
 }
