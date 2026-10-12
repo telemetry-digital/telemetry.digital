@@ -44,8 +44,9 @@ tracker follows them and a crossing counts when a confirmed object (seen 3 times
 to the other through the drawn segment, once per object and line. Objects coming into view at the picture border are
 ignored until they are fully visible. The moment of a crossing is interpolated between pictures.
 
-**No picture is stored or leaves the worker** — only the numbers. The editor shows a picture taken in the browser from
-the live view (privacy masks burnt in) and the boxes of the last analysed picture.
+**No picture is stored or leaves the worker** — only the numbers. The editor shows the live sub-stream in the browser
+(privacy masks like in the player; `video.view`), or on request a still picture taken from it, with the lines on top,
+the boxes of the last analysed picture and a flash of each line crossed since the editor was opened (from `recent`).
 
 ### Sensors: the device protocol
 

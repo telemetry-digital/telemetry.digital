@@ -3544,5 +3544,6 @@
  "Show the cameras": "Afișează camerele",
  "The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.": "Imaginea în direct a fiecărei camere care numără pentru această zonă, cu liniile ei de numărare; săgeata arată spre interior. Fiecare trecere face linia să clipească (verde intrare, roșu ieșire) și apare în lista de sub imagine, ca să comparați numerele cu ce vedeți. Imaginea sosește de obicei la o secundă-două după numărare.",
  "since the page was opened": "de la deschiderea paginii",
- "not counting now": "nu numără acum"
+ "not counting now": "nu numără acum",
+ "Live video": "Video în direct"
 }

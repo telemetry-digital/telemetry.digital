@@ -3544,5 +3544,6 @@
  "Show the cameras": "Покажи камерите",
  "The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.": "Живият образ на всяка камера, която брои за тази зона, с линиите ѝ за преброяване; стрелката сочи навътре. Всяко преминаване осветява линията (навътре в зелено, навън в червено) и се появява в списъка под образа, за да сравните броя с това, което виждате. Образът обикновено идва секунда-две след преброяването.",
  "since the page was opened": "откакто страницата е отворена",
- "not counting now": "в момента не брои"
+ "not counting now": "в момента не брои",
+ "Live video": "Видео на живо"
 }
