@@ -3539,5 +3539,10 @@
  "secret key": "hemlig nyckel",
  "Last completed": "Senast slutförd",
  "Last restore test": "Senaste återställningstest",
- "Last passed": "Senast godkänt"
+ "Last passed": "Senast godkänt",
+ "Live check of the counting": "Livekontroll av räkningen",
+ "Show the cameras": "Visa kamerorna",
+ "The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.": "Livebilden från varje kamera som räknar för detta område, med dess räknelinjer; pilen pekar inåt. Varje passage får linjen att lysa (grönt in, rött ut) och visas i listan under bilden, så att du kan jämföra siffrorna med det du ser. Bilden kommer oftast en eller två sekunder efter räkningen.",
+ "since the page was opened": "sedan sidan öppnades",
+ "not counting now": "räknar inte nu"
 }

@@ -3539,5 +3539,10 @@
  "secret key": "tajný klíč",
  "Last completed": "Poslední dokončená",
  "Last restore test": "Poslední test obnovy",
- "Last passed": "Naposledy úspěšný"
+ "Last passed": "Naposledy úspěšný",
+ "Live check of the counting": "Živá kontrola počítání",
+ "Show the cameras": "Zobrazit kamery",
+ "The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.": "Živý obraz každé kamery, která počítá pro tuto oblast, s jejími čarami počítání; šipka ukazuje dovnitř. Každý průchod rozsvítí čáru (dovnitř zeleně, ven červeně) a objeví se v seznamu pod obrazem, takže počty můžete porovnat s tím, co vidíte. Obraz obvykle dorazí sekundu či dvě po započítání.",
+ "since the page was opened": "od otevření stránky",
+ "not counting now": "nyní nepočítá"
 }

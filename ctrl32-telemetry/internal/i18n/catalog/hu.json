@@ -3539,5 +3539,10 @@
  "secret key": "titkos kulcs",
  "Last completed": "Utolsó befejezett",
  "Last restore test": "Utolsó visszaállítási teszt",
- "Last passed": "Utoljára sikeres"
+ "Last passed": "Utoljára sikeres",
+ "Live check of the counting": "A számlálás élő ellenőrzése",
+ "Show the cameras": "Kamerák megjelenítése",
+ "The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.": "A területre számláló összes kamera élő képe a számlálóvonalakkal; a nyíl befelé mutat. Minden áthaladás felvillantja a vonalat (be zöld, ki piros), és megjelenik a kép alatti listában, így a számokat összevetheti azzal, amit lát. A kép általában egy-két másodperccel a számlálás után érkezik.",
+ "since the page was opened": "az oldal megnyitása óta",
+ "not counting now": "most nem számlál"
 }

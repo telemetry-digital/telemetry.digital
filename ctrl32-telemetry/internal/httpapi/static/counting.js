@@ -70,7 +70,7 @@
       $('#tCapText').textContent = isToday ? `${nf(pct, 0)} % · ${t('capacity')} ${nf(cap)}` : '';
     } else $('#tCapText').textContent = '';
     $('#clampNote').hidden = !isToday || !((a.clamped || {})[g] > 0);
-    hourChart(); dayChart(); entrances(); speeds();
+    hourChart(); dayChart(); entrances(); speeds(); liveCheck(isToday);
     $('#correctBtn').hidden = !can('config.write') || !isToday;
     $('#alarmBtn').hidden = !can('config.write') || !d.datastreams[g + '_occupancy'];
   }
@@ -134,6 +134,92 @@
         <p class="muted small">An indicative measurement from the camera picture (accuracy depends on the frame rate, the camera angle and the measured distance), not a certified speed measurement; no number plates or persons are recorded.</p></div>`;
     }).join('');
   }
+
+  // ---- live check: the live picture of the area's counting cameras with their lines; every crossing (from the
+  // camera's counting status, polled) flashes its line and goes to the list, so a person can check the counts by eye
+  const LIVE = { key: '', cams: [], players: [], poll: null, last: {}, opened: 0 };
+  function stopLive() {
+    clearInterval(LIVE.poll); LIVE.poll = null;
+    for (const p of LIVE.players) { try { p.close(); } catch (e) { /* closed */ } }
+    LIVE.players = []; LIVE.cams = []; LIVE.key = '';
+    $('#liveGrid').innerHTML = '';
+  }
+  async function liveCheck(isToday) {
+    const card = $('#liveCard');
+    const a = AREAS.find((x) => x.id === (AREA && AREA.id));
+    if (!a || !isToday || !can('video.view')) { card.hidden = true; stopLive(); return; }
+    let cams = [];
+    try {
+      const ents = new Set((a.entrances || []).map((e) => e.id));
+      cams = (await api('GET', '/api/v1/counting/cameras')).filter((c) => c.enabled && c.camera_enabled && ((c.config || {}).lines || []).some((l) => ents.has(l.entrance_id)));
+    } catch (x) { cams = []; }
+    card.hidden = !cams.length;
+    const on = $('#liveOn').checked = stored('live') === '1';
+    $('#liveOn').onchange = (e) => { store('live', e.target.checked ? '1' : '0'); stopLive(); liveCheck(true); };
+    const key = a.id + '|' + cams.map((c) => c.camera_id + JSON.stringify(c.config)).join('|');
+    if (!on || !cams.length) { stopLive(); return; }
+    if (LIVE.key === key) return; // already showing these cameras
+    stopLive();
+    LIVE.key = key; LIVE.cams = cams; LIVE.last = {}; LIVE.opened = Date.now();
+    $('#liveGrid').innerHTML = cams.map((c) => `<div data-live="${c.camera_id}"><div class="muted notranslate" style="margin-bottom:4px">${esc(c.camera)}</div>
+      <div class="oc-lc-stage"><div class="oc-lc-video"></div><svg viewBox="0 0 1000 562.5" preserveAspectRatio="none"></svg></div>
+      <div class="oc-lc-counts"></div><ul class="oc-lc-list"><li class="muted">${esc(t('nothing yet'))}</li></ul></div>`).join('');
+    for (const c of cams) {
+      const stage = document.querySelector(`[data-live="${c.camera_id}"] .oc-lc-stage`);
+      c.ratio = 16 / 9; c.flash = {}; c.counts = {};
+      // the lines are fractions of the analysed sub-stream: show it in its own proportions, filled, so they match
+      const fit = () => {
+        const vp = stage.querySelector('.vp'), m = vp && /^(\d+)x(\d+)$/.exec(vp.dataset.size || '');
+        if (m && +m[2]) { c.ratio = +m[1] / +m[2]; stage.style.aspectRatio = `${m[1]} / ${m[2]}`; drawLive(c); }
+      };
+      LIVE.players.push(ctrl32Player(stage.querySelector('.oc-lc-video'), { url: `/api/v1/video/cameras/${c.camera_id}/live?quality=sub`, live: true, onState: () => setTimeout(fit, 0) }));
+      drawLive(c);
+    }
+    pollLive();
+    LIVE.poll = setInterval(() => { if (!document.hidden) pollLive(); }, 1500);
+  }
+  function drawLive(c) {
+    const el = document.querySelector(`[data-live="${c.camera_id}"]`); if (!el) return;
+    const W = 1000, h = W / c.ratio, now = Date.now(), svg = el.querySelector('.oc-lc-stage > svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${h}`);
+    let g = '';
+    for (const l of c.config.lines || []) {
+      const ax = l.a.x * W, ay = l.a.y * h, bx = l.b.x * W, by = l.b.y * h, mx = (ax + bx) / 2, my = (ay + by) / 2;
+      const dx = bx - ax, dy = by - ay, n = Math.hypot(dx, dy) || 1, s = l.in === 'right' ? 1 : -1;
+      const nx = -dy / n * s, ny = dx / n * s; // towards the area (the "in" side)
+      const tip = [mx + nx * 34, my + ny * 34], b1 = [mx + nx * 12 - dx / n * 10, my + ny * 12 - dy / n * 10], b2 = [mx + nx * 12 + dx / n * 10, my + ny * 12 + dy / n * 10];
+      const f = c.flash[l.id], lit = f && now - f.at < 1500 ? ' ' + f.dir : '';
+      g += `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" class="oc-line${lit}"/><polygon points="${tip.join(',')} ${b1.join(',')} ${b2.join(',')}" class="oc-arrow"/>`;
+      g += `<text x="${ax + 6}" y="${ay - 8}" class="oc-lbl">${esc(l.name)}</text><text x="${tip[0] + 4}" y="${tip[1] + 4}" class="oc-lbl">${esc(t('in'))}</text>`;
+      if (lit) g += `<text x="${mx - nx * 40}" y="${my - ny * 40}" text-anchor="middle" class="oc-flash${lit}">${f.dir === 'in' ? '+1 ' + esc(t('in')) : '−1 ' + esc(t('out'))}</text>`;
+    }
+    svg.innerHTML = g;
+    el.querySelector('.oc-lc-counts').innerHTML = (c.config.lines || []).map((l) => {
+      const k = c.counts[l.id] || { in: 0, out: 0 };
+      return `<span><span class="notranslate">${esc(l.name)}</span>: <b>${nf(k.in)}</b> ${esc(t('in'))} · <b>${nf(k.out)}</b> ${esc(t('out'))}</span>`;
+    }).join('') + `<span class="muted small">${esc(t('since the page was opened'))}</span>`;
+  }
+  async function pollLive() {
+    for (const c of LIVE.cams) {
+      let st;
+      try { st = (await api('GET', `/api/v1/counting/cameras/${c.camera_id}`)).status || {}; } catch (x) { continue; }
+      const el = document.querySelector(`[data-live="${c.camera_id}"]`); if (!el) return; // stopped meanwhile
+      const recent = st.recent || [], names = Object.fromEntries((c.config.lines || []).map((l) => [l.id, l.name]));
+      const last = LIVE.last[c.camera_id];
+      for (const p of recent) {
+        const at = new Date(p.t).getTime();
+        if (last == null ? at < LIVE.opened : at <= last) continue;
+        const dir = p.dir === 'in' ? 'in' : 'out';
+        (c.counts[p.line] = c.counts[p.line] || { in: 0, out: 0 })[dir]++;
+        c.flash[p.line] = { dir, at: Date.now() };
+        setTimeout(() => drawLive(c), 1600);
+      }
+      LIVE.last[c.camera_id] = Math.max(last || LIVE.opened, ...recent.map((p) => new Date(p.t).getTime()));
+      el.querySelector('.oc-lc-list').innerHTML = recent.slice().reverse().slice(0, 20).map((p) => `<li>${esc(fmtTz(p.t, { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }))} · <span class="notranslate">${esc(names[p.line] || p.line)}</span> · <span class="${p.dir === 'in' ? 'in' : 'out'}">${esc(t(p.dir === 'in' ? 'in' : 'out'))}</span> · ${esc(t(CLASS_LABEL[p.cls] || p.cls))}</li>`).join('') || `<li class="muted">${esc(t(st.state === 'running' ? 'nothing yet' : 'not counting now'))}</li>`;
+      drawLive(c);
+    }
+  }
+
   function shiftDay(n) {
     const d = DATE ? new Date(DATE + 'T12:00:00') : new Date();
     d.setDate(d.getDate() + n);
@@ -270,6 +356,7 @@
     await loadAreas();
     const sec = ctrl32.section('overview', ['overview', 'areas', 'cameras', 'sensors']);
     if (sec === 'overview') { renderSites(); fillAreaSelect(); if (AREA) await loadSummary(); }
+    if (sec !== 'overview') stopLive();
     if (sec === 'areas') renderAreas();
     if (sec === 'sensors') loadInputs();
     if (sec === 'cameras' && window.ctrl32Counting) window.ctrl32Counting.cameras({ areas: AREAS, classes: CLASSES, installed: INSTALLED, note: INSTALL_NOTE, can });

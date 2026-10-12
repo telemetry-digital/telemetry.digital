@@ -3539,5 +3539,10 @@
  "secret key": "hemmelig nøkkel",
  "Last completed": "Sist fullført",
  "Last restore test": "Siste gjenopprettingstest",
- "Last passed": "Sist bestått"
+ "Last passed": "Sist bestått",
+ "Live check of the counting": "Live kontroll av tellingen",
+ "Show the cameras": "Vis kameraene",
+ "The live picture of each camera that counts for this area, with its counting lines; the arrow points inwards. Every crossing flashes the line (green in, red out) and appears in the list below the picture, so you can compare the counts with what you see. The picture usually arrives a second or two after the count.": "Livebildet fra hvert kamera som teller for dette området, med tellelinjene; pilen peker innover. Hver passering får linjen til å lyse (grønt inn, rødt ut) og vises i listen under bildet, slik at du kan sammenligne tallene med det du ser. Bildet kommer vanligvis et par sekunder etter tellingen.",
+ "since the page was opened": "siden siden ble åpnet",
+ "not counting now": "teller ikke nå"
 }
