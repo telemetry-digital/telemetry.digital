@@ -218,7 +218,8 @@ let CAMS = [], WALLS = [], ME = null, players = [], SECTION = 'live';
 const LAYOUTS = [[1, 1], [2, 1], [2, 2], [3, 2], [3, 3], [4, 3], [4, 4], [5, 4], [6, 4], [6, 5], [8, 5], [8, 6]];
 const can = p => !!(ME && (ME.permissions || []).includes(p));
 const fmtBytes = b => b >= 1 << 30 ? (b / (1 << 30)).toFixed(1) + ' GB' : b >= 1 << 20 ? (b / (1 << 20)).toFixed(0) + ' MB' : Math.round(b / 1024) + ' kB';
-const dot = st => `<span class="cam-dot ${st.recording ? 'rec' : st.state === 'online' ? 'online' : st.state === 'offline' ? 'offline' : ''}" title="${esc(t(st.recording ? 'recording' : st.state))}"></span>`;
+// green = works (ring: also records), red only when the camera is down
+const dot = st => `<span class="cam-dot ${st.state === 'offline' ? 'offline' : st.recording ? 'rec' : st.state === 'online' ? 'online' : ''}" title="${esc(t(st.state === 'offline' ? 'offline' : st.recording ? 'recording' : st.state))}"></span>`;
 
 function stopPlayers() { for (const p of players) p.close(); players = []; }
 function renderLive() {
@@ -230,7 +231,7 @@ function renderLive() {
   for (const el of g.querySelectorAll('.cam-tile')) {
     const cam = CAMS.find(c => c.id === el.dataset.id);
     const p = ctrl32Player(el, {url: `/api/v1/video/cameras/${el.dataset.id}/live?quality=sub`, live: true, stats: $('#tileStats').checked,
-      onState: s => { if (!cam.status.recording) el.querySelector('.cam-dot').className = 'cam-dot ' + (s === 'online' ? 'online' : s === 'offline' ? 'offline' : ''); }});
+      onState: s => { const d = el.querySelector('.cam-dot'); if (s === 'online') d.className = 'cam-dot ' + (cam.status.recording ? 'rec' : 'online'); else if (s === 'offline') d.className = 'cam-dot offline'; }});
     el.prepend(p.el); players.push(p);
     el.onclick = () => { location.href = '/video/cameras/' + el.dataset.id; };
   }

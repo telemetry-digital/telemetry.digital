@@ -615,12 +615,32 @@
       return r;
     });
   }
+  // Full screen that works everywhere (0.81.0): the Fullscreen API where the browser has it for any element (Android,
+  // computers, iPad), otherwise (iPhone: only a <video> could go full screen natively, without the privacy masks drawn
+  // over it) the element fills the window itself. On a phone the picture turns to landscape where the browser allows it.
+  const fsCur = () => document.fullscreenElement || document.webkitFullscreenElement || document.querySelector('.pseudo-fs');
+  function fullscreen(el) {
+    const cur = fsCur();
+    if (cur) {
+      if (cur.classList.contains('pseudo-fs')) { cur.classList.remove('pseudo-fs'); document.documentElement.classList.remove('has-pseudo-fs'); window.dispatchEvent(new Event('resize')); } else (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      return;
+    }
+    const pseudo = () => { if (el === document.documentElement) return; el.classList.add('pseudo-fs'); document.documentElement.classList.add('has-pseudo-fs'); window.dispatchEvent(new Event('resize')); };
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (!req) { pseudo(); return; }
+    try {
+      const r = req.call(el);
+      const turn = () => { try { if (window.matchMedia('(pointer: coarse)').matches && screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); } catch (e) { /* not allowed */ } };
+      if (r && r.then) r.then(turn, pseudo); else turn();
+    } catch (e) { pseudo(); }
+  }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const p = document.querySelector('.pseudo-fs'); if (p) fullscreen(p); } });
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
   }
   if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyMode);
   applyMode();
-  window.ctrl32 = { ready, loadBranding, loadMe, api, logout, toggleMode, can, esc, section, t, appAllows, ask, confirm: confirmAsk, setLocale, get locale() { return locale; }, get langs() { return langs; }, get brand() { return brand; }, get me() { return me; }, get csrf() { return csrf; }, get app() { return app; }, home, enterApp, ICON,
+  window.ctrl32 = { ready, loadBranding, loadMe, api, logout, toggleMode, can, esc, section, t, appAllows, fullscreen, isFullscreen: () => !!fsCur(), ask, confirm: confirmAsk, setLocale, get locale() { return locale; }, get langs() { return langs; }, get brand() { return brand; }, get me() { return me; }, get csrf() { return csrf; }, get app() { return app; }, home, enterApp, ICON,
     fmt: (t) => (t ? new Date(t).toLocaleString(document.documentElement.lang || undefined) : '—'), toast, openSearch };
   function toast(msg, kind) {
     let t = $('#toast');

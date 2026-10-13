@@ -24,6 +24,11 @@
     box.innerHTML = '<div class="vp-stage"><video muted playsinline autoplay disablepictureinpicture></video><canvas hidden></canvas><svg class="vp-mask" hidden aria-hidden="true"></svg></div><div class="vp-msg" hidden></div><div class="vp-zoom" hidden></div><div class="vp-stats notranslate" hidden></div>';
     host.appendChild(box);
     const video = box.querySelector('video'), canvas = box.querySelector('canvas'), msg = box.querySelector('.vp-msg'), stage = box.querySelector('.vp-stage'), zlabel = box.querySelector('.vp-zoom');
+    // the video stays invisible until it shows a picture (no play glyph of the browser meanwhile); a tap starts a
+    // picture the browser did not start by itself (iPhone in low power mode)
+    video.classList.add('vp-wait');
+    for (const ev of ['playing', 'seeked']) video.addEventListener(ev, () => video.classList.remove('vp-wait'));
+    box.addEventListener('click', () => { if (!video.hidden && video.paused && opts.live) video.play().catch(() => {}); });
     // stream information: what arrives from the camera (codec, size, frames per second, kbit/s)
     const statsEl = box.querySelector('.vp-stats'); let statsOn = !!opts.stats, lastStats = null;
     function drawStats() {

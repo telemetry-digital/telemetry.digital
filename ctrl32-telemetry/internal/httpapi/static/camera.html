@@ -182,7 +182,7 @@ $('#bSnap').onclick = async () => {
 // sound: switching it on reconnects with the sound (the main stream); off reconnects without it
 $('#bSound').onclick = () => { SOUND = !SOUND; if (MODE === 'live') live(); else if (CUR) playFrom(CUR); ui(); };
 $('#bInfo').onclick = () => { STATS = !STATS; try { localStorage.setItem('ctrl32.video.stats', STATS ? '1' : '0'); } catch (x) { /* ignore */ } if (P) P.stats(STATS); ui(); };
-$('#bFull').onclick = () => { const s = $('#player'); if (document.fullscreenElement) document.exitFullscreen(); else s.requestFullscreen().catch(() => {}); };
+$('#bFull').onclick = () => ctrl32.fullscreen($('#player'));
 $('#quality').onchange = live;
 // the player and its buttons are controls: a long press opens no browser menu (the lists keep theirs)
 $('#player').addEventListener('contextmenu', e => { if (!e.target.closest('select')) e.preventDefault(); });

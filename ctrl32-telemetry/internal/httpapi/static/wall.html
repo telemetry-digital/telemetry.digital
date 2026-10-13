@@ -72,7 +72,7 @@ for (const b of document.querySelectorAll('#camLayout [data-layout]')) { b.inner
 addEventListener('resize', applyLayout);
 applyLayout();
 $('#screen').onchange = e => { SCREEN = +e.target.value; const u = new URL(location.href); u.searchParams.set('screen', SCREEN); history.replaceState(null, '', u); render(); };
-$('#fs').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); };
+$('#fs').onclick = () => ctrl32.fullscreen(document.documentElement);
 $('#all').onclick = async () => {
   let screens = null;
   try { if ('getScreenDetails' in window) screens = (await window.getScreenDetails()).screens; } catch (e) { screens = null; }
@@ -101,7 +101,7 @@ ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(async () => {
       const a = c.status.active || []; el.classList.toggle('cam-alert', a.length > 0); el.dataset.active = a.map(k => t(k)).join(', '); } } catch (x) { /* next time */ }
   }, 3000);
   // opened by "Open on all monitors": the first click anywhere switches this window to full screen
-  if (Q.get('auto')) document.addEventListener('click', () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}); }, {once: true, capture: true});
+  if (Q.get('auto')) document.addEventListener('click', () => { if (!ctrl32.isFullscreen()) ctrl32.fullscreen(document.documentElement); }, {once: true, capture: true});
 });
 </script>
 </body>
