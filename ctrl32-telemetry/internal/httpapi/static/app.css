@@ -554,6 +554,11 @@ dialog.dw-full::backdrop { background: rgba(15, 23, 42, .55); }
 .vp-stats[hidden] { display: none; }
 .vp video, .vp canvas { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; object-fit: contain; display: block; }
 .vp video[hidden], .vp canvas[hidden] { display: none; }
+/* no play glyph of the browser over a live picture (phones draw it until the first frame and after): the player
+   starts the picture itself; the video stays invisible until it plays */
+.vp video::-webkit-media-controls, .vp video::-webkit-media-controls-start-playback-button,
+.vp video::-webkit-media-controls-overlay-play-button, .vp video::-webkit-media-controls-panel { display: none !important; -webkit-appearance: none; }
+.vp video.vp-wait { visibility: hidden; }
 .vp-msg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #cbd5e1; font-size: 13px; text-align: center; padding: 4px 10px; background: rgba(0,0,0,.55); border-radius: 4px; max-width: 90%; }
 .vp-msg[hidden] { display: none; }
 .cam-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
@@ -562,7 +567,8 @@ dialog.dw-full::backdrop { background: rgba(15, 23, 42, .55); }
   background: linear-gradient(transparent, rgba(0,0,0,.75)); pointer-events: none; }
 .cam-tile .cap b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cam-dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; flex: none; }
-.cam-dot.online { background: #22c55e; } .cam-dot.offline { background: #ef4444; } .cam-dot.rec { background: #ef4444; box-shadow: 0 0 0 2px rgba(239,68,68,.35); }
+/* green = the camera works (a ring when it also records), red only when it is down */
+.cam-dot.online, .cam-dot.rec { background: #22c55e; } .cam-dot.rec { box-shadow: 0 0 0 2px rgba(34,197,94,.35); } .cam-dot.offline { background: #ef4444; box-shadow: none; }
 .cam-live { height: min(58vh, 50vw); width: 100%; background: #000; border-radius: var(--radius); overflow: hidden; position: relative; }
 .cam-live .clock { position: absolute; right: 8px; top: 8px; color: #fff; background: rgba(0,0,0,.55); padding: 2px 8px; border-radius: 4px; font: 13px var(--mono); pointer-events: none; z-index: 2; }
 .tl { position: relative; height: 44px; background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; user-select: none; touch-action: none; }
@@ -593,8 +599,11 @@ body.wall .footer { display: none; }
 /* camera player controls */
 .cam-player { border-radius: var(--radius); overflow: hidden; background: #0b0e12; }
 .cam-player .cam-live { border-radius: 0; }
-.cam-player:fullscreen { display: flex; flex-direction: column; }
-.cam-player:fullscreen .cam-live { flex: 1; height: auto; }
+.cam-player:fullscreen, .cam-player.pseudo-fs { display: flex; flex-direction: column; }
+.cam-player:fullscreen .cam-live, .cam-player.pseudo-fs .cam-live { flex: 1; height: auto; }
+/* full screen without the Fullscreen API (iPhone): the element covers the window */
+.pseudo-fs { position: fixed !important; inset: 0; z-index: 10000; width: 100vw; height: 100vh; height: 100dvh; max-width: none; margin: 0; border-radius: 0; background: #000; }
+html.has-pseudo-fs, html.has-pseudo-fs body { overflow: hidden; }
 .live-badge { position: absolute; left: 8px; top: 8px; z-index: 2; padding: 2px 8px; border-radius: 4px; font: 600 12px var(--font); color: #fff; background: rgba(0,0,0,.55); pointer-events: none; letter-spacing: .03em; }
 .live-badge.live { background: #dc2626; } .live-badge.paused { background: #475569; } .live-badge:empty { display: none; }
 .cam-live .vp-zoom { top: 36px; }
