@@ -3553,5 +3553,10 @@
  "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Χωρίς αυτό, η σύνδεση λήγει μετά από {idle} λεπτά αδράνειας, το αργότερο μετά από {abs} ώρες.",
  "View only — no pages for configuring": "Μόνο προβολή — χωρίς σελίδες ρυθμίσεων",
  "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "Για προβολή, έλεγχο και αναπαραγωγή: η εφαρμογή παραλείπει τη διαχείριση καμερών, τις ρυθμίσεις καμερών και τη ρύθμιση της καταμέτρησης αντικειμένων. Περιορίζει τις οθόνες της εφαρμογής, όχι τα δικαιώματα του χρήστη.",
- "view only": "μόνο προβολή"
+ "view only": "μόνο προβολή",
+ "A click on a camera opens playback": "Ένα κλικ σε κάμερα ανοίγει την αναπαραγωγή",
+ "The camera opens over the wall with its recordings: going back in time, the timeline, speed. Only for users allowed to play back recordings; playing back is written to the audit trail. Leave it off for a wall on a monitor that others can operate.": "Η κάμερα ανοίγει πάνω από τον τοίχο με τις εγγραφές της: επιστροφή στον χρόνο, χρονολόγιο, ταχύτητα. Μόνο για χρήστες με δικαίωμα αναπαραγωγής εγγραφών· η αναπαραγωγή καταγράφεται στο ιστορικό ελέγχου. Αφήστε το απενεργοποιημένο για τοίχο σε οθόνη που μπορούν να χειριστούν άλλοι.",
+ "playback on click": "αναπαραγωγή με κλικ",
+ "Click: playback": "Κλικ: αναπαραγωγή",
+ "Back to the wall": "Πίσω στον τοίχο"
 }

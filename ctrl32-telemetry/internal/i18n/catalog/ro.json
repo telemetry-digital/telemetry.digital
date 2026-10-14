@@ -3553,5 +3553,10 @@
  "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Fără aceasta, o autentificare se încheie după {idle} min de inactivitate, cel târziu după {abs} h.",
  "View only — no pages for configuring": "Doar vizualizare — fără pagini de configurare",
  "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "Pentru vizionare, comandă și redare: aplicația omite gestionarea camerelor, setările camerelor și configurarea numărării obiectelor. Limitează ecranele aplicației, nu drepturile utilizatorului.",
- "view only": "doar vizualizare"
+ "view only": "doar vizualizare",
+ "A click on a camera opens playback": "Un clic pe o cameră deschide redarea",
+ "The camera opens over the wall with its recordings: going back in time, the timeline, speed. Only for users allowed to play back recordings; playing back is written to the audit trail. Leave it off for a wall on a monitor that others can operate.": "Camera se deschide peste perete cu înregistrările sale: înapoi în timp, cronologia, viteza. Doar pentru utilizatorii cu drept de redare a înregistrărilor; redarea este scrisă în jurnalul de audit. Lăsați dezactivat pentru un perete pe un monitor pe care îl pot folosi alții.",
+ "playback on click": "redare la clic",
+ "Click: playback": "Clic: redare",
+ "Back to the wall": "Înapoi la perete"
 }

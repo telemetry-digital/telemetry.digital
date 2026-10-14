@@ -3553,5 +3553,10 @@
  "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Senza, un accesso termina dopo {idle} min di inattività, al più tardi dopo {abs} h.",
  "View only — no pages for configuring": "Solo visualizzazione — senza pagine di configurazione",
  "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "Per guardare, comandare e riprodurre: l’app omette la gestione delle telecamere, le impostazioni delle telecamere e la configurazione del conteggio oggetti. Limita le schermate dell’app, non i diritti dell’utente.",
- "view only": "solo visualizzazione"
+ "view only": "solo visualizzazione",
+ "A click on a camera opens playback": "Un clic su una telecamera apre la riproduzione",
+ "The camera opens over the wall with its recordings: going back in time, the timeline, speed. Only for users allowed to play back recordings; playing back is written to the audit trail. Leave it off for a wall on a monitor that others can operate.": "La telecamera si apre sopra la parete con le sue registrazioni: tornare indietro nel tempo, la linea temporale, la velocità. Solo per gli utenti autorizzati a riprodurre le registrazioni; la riproduzione è scritta nel registro di audit. Lasciatelo disattivato per una parete su un monitor che altri possono usare.",
+ "playback on click": "riproduzione al clic",
+ "Click: playback": "Clic: riproduzione",
+ "Back to the wall": "Torna alla parete"
 }

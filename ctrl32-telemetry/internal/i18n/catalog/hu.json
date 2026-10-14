@@ -3553,5 +3553,10 @@
  "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Enélkül a bejelentkezés {idle} perc tétlenség után, legkésőbb {abs} óra után lejár.",
  "View only — no pages for configuring": "Csak megtekintés — beállítóoldalak nélkül",
  "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "Megtekintéshez, vezérléshez és visszajátszáshoz: az alkalmazás kihagyja a kamerák kezelését, a kamerabeállításokat és az objektumszámlálás beállítását. Ez az alkalmazás képernyőit korlátozza, nem a felhasználó jogait.",
- "view only": "csak megtekintés"
+ "view only": "csak megtekintés",
+ "A click on a camera opens playback": "A kamerára kattintás megnyitja a visszajátszást",
+ "The camera opens over the wall with its recordings: going back in time, the timeline, speed. Only for users allowed to play back recordings; playing back is written to the audit trail. Leave it off for a wall on a monitor that others can operate.": "A kamera a fal fölött nyílik meg a felvételeivel: visszalépés az időben, idővonal, sebesség. Csak a felvételek visszajátszására jogosult felhasználóknak; a visszajátszás bekerül a naplóba. Hagyja kikapcsolva olyan monitoron lévő falnál, amelyet mások is kezelhetnek.",
+ "playback on click": "visszajátszás kattintásra",
+ "Click: playback": "Kattintás: visszajátszás",
+ "Back to the wall": "Vissza a falhoz"
 }

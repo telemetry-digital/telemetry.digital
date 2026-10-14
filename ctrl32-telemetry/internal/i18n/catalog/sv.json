@@ -3553,5 +3553,10 @@
  "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Utan detta upphör en inloggning efter {idle} min utan aktivitet, senast efter {abs} h.",
  "View only — no pages for configuring": "Endast visning — inga inställningssidor",
  "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "För att titta, styra och spela upp: appen utelämnar kamerahantering, kamerainställningar och inställning av objekträkning. Det begränsar appens skärmar, inte användarens rättigheter.",
- "view only": "endast visning"
+ "view only": "endast visning",
+ "A click on a camera opens playback": "Ett klick på en kamera öppnar uppspelning",
+ "The camera opens over the wall with its recordings: going back in time, the timeline, speed. Only for users allowed to play back recordings; playing back is written to the audit trail. Leave it off for a wall on a monitor that others can operate.": "Kameran öppnas över väggen med sina inspelningar: tillbaka i tiden, tidslinje, hastighet. Bara för användare som får spela upp inspelningar; uppspelning skrivs i granskningsloggen. Låt det vara av för en vägg på en skärm som andra kan använda.",
+ "playback on click": "uppspelning vid klick",
+ "Click: playback": "Klick: uppspelning",
+ "Back to the wall": "Tillbaka till väggen"
 }

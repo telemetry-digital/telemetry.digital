@@ -3553,5 +3553,10 @@
  "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.",
  "View only — no pages for configuring": "View only — no pages for configuring",
  "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.",
- "view only": "view only"
+ "view only": "view only",
+ "A click on a camera opens playback": "A click on a camera opens playback",
+ "The camera opens over the wall with its recordings: going back in time, the timeline, speed. Only for users allowed to play back recordings; playing back is written to the audit trail. Leave it off for a wall on a monitor that others can operate.": "The camera opens over the wall with its recordings: going back in time, the timeline, speed. Only for users allowed to play back recordings; playing back is written to the audit trail. Leave it off for a wall on a monitor that others can operate.",
+ "playback on click": "playback on click",
+ "Click: playback": "Click: playback",
+ "Back to the wall": "Back to the wall"
 }

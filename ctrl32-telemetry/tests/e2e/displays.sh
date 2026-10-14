@@ -40,6 +40,12 @@ D1=$(node -e 'const a=JSON.parse(process.argv[1]), b=JSON.parse(process.argv[2])
 req POST /api/v1/dashboards "$D1"; check "dashboard with a camera and a camera on a plan" "$(st)" 201; SLUG=$(jx j.slug)
 req POST /api/v1/dashboards "{\"name\":\"Other $SUF\",\"reason\":\"e2e\",\"spec\":{\"version\":1,\"kind\":\"dashboard\",\"layout\":{\"type\":\"grid\",\"row_height\":96},\"range\":\"6h\",\"refresh_s\":30,\"widgets\":[]}}"; OTHER=$(jx j.slug)
 req POST /api/v1/video/walls "{\"name\":\"Wall $SUF\",\"reason\":\"e2e\",\"screens\":[{\"cols\":2,\"rows\":1,\"tiles\":[\"$YARD\"]},{\"cols\":1,\"rows\":1,\"tiles\":[\"$ODD\"]}]}"; WALL=$(jx j.id)
+check "playback from the wall is off by default" "$(jx j.playback_on_click)" false
+req PUT "/api/v1/video/walls/$WALL" '{"playback_on_click":true,"reason":"e2e: playback from the wall"}'; check "playback from the wall allowed" "$(st) $(jx j.playback_on_click) $(jx 'j.screens.length')" "200 true 2"
+req PUT "/api/v1/video/walls/$WALL" "{\"name\":\"Wall $SUF\",\"reason\":\"e2e: rename keeps the option\"}"; check "…kept when left out" "$(jx j.playback_on_click)" true
+req GET "/api/v1/audit?action=video_wall.update&limit=20"; check "…audited with the reason" "$(jx 'JSON.stringify(j).includes("e2e: playback from the wall")')" true
+curl -s -D "$TMP/fh" -o /dev/null "$BASE/video/cameras/$YARD?embed=1"; check "the embedded camera page may be framed by the same origin only" "$(grep -ci 'frame-ancestors .self.' "$TMP/fh") $(grep -ci 'x-frame-options: sameorigin' "$TMP/fh")" "1 1"
+curl -s -D "$TMP/fh" -o /dev/null "$BASE/video/cameras/$YARD"; check "…any other page not at all" "$(grep -ci "frame-ancestors 'none'" "$TMP/fh") $(grep -ci 'x-frame-options: deny' "$TMP/fh")" "1 1"
 
 echo "== pairing"
 kiosk POST /api/v1/display/hello '{}'; check "kiosk gets a code" "$(st) $(jx '/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(j.code) && !j.paired')" "200 true"
