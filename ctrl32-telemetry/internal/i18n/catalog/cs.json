@@ -3553,5 +3553,10 @@
  "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Bez toho přihlášení skončí po {idle} min nečinnosti, nejpozději po {abs} h.",
  "View only — no pages for configuring": "Jen k prohlížení — bez stránek pro nastavení",
  "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "K prohlížení, ovládání a přehrávání: aplikace vynechá správu kamer, nastavení kamer a nastavení počítání objektů. Omezuje to obrazovky aplikace, ne oprávnění uživatele.",
- "view only": "jen k prohlížení"
+ "view only": "jen k prohlížení",
+ "A click on a camera opens playback": "Kliknutí na kameru otevře přehrávání",
+ "The camera opens over the wall with its recordings: going back in time, the timeline, speed. Only for users allowed to play back recordings; playing back is written to the audit trail. Leave it off for a wall on a monitor that others can operate.": "Kamera se otevře nad stěnou se svými záznamy: návrat v čase, časová osa, rychlost. Jen pro uživatele s oprávněním přehrávat záznamy; přehrávání se zapisuje do auditu. Pro stěnu na monitoru, který mohou ovládat jiní, to nechte vypnuté.",
+ "playback on click": "přehrávání kliknutím",
+ "Click: playback": "Kliknutí: přehrávání",
+ "Back to the wall": "Zpět na stěnu"
 }

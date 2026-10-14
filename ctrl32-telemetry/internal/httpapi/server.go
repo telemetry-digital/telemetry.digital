@@ -711,9 +711,15 @@ func (s *Server) secureHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("X-Frame-Options", "DENY")
+		// No framing, except the camera page embedded by a video wall of this same server (playback from the wall,
+		// 0.82.0): GET /video/cameras/{id}?embed=1 may be framed by the same origin only, never by another site.
+		frame, xfo := "'none'", "DENY"
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/video/cameras/") && r.URL.Query().Get("embed") == "1" {
+			frame, xfo = "'self'", "SAMEORIGIN"
+		}
+		h.Set("X-Frame-Options", xfo)
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		h.Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'")
+		h.Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob:; connect-src 'self'; frame-ancestors "+frame)
 		h.Set("Cache-Control", "no-store")
 		if s.isSecure(r) {
 			h.Set("Strict-Transport-Security", "max-age=31536000")

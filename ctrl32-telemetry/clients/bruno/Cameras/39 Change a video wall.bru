@@ -17,6 +17,7 @@ params:path {
 body:json {
   {
     "name": "string",
+    "playback_on_click": true,
     "reason": "string",
     "screens": [
       {
@@ -34,6 +35,8 @@ body:json {
 
 docs {
   Change a video wall
+  
+  Fields left out keep their value. Allowing playback from the wall (`playback_on_click`) is audited with the reason like every change.
   
   Requires permission `video.manage`.
 }

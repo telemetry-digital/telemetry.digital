@@ -593,6 +593,15 @@ body.wall main { padding: 0; }
 .wall-bar.idle { opacity: 0; pointer-events: none; }
 .wall-bar .btn { color: #e5e7eb; }
 body.wall .footer { display: none; }
+/* playback from a video wall: the camera page in a layer over the wall */
+.wall-play { position: fixed; inset: 0; z-index: 20; background: #000; }
+.wall-play iframe { width: 100%; height: 100%; border: 0; display: block; }
+.wall-play #playClose { position: absolute; top: 8px; right: 12px; z-index: 1; background: rgba(15,18,22,.9); color: #e5e7eb; border-color: #2a313a; }
+/* the camera page embedded (?embed=1): no menu, header or back link, only the player */
+html.embed header.topbar, html.embed #sidebar, html.embed .update-banner, html.embed .top-strip, html.embed .footer, html.embed .subnav, html.embed .page-head > a.btn { display: none !important; }
+html.embed .content { margin-left: 0 !important; min-height: 0; }
+html.embed main.container { max-width: none; }
+html.embed .page-head { padding-right: 190px; }
 .cam-widget { position: relative; flex: 1; min-height: 0; width: 100%; height: 100%; background: #000; border-radius: var(--radius); overflow: hidden; }
 .cam-widget.click { cursor: pointer; }
 .cam-widget .cap { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 6px; align-items: center; padding: 3px 8px; font-size: 12px; color: #fff; background: linear-gradient(transparent, rgba(0,0,0,.7)); pointer-events: none; z-index: 2; }

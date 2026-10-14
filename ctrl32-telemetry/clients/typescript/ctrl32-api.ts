@@ -1563,6 +1563,8 @@ export type VideoSettings = {
 export type VideoWall = {
   id?: string;
   name?: string;
+  /** a click on a camera opens its player with the recordings (users with video.playback) */
+  playback_on_click?: boolean;
   screens?: WallScreen[];
   /** tiles above which automatic screens use the sub-stream */
   sub_stream_above?: number;
@@ -10905,6 +10907,8 @@ export class Ctrl32Client {
   postVideoWalls(body: {
     /** ≤ 80 */
     name: string;
+    /** a click on a camera tile opens its player with the recordings, for users with video.playback (playing back is audited); default false, omitted keeps the value */
+    playback_on_click?: boolean;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
     screens: WallScreen[];
@@ -10921,10 +10925,14 @@ export class Ctrl32Client {
 
   /** Change a video wall
    *
+   * Fields left out keep their value. Allowing playback from the wall (`playback_on_click`) is audited with the reason like every change.
+   * 
    * Requires permission `video.manage`. */
   putVideoWallsId(id: string, body: {
     /** ≤ 80 */
     name?: string;
+    /** a click on a camera tile opens its player with the recordings, for users with video.playback (playing back is audited); default false, omitted keeps the value */
+    playback_on_click?: boolean;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
     screens?: WallScreen[];

@@ -1213,7 +1213,10 @@ type WallScreen struct {
 type wallIn struct {
 	Name    *string      `json:"name"`
 	Screens []WallScreen `json:"screens"`
-	Reason  string       `json:"reason"`
+	// PlaybackOnClick: a click on a tile opens the camera's player with its recordings (users with video.playback).
+	// Off by default; omitted keeps the stored value.
+	PlaybackOnClick *bool  `json:"playback_on_click"`
+	Reason          string `json:"reason"`
 }
 
 func (s *Server) validateWall(ctx context.Context, org string, screens []WallScreen) string {
@@ -1265,8 +1268,9 @@ func (s *Server) wallJSON(ctx context.Context, org, id string) (map[string]any, 
 	var name string
 	var screens []byte
 	var updated time.Time
-	err := s.pool.QueryRow(ctx, `SELECT name, screens, updated_at FROM core.video_wall WHERE id = $1::uuid AND org_id = $2::uuid AND removed_at IS NULL`, id, org).
-		Scan(&name, &screens, &updated)
+	var playback bool
+	err := s.pool.QueryRow(ctx, `SELECT name, screens, updated_at, playback_on_click FROM core.video_wall WHERE id = $1::uuid AND org_id = $2::uuid AND removed_at IS NULL`, id, org).
+		Scan(&name, &screens, &updated, &playback)
 	if err != nil {
 		return nil, false
 	}
@@ -1274,7 +1278,8 @@ func (s *Server) wallJSON(ctx context.Context, org, id string) (map[string]any, 
 	if s.video != nil {
 		subAbove = s.video.Settings().WallSubStreamAbove
 	}
-	return map[string]any{"id": id, "name": name, "screens": json.RawMessage(screens), "updated_at": updated, "sub_stream_above": subAbove}, true
+	return map[string]any{"id": id, "name": name, "screens": json.RawMessage(screens), "updated_at": updated, "sub_stream_above": subAbove,
+		"playback_on_click": playback}, true
 }
 
 func (s *Server) listWalls(w http.ResponseWriter, r *http.Request) {
@@ -1345,7 +1350,12 @@ func (s *Server) saveWall(w http.ResponseWriter, r *http.Request) {
 		if in.Screens == nil {
 			_ = json.Unmarshal(old["screens"].(json.RawMessage), &in.Screens)
 		}
+		if in.PlaybackOnClick == nil {
+			pb := old["playback_on_click"].(bool)
+			in.PlaybackOnClick = &pb
+		}
 	}
+	playback := in.PlaybackOnClick != nil && *in.PlaybackOnClick
 	if in.Name == nil || strings.TrimSpace(*in.Name) == "" || len([]rune(*in.Name)) > 80 {
 		writeErr(w, 400, "name: 1 to 80 characters")
 		return
@@ -1358,13 +1368,13 @@ func (s *Server) saveWall(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(*in.Name)
 	if id == "" {
 		by := PrincipalFrom(r.Context()).Username
-		if err := s.pool.QueryRow(r.Context(), `INSERT INTO core.video_wall (org_id, name, screens, created_by) VALUES ($1::uuid, $2, $3::jsonb, $4) RETURNING id::text`,
-			org, name, string(scr), by).Scan(&id); err != nil {
+		if err := s.pool.QueryRow(r.Context(), `INSERT INTO core.video_wall (org_id, name, screens, created_by, playback_on_click) VALUES ($1::uuid, $2, $3::jsonb, $4, $5) RETURNING id::text`,
+			org, name, string(scr), by, playback).Scan(&id); err != nil {
 			writeErr(w, 500, "video wall not stored")
 			return
 		}
-	} else if _, err := s.pool.Exec(r.Context(), `UPDATE core.video_wall SET name = $3, screens = $4::jsonb, updated_at = now() WHERE id = $1::uuid AND org_id = $2::uuid`,
-		id, org, name, string(scr)); err != nil {
+	} else if _, err := s.pool.Exec(r.Context(), `UPDATE core.video_wall SET name = $3, screens = $4::jsonb, playback_on_click = $5, updated_at = now() WHERE id = $1::uuid AND org_id = $2::uuid`,
+		id, org, name, string(scr), playback); err != nil {
 		writeErr(w, 500, "update failed")
 		return
 	}

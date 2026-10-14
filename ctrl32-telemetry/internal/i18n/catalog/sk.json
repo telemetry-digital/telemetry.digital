@@ -3553,5 +3553,10 @@
  "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Bez toho sa prihlásenie skončí po {idle} min nečinnosti, najneskôr po {abs} h.",
  "View only — no pages for configuring": "Len na prezeranie — bez stránok na nastavovanie",
  "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "Na prezeranie, ovládanie a prehrávanie: aplikácia vynechá správu kamier, nastavenia kamier a nastavenie počítania objektov. Obmedzuje to obrazovky aplikácie, nie oprávnenia používateľa.",
- "view only": "len na prezeranie"
+ "view only": "len na prezeranie",
+ "A click on a camera opens playback": "Kliknutie na kameru otvorí prehrávanie",
+ "The camera opens over the wall with its recordings: going back in time, the timeline, speed. Only for users allowed to play back recordings; playing back is written to the audit trail. Leave it off for a wall on a monitor that others can operate.": "Kamera sa otvorí nad stenou so svojimi záznamami: návrat v čase, časová os, rýchlosť. Len pre používateľov s oprávnením prehrávať záznamy; prehrávanie sa zapisuje do auditu. Pre stenu na monitore, ktorý môžu ovládať iní, to nechajte vypnuté.",
+ "playback on click": "prehrávanie kliknutím",
+ "Click: playback": "Kliknutie: prehrávanie",
+ "Back to the wall": "Späť na stenu"
 }

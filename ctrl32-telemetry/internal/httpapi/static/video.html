@@ -205,6 +205,8 @@ sudo bash install-relay.sh --config relay.toml</pre>
       <button class="btn small" type="button" id="addScreen">Add screen</button>
       <button class="btn small" type="button" id="autoFill" title="Put all cameras on the screens in order">Fill with all cameras</button></div>
     <div id="screens"></div>
+    <label class="inline"><input type="checkbox" name="playback_on_click"> A click on a camera opens playback</label>
+    <div class="muted" style="font-size:12px">The camera opens over the wall with its recordings: going back in time, the timeline, speed. Only for users allowed to play back recordings; playing back is written to the audit trail. Leave it off for a wall on a monitor that others can operate.</div>
     <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
     <div class="err" id="wallErr"></div>
     <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
@@ -241,7 +243,7 @@ function preview(sc) { const n = sc.cols * sc.rows; let h = ''; for (let i = 0; 
 function renderWalls() {
   $('#noWalls').hidden = WALLS.length > 0;
   $('#walls tbody').innerHTML = WALLS.map(w => `<tr><td class="notranslate"><a href="/video/walls/${w.id}">${esc(w.name)}</a></td>
-    <td>${w.screens.map((s, i) => `<a href="/video/walls/${w.id}?screen=${i}" title="${esc(s.name || t('Screen') + ' ' + (i + 1))}">${preview(s)}</a> `).join('')}</td><td>${wallCams(w)}</td>
+    <td>${w.screens.map((s, i) => `<a href="/video/walls/${w.id}?screen=${i}" title="${esc(s.name || t('Screen') + ' ' + (i + 1))}">${preview(s)}</a> `).join('')}</td><td>${wallCams(w)}${w.playback_on_click ? ` <span class="badge">${esc(t('playback on click'))}</span>` : ''}</td>
     <td class="actions-cell"><button class="btn small" data-open="${w.id}" type="button">Open on all monitors</button>
     ${can('video.manage') && !viewOnly() ? `<button class="btn small" data-edit="${w.id}" type="button">Edit</button><button class="btn small" data-del="${w.id}" type="button">Delete</button>` : ''}</td></tr>`).join('');
   for (const b of document.querySelectorAll('[data-open]')) b.onclick = () => openAll(WALLS.find(w => w.id === b.dataset.open));
@@ -508,7 +510,7 @@ function renderScreens() {
 }
 function wallDialog(w) {
   WEDIT = w || null; const f = $('#wallForm'); f.reset(); $('#wallErr').textContent = '';
-  f.name.value = w ? w.name : '';
+  f.name.value = w ? w.name : ''; f.playback_on_click.checked = !!(w && w.playback_on_click);
   WSCREENS = w ? JSON.parse(JSON.stringify(w.screens)) : [{name: '', cols: 3, rows: 3, tiles: []}];
   renderScreens(); $('#wallDlg').showModal();
 }
@@ -520,8 +522,9 @@ $('#autoFill').onclick = () => {
 };
 $('#wallForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#wallErr').textContent = '';
   const screens = WSCREENS.map(s => { const tiles = (s.tiles || []).slice(0, s.cols * s.rows); while (tiles.length && !tiles[tiles.length - 1]) tiles.pop(); return {name: s.name || '', cols: s.cols, rows: s.rows, tiles, quality: s.quality && s.quality !== 'auto' ? s.quality : undefined}; });
-  try { if (WEDIT) await api('PUT', '/api/v1/video/walls/' + WEDIT.id, {name: f.name.value, screens, reason: f.reason.value});
-    else await api('POST', '/api/v1/video/walls', {name: f.name.value, screens, reason: f.reason.value});
+  const body = {name: f.name.value, screens, playback_on_click: f.playback_on_click.checked, reason: f.reason.value};
+  try { if (WEDIT) await api('PUT', '/api/v1/video/walls/' + WEDIT.id, body);
+    else await api('POST', '/api/v1/video/walls', body);
     $('#wallDlg').close(); ctrl32.toast(t('video wall saved'), 'ok'); load(); } catch (x) { $('#wallErr').textContent = x.message; } };
 
 // a view-only app (watching, controlling, playing back) offers no editing of walls and cameras

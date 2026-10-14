@@ -3553,5 +3553,10 @@
  "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Zonder dit eindigt een aanmelding na {idle} min zonder activiteit, uiterlijk na {abs} u.",
  "View only — no pages for configuring": "Alleen bekijken — geen instellingspagina’s",
  "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "Om te bekijken, te bedienen en af te spelen: de app laat het camerabeheer, de camera-instellingen en de inrichting van het tellen van objecten weg. Dit beperkt de schermen van de app, niet de rechten van de gebruiker.",
- "view only": "alleen bekijken"
+ "view only": "alleen bekijken",
+ "A click on a camera opens playback": "Een klik op een camera opent het terugkijken",
+ "The camera opens over the wall with its recordings: going back in time, the timeline, speed. Only for users allowed to play back recordings; playing back is written to the audit trail. Leave it off for a wall on a monitor that others can operate.": "De camera opent boven de wand met zijn opnamen: terug in de tijd, tijdlijn, snelheid. Alleen voor gebruikers die opnamen mogen terugkijken; terugkijken wordt in het auditlogboek geschreven. Laat het uit voor een wand op een monitor die anderen kunnen bedienen.",
+ "playback on click": "terugkijken met klik",
+ "Click: playback": "Klik: terugkijken",
+ "Back to the wall": "Terug naar de wand"
 }

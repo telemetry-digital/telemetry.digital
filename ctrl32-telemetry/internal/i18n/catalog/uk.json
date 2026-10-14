@@ -3553,5 +3553,10 @@
  "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Без цього вхід завершується після {idle} хв бездіяльності, не пізніше ніж через {abs} год.",
  "View only — no pages for configuring": "Лише перегляд — без сторінок налаштування",
  "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "Для перегляду, керування та відтворення: застосунок пропускає керування камерами, налаштування камер і налаштування підрахунку об’єктів. Це обмежує екрани застосунку, а не права користувача.",
- "view only": "лише перегляд"
+ "view only": "лише перегляд",
+ "A click on a camera opens playback": "Клік на камеру відкриває відтворення",
+ "The camera opens over the wall with its recordings: going back in time, the timeline, speed. Only for users allowed to play back recordings; playing back is written to the audit trail. Leave it off for a wall on a monitor that others can operate.": "Камера відкривається над стіною зі своїми записами: повернення в часі, шкала часу, швидкість. Лише для користувачів із правом відтворювати записи; відтворення записується в журнал аудиту. Залиште вимкненим для стіни на моніторі, яким можуть керувати інші.",
+ "playback on click": "відтворення кліком",
+ "Click: playback": "Клік: відтворення",
+ "Back to the wall": "Назад до стіни"
 }

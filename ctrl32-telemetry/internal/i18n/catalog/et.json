@@ -3553,5 +3553,10 @@
  "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Ilma selleta lõpeb sisselogimine pärast {idle} min tegevusetust, hiljemalt {abs} h pärast.",
  "View only — no pages for configuring": "Ainult vaatamiseks — ilma seadistuslehtedeta",
  "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "Vaatamiseks, juhtimiseks ja taasesituseks: rakendus jätab välja kaamerate halduse, kaamerate seaded ja objektide loendamise seadistuse. See piirab rakenduse ekraane, mitte kasutaja õigusi.",
- "view only": "ainult vaatamiseks"
+ "view only": "ainult vaatamiseks",
+ "A click on a camera opens playback": "Klõps kaameral avab taasesituse",
+ "The camera opens over the wall with its recordings: going back in time, the timeline, speed. Only for users allowed to play back recordings; playing back is written to the audit trail. Leave it off for a wall on a monitor that others can operate.": "Kaamera avaneb seina kohal koos salvestistega: ajas tagasi, ajatelg, kiirus. Ainult kasutajatele, kellel on õigus salvestisi taasesitada; taasesitus kirjutatakse auditilogisse. Jätke see välja seina puhul, mille monitori saavad juhtida teised.",
+ "playback on click": "taasesitus klõpsuga",
+ "Click: playback": "Klõps: taasesitus",
+ "Back to the wall": "Tagasi seinale"
 }

@@ -3553,5 +3553,10 @@
  "Without it a sign-in ends after {idle} min without activity, at the latest after {abs} h.": "Ilman sitä kirjautuminen päättyy {idle} min käyttämättömyyden jälkeen, viimeistään {abs} h kuluttua.",
  "View only — no pages for configuring": "Vain katselu — ei asetussivuja",
  "For watching, controlling and playing back: the app leaves out camera management, camera settings and the setup of object counting. This limits the app's screens, not the user's rights.": "Katseluun, ohjaukseen ja toistoon: sovellus jättää pois kameroiden hallinnan, kamera-asetukset ja kohteiden laskennan määrityksen. Tämä rajaa sovelluksen näkymiä, ei käyttäjän oikeuksia.",
- "view only": "vain katselu"
+ "view only": "vain katselu",
+ "A click on a camera opens playback": "Kameran napsautus avaa toiston",
+ "The camera opens over the wall with its recordings: going back in time, the timeline, speed. Only for users allowed to play back recordings; playing back is written to the audit trail. Leave it off for a wall on a monitor that others can operate.": "Kamera avautuu seinän päälle tallenteineen: ajassa taaksepäin, aikajana, nopeus. Vain käyttäjille, joilla on oikeus toistaa tallenteita; toisto kirjataan tarkastuslokiin. Jätä pois päältä seinälle näytöllä, jota muut voivat käyttää.",
+ "playback on click": "toisto napsautuksella",
+ "Click: playback": "Napsautus: toisto",
+ "Back to the wall": "Takaisin seinään"
 }

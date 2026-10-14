@@ -26,7 +26,7 @@
 <script>
 const $ = s => document.querySelector(s), esc = ctrl32.esc, api = ctrl32.api, t = ctrl32.t;
 const ID = location.pathname.split('/').pop(), Q = new URLSearchParams(location.search);
-let WALL = null, CAMS = {}, players = [], SCREEN = +(Q.get('screen') || 0);
+let WALL = null, CAMS = {}, players = [], SCREEN = +(Q.get('screen') || 0), PLAY = false;
 
 function render() {
   for (const p of players) p.close(); players = [];
@@ -47,8 +47,10 @@ function render() {
     const p = ctrl32Player(el, {url: `/api/v1/video/cameras/${el.dataset.id}/live?quality=${quality}`, live: true,
       onState: s => { dotEl.className = 'cam-dot ' + (s === 'online' ? 'online' : s === 'offline' ? 'offline' : ''); }});
     el.prepend(p.el); players.push(p);
-    // a click enlarges the tile to the whole screen (main stream), another click returns
-    el.ondblclick = el.onclick = () => maximize(el);
+    // a click enlarges the tile to the whole screen (main stream), another click returns; on a wall allowing playback
+    // (and for a user allowed to play back) a click opens the camera's player with its recordings instead
+    el.ondblclick = el.onclick = () => PLAY ? playback(el.dataset.id) : maximize(el);
+    if (PLAY) el.title = t('Click: playback');
   }
   $('#screen').innerHTML = WALL.screens.map((s, i) => `<option value="${i}"${i === SCREEN ? ' selected' : ''}>${esc(s.name || t('Screen') + ' ' + (i + 1))} (${s.cols}×${s.rows})</option>`).join('');
 }
@@ -60,7 +62,20 @@ function maximize(el) {
   p.el.style.position = 'absolute'; p.el.style.inset = '0'; p.el.style.zIndex = '1';
   big = {el, p};
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && big) maximize(big.el); });
+// Playback from the wall (0.82.0): the camera page (live, timeline, recordings) in a layer over the wall; the tiles
+// stop meanwhile (one decoder less per tile on the wall PC) and start again when the layer closes.
+function playback(id) {
+  if (big) maximize(big.el);
+  for (const p of players) p.close(); players = [];
+  const lay = document.createElement('div'); lay.className = 'wall-play'; lay.id = 'play';
+  lay.innerHTML = `<iframe src="/video/cameras/${encodeURIComponent(id)}?embed=1" title="${esc(CAMS[id] ? CAMS[id].name : '')}"></iframe><button class="btn small" type="button" id="playClose">${esc(t('Back to the wall'))} (Esc)</button>`;
+  document.body.appendChild(lay);
+  const fr = lay.querySelector('iframe');
+  fr.onload = () => { try { fr.contentWindow.addEventListener('keydown', e => { if (e.key === 'Escape') closePlayback(); }); fr.contentWindow.focus(); } catch (e) { /* other origin */ } };
+  $('#playClose').onclick = closePlayback;
+}
+function closePlayback() { const lay = $('#play'); if (!lay) return; lay.remove(); render(); }
+document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if ($('#play')) closePlayback(); else if (big) maximize(big.el); });
 // on a phone the tiles go below each other (one camera per row, scrolling); the same streams as in the grid
 const LAYOUT = ctrl32Player.layout;
 function applyLayout() {
@@ -86,17 +101,18 @@ $('#all').onclick = async () => {
 let idle = null;
 function wake() { $('#bar').classList.remove('idle'); document.body.style.cursor = ''; clearTimeout(idle); idle = setTimeout(() => { $('#bar').classList.add('idle'); document.body.style.cursor = 'none'; }, 3000); }
 document.addEventListener('mousemove', wake); document.addEventListener('touchstart', wake);
-ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(async () => {
+ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(async ({me}) => {
   try {
     const [w, cams] = await Promise.all([api('GET', '/api/v1/video/walls/' + ID), api('GET', '/api/v1/video/cameras')]);
     WALL = w; for (const c of cams) CAMS[c.id] = c;
   } catch (x) { $('#grid').innerHTML = `<div class="vp-msg">${esc(x.message)}</div>`; return; }
   $('#wname').textContent = WALL.name;
+  PLAY = !!WALL.playback_on_click && !!(me && (me.permissions || []).includes('video.playback'));
   applyLayout(); // the app profile is known now
   render(); wake();
   // cameras reporting motion or other events are outlined
   setInterval(async () => {
-    if (document.hidden) return;
+    if (document.hidden || $('#play')) return;
     try { for (const c of await api('GET', '/api/v1/video/cameras')) for (const el of document.querySelectorAll(`.cell[data-id="${c.id}"]`)) {
       const a = c.status.active || []; el.classList.toggle('cam-alert', a.length > 0); el.dataset.active = a.map(k => t(k)).join(', '); } } catch (x) { /* next time */ }
   }, 3000);
