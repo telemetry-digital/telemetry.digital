@@ -1,4 +1,4 @@
-# Stav práce (aktualizované 18. 10. 2026, 0.82.0)
+# Stav práce (aktualizované 18. 10. 2026, 0.83.0)
 
 ## Hotové (vo vetve `main`, otestované)
 
@@ -56,6 +56,7 @@
 | 0.80.0 | **Aplikácie (PWA): „Len na prezeranie“ a bez záložiek na mobile.** Voľba aplikácie `view_only` (migrácia 0056, predvolene vypnutá, predvoľba Kamery ju zapína): vynechá správu kamier, nastavenia kamier a nastavenie počítania (menu, záložky, odkazy, priamy prístup → úvodná stránka) aj úpravu video stien. Na mobile aplikácia nezobrazuje horné záložky stránky (sú v menu). Na žiadosť používateľa z BB | unit `httpapi` (kontrolný súčet starých verzií sa nemení), headless Chrome lokálne (390 px a 1000 px: záložky, menu, presmerovanie, video steny) |
 | 0.81.0 | **Prehrávač na mobile:** bez šípky „play“ prehliadača (video neviditeľné, kým nehrá; ťuknutie spustí obraz, ak ho prehliadač nespustil sám), bodka stavu zelená = kamera ide (krúžok = aj nahráva), červená len pri výpadku; celá obrazovka cez spoločnú funkciu: Fullscreen API (mobil sa otočí na šírku), na iPhone prehrávač vyplní okno aplikácie (masky ostávajú). Na žiadosť používateľa z BB | headless Chrome lokálne 390 px (bodky, prehrávanie, celá obrazovka bez Fullscreen API a späť) |
 | 0.82.0 | **Prehrávanie z video steny.** Voľba steny „Kliknutie na kameru otvorí prehrávanie“ (`playback_on_click`, migrácia 0057, predvolene vypnutá, zmena s dôvodom v audite, cez MCP `cameras_change` / `putVideoWallsId`): kliknutie na dlaždicu otvorí nad stenou stránku kamery (`?embed=1`, bez menu) so záznamami, časovou osou a rýchlosťami; „Späť na stenu“ alebo Esc; dlaždice steny medzitým stoja. Len pre `video.playback` (inak klik zväčší dlaždicu ako doteraz), prehrávanie sa audituje. Rámovanie povolené len pre `/video/cameras/{id}?embed=1` z rovnakého pôvodu (frame-ancestors 'self', SAMEORIGIN), všade inde ostáva DENY. Na žiadosť používateľa z BB | unit (hlavičky rámovania), e2e displays (voľba, zachovanie, audit, hlavičky), headless Chrome lokálne (editor, klik, prehrávanie, späť, Esc, vypnutá voľba), MCP zmena s auditom „via MCP“ |
+| 0.83.0 | **Kompletný OPC UA a Siemens S7.** OPC UA: prehliadanie stromu servera a pridanie uzlov kliknutím, zistenie zabezpečení, pripnutie certifikátu servera, režim odberu (interval publikovania, mŕtve pásmo), jeden server → viac virtuálnych zariadení, zápis cez otvorenú reláciu, 2000 uzlov. Nový konektor **Siemens S7** (S7-300/400/1200/1500, ET 200SP, LOGO!): vlastný S7comm bez cudzej knižnice, adresy DB/M/I/Q/V, typy bool…lreal a string, zápis ako príkaz so spätným čítaním a auditom (migrácia 0058, spec 033) | unit `opcua`, `s7`; e2e `s7` 55, `opcua` 70, `modbus` 36, `commands` 52, `mcp` 82, `rules` 85; headless `connectors_industrial` |
 | 0.63.2 | Úvodná stránka portálu = prihlásenie s krátkou ukážkou možností (Zariadenia a dáta, Dashboardy a SCADA, Video NVR, Energie a reporty, Automatizácia a AI; 19 jazykov), menu bez zaoblení | headless `front_page`, e2e `landing`, `i18n_auth` |
 
 Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (`tests/run-all.sh`) pre 0.54.0 (27. 9. 2026): všetko prešlo okrem 3 kontrol času NTP v `ops`, ktoré potrebujú internet (v tomto kontajneri nedostupný) — nesúvisí s kódom.
@@ -91,6 +92,9 @@ Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (
 - **27. 9. 2026: white labeling je platený — 99,- EUR jednorazovo, navždy** (cena zmenená z 99 EUR 27. 9. 2026 večer: rovnako ako ctrl32 editor) (trvalá licencia na server/inštaláciu,
   overovaná offline; ADR-0016). Všetko ostatné ostáva zadarmo; bez licencie je pätička ctrl32 pevná. (História:
   26. 9. pripravený, v ten istý deň vrátený „nič platené“, 27. 9. obnovený s cenou.)
+
+- **Heslo OPC UA konektora** sa ukladá v `core.connector.settings` nešifrované (od 0.13.0; API ho skrýva) — šifrovať
+  SecretBoxom ako SMTP a mosty, s migráciou existujúcich hodnôt (zistené 18. 10. 2026).
 
 ## Čaká na používateľa
 

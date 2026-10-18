@@ -41,6 +41,7 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/replication"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/report"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/rules"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/s7"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/smarthome"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/uptunnel"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/video"
@@ -71,6 +72,7 @@ type Server struct {
 	repl              *replication.Primary
 	live              *live.Hub
 	mb                *modbus.Manager
+	s7                *s7.Manager
 	esc               *escalate.Engine
 	rules             *rules.Engine
 	push              *push.Manager
@@ -94,8 +96,8 @@ type Server struct {
 }
 
 // New builds the handler tree.
-func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.Service, rep *report.Engine, ing *ingest.Ingest, con *console.Manager, ag *agent.Client, opc *opcua.Manager, log *slog.Logger, version string, hub *live.Hub, mbm *modbus.Manager, esc *escalate.Engine, eng *rules.Engine, pm *push.Manager, tc *timecheck.Checker, inc *incident.Manager, rp *replication.Primary, fl *flows.Engine, nt *notify.Notifier, sh *smarthome.Manager, vm *video.Manager) http.Handler {
-	s := &Server{cfg: cfg, pool: pool, br: br, iam: iamSvc, rep: rep, ing: ing, con: con, agent: ag, opc: opc, started: time.Now(), log: log.With("component", "http"), version: version, live: hub, mb: mbm, esc: esc, rules: eng, push: pm, tc: tc, incidents: inc, repl: rp, flows: fl, notifier: nt, smart: sh, video: vm,
+func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.Service, rep *report.Engine, ing *ingest.Ingest, con *console.Manager, ag *agent.Client, opc *opcua.Manager, log *slog.Logger, version string, hub *live.Hub, mbm *modbus.Manager, esc *escalate.Engine, eng *rules.Engine, pm *push.Manager, tc *timecheck.Checker, inc *incident.Manager, rp *replication.Primary, fl *flows.Engine, nt *notify.Notifier, sh *smarthome.Manager, vm *video.Manager, s7m *s7.Manager) http.Handler {
+	s := &Server{cfg: cfg, pool: pool, br: br, iam: iamSvc, rep: rep, ing: ing, con: con, agent: ag, opc: opc, started: time.Now(), log: log.With("component", "http"), version: version, live: hub, mb: mbm, esc: esc, rules: eng, push: pm, tc: tc, incidents: inc, repl: rp, flows: fl, notifier: nt, smart: sh, video: vm, s7: s7m,
 		loginLimiter: newLimiter(10, 10), provisionLimiter: newLimiter(20, 10), pairLimiter: newLimiter(5, 5), mcpLimiter: newLimiter(300, 60), oauthLimiter: newLimiter(30, 20), stepUpLimiter: newLimiter(5, 5), credExportLimiter: newLimiter(1, 3)}
 	s.uplinkTunnel = s.newUplinkTunnel()
 	if eng != nil {
@@ -428,6 +430,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("PUT /api/v1/connectors/{id}", s.require("config.write", s.updateConnector))
 	mux.Handle("POST /api/v1/connectors/test", s.require("config.write", s.testConnector))
 	mux.Handle("GET /api/v1/connectors/opcua/certificate", s.require("config.write", s.opcuaCertificate))
+	mux.Handle("POST /api/v1/connectors/opcua/endpoints", s.require("config.write", s.opcuaEndpoints))
+	mux.Handle("POST /api/v1/connectors/opcua/browse", s.require("config.write", s.opcuaBrowse))
 	mux.Handle("GET /api/v1/register-profiles", s.require("config.write", s.listProfiles))
 	mux.Handle("POST /api/v1/register-profiles", s.require("config.write", s.createProfile))
 	mux.Handle("GET /api/v1/register-profiles/{id}", s.require("config.write", s.getProfile))

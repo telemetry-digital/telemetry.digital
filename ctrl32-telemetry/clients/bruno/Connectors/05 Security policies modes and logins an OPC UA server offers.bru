@@ -1,0 +1,25 @@
+meta {
+  name: Security policies modes and logins an OPC UA server offers
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/connectors/opcua/endpoints
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "endpoint": "string"
+  }
+}
+
+docs {
+  Security policies, modes and logins an OPC UA server offers
+  
+  GetEndpoints without a session; nothing is stored. `supported` tells whether this client can use the policy.
+  
+  Requires permission `config.write`.
+}

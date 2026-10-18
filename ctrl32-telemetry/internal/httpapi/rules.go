@@ -388,7 +388,7 @@ func (s *Server) RunCommand(ctx context.Context, c rules.CommandRequest) (rules.
 	if len(c.Args) == 0 {
 		c.Args = json.RawMessage(`{}`)
 	}
-	mbOp, opcOp, _, err := s.prepareConnector(ctx, c.DeviceID, transport, c.Method, c.Args)
+	op, _, err := s.prepareConnector(ctx, c.DeviceID, transport, c.Method, c.Args)
 	if err != nil {
 		return rules.CommandResult{}, err
 	}
@@ -402,7 +402,7 @@ func (s *Server) RunCommand(ctx context.Context, c rules.CommandRequest) (rules.
 		VALUES ($1::uuid, $2::uuid, $3, $4::jsonb, $5, $6, $7, 'queued', NULLIF($8, '')::uuid, NULLIF($9, '')::uuid) RETURNING id::text`, c.OrgID, c.DeviceID, c.Method, string(c.Args), exp, issuer, reason, c.RuleID, c.FlowID).Scan(&cid); err != nil {
 		return rules.CommandResult{}, errors.New("command could not be recorded")
 	}
-	status, result, cmdErr := s.dispatchCommand(ctx, cmdExec{org: c.OrgID, deviceID: c.DeviceID, ext: ext, transport: transport, cid: cid, method: c.Method, args: c.Args, exp: exp, mbOp: mbOp, opcOp: opcOp})
+	status, result, cmdErr := s.dispatchCommand(ctx, cmdExec{org: c.OrgID, deviceID: c.DeviceID, ext: ext, transport: transport, cid: cid, method: c.Method, args: c.Args, exp: exp, op: op})
 	msg, _ := json.Marshal(map[string]any{"id": cid, "m": c.Method, "a": c.Args, "exp": exp.Unix()})
 	_, _ = s.pool.Exec(ctx, `INSERT INTO core.raw_message (org_id, device_id, connector, direction, topic, payload, payload_json, decode_status) VALUES ($1::uuid, $2::uuid, 'mqtt', 'out', $3, $4, $4::jsonb, 'ok')`, c.OrgID, c.DeviceID, "d/"+ext+"/cmd", msg)
 	e := audit.Entry{OrgID: c.OrgID, ActorType: "system", ActorName: issuer, Action: "device.command", EntityType: "device", EntityID: c.DeviceID,

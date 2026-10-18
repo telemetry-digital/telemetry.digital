@@ -60,6 +60,7 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/replication"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/report"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/rules"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/s7"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/seed"
 	svc "github.com/telemetry-digital/ctrl32-telemetry/internal/service"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/smarthome"
@@ -297,13 +298,15 @@ func runServer(ctx context.Context, cfg *config.Config, cfgPath string, logger *
 	opc.Start(ctx)
 	mbm := modbus.New(pool, ing, logger)
 	mbm.Start(ctx)
+	s7m := s7.NewManager(pool, ing, logger)
+	s7m.Start(ctx)
 
 	tc := timecheck.New(timecheck.Config{Server: cfg.Time.NTPServer, Interval: cfg.Time.CheckInterval, MaxOffset: cfg.Time.MaxOffset}, logger)
 	tc.Start(ctx)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTP.Listen,
-		Handler:           httpapi.New(cfg, pool, br, iamSvc, rep, ing, con, agent.NewClient(cfg.Agent.Socket), opc, logger, version, hub, mbm, esc, rulesEngine, pm, tc, inc, repl, flowEngine, notifier, smart, vids),
+		Handler:           httpapi.New(cfg, pool, br, iamSvc, rep, ing, con, agent.NewClient(cfg.Agent.Socket), opc, logger, version, hub, mbm, esc, rulesEngine, pm, tc, inc, repl, flowEngine, notifier, smart, vids, s7m),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
