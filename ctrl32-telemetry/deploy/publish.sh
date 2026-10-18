@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build a signed release and publish it with the installer to a host running ctrl32 telemetry behind Caddy:
-#   https://<host>/install.sh, /install-relay.sh (+ .ps1) and https://<host>/dl/ with
+#   https://<host>/install.sh, /install-relay.sh (+ .ps1), /install-wg-modem.sh and https://<host>/dl/ with
 #   ctrl32-telemetry-linux-{amd64,arm64,arm}, ctrl32-telemetry-windows-amd64.exe, SHA256SUMS, VERSION,
 #   release.json + release.json.sig (the signed manifest, ADR-0024), analytics/ (the pinned parts of the object
 #   counting detector) and ctrl32-telemetry-<version>-offline.zip (everything for a server without the Internet)
@@ -51,7 +51,7 @@ else echo "note: cyclonedx-gomod not installed (go install github.com/CycloneDX/
 ( cd "$OUT" && sha256sum ctrl32-telemetry-* $(ls sbom-* govulncheck-* 2>/dev/null) > SHA256SUMS )
 cp deploy/install.sh "$OUT/install.sh"
 cp deploy/install.ps1 "$OUT/install.ps1"
-cp deploy/install-relay.sh deploy/install-relay.ps1 "$OUT/"
+cp deploy/install-relay.sh deploy/install-relay.ps1 deploy/install-wg-modem.sh "$OUT/"
 printf '%s\n' "$VERSION" > "$OUT/VERSION"
 # the detector parts for servers without the Internet (pinned, unmodified, with their licences)
 if [[ "${NO_DETECTOR:-}" != 1 ]]; then go run ./tools/relsign fetch-detector -out "$OUT/analytics"; fi
@@ -69,10 +69,10 @@ for f in "$OUT"/sbom-* "$OUT"/govulncheck-*; do [[ -e "$f" ]] && scp "${SSH_OPTS
 if [[ -d "$OUT/analytics" ]]; then scp "${SSH_OPTS[@]}" "$OUT"/analytics/* "$TARGET:/var/www/ctrl32/dl/analytics/"; fi
 scp "${SSH_OPTS[@]}" "$OUT/install.sh" "$TARGET:/var/www/ctrl32/install.sh"
 scp "${SSH_OPTS[@]}" "$OUT/install.ps1" "$TARGET:/var/www/ctrl32/install.ps1"
-scp "${SSH_OPTS[@]}" "$OUT/install-relay.sh" "$OUT/install-relay.ps1" "$TARGET:/var/www/ctrl32/"
+scp "${SSH_OPTS[@]}" "$OUT/install-relay.sh" "$OUT/install-relay.ps1" "$OUT/install-wg-modem.sh" "$TARGET:/var/www/ctrl32/"
 # the manifest lists install.sh & co. too: the copies under /dl/ keep the mirror complete
-scp "${SSH_OPTS[@]}" "$OUT/install.sh" "$OUT/install.ps1" "$OUT/install-relay.sh" "$OUT/install-relay.ps1" "$TARGET:/var/www/ctrl32/dl/"
+scp "${SSH_OPTS[@]}" "$OUT/install.sh" "$OUT/install.ps1" "$OUT/install-relay.sh" "$OUT/install-relay.ps1" "$OUT/install-wg-modem.sh" "$TARGET:/var/www/ctrl32/dl/"
 scp "${SSH_OPTS[@]}" "$OUT/release.json" "$OUT/release.json.sig" "$OUT/VERSION" "$TARGET:/var/www/ctrl32/dl/"
-ssh "${SSH_OPTS[@]}" "$TARGET" "chmod 0644 /var/www/ctrl32/install.sh /var/www/ctrl32/install.ps1 /var/www/ctrl32/install-relay.sh /var/www/ctrl32/install-relay.ps1; find /var/www/ctrl32/dl -type f -exec chmod 0644 {} +; find /var/www/ctrl32/dl -maxdepth 1 -name 'ctrl32-telemetry-*-offline.zip' ! -name '$PKG' -delete"
+ssh "${SSH_OPTS[@]}" "$TARGET" "chmod 0644 /var/www/ctrl32/install.sh /var/www/ctrl32/install.ps1 /var/www/ctrl32/install-relay.sh /var/www/ctrl32/install-relay.ps1 /var/www/ctrl32/install-wg-modem.sh; find /var/www/ctrl32/dl -type f -exec chmod 0644 {} +; find /var/www/ctrl32/dl -maxdepth 1 -name 'ctrl32-telemetry-*-offline.zip' ! -name '$PKG' -delete"
 bash deploy/homeassistant/publish-addon.sh "$VERSION" "$TARGET" "${SSH_OPTS[@]}"
 echo "published $VERSION to $TARGET (/install.sh, /dl/ with the signed manifest and $PKG, /dl/ha-addons.git)"

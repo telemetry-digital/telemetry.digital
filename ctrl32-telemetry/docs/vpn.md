@@ -101,6 +101,36 @@ into the LAN (the wg-quick template has the two lines commented out), or the gat
 the Raspberry Pi. The templates are text only — check them before use. The server does not NAT: VPN addresses stay
 visible in the site's logs.
 
+### Raspberry Pi as a WireGuard modem for PLCs (`install-wg-modem.sh`)
+
+For the common case "the server polls a PLC at a site" a Raspberry Pi (3 or newer, Raspberry Pi OS) in the site's LAN
+becomes the site's VPN link with one script; it connects out (UDP to the server's WireGuard port), nothing is opened
+towards the internet and the site's router is not touched.
+
+1. *System → VPN → Add peer*: **Device** (free, counts towards the 5 peers) for single PLC ports, or **Site** with the
+   LAN subnet (needs the licence) for the whole network. Save the configuration shown once as `ctrl32.conf`.
+2. On the Pi:
+
+   ```
+   curl -fsSL https://portal.telemetry.digital/install-wg-modem.sh -o install-wg-modem.sh
+   sudo bash install-wg-modem.sh --conf ctrl32.conf --forward 102=192.168.0.7:102     # device: only the S7 PLC
+   sudo bash install-wg-modem.sh --conf ctrl32.conf --site                            # site: the routed LAN
+   ```
+
+   `--forward PORT=HOST:PORT` repeats (S7 102, Modbus TCP 502, OPC UA 4840 …). With a device peer the connector uses
+   the **Pi's VPN address** and the forwarded port as its host (e.g. S7 host `10.66.0.5`, port 102); the PLC sees the
+   Pi's LAN address. With a site peer connectors use the PLC's own address.
+3. The script installs wireguard-tools and nftables, stores the configuration as `/etc/wireguard/ctrl32.conf`, enables
+   `wg-quick@ctrl32` (starts at boot) and loads the table `inet ctrl32_modem` with the tunnel: through the tunnel only
+   the forwarded ports (or, as a site, the LAN) are reachable, the Pi's own services are not (ping only; `--ssh` opens
+   SSH from the VPN), and the LAN cannot open connections into the VPN. Traffic into the LAN is masqueraded behind the
+   Pi, so the PLC needs no route or gateway change.
+4. It checks the handshake with the server and that every forwarded service answers; `--check` repeats the checks,
+   `--endpoint host:port` overrides the server address in the configuration, `--uninstall` removes everything.
+
+Tested end to end in containers (server — Pi with systemd — S7 simulator): S7 connection through the forwarded port,
+closed Pi ports, no route into the LAN in device mode, re-run, restart of the tunnel, site mode and removal.
+
 ## How it is enforced
 
 - The agent renders `/etc/wireguard/wg0.conf` and `/etc/ctrl32-telemetry/wireguard/vpn.nft` (nftables table
