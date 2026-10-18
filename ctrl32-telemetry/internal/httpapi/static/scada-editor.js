@@ -30,7 +30,7 @@
   };
   const DYN = [
     ['fill', 'Fill colour', 'color'], ['stroke', 'Line colour', 'color'], ['color', 'Text colour', 'color'], ['state', 'State', 'state'], ['text', 'Text', 'text'],
-    ['visible', 'Visible when', 'cond'], ['blink', 'Blink when', 'cond'], ['flow', 'Flow when', 'cond'], ['rotate', 'Rotate when', 'cond'],
+    ['visible', 'Visible when', 'cond'], ['blink', 'Blink when', 'cond'], ['flow', 'Flow when', 'cond'], ['rotate', 'Rotate when', 'cond'], ['animate', 'Animate when', 'cond'],
     ['level', 'Level (fill 0–1)', 'lin'], ['opacity', 'Opacity (0–1)', 'lin'], ['angle', 'Angle (°)', 'lin'], ['move_x', 'Move X (px)', 'lin'], ['move_y', 'Move Y (px)', 'lin'],
   ];
   const DYNKIND = Object.fromEntries(DYN.map((d) => [d[0], d[2]]));
@@ -455,8 +455,10 @@
       if (f.size > 512 * 1024) { toast('The SVG is larger than 512 KiB.', 'bad'); return; }
       const name = (ask('Name of the graphic', f.name.replace(/\.svg$/i, '')) || '').trim(); if (!name) return;
       const reason = (ask('Reason (audit trail)', '') || '').trim(); if (!reason) return;
-      try { const r = await ctrl32.api('POST', '/api/v1/hmi/objects/import-svg', { name, category: 'Imported', svg: await f.text(), reason });
-        toast(r.removed.length ? 'Imported; removed: ' + r.removed.join(', ') : 'Imported', r.removed.length ? 'warn' : 'ok'); await loadLibrary(); placeLibrary(r.slug, 'svg'); } catch (x) { toast(x.message, 'bad'); }
+      const svg = await f.text(); const fx = [...new Set(svg.match(/c32-(spin-ccw|spin|sway|pulse|rise|fall|flow-rev|flow|blink)/g) || [])];
+      try { const r = await ctrl32.api('POST', '/api/v1/hmi/objects/import-svg', { name, category: 'Imported', svg, reason });
+        const tr = (x) => (ctrl32.t ? ctrl32.t(x) : x);
+        toast((r.removed.length ? tr('Imported; removed') + ': ' + r.removed.join(', ') : tr('Imported')) + (fx.length ? ' · ' + tr('Animation effects') + ': ' + fx.join(', ') : ''), r.removed.length ? 'warn' : 'ok'); await loadLibrary(); placeLibrary(r.slug, 'svg'); } catch (x) { toast(x.message, 'bad'); }
     };
 
     // ---- layers panel ----------------------------------------------------------------------------------------------
@@ -518,7 +520,7 @@
         const kind = DYNKIND[d.prop] || 'cond';
         let body = '';
         if (kind === 'color' || kind === 'state' || kind === 'text') body = `<div class="se-map">${(d.map || []).map((m, j) => `<div class="row se-mrow"><select data-dm="${i}.${j}.op">${OPS.map((op) => `<option${op === m.op ? ' selected' : ''}>${esc(op)}</option>`).join('')}</select><input type="number" step="any" data-dm="${i}.${j}.v" value="${m.v}" style="width:80px">${kind === 'color' ? `<input type="color" data-dm="${i}.${j}.to" value="${/^#[0-9a-f]{6}$/i.test(m.to) ? m.to : '#dc2626'}">` : kind === 'state' ? `<select data-dm="${i}.${j}.to">${Object.keys(STATE_NAMES).map((s) => `<option value="${s}"${s === m.to ? ' selected' : ''}>${esc(STATE_NAMES[s])}</option>`).join('')}</select>` : `<input data-dm="${i}.${j}.to" value="${esc(m.to)}" maxlength="64" style="width:110px">`}<button type="button" class="btn small ghost" data-dmdel="${i}.${j}" title="Remove row">✕</button></div>`).join('')}<button type="button" class="btn small" data-dmadd="${i}">+ row</button>${kind === 'text' ? '<div class="muted" style="font-size:11px">Without rows the text shows the formatted value.</div>' : ''}</div>`;
-        else if (kind === 'cond') body = `<div class="row"><select data-dc="${i}.op">${OPS.map((op) => `<option${op === d.op ? ' selected' : ''}>${esc(op)}</option>`).join('')}</select><input type="number" step="any" data-dc="${i}.v" value="${d.v ?? 0}" style="width:90px">${d.prop === 'blink' ? `<label class="inline">frame <input type="color" data-dc="${i}.color" value="${/^#[0-9a-f]{6}$/i.test(d.color || '') ? d.color : '#dc2626'}"></label>` : ''}${d.prop === 'flow' || d.prop === 'rotate' ? `<label class="inline">speed <input type="number" step="0.1" min="0.05" max="20" data-dc="${i}.speed" value="${d.speed ?? 1}" style="width:64px"></label>` : ''}</div>`;
+        else if (kind === 'cond') body = `<div class="row"><select data-dc="${i}.op">${OPS.map((op) => `<option${op === d.op ? ' selected' : ''}>${esc(op)}</option>`).join('')}</select><input type="number" step="any" data-dc="${i}.v" value="${d.v ?? 0}" style="width:90px">${d.prop === 'blink' ? `<label class="inline">frame <input type="color" data-dc="${i}.color" value="${/^#[0-9a-f]{6}$/i.test(d.color || '') ? d.color : '#dc2626'}"></label>` : ''}${d.prop === 'flow' || d.prop === 'rotate' || d.prop === 'animate' ? `<label class="inline">speed <input type="number" step="0.1" min="0.05" max="20" data-dc="${i}.speed" value="${d.speed ?? 1}" style="width:64px"></label>` : ''}</div>`;
         else body = `<div class="row se-lin">${['value from', 'value to', 'result from', 'result to'].map((lab, k) => `<label>${esc(lab)} <input type="number" step="any" data-dl="${i}.${k}" value="${(d.lin || [0, 100, 0, 1])[k]}"></label>`).join('')}</div>`;
         return `<div class="se-dyn"><div class="row" style="align-items:center"><select data-dp="${i}">${DYN.map(([p, lab]) => `<option value="${p}"${p === d.prop ? ' selected' : ''}>${esc(lab)}</option>`).join('')}</select><span class="grow"></span><button type="button" class="btn small ghost" data-ddel="${i}" title="Remove dynamic">✕</button></div><label>Tag <select data-dt="${i}">${dsOptions(d.tag, '(object tag)')}</select></label>${body}</div>`;
       }).join('');

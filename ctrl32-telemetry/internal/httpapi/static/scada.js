@@ -168,6 +168,7 @@
         case 'blink': if (cmp(v, d.op, d.v)) out.blink = { color: d.color || '' }; break;
         case 'flow': if (cmp(v, d.op, d.v)) out.flow = { speed: d.speed || 1 }; break;
         case 'rotate': if (cmp(v, d.op, d.v)) out.spin = { speed: d.speed || 1 }; break;
+        case 'animate': out.anim = cmp(v, d.op, d.v) ? { speed: d.speed || 1 } : false; break;
         case 'level': out.level = lin(v, d.lin); break;
         case 'opacity': out.opacity = lin(v, d.lin); break;
         case 'angle': out.angle = lin(v, d.lin); break;
@@ -235,7 +236,9 @@
         break;
       }
       case 'image': {
-        const WG = window.ctrl32Widgets; const url = (WG && WG.apiPath ? WG.apiPath('/api/v1/hmi/objects/') : '/api/v1/hmi/objects/') + encodeURIComponent(e.src || '') + '/svg';
+        // Effects of the graphic (c32-* classes) run always, or only while an "animate" dynamic is true.
+        const an = (e.dyn || []).some((d) => d.prop === 'animate') ? dv.anim : { speed: 1 };
+        const WG = window.ctrl32Widgets; const url = (WG && WG.apiPath ? WG.apiPath('/api/v1/hmi/objects/') : '/api/v1/hmi/objects/') + encodeURIComponent(e.src || '') + '/svg' + (an ? '?anim=1&speed=' + an.speed : '');
         inner = `<image href="${esc(url)}" x="${r2(b.x)}" y="${r2(b.y)}" width="${r2(Math.max(1, b.w))}" height="${r2(Math.max(1, b.h))}" preserveAspectRatio="xMidYMid meet"/>`;
         if (stroke) inner += `<rect x="${r2(b.x)}" y="${r2(b.y)}" width="${r2(b.w)}" height="${r2(b.h)}" fill="none" stroke="${stroke}" stroke-width="${sw ?? 1}"/>`;
         break;
@@ -245,7 +248,7 @@
         if (!def) { inner = `<rect x="${r2(b.x)}" y="${r2(b.y)}" width="${r2(b.w)}" height="${r2(b.h)}" fill="none" stroke="#dc2626" stroke-dasharray="4 3"/><text x="${r2(cx)}" y="${r2(cy)}" text-anchor="middle" font-size="11" fill="#dc2626">${esc(e.symbol)}</text>`; break; }
         const base = baseFill || DEF.body; let body = base;
         if (st.shade) { defs += shadeDef(uid + 'g', base, def.fit === 'none' && b.w > b.h * 1.4); body = `url(#${uid}g)`; }
-        const c = { body, base, line: stroke || DEF.line, sw: sw ?? 1.5, state, level: dv.level ?? null, medium: col(st.medium, DEF.medium), spin: !!dv.spin, speed: dv.spin ? dv.spin.speed : 1, label: e.text || e.name || '', value: val, unit, uid, ar: b.h > 0 ? b.w / b.h : 1 };
+        const c = { body, base, line: stroke || DEF.line, sw: sw ?? 1.5, state, level: dv.level ?? null, medium: col(st.medium, DEF.medium), spin: !!(dv.spin || dv.anim), speed: dv.spin ? dv.spin.speed : dv.anim ? dv.anim.speed : 1, label: e.text || e.name || '', value: val, unit, uid, ar: b.h > 0 ? b.w / b.h : 1 };
         inner = `<svg x="${r2(b.x)}" y="${r2(b.y)}" width="${r2(Math.max(1, b.w))}" height="${r2(Math.max(1, b.h))}" viewBox="0 0 100 100" preserveAspectRatio="${def.fit === 'none' ? 'none' : 'xMidYMid meet'}" overflow="visible" class="sc-sym" style="width:${r2(Math.max(1, b.w))}px;height:${r2(Math.max(1, b.h))}px;max-width:none">${def.draw(c)}</svg>`;
         break;
       }
