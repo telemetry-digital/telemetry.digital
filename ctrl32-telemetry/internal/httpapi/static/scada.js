@@ -98,6 +98,17 @@
   sym('orifice', 'Orifice plate', 'process', 50, 80, 'meet', (c) => P(c, 'M34,6 H44 V94 H34 Z M56,6 H66 V94 H56 Z'));
   sym('scale', 'Weighing scale', 'process', 110, 80, 'meet', (c) => P(c, 'M4,58 H96 V70 H4 Z') + L(c, 'M14,70 V92 M86,70 V92') + P(c, 'M30,8 H70 V38 H30 Z', '#f8fafc') + L(c, 'M50,38 V58'));
   sym('nozzle', 'Spray nozzle', 'process', 60, 80, 'meet', (c) => P(c, 'M36,4 H64 V36 L50,58 L36,36 Z') + L(c, 'M50,62 L34,94 M50,62 L50,96 M50,62 L66,94', 1.2, c.medium));
+  // Aeration: diffuser grid with bubbles rising to the surface while running (state run or rotate dynamic); bubbles stay
+  // round in a stretched symbol (c.ar = width / height), none when stopped, a few still ones without data (palette).
+  sym('aeration', 'Aeration (bubbles)', 'process', 200, 120, 'none', (c) => {
+    const ar = c.ar || 1, on = c.spin || c.state === 'run', idle = !on && !c.state; let b = '';
+    for (let k = 0; k < (idle ? 7 : 22); k++) {
+      const x = 8 + (k * 37 + (k % 3) * 11) % 84, r = 2.8 + (k % 3) * 1.1, d = (2.2 + (k % 5) * 0.35) / (c.speed || 1);
+      b += on ? `<ellipse cx="${x}" cy="86" rx="${(r / ar).toFixed(2)}" ry="${r}" class="sc-bub" style="animation-duration:${d.toFixed(2)}s;animation-delay:-${((k * 0.37) % d).toFixed(2)}s" fill="#ffffff" fill-opacity="0.85" stroke="${tone(c.medium, -0.1)}" stroke-width="1"/>`
+        : `<ellipse cx="${x}" cy="${78 - (k * 23) % 60}" rx="${(r / ar).toFixed(2)}" ry="${r}" fill="#ffffff" fill-opacity="0.5" stroke="${tone(c.medium, -0.1)}" stroke-width="1"/>`;
+    }
+    return (idle || on ? b : '') + P(c, 'M3,90 H97 V96 H3 Z', c.state === 'fault' ? c.body : DEF.body) + L(c, 'M10,90 V88 M30,90 V88 M50,90 V88 M70,90 V88 M90,90 V88', 0.8);
+  });
   sym('dryer', 'Rotary dryer', 'process', 240, 80, 'none', (c) => P(c, 'M6,20 H94 V80 H6 Z') + L(c, 'M20,20 V80 M80,20 V80', 1.6) + `<g${spinCls(c, 'sc-agit')}>${L(c, 'M30,50 H70', 3)}</g>`);
 
   // Instruments (ISA 5.1 bubbles; the label is the element text, the value the bound tag)
@@ -234,7 +245,7 @@
         if (!def) { inner = `<rect x="${r2(b.x)}" y="${r2(b.y)}" width="${r2(b.w)}" height="${r2(b.h)}" fill="none" stroke="#dc2626" stroke-dasharray="4 3"/><text x="${r2(cx)}" y="${r2(cy)}" text-anchor="middle" font-size="11" fill="#dc2626">${esc(e.symbol)}</text>`; break; }
         const base = baseFill || DEF.body; let body = base;
         if (st.shade) { defs += shadeDef(uid + 'g', base, def.fit === 'none' && b.w > b.h * 1.4); body = `url(#${uid}g)`; }
-        const c = { body, base, line: stroke || DEF.line, sw: sw ?? 1.5, state, level: dv.level ?? null, medium: col(st.medium, DEF.medium), spin: !!dv.spin, speed: dv.spin ? dv.spin.speed : 1, label: e.text || e.name || '', value: val, unit, uid };
+        const c = { body, base, line: stroke || DEF.line, sw: sw ?? 1.5, state, level: dv.level ?? null, medium: col(st.medium, DEF.medium), spin: !!dv.spin, speed: dv.spin ? dv.spin.speed : 1, label: e.text || e.name || '', value: val, unit, uid, ar: b.h > 0 ? b.w / b.h : 1 };
         inner = `<svg x="${r2(b.x)}" y="${r2(b.y)}" width="${r2(Math.max(1, b.w))}" height="${r2(Math.max(1, b.h))}" viewBox="0 0 100 100" preserveAspectRatio="${def.fit === 'none' ? 'none' : 'xMidYMid meet'}" overflow="visible" class="sc-sym" style="width:${r2(Math.max(1, b.w))}px;height:${r2(Math.max(1, b.h))}px;max-width:none">${def.draw(c)}</svg>`;
         break;
       }
