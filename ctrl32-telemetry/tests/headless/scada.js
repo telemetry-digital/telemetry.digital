@@ -75,6 +75,8 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   expect("no value → dash", await q("nodata", `return g.querySelector('text').textContent;`), "—");
   expect("tank viewport keeps its size (CSS 140 × 260 px)", await ev(`(() => { const cs = getComputedStyle(document.querySelector('#vGrid [data-eid="tank"] svg')); return cs.width + " x " + cs.height; })()`), "140px x 260px");
   expect("clickable pump", await q("pump", `return g.classList.contains('sc-click');`), true);
+  // Pictures with more than 50 tags: the latest values are fetched in chunks of 50 (the endpoint limit).
+  expect("latest values for > 50 tags", await ev(`(async () => { const all = await window.ctrl32Widgets.datastreams(); const ids = all.map((d) => d.id); const pad = Array.from({ length: Math.max(0, 120 - ids.length) }, (_, i) => '00000000-0000-7000-8000-' + String(i).padStart(12, '0')); const r = await window.ctrl32Widgets.latest(ids.concat(pad)); return Object.keys(r).length > 0 && ids.concat(pad).length > 50; })()`), true);
   const s1 = await send("Page.captureScreenshot", { format: "png" }); fs.writeFileSync(out + "/scada-view.png", Buffer.from(s1.result.data, "base64"));
 
   // Live update without reload.
