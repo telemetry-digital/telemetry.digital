@@ -1,11 +1,11 @@
 meta {
-  name: Retire a profile
+  name: Revoke a connector
   type: http
-  seq: 11
+  seq: 8
 }
 
 delete {
-  url: {{baseUrl}}/api/v1/register-profiles/:id
+  url: {{baseUrl}}/api/v1/connectors/:id
   body: none
   auth: inherit
 }
@@ -19,9 +19,9 @@ params:query {
 }
 
 docs {
-  Retire a profile
+  Revoke a connector
   
-  Refused (409) while connectors use any version of it.
+  Stops polling and rejects its secret.
   
   Requires permission `config.write`.
 }

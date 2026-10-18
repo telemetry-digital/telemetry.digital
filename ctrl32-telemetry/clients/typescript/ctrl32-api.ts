@@ -324,19 +324,27 @@ export type ConnectorSettings = {
   auth?: string;
   /** modbus */
   byte_order?: "big" | "big_swap" | "little" | "little_swap";
+  /** s7 */
+  conn_type?: "pg" | "op" | "s7basic";
   /** virtual device the values arrive under */
   device_external_id?: string;
   /** opcua: opc.tcp://host:4840 */
   endpoint?: string;
   /** modbus */
   framing?: "tcp" | "rtuovertcp";
-  /** modbus */
+  /** modbus, s7 */
   host?: string;
   /** polling interval */
   interval_s?: number;
+  /** s7: hex, e.g. 01.00 (LOGO!) */
+  local_tsap?: string;
+  /** opcua */
+  mode?: "poll" | "subscribe";
   nodes?: (Record<string, unknown>)[];
   password?: string;
-  /** modbus, default 502 */
+  /** s7 */
+  plc?: "s7-300" | "s7-400" | "s7-1200" | "s7-1500" | "et200sp" | "logo" | "other";
+  /** modbus, default 502; s7, default 102 */
   port?: number;
   /** modbus: register profile version the registers come from */
   profile_id?: string;
@@ -344,11 +352,22 @@ export type ConnectorSettings = {
   profile_name?: string;
   /** modbus, informational */
   profile_version?: number;
+  /** opcua subscribe: 100..60000, default 1000 */
+  publishing_ms?: number;
+  /** s7: 0..7 (default from plc) */
+  rack?: number;
   registers?: ModbusRegister[];
+  /** s7: hex, e.g. 02.00 (LOGO!) */
+  remote_tsap?: string;
   /** opcua */
   security_mode?: string;
   /** opcua */
   security_policy?: string;
+  /** opcua: pin the server certificate (SHA-1 hex) */
+  server_thumbprint?: string;
+  /** s7: 0..31 (default from plc) */
+  slot?: number;
+  tags?: S7Tag[];
   /** modbus */
   timeout_ms?: number;
   /** modbus */
@@ -437,7 +456,7 @@ export type Device = {
   revoked_at?: string | null;
   /** last_seen, fw, battery, rssi, last_values, … */
   status?: Record<string, unknown>;
-  transport?: "mqtt" | "http" | "lorawan" | "opcua" | "modbus";
+  transport?: "mqtt" | "http" | "lorawan" | "opcua" | "modbus" | "s7";
 };
 
 export type Display = {
@@ -1259,6 +1278,25 @@ export type RuleSpec = {
   inputs: RuleInput[];
   /** default all */
   match?: "all" | "any";
+};
+
+export type S7Tag = {
+  /** DB1.DBD0, DB1.DBX6.0, DB1.DBS20.20, MW10, M0.1, IW64, Q0.0, DB1,REAL4, VW100 (LOGO!) */
+  address: string;
+  /** route the value to another virtual device */
+  device?: string;
+  /** ^[a-z][a-z0-9_]{0,31}$ */
+  key: string;
+  /** write limit (scaled) */
+  max?: number;
+  /** write limit (scaled) */
+  min?: number;
+  offset?: number;
+  scale?: number;
+  /** default implied by the address (X bool, B byte, W int, D real, S string) */
+  type?: "bool" | "byte" | "char" | "sint" | "usint" | "int" | "uint" | "word" | "dint" | "udint" | "dword" | "real" | "lreal" | "string";
+  /** not for inputs */
+  writable?: boolean;
 };
 
 export type Scene = {
@@ -2466,19 +2504,70 @@ export class Ctrl32Client {
 
   /** Create a connector
    *
-   * `kind` chirpstack: returns the ingest URL and a bearer secret (shown once) for the ChirpStack HTTP integration. `kind` opcua / modbus_tcp: `settings` describe the endpoint and the nodes/registers; values arrive under a virtual device (`settings.device_external_id`).
+   * `kind` chirpstack: returns the ingest URL and a bearer secret (shown once) for the ChirpStack HTTP integration. `kind` opcua / modbus_tcp / s7: `settings` describe the endpoint and the nodes/registers/tags; values arrive under a virtual device (`settings.device_external_id`); OPC UA nodes and S7 tags with `device` feed another virtual device.
    * 
    * Requires permission `config.write`. */
   postConnectors(body: {
     /** chirpstack: register unknown DevEUIs automatically */
     auto_create_devices?: boolean;
-    kind: "chirpstack" | "opcua" | "modbus_tcp";
+    kind: "chirpstack" | "opcua" | "modbus_tcp" | "s7";
     name: string;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
     settings?: ConnectorSettings;
   }): Promise<ConnectorCreated> {
     return this.request<ConnectorCreated>('POST', `/api/v1/connectors`, undefined, body, false);
+  }
+
+  /** Browse the address space of an OPC UA server
+   *
+   * Children of a node (default the Objects folder i=85): objects and folders first, variables with data type, access (readable/writable) and current value; at most 2000 children. Uses the connection part of `settings` (endpoint, security, login); `id` reuses the stored password of a connector.
+   * 
+   * Requires permission `config.write`. */
+  postConnectorsOpcuaBrowse(body: {
+    /** existing connector id */
+    id?: string;
+    /** ns=2;s=Line1 (empty = i=85) */
+    node_id?: string;
+    settings: ConnectorSettings;
+  }): Promise<{
+    items?: ({
+      browse_name?: string;
+      data_type?: string;
+      display_name?: string;
+      has_children?: boolean;
+      /** Object | Variable | Method | View */
+      node_class?: string;
+      node_id?: string;
+      problem?: string;
+      readable?: boolean;
+      value?: Record<string, unknown>;
+      writable?: boolean;
+    })[];
+    namespaces?: string[];
+    node_id?: string;
+    server_thumbprint?: string;
+    truncated?: boolean;
+  }> {
+    return this.request<{
+    items?: ({
+      browse_name?: string;
+      data_type?: string;
+      display_name?: string;
+      has_children?: boolean;
+      /** Object | Variable | Method | View */
+      node_class?: string;
+      node_id?: string;
+      problem?: string;
+      readable?: boolean;
+      value?: Record<string, unknown>;
+      writable?: boolean;
+    })[];
+    namespaces?: string[];
+    node_id?: string;
+    server_thumbprint?: string;
+    truncated?: boolean;
+  }>('POST', `/api/v1/connectors/opcua/browse`, undefined, body, false);
   }
 
   /** This server's OPC UA client certificate (PEM)
@@ -2490,38 +2579,94 @@ export class Ctrl32Client {
     return this.request<Response>('GET', `/api/v1/connectors/opcua/certificate`, undefined, undefined, true);
   }
 
+  /** Security policies, modes and logins an OPC UA server offers
+   *
+   * GetEndpoints without a session; nothing is stored. `supported` tells whether this client can use the policy.
+   * 
+   * Requires permission `config.write`. */
+  postConnectorsOpcuaEndpoints(body: {
+    /** opc.tcp://host:4840/path */
+    endpoint: string;
+  }): Promise<{
+    endpoint?: string;
+    endpoints?: ({
+      application_uri?: string;
+      product_uri?: string;
+      security_level?: number;
+      /** None | Sign | SignAndEncrypt */
+      security_mode?: string;
+      security_policy?: string;
+      server_name?: string;
+      /** SHA-1 */
+      server_thumbprint?: string;
+      supported?: boolean;
+      url?: string;
+      user_tokens?: string[];
+    })[];
+  }> {
+    return this.request<{
+    endpoint?: string;
+    endpoints?: ({
+      application_uri?: string;
+      product_uri?: string;
+      security_level?: number;
+      /** None | Sign | SignAndEncrypt */
+      security_mode?: string;
+      security_policy?: string;
+      server_name?: string;
+      /** SHA-1 */
+      server_thumbprint?: string;
+      supported?: boolean;
+      url?: string;
+      user_tokens?: string[];
+    })[];
+  }>('POST', `/api/v1/connectors/opcua/endpoints`, undefined, body, false);
+  }
+
   /** Test connector settings without saving
    *
-   * Connects once and reads the configured nodes/registers.
+   * Connects once and reads the configured nodes/registers/tags (S7: also identifies the CPU).
    * 
    * Requires permission `config.write`. */
   postConnectorsTest(body: {
     /** existing connector id (reuse its stored password) */
     id?: string;
     /** default opcua */
-    kind?: "opcua" | "modbus_tcp";
+    kind?: "opcua" | "modbus_tcp" | "s7";
     settings: ConnectorSettings;
   }): Promise<{
     bad_nodes?: string[];
+    /** S7: order_code, module_type, module_name, plc_name, serial */
+    cpu?: Record<string, unknown>;
     endpoint?: string;
     ok?: boolean;
+    /** S7: negotiated PDU size */
+    pdu?: number;
     /** OPC UA: negotiated policy */
     security?: string;
-    /** key → value */
+    /** OPC UA: SHA-1 of the server certificate */
+    server_thumbprint?: string;
+    /** key → value (device/key for nodes routed to another device) */
     values?: Record<string, unknown>;
   }> {
     return this.request<{
     bad_nodes?: string[];
+    /** S7: order_code, module_type, module_name, plc_name, serial */
+    cpu?: Record<string, unknown>;
     endpoint?: string;
     ok?: boolean;
+    /** S7: negotiated PDU size */
+    pdu?: number;
     /** OPC UA: negotiated policy */
     security?: string;
-    /** key → value */
+    /** OPC UA: SHA-1 of the server certificate */
+    server_thumbprint?: string;
+    /** key → value (device/key for nodes routed to another device) */
     values?: Record<string, unknown>;
   }>('POST', `/api/v1/connectors/test`, undefined, body, false);
   }
 
-  /** Update connector settings (OPC UA, Modbus)
+  /** Update connector settings (OPC UA, Modbus, S7)
    *
    * Requires permission `config.write`. */
   putConnectorsId(id: string, body: {
@@ -3738,7 +3883,7 @@ export class Ctrl32Client {
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
     /** default mqtt */
-    transport?: "mqtt" | "http" | "lorawan" | "opcua" | "modbus";
+    transport?: "mqtt" | "http" | "lorawan" | "opcua" | "modbus" | "s7";
   }): Promise<{
     claim_code?: string;
     claim_expires_in_hours?: number;

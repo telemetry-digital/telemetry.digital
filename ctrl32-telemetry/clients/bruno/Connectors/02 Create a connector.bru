@@ -19,19 +19,25 @@ body:json {
     "settings": {
       "auth": "string",
       "byte_order": "big",
+      "conn_type": "pg",
       "device_external_id": "string",
       "endpoint": "string",
       "framing": "tcp",
       "host": "string",
       "interval_s": 1,
+      "local_tsap": "string",
+      "mode": "poll",
       "nodes": [
         {}
       ],
       "password": "string",
+      "plc": "s7-300",
       "port": 1,
       "profile_id": "string",
       "profile_name": "string",
       "profile_version": 1,
+      "publishing_ms": 1,
+      "rack": 1,
       "registers": [
         {
           "address": 1,
@@ -45,8 +51,24 @@ body:json {
           "writable": true
         }
       ],
+      "remote_tsap": "string",
       "security_mode": "string",
       "security_policy": "string",
+      "server_thumbprint": "string",
+      "slot": 1,
+      "tags": [
+        {
+          "address": "string",
+          "device": "string",
+          "key": "string",
+          "max": 21.5,
+          "min": 21.5,
+          "offset": 21.5,
+          "scale": 21.5,
+          "type": "bool",
+          "writable": true
+        }
+      ],
       "timeout_ms": 1,
       "unit_id": 1,
       "username": "string"
@@ -57,7 +79,7 @@ body:json {
 docs {
   Create a connector
   
-  `kind` chirpstack: returns the ingest URL and a bearer secret (shown once) for the ChirpStack HTTP integration. `kind` opcua / modbus_tcp: `settings` describe the endpoint and the nodes/registers; values arrive under a virtual device (`settings.device_external_id`).
+  `kind` chirpstack: returns the ingest URL and a bearer secret (shown once) for the ChirpStack HTTP integration. `kind` opcua / modbus_tcp / s7: `settings` describe the endpoint and the nodes/registers/tags; values arrive under a virtual device (`settings.device_external_id`); OPC UA nodes and S7 tags with `device` feed another virtual device.
   
   Requires permission `config.write`.
 }

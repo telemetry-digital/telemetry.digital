@@ -12,6 +12,7 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/iam"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/modbus"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/opcua"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/s7"
 )
 
 // Command execution and four-eyes approval (URS H-08, A-12, ADR-0008). A command is recorded first; with the
@@ -27,33 +28,48 @@ type cmdExec struct {
 	org, deviceID, ext, transport, cid, method string
 	args                                       json.RawMessage
 	exp                                        time.Time
-	mbOp                                       *modbus.WriteOp
-	opcOp                                      *opcua.WriteOp
+	op                                         connOp
 }
 
-// prepareConnector validates a command for connector devices (Modbus/OPC UA) before anything is recorded or sent.
-func (s *Server) prepareConnector(ctx context.Context, deviceID, transport, method string, args json.RawMessage) (*modbus.WriteOp, *opcua.WriteOp, int, error) {
+// connOp is a validated write for a connector device (Modbus, OPC UA or S7); at most one field is set.
+type connOp struct {
+	mb  *modbus.WriteOp
+	opc *opcua.WriteOp
+	s7  *s7.WriteOp
+}
+
+// prepareConnector validates a command for connector devices (Modbus/OPC UA/S7) before anything is recorded or sent.
+func (s *Server) prepareConnector(ctx context.Context, deviceID, transport, method string, args json.RawMessage) (connOp, int, error) {
 	switch transport {
 	case "opcua":
 		if s.opc == nil {
-			return nil, nil, 503, errors.New("OPC UA is not available on this server")
+			return connOp{}, 503, errors.New("OPC UA is not available on this server")
 		}
 		op, err := s.opc.Prepare(ctx, deviceID, method, args)
 		if err != nil {
-			return nil, nil, 400, err
+			return connOp{}, 400, err
 		}
-		return nil, op, 0, nil
+		return connOp{opc: op}, 0, nil
 	case "modbus":
 		if s.mb == nil {
-			return nil, nil, 503, errors.New("Modbus is not available on this server")
+			return connOp{}, 503, errors.New("Modbus is not available on this server")
 		}
 		op, err := s.mb.Prepare(ctx, deviceID, method, args)
 		if err != nil {
-			return nil, nil, 400, err
+			return connOp{}, 400, err
 		}
-		return op, nil, 0, nil
+		return connOp{mb: op}, 0, nil
+	case "s7":
+		if s.s7 == nil {
+			return connOp{}, 503, errors.New("S7 is not available on this server")
+		}
+		op, err := s.s7.Prepare(ctx, deviceID, method, args)
+		if err != nil {
+			return connOp{}, 400, err
+		}
+		return connOp{s7: op}, 0, nil
 	}
-	return nil, nil, 0, nil
+	return connOp{}, 0, nil
 }
 
 // dispatchCommand sends or executes a recorded command and stores the outcome; MQTT devices ack later.
@@ -102,11 +118,14 @@ func (s *Server) dispatchCommand(ctx context.Context, e cmdExec) (status string,
 		b, _ := json.Marshal(res)
 		_, _ = s.pool.Exec(ctx, `UPDATE core.device_command SET status = 'acked', sent_at = now(), acked_at = now(), result = $2::jsonb WHERE id = $1::uuid`, e.cid, string(b))
 	}
-	if e.opcOp != nil {
-		finish(s.opc.Do(ctx, e.opcOp))
+	if e.op.opc != nil {
+		finish(s.opc.Do(ctx, e.op.opc))
 	}
-	if e.mbOp != nil {
-		finish(s.mb.Do(ctx, e.mbOp))
+	if e.op.mb != nil {
+		finish(s.mb.Do(ctx, e.op.mb))
+	}
+	if e.op.s7 != nil {
+		finish(s.s7.Do(ctx, e.op.s7))
 	}
 	if s.live != nil {
 		s.live.Command(e.org, e.deviceID, e.cid, e.method, status, map[string]any{"result": result, "error": cmdErr})
@@ -168,7 +187,7 @@ func (s *Server) approveCommand(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 403, "four eyes: a different user must approve this command")
 		return
 	}
-	mbOp, opcOp, code, err := s.prepareConnector(r.Context(), id, c.transport, c.method, c.args)
+	op, code, err := s.prepareConnector(r.Context(), id, c.transport, c.method, c.args)
 	if err != nil {
 		writeErr(w, code, err.Error())
 		return
@@ -181,7 +200,7 @@ func (s *Server) approveCommand(w http.ResponseWriter, r *http.Request) {
 	if c.exp != nil {
 		exp = *c.exp
 	}
-	status, result, cmdErr := s.dispatchCommand(r.Context(), cmdExec{org: org, deviceID: id, ext: c.ext, transport: c.transport, cid: cid, method: c.method, args: c.args, exp: exp, mbOp: mbOp, opcOp: opcOp})
+	status, result, cmdErr := s.dispatchCommand(r.Context(), cmdExec{org: org, deviceID: id, ext: c.ext, transport: c.transport, cid: cid, method: c.method, args: c.args, exp: exp, op: op})
 	s.audit(r, "command.approve", "device", id, map[string]any{"command_id": cid, "status": "pending", "issued_by": c.issuedName}, map[string]any{"command_id": cid, "method": c.method, "args": c.args, "status": status, "approved_by": p.Username}, in.Reason)
 	writeJSON(w, 200, map[string]any{"id": cid, "method": c.method, "status": status, "result": result, "error": cmdErr})
 }

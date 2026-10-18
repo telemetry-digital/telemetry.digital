@@ -100,7 +100,7 @@ func (s *Server) sendCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Connector devices: the write is validated against the register map / node list before anything is recorded.
-	mbOp, opcOp, code, err := s.prepareConnector(r.Context(), id, transport, in.Method, in.Args)
+	op, code, err := s.prepareConnector(r.Context(), id, transport, in.Method, in.Args)
 	if err != nil {
 		writeErr(w, code, err.Error())
 		return
@@ -125,7 +125,7 @@ func (s *Server) sendCommand(w http.ResponseWriter, r *http.Request) {
 			s.live.Command(org, id, cid, in.Method, "pending", nil)
 		}
 	} else {
-		status, result, cmdErr = s.dispatchCommand(r.Context(), cmdExec{org: org, deviceID: id, ext: ext, transport: transport, cid: cid, method: in.Method, args: in.Args, exp: exp, mbOp: mbOp, opcOp: opcOp})
+		status, result, cmdErr = s.dispatchCommand(r.Context(), cmdExec{org: org, deviceID: id, ext: ext, transport: transport, cid: cid, method: in.Method, args: in.Args, exp: exp, op: op})
 	}
 	msg, _ := json.Marshal(map[string]any{"id": cid, "m": in.Method, "a": in.Args, "exp": exp.Unix()})
 	_, _ = s.pool.Exec(r.Context(), `INSERT INTO core.raw_message (org_id, device_id, connector, direction, topic, payload, payload_json, decode_status) VALUES ($1::uuid, $2::uuid, 'mqtt', 'out', $3, $4, $4::jsonb, 'ok')`, org, id, "d/"+ext+"/cmd", msg)

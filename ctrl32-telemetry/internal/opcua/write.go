@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gopcua/opcua"
 	"github.com/gopcua/opcua/ua"
 )
 
@@ -25,9 +26,10 @@ type WriteOp struct {
 	Value                      any // float64, bool or string
 }
 
-func (st Settings) node(key string) *Node {
+// node finds the node with the key on a device of the connector ("" = the connector's own device).
+func (st Settings) node(device, key string) *Node {
 	for i := range st.Nodes {
-		if st.Nodes[i].Key == key {
+		if st.Nodes[i].Key == key && st.Nodes[i].Device == device {
 			return &st.Nodes[i]
 		}
 	}
@@ -46,11 +48,11 @@ func (m *Manager) Prepare(ctx context.Context, deviceID, method string, args jso
 	if err := json.Unmarshal(args, &a); err != nil {
 		return nil, errors.New("args must be {key, value}")
 	}
-	w := m.workerFor(ctx, deviceID)
+	w, ext := m.workerFor(ctx, deviceID)
 	if w == nil {
 		return nil, errors.New("no running OPC UA connector owns this device")
 	}
-	n := w.row.Settings.node(a.Key)
+	n := w.row.Settings.node(ext, a.Key)
 	if n == nil {
 		return nil, fmt.Errorf("unknown key %q", a.Key)
 	}
@@ -82,7 +84,8 @@ func fmtLimit(p *float64, def string) string {
 	return strconv.FormatFloat(*p, 'f', -1, 64)
 }
 
-func (m *Manager) workerFor(ctx context.Context, deviceID string) *worker {
+// workerFor finds the running connector that feeds the device and the device's key in its settings.
+func (m *Manager) workerFor(ctx context.Context, deviceID string) (*worker, string) {
 	m.mu.Lock()
 	ws := make([]*worker, 0, len(m.workers))
 	for _, w := range m.workers {
@@ -90,12 +93,28 @@ func (m *Manager) workerFor(ctx context.Context, deviceID string) *worker {
 	}
 	m.mu.Unlock()
 	for _, w := range ws {
-		d, err := w.device(ctx)
-		if err == nil && d.ID == deviceID {
-			return w
+		exts := map[string]bool{"": true}
+		for _, n := range w.row.Settings.Nodes {
+			exts[n.Device] = true
+		}
+		for ext := range exts {
+			d, err := w.device(ctx, ext)
+			if err == nil && d.ID == deviceID {
+				return w, ext
+			}
 		}
 	}
-	return nil
+	return nil, ""
+}
+
+func (m *Manager) liveClient(connectorID string) *opcua.Client {
+	m.mu.Lock()
+	w := m.workers[connectorID]
+	m.mu.Unlock()
+	if w == nil {
+		return nil
+	}
+	return w.live()
 }
 
 // unscale reverses the node's scale/offset so the server receives the raw engineering value.
@@ -177,11 +196,15 @@ func coerce(cur any, n Node, v any) (any, error) {
 
 // Do reads the node (for its data type), writes the value, reads it back and returns the result for the ack.
 func (m *Manager) Do(ctx context.Context, op *WriteOp) (map[string]any, error) {
-	c, err := m.connect(ctx, op.Settings)
-	if err != nil {
-		return nil, err
+	// Reuse the connector's open session; connect separately only while it is reconnecting.
+	c := m.liveClient(op.ConnectorID)
+	if c == nil {
+		var err error
+		if c, _, err = m.connect(ctx, op.Settings); err != nil {
+			return nil, err
+		}
+		defer c.Close(ctx)
 	}
-	defer c.Close(ctx)
 	id, err := ua.ParseNodeID(op.Node.NodeID)
 	if err != nil {
 		return nil, err

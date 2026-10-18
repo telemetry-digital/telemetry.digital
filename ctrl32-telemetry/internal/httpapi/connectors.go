@@ -63,6 +63,12 @@ func (s *Server) listConnectors(w http.ResponseWriter, r *http.Request) {
 				row["status"] = s.mb.Status(id)
 			}
 		}
+		if kind == "s7" {
+			row["url"] = ""
+			if s.s7 != nil {
+				row["status"] = s.s7.Status(id)
+			}
+		}
 		out = append(out, row)
 	}
 	writeJSON(w, 200, out)
@@ -103,8 +109,12 @@ func (s *Server) createConnector(w http.ResponseWriter, r *http.Request) {
 		s.createModbusConnector(w, r, org, in.Name, in.Settings, in.Reason)
 		return
 	}
+	if in.Kind == "s7" {
+		s.createS7Connector(w, r, org, in.Name, in.Settings, in.Reason)
+		return
+	}
 	if in.Kind != "chirpstack_http" {
-		writeErr(w, 400, "kind must be chirpstack_http, opcua or modbus_tcp")
+		writeErr(w, 400, "kind must be chirpstack_http, opcua, modbus_tcp or s7")
 		return
 	}
 	auto := true
@@ -149,6 +159,9 @@ func (s *Server) revokeConnector(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.mb != nil {
 		s.mb.Resync()
+	}
+	if s.s7 != nil {
+		s.s7.Resync()
 	}
 	writeJSON(w, 200, map[string]any{"ok": true})
 }

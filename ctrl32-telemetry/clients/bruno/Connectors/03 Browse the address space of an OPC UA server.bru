@@ -1,0 +1,83 @@
+meta {
+  name: Browse the address space of an OPC UA server
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/connectors/opcua/browse
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "id": "string",
+    "node_id": "string",
+    "settings": {
+      "auth": "string",
+      "byte_order": "big",
+      "conn_type": "pg",
+      "device_external_id": "string",
+      "endpoint": "string",
+      "framing": "tcp",
+      "host": "string",
+      "interval_s": 1,
+      "local_tsap": "string",
+      "mode": "poll",
+      "nodes": [
+        {}
+      ],
+      "password": "string",
+      "plc": "s7-300",
+      "port": 1,
+      "profile_id": "string",
+      "profile_name": "string",
+      "profile_version": 1,
+      "publishing_ms": 1,
+      "rack": 1,
+      "registers": [
+        {
+          "address": 1,
+          "key": "string",
+          "max": 21.5,
+          "min": 21.5,
+          "offset": 21.5,
+          "scale": 21.5,
+          "table": "holding",
+          "type": "bool",
+          "writable": true
+        }
+      ],
+      "remote_tsap": "string",
+      "security_mode": "string",
+      "security_policy": "string",
+      "server_thumbprint": "string",
+      "slot": 1,
+      "tags": [
+        {
+          "address": "string",
+          "device": "string",
+          "key": "string",
+          "max": 21.5,
+          "min": 21.5,
+          "offset": 21.5,
+          "scale": 21.5,
+          "type": "bool",
+          "writable": true
+        }
+      ],
+      "timeout_ms": 1,
+      "unit_id": 1,
+      "username": "string"
+    }
+  }
+}
+
+docs {
+  Browse the address space of an OPC UA server
+  
+  Children of a node (default the Objects folder i=85): objects and folders first, variables with data type, access (readable/writable) and current value; at most 2000 children. Uses the connection part of `settings` (endpoint, security, login); `id` reuses the stored password of a connector.
+  
+  Requires permission `config.write`.
+}
