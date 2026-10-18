@@ -5508,11 +5508,11 @@ export class Ctrl32Client {
 
   /** The sanitised SVG of a graphic
    *
-   * Served as image/svg+xml with a sandbox Content-Security-Policy.
+   * Served as image/svg+xml with a sandbox Content-Security-Policy. ?anim=1 animates the parts marked with c32-* effect classes (0.84.0).
    * 
    * Requires permission `data.read`. */
-  getHmiObjectsSlugSvg(slug: string): Promise<Response> {
-    return this.request<Response>('GET', `/api/v1/hmi/objects/${encodeURIComponent(slug)}/svg`, undefined, undefined, true);
+  getHmiObjectsSlugSvg(slug: string, query?: { anim?: string; /** 1 = add the server's style sheet for the c32-* effect classes */ speed?: string; /** effect speed 0.05–20, default 1 */ }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/hmi/objects/${encodeURIComponent(slug)}/svg`, query, undefined, true);
   }
 
   /** Rooms with their entities (Home page)
@@ -6795,9 +6795,9 @@ export class Ctrl32Client {
 
   /** A library graphic shown by the shared picture
    *
-   * Only graphics that the linked process picture references. */
-  getPublicTokenHmiObjectsSlugSvg(token: string, slug: string): Promise<Response> {
-    return this.request<Response>('GET', `/api/v1/public/${encodeURIComponent(token)}/hmi/objects/${encodeURIComponent(slug)}/svg`, undefined, undefined, true);
+   * Only graphics that the linked process picture references. ?anim=1 animates the parts marked with c32-* effect classes (0.84.0). */
+  getPublicTokenHmiObjectsSlugSvg(token: string, slug: string, query?: { anim?: string; /** 1 = add the server's style sheet for the c32-* effect classes */ speed?: string; /** effect speed 0.05–20, default 1 */ }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/public/${encodeURIComponent(token)}/hmi/objects/${encodeURIComponent(slug)}/svg`, query, undefined, true);
   }
 
   /** Observations (bound datastreams only)
