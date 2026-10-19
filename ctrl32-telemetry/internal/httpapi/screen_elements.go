@@ -31,7 +31,7 @@ var (
 	pointTypes   = map[string]bool{"line": true, "polyline": true, "polygon": true, "pipe": true}
 	dynProps     = map[string]string{ // property → kind of the mapped value
 		"fill": "color", "stroke": "color", "color": "color", "state": "state", "text": "text",
-		"visible": "cond", "blink": "cond", "flow": "cond", "rotate": "cond",
+		"visible": "cond", "blink": "cond", "flow": "cond", "rotate": "cond", "animate": "cond",
 		"level": "lin", "opacity": "lin", "angle": "lin", "move_x": "lin", "move_y": "lin",
 	}
 	dynOps     = map[string]bool{">": true, ">=": true, "<": true, "<=": true, "==": true, "!=": true}

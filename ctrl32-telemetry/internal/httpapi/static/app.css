@@ -300,13 +300,15 @@ main { padding-top: 24px; }
 .sc-agit { transform-box: fill-box; transform-origin: 50% 50%; animation: sc-agit 1s ease-in-out infinite alternate; }
 .sc-flow { animation: sc-flow 1s linear infinite; }
 .sc-blink { animation: sc-blink 1s steps(2, jump-none) infinite; }
+.sc-bub { animation: sc-bub 2.4s ease-in infinite; }
 .sc-flame { transform-box: fill-box; transform-origin: 50% 100%; animation: sc-flame .6s ease-in-out infinite alternate; }
 @keyframes sc-spin { to { transform: rotate(360deg); } }
 @keyframes sc-agit { from { transform: scaleX(1); } to { transform: scaleX(-1); } }
 @keyframes sc-flow { to { stroke-dashoffset: var(--sc-per, -20px); } }
 @keyframes sc-blink { 50% { opacity: .15; } }
+@keyframes sc-bub { 0% { transform: translate(0, 0); opacity: 0; } 12% { opacity: .95; } 50% { transform: translate(1.5px, -38px); } 85% { opacity: .85; } 100% { transform: translate(-1px, -80px); opacity: 0; } }
 @keyframes sc-flame { from { transform: scaleY(.85); } to { transform: scaleY(1.1); } }
-@media (prefers-reduced-motion: reduce) { .sc-spin, .sc-agit, .sc-flow, .sc-flame { animation: none; } .sc-blink { animation-duration: 2s; } }
+@media (prefers-reduced-motion: reduce) { .sc-spin, .sc-agit, .sc-flow, .sc-flame, .sc-bub { animation: none; } .sc-blink { animation-duration: 2s; } }
 dialog.sc-dlg { width: min(720px, calc(100vw - 32px)); }
 .sc-fp-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .sc-fp-val { margin: 4px 0 8px; } .sc-fp-big { font-size: 2em; font-weight: 700; }

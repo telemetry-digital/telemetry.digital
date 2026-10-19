@@ -45,6 +45,20 @@ req POST /api/v1/hmi/objects/import-svg "{\"name\":\"broken\",\"svg\":\"<svg><re
 req POST /api/v1/hmi/objects/import-svg "{\"name\":\"html\",\"svg\":\"<html><svg/></html>\",\"reason\":\"e2e\"}" >/dev/null; check "non-SVG root refused" "$(st)" 400
 req POST /api/v1/hmi/objects/import-svg "$BODY" >/dev/null; check "duplicate slug refused" "$(st)" 409
 
+echo "== animation effects (c32-* classes, server style sheet only with ?anim=1)"
+ASVG='<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style>.x{animation:evil 1s}</style><g class="c32-spin"><rect width="40" height="10"/></g><animate attributeName="x" to="9"/></svg>'
+ABODY=$(node -e 'console.log(JSON.stringify({name:"fan '$SUF'",svg:process.argv[1],reason:"e2e"}))' "$ASVG")
+ASLUG=$(req POST /api/v1/hmi/objects/import-svg "$ABODY" | jget slug); check "animated graphic imported" "$(st)" 201
+check "effect class kept, own style and animate removed" "$(jx "$TMP/b" '/class="c32-spin"/.test(j.body.svg) && !/<style|<animate|evil/.test(j.body.svg) + ""')" "true"
+curl -s -b "$JAR" -o "$TMP/svg" "$BASE/api/v1/hmi/objects/$ASLUG/svg"; grep -q "<style" "$TMP/svg" && bad "static graphic has no style sheet" || ok "static graphic has no style sheet"
+curl -s -b "$JAR" -o "$TMP/svg" "$BASE/api/v1/hmi/objects/$ASLUG/svg?anim=1&speed=2"; grep -q "@keyframes c32-spin" "$TMP/svg" && grep -q "c32-spin 0.500s" "$TMP/svg" && ok "?anim=1&speed=2: effects at double speed" || bad "animation style sheet"
+curl -s -b "$JAR" -o "$TMP/svg" "$BASE/api/v1/hmi/objects/$ASLUG/svg?anim=1&speed=999"; grep -q "c32-spin 0.050s" "$TMP/svg" && ok "speed clamped to 20" || bad "speed clamp"
+ADASH=$(req POST /api/v1/dashboards "{\"name\":\"Anim $SUF\",\"spec\":{\"kind\":\"mimic\",\"widgets\":[],\"elements\":[{\"type\":\"image\",\"src\":\"$ASLUG\",\"x\":0,\"y\":0,\"w\":50,\"h\":50,\"dyn\":[{\"prop\":\"animate\",\"op\":\"==\",\"v\":1,\"speed\":1.5}]}]},\"reason\":\"e2e\"}" | jget slug); check "picture with an animate dynamic" "$(st)" 201
+req GET "/api/v1/dashboards/$ADASH" >/dev/null
+check "animate dynamic stored" "$(jx "$TMP/b" '(d => [d.prop, d.op, d.v, d.speed].join(" "))(j.spec.elements[0].dyn[0])')" "animate == 1 1.5"
+req DELETE "/api/v1/dashboards/$ADASH?reason=e2e" >/dev/null
+req DELETE "/api/v1/hmi/objects/$ASLUG?reason=e2e" >/dev/null
+
 echo "== composites"
 COMP="{\"name\":\"Pump station $SUF\",\"kind\":\"composite\",\"category\":\"Stations\",\"reason\":\"e2e\",\"body\":{\"width\":300,\"height\":200,\"tags\":[\"run\"],\"elements\":[{\"type\":\"symbol\",\"symbol\":\"pump_centrifugal\",\"x\":0,\"y\":0,\"w\":90,\"h\":84,\"tag\":\"\$run\",\"dyn\":[{\"prop\":\"state\",\"map\":[{\"op\":\"==\",\"v\":1,\"to\":\"run\"}]}]},{\"type\":\"symbol\",\"symbol\":\"valve_gate\",\"x\":120,\"y\":20,\"w\":80,\"h\":70}]}}"
 req POST /api/v1/hmi/objects "$COMP" >/dev/null; check "composite created" "$(st)" 201

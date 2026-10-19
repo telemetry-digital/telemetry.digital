@@ -51,7 +51,13 @@
     const r = await api('GET', P(`/api/v1/observations?datastream_id=${id}&from=${encodeURIComponent(from)}&bucket=3600`));
     return r.points.map((p) => ({ t: new Date(p.t).getTime(), v: p.avg }));
   }
-  async function latest(ids) { if (!ids.length) return {}; return api('GET', P('/api/v1/datastreams/latest?ids=' + ids.join(','))); }
+  // The endpoint takes at most 50 ids: larger sets (process pictures) are fetched in chunks and merged.
+  async function latest(ids) {
+    if (!ids.length) return {};
+    const parts = []; for (let i = 0; i < ids.length; i += 50) parts.push(ids.slice(i, i + 50));
+    const res = await Promise.all(parts.map((p) => api('GET', P('/api/v1/datastreams/latest?ids=' + p.join(',')))));
+    return Object.assign({}, ...res);
+  }
   async function devices(ids) { const all = await api('GET', P('/api/v1/devices')); return ids && ids.length ? all.filter((d) => ids.includes(d.id)) : all; }
   const devState = (d) => { if (d.connected) return ['online', 'ok', '#059669']; const ls = d.last_seen ? new Date(d.last_seen).getTime() : 0; if (!ls) return ['never', '', '#6b7280']; return Date.now() - ls < 3600e3 ? ['recent', 'warn', '#d97706'] : ['offline', 'bad', '#dc2626']; };
   function level(v, p) { if (v == null) return ''; if ((p.action != null && v >= p.action) || (p.low_action != null && v <= p.low_action)) return 'bad'; if ((p.warn != null && v >= p.warn) || (p.low_warn != null && v <= p.low_warn)) return 'warn'; return 'ok'; }

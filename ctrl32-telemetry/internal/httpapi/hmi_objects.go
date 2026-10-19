@@ -362,7 +362,8 @@ func (s *Server) deleteHMIObject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
 
-// writeSVG serves a stored, sanitised SVG so that even a direct visit cannot run anything.
+// writeSVG serves a stored, sanitised SVG so that even a direct visit cannot run anything; ?anim=1 adds the server's
+// own animation style sheet for the c32-* effect classes (svg_anim.go).
 func (s *Server) writeSVG(w http.ResponseWriter, r *http.Request, org, slug string) {
 	var svg string
 	err := s.pool.QueryRow(r.Context(), `SELECT body->>'svg' FROM core.hmi_object WHERE org_id = $1::uuid AND slug = $2 AND kind = 'svg' AND valid_to IS NULL`, org, slug).Scan(&svg)
@@ -375,6 +376,9 @@ func (s *Server) writeSVG(w http.ResponseWriter, r *http.Request, org, slug stri
 	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Cache-Control", "private, max-age=60")
+	if speed, ok := animParams(r); ok {
+		svg = withAnimation(svg, speed)
+	}
 	_, _ = w.Write([]byte(svg))
 }
 

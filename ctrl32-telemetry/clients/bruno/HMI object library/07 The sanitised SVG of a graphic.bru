@@ -14,10 +14,15 @@ params:path {
   slug: 
 }
 
+params:query {
+  ~anim: 
+  ~speed: 
+}
+
 docs {
   The sanitised SVG of a graphic
   
-  Served as image/svg+xml with a sandbox Content-Security-Policy.
+  Served as image/svg+xml with a sandbox Content-Security-Policy. ?anim=1 animates the parts marked with c32-* effect classes (0.84.0).
   
   Requires permission `data.read`.
 }
