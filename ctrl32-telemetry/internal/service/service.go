@@ -4,6 +4,7 @@ package service
 import (
 	"context"
 	"log/slog"
+	"os"
 
 	"github.com/kardianos/service"
 )
@@ -18,11 +19,23 @@ type program struct {
 	done   chan error
 }
 
+// exit ends the process when the application returns on its own; a variable for tests.
+var exit = os.Exit
+
 func (p *program) Start(s service.Service) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 	p.done = make(chan error, 1)
-	go func() { p.done <- p.run(ctx) }()
+	go func() {
+		err := p.run(ctx)
+		if ctx.Err() == nil {
+			// Returned without Stop (e.g. the database was not up yet after a reboot): the service manager only
+			// restarts a process that ends, so end it instead of waiting for a stop signal that never comes.
+			p.log.Error("server stopped; exiting so the service manager starts it again", "err", err)
+			exit(1)
+		}
+		p.done <- err
+	}()
 	return nil
 }
 
