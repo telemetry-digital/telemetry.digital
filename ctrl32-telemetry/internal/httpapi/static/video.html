@@ -198,15 +198,15 @@ sudo bash install-relay.sh --config relay.toml</pre>
     <div class="actions"><button class="btn primary" type="submit" id="impApply" disabled>Import</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
   </form></dialog>
 
-  <dialog id="wallDlg" style="max-width:min(1100px,96vw)"><form class="form" id="wallForm">
+  <dialog id="wallDlg" style="max-width:min(1100px,96vw);width:min(1100px,96vw)"><form class="form" id="wallForm">
     <h2 style="margin-top:0">Video wall</h2>
     <label>Name <input name="name" required maxlength="80"></label>
     <div class="row"><b>Screens (monitors)</b><span class="grow"></span>
       <button class="btn small" type="button" id="addScreen">Add screen</button>
       <button class="btn small" type="button" id="autoFill" title="Put all cameras on the screens in order">Fill with all cameras</button></div>
     <div id="screens"></div>
-    <label class="inline"><input type="checkbox" name="playback_on_click"> A click on a camera opens playback</label>
-    <div class="muted" style="font-size:12px">The camera opens over the wall with its recordings: going back in time, the timeline, speed. Only for users allowed to play back recordings; playing back is written to the audit trail. Leave it off for a wall on a monitor that others can operate.</div>
+    <label class="inline"><input type="checkbox" name="playback_on_click"> The enlarged camera offers its recordings</label>
+    <div class="muted" style="font-size:12px">A click on a camera of the wall enlarges it to the whole screen; with this option the enlarged camera has a Recordings button that opens it over the wall with its recordings: going back in time, the timeline, speed. Only for users allowed to play back recordings; playing back is written to the audit trail. Leave it off for a wall on a monitor that others can operate.</div>
     <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
     <div class="err" id="wallErr"></div>
     <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
@@ -239,7 +239,7 @@ function renderLive() {
   }
 }
 function wallCams(w) { const s = new Set(); for (const sc of w.screens) for (const x of sc.tiles || []) if (x) s.add(x); return s.size; }
-function preview(sc) { const n = sc.cols * sc.rows; let h = ''; for (let i = 0; i < n; i++) h += `<i class="${(sc.tiles || [])[i] ? 'on' : ''}"></i>`; return `<span class="wall-preview" style="grid-template-columns:repeat(${sc.cols},1fr)">${h}</span>`; }
+function preview(sc) { const h = ctrl32Player.wallPlace(sc).map(r => `<i class="${r.id ? 'on' : ''}" style="${ctrl32Player.wallArea(r)}"></i>`).join(''); return `<span class="wall-preview" style="grid-template-columns:repeat(${sc.cols},1fr);grid-template-rows:repeat(${sc.rows},1fr)">${h}</span>`; }
 function renderWalls() {
   $('#noWalls').hidden = WALLS.length > 0;
   $('#walls tbody').innerHTML = WALLS.map(w => `<tr><td class="notranslate"><a href="/video/walls/${w.id}">${esc(w.name)}</a></td>
@@ -489,39 +489,150 @@ $('#impForm').onsubmit = async e => { e.preventDefault(); $('#impErr').textConte
   catch (x) { if (x.plan) impRender(x.plan); $('#impErr').textContent = x.message; }
 };
 
-// ---- wall editor
-let WEDIT = null, WSCREENS = [];
+// ---- wall editor (0.85.0: every tile has its own place and size on the screen's grid)
+// The editor keeps each screen as tiles + rects (cells from the top left); the server stores a plain row-by-row grid
+// of single cells without rects. A tile is moved by dragging it and resized by its corner handle; a click on a free
+// cell adds a tile there; the selected tile's camera, place and size can also be typed.
+let WEDIT = null, WSCREENS = [], WSEL = null; // WSEL = {si, i}
 function camOptions(sel) { return `<option value="">—</option>` + CAMS.map(c => `<option value="${c.id}"${c.id === sel ? ' selected' : ''}>${esc(c.name)}</option>`).join(''); }
+function camName(id) { const c = id && CAMS.find(x => x.id === id); return c ? c.name : ''; }
+// a screen in the editor's form: one rect per tile
+function withRects(s) {
+  s.tiles = s.tiles || [];
+  if (!s.rects) s.rects = s.tiles.map((_, i) => ({x: i % s.cols, y: Math.floor(i / s.cols), w: 1, h: 1}));
+  return s;
+}
+// whether rect r (of tile skip, -1 for a new one) lies on the grid without covering another tile
+function rectFree(s, r, skip) {
+  if (r.w < 1 || r.h < 1 || r.x < 0 || r.y < 0 || r.x + r.w > s.cols || r.y + r.h > s.rows) return false;
+  return s.rects.every((o, k) => k === skip || r.x + r.w <= o.x || o.x + o.w <= r.x || r.y + r.h <= o.y || o.y + o.h <= r.y);
+}
 function renderScreens() {
-  $('#screens').innerHTML = WSCREENS.map((s, i) => `<div class="card" style="margin:8px 0" data-si="${i}">
+  WSCREENS.forEach(withRects);
+  $('#screens').innerHTML = WSCREENS.map((s, i) => {
+    const sel = WSEL && WSEL.si === i && s.rects[WSEL.i] ? WSEL.i : -1, r = sel >= 0 ? s.rects[sel] : null;
+    return `<div class="card" style="margin:8px 0" data-si="${i}">
     <div class="row"><label>${esc(t('Screen'))} ${i + 1} <input data-sname value="${esc(s.name || '')}" maxlength="40" placeholder="${esc(t('Monitor') + ' ' + (i + 1))}"></label>
-      <label>${esc(t('Layout'))} <select data-layout>${LAYOUTS.map(([c, r]) => `<option value="${c}x${r}"${c === s.cols && r === s.rows ? ' selected' : ''}>${c} × ${r} (${c * r})</option>`).join('')}</select></label>
+      <label>${esc(t('Layout'))} <select data-layout>${LAYOUTS.map(([c, rr]) => `<option value="${c}x${rr}"${c === s.cols && rr === s.rows ? ' selected' : ''}>${c} × ${rr} (${c * rr})</option>`).join('')}</select></label>
       <label>${esc(t('Stream'))} <select data-quality>${[['auto', 'automatic'], ['sub', 'sub-stream (smaller, saves bandwidth)'], ['main', 'main stream (full quality)']].map(([v, l]) => `<option value="${v}"${(s.quality || 'auto') === v ? ' selected' : ''}>${esc(t(l))}</option>`).join('')}</select></label>
       <span class="grow"></span>${WSCREENS.length > 1 ? `<button class="btn small" type="button" data-sdel>${esc(t('Remove screen'))}</button>` : ''}</div>
-    <div class="wall-edit-grid" style="grid-template-columns:repeat(${s.cols},1fr)">${Array.from({length: s.cols * s.rows}, (_, k) => `<select data-tile="${k}" class="notranslate">${camOptions((s.tiles || [])[k])}</select>`).join('')}</div></div>`).join('');
+    <div class="wall-edit-presets"><span>${esc(t('Arrangement'))}:</span>${ARRANGEMENTS.filter(p => arrangeRects(p, s.cols, s.rows)).map(p => `<button class="btn small" type="button" data-preset="${p}">${esc(t(ARR_LABEL[p]))}</button>`).join('')}</div>
+    <div class="muted" style="font-size:12px">${esc(t('Drag a tile to move it, drag its corner to change its size; a click on a free cell adds a tile.'))}</div>
+    <div class="wall-edit-grid" data-grid style="grid-template-columns:repeat(${s.cols},1fr);grid-template-rows:repeat(${s.rows},1fr)">${ctrl32Player.wallPlace(s).map(p => p.i < 0
+      ? `<button type="button" class="wall-edit-free" data-free="${p.x},${p.y}" style="${ctrl32Player.wallArea(p)}" title="${esc(t('Add a tile here'))}">+</button>`
+      : `<div class="wall-edit-tile${p.i === sel ? ' sel' : ''}${p.id ? '' : ' empty'}" data-ti="${p.i}" style="${ctrl32Player.wallArea(p)}"><span class="notranslate">${esc(camName(p.id) || t('empty'))}</span><span class="wall-size">${p.w} × ${p.h}</span><i class="wall-edit-handle" data-handle title="${esc(t('Size'))}"></i></div>`).join('')}</div>
+    ${r ? `<div class="row wall-edit-sel"><b>${esc(t('Tile'))} ${sel + 1}</b>
+      <label>${esc(t('Camera'))} <select data-cam class="notranslate">${camOptions(s.tiles[sel])}</select></label>
+      ${['x', 'y', 'w', 'h'].map(k => `<label>${esc(t(GEOM_LABEL[k]))} <input data-g="${k}" type="number" min="1" max="${k === 'x' || k === 'w' ? s.cols : s.rows}" value="${k === 'x' || k === 'y' ? r[k] + 1 : r[k]}" style="width:4.5em"></label>`).join('')}
+      <button class="btn small" type="button" data-tdel>${esc(t('Remove tile'))}</button></div>` : ''}
+    </div>`;
+  }).join('');
   for (const card of document.querySelectorAll('#screens [data-si]')) {
-    const s = WSCREENS[+card.dataset.si];
+    const si = +card.dataset.si, s = WSCREENS[si];
     card.querySelector('[data-sname]').oninput = e => { s.name = e.target.value; };
     card.querySelector('[data-quality]').onchange = e => { s.quality = e.target.value; };
-    card.querySelector('[data-layout]').onchange = e => { const [c, r] = e.target.value.split('x').map(Number); s.cols = c; s.rows = r; s.tiles = (s.tiles || []).slice(0, c * r); renderScreens(); };
-    for (const sel of card.querySelectorAll('[data-tile]')) sel.onchange = () => { s.tiles = s.tiles || []; while (s.tiles.length < s.cols * s.rows) s.tiles.push(null); s.tiles[+sel.dataset.tile] = sel.value || null; };
-    const d = card.querySelector('[data-sdel]'); if (d) d.onclick = () => { WSCREENS.splice(+card.dataset.si, 1); renderScreens(); };
+    card.querySelector('[data-layout]').onchange = e => { const [c, rr] = e.target.value.split('x').map(Number); s.cols = c; s.rows = rr; fitScreen(s); WSEL = null; renderScreens(); };
+    for (const b of card.querySelectorAll('[data-preset]')) b.onclick = () => { applyArrangement(s, b.dataset.preset); WSEL = null; renderScreens(); };
+    for (const b of card.querySelectorAll('[data-free]')) b.onclick = () => {
+      const [x, y] = b.dataset.free.split(',').map(Number);
+      s.tiles.push(null); s.rects.push({x, y, w: 1, h: 1}); WSEL = {si, i: s.tiles.length - 1}; renderScreens();
+    };
+    const grid = card.querySelector('[data-grid]');
+    for (const el of card.querySelectorAll('[data-ti]')) dragTile(s, si, grid, el);
+    const cam = card.querySelector('[data-cam]'); if (cam) cam.onchange = () => { s.tiles[WSEL.i] = cam.value || null; renderScreens(); };
+    for (const inp of card.querySelectorAll('[data-g]')) inp.onchange = () => {
+      const r = {...s.rects[WSEL.i]}, v = Math.round(+inp.value || 0), k = inp.dataset.g;
+      r[k] = k === 'x' || k === 'y' ? v - 1 : v;
+      if (rectFree(s, r, WSEL.i)) s.rects[WSEL.i] = r; else ctrl32.toast(t('The tile would leave the screen or cover another tile.'), 'bad');
+      renderScreens();
+    };
+    const del = card.querySelector('[data-tdel]'); if (del) del.onclick = () => { s.tiles.splice(WSEL.i, 1); s.rects.splice(WSEL.i, 1); WSEL = null; renderScreens(); };
+    const d = card.querySelector('[data-sdel]'); if (d) d.onclick = () => { WSCREENS.splice(si, 1); WSEL = null; renderScreens(); };
   }
 }
+// moving (the tile) and resizing (its corner handle) with a mouse, a pen or a finger: snaps to the cells, never onto
+// another tile or off the grid; a click without moving selects the tile
+function dragTile(s, si, grid, el) {
+  const i = +el.dataset.ti;
+  el.onpointerdown = e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const resize = !!e.target.closest('[data-handle]'), box = grid.getBoundingClientRect(), orig = {...s.rects[i]};
+    const cell = ev => ({cx: Math.floor((ev.clientX - box.left) / (box.width / s.cols)), cy: Math.floor((ev.clientY - box.top) / (box.height / s.rows))});
+    const start = cell(e); let cur = orig;
+    try { el.setPointerCapture(e.pointerId); } catch (x) { /* synthetic events */ }
+    el.onpointermove = ev => {
+      const c = cell(ev);
+      const r = resize ? {x: orig.x, y: orig.y, w: Math.max(1, c.cx - orig.x + 1), h: Math.max(1, c.cy - orig.y + 1)}
+        : {x: orig.x + c.cx - start.cx, y: orig.y + c.cy - start.cy, w: orig.w, h: orig.h};
+      if ((r.x !== cur.x || r.y !== cur.y || r.w !== cur.w || r.h !== cur.h) && rectFree(s, r, i)) {
+        cur = r; el.setAttribute('style', ctrl32Player.wallArea(r)); el.querySelector('.wall-size').textContent = `${r.w} × ${r.h}`;
+      }
+    };
+    el.onpointerup = () => { el.onpointermove = el.onpointerup = null; s.rects[i] = cur; WSEL = {si, i}; renderScreens(); };
+  };
+}
+const GEOM_LABEL = {x: 'From column', y: 'From row', w: 'Width (cells)', h: 'Height (cells)'};
+// arrangements set the tiles of a whole screen at once; afterwards every tile can still be moved and resized
+const ARRANGEMENTS = ['equal', 'one', 'two', 'four'];
+const ARR_LABEL = {equal: 'Equal tiles', one: '1 large + small', two: '2 large + small', four: '4 large + small'};
+// the large tiles of an arrangement on C×R cells, or null when it does not suit the grid
+function arrangeRects(p, C, R) {
+  if (p === 'equal') return [];
+  if (p === 'one') { const B = Math.max(2, Math.min(C, R) - 1); return B <= C && B <= R && (C > B || R > B) ? [{x: 0, y: 0, w: B, h: B}] : null; }
+  if (p === 'two') {
+    const v = Math.floor(R / 2); if (v >= 2 && C > v) return [{x: 0, y: 0, w: v, h: v}, {x: 0, y: v, w: v, h: v}];   // stacked on the left
+    const hz = Math.floor(C / 2); if (hz >= 2 && R > hz) return [{x: 0, y: 0, w: hz, h: hz}, {x: hz, y: 0, w: hz, h: hz}]; // side by side on top
+    return null;
+  }
+  if (p === 'four') { const B = Math.floor(Math.min(C, R) / 2); return B >= 2 && (C > 2 * B || R > 2 * B) ? [0, 1, 2, 3].map(k => ({x: (k % 2) * B, y: Math.floor(k / 2) * B, w: B, h: B})) : null; }
+  return null;
+}
+// keeps the cameras: the ones on the largest tiles get the large tiles again, the rest the small ones row by row
+function applyArrangement(s, p) {
+  const big = arrangeRects(p, s.cols, s.rows) || [], used = new Array(s.cols * s.rows).fill(false), rects = [...big];
+  for (const r of big) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) used[y * s.cols + x] = true;
+  for (let c = 0; c < s.cols * s.rows; c++) if (!used[c]) rects.push({x: c % s.cols, y: Math.floor(c / s.cols), w: 1, h: 1});
+  const cams = ctrl32Player.wallPlace(s).filter(r => r.id).sort((a, b) => b.w * b.h - a.w * a.h || a.y - b.y || a.x - b.x).map(r => r.id);
+  s.rects = rects; s.tiles = rects.map((_, k) => cams[k] || null);
+  if (cams.length > rects.length) ctrl32.toast(`${cams.length - rects.length} ${t('cameras did not fit on the screen')}`, 'bad');
+}
+// after the grid changed: tiles shrink to the grid; a tile that would then cover another is dropped
+function fitScreen(s) {
+  const tiles = [], rects = [], tmp = {cols: s.cols, rows: s.rows, rects};
+  s.rects.forEach((r0, k) => {
+    const r = {x: Math.min(r0.x, s.cols - 1), y: Math.min(r0.y, s.rows - 1)}; r.w = Math.min(r0.w, s.cols - r.x); r.h = Math.min(r0.h, s.rows - r.y);
+    if (rectFree(tmp, r, -1)) { rects.push(r); tiles.push(s.tiles[k]); }
+  });
+  s.tiles = tiles; s.rects = rects;
+}
 function wallDialog(w) {
-  WEDIT = w || null; const f = $('#wallForm'); f.reset(); $('#wallErr').textContent = '';
+  WEDIT = w || null; WSEL = null; const f = $('#wallForm'); f.reset(); $('#wallErr').textContent = '';
   f.name.value = w ? w.name : ''; f.playback_on_click.checked = !!(w && w.playback_on_click);
   WSCREENS = w ? JSON.parse(JSON.stringify(w.screens)) : [{name: '', cols: 3, rows: 3, tiles: []}];
   renderScreens(); $('#wallDlg').showModal();
 }
 $('#addScreen').onclick = () => { if (WSCREENS.length < 8) { WSCREENS.push({name: '', cols: 3, rows: 3, tiles: []}); renderScreens(); } };
+// all enabled cameras in order: the tiles keep their places and sizes (large ones first), free cells get tiles too
 $('#autoFill').onclick = () => {
   let k = 0; const on = CAMS.filter(c => c.enabled);
-  for (const s of WSCREENS) { s.tiles = []; for (let i = 0; i < s.cols * s.rows; i++) s.tiles.push(k < on.length ? on[k++].id : null); }
+  for (const s of WSCREENS) {
+    withRects(s);
+    const order = s.rects.map((r, i) => i).sort((a, b) => s.rects[b].w * s.rects[b].h - s.rects[a].w * s.rects[a].h || s.rects[a].y - s.rects[b].y || s.rects[a].x - s.rects[b].x);
+    for (const i of order) s.tiles[i] = k < on.length ? on[k++].id : null;
+    for (const p of ctrl32Player.wallPlace(s).filter(p => p.i < 0)) { s.tiles.push(k < on.length ? on[k++].id : null); s.rects.push({x: p.x, y: p.y, w: 1, h: 1}); }
+  }
   renderScreens();
 };
 $('#wallForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#wallErr').textContent = '';
-  const screens = WSCREENS.map(s => { const tiles = (s.tiles || []).slice(0, s.cols * s.rows); while (tiles.length && !tiles[tiles.length - 1]) tiles.pop(); return {name: s.name || '', cols: s.cols, rows: s.rows, tiles, quality: s.quality && s.quality !== 'auto' ? s.quality : undefined}; });
+  const screens = WSCREENS.map(s => {
+    withRects(s);
+    // tiles in reading order; a plain grid of single cells is sent without rects
+    const order = s.rects.map((r, i) => i).sort((a, b) => s.rects[a].y - s.rects[b].y || s.rects[a].x - s.rects[b].x);
+    const tiles = order.map(i => s.tiles[i] || null), rects = order.map(i => ({...s.rects[i]}));
+    const plain = rects.every((r, k) => r.w === 1 && r.h === 1 && r.x === k % s.cols && r.y === Math.floor(k / s.cols));
+    if (plain) while (tiles.length && !tiles[tiles.length - 1]) tiles.pop();
+    return {name: s.name || '', cols: s.cols, rows: s.rows, tiles, rects: plain ? undefined : rects, quality: s.quality && s.quality !== 'auto' ? s.quality : undefined}; });
   const body = {name: f.name.value, screens, playback_on_click: f.playback_on_click.checked, reason: f.reason.value};
   try { if (WEDIT) await api('PUT', '/api/v1/video/walls/' + WEDIT.id, body);
     else await api('POST', '/api/v1/video/walls', body);

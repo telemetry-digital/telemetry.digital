@@ -1206,8 +1206,39 @@ type WallScreen struct {
 	Cols  int       `json:"cols"`
 	Rows  int       `json:"rows"`
 	Tiles []*string `json:"tiles"`
+	// Rects, when present, gives every tile (same index) its place and size on the grid, in cells from the top left
+	// (x, y zero-based, w × h); tiles must not overlap and cells without a tile stay empty. Without rects the tiles
+	// fill the grid row by row, one cell each (0.85.0).
+	Rects []WallRect `json:"rects,omitempty"`
 	// Quality of the tiles: "" or "auto" (sub-stream above the configured number of tiles), "main" or "sub".
 	Quality string `json:"quality,omitempty"`
+}
+
+// WallRect is the place and size of a wall tile in grid cells.
+type WallRect struct {
+	X int `json:"x"`
+	Y int `json:"y"`
+	W int `json:"w"`
+	H int `json:"h"`
+}
+
+// checkWallRects reports the first tile that leaves the cols×rows grid or overlaps an earlier one ("" when all fit).
+func checkWallRects(cols, rows int, rects []WallRect) string {
+	used := make([]int, cols*rows) // tile number + 1
+	for i, r := range rects {
+		if r.W < 1 || r.H < 1 || r.X < 0 || r.Y < 0 || r.X+r.W > cols || r.Y+r.H > rows {
+			return fmt.Sprintf("tile %d lies outside the %d×%d grid", i+1, cols, rows)
+		}
+		for y := r.Y; y < r.Y+r.H; y++ {
+			for x := r.X; x < r.X+r.W; x++ {
+				if o := used[y*cols+x]; o != 0 {
+					return fmt.Sprintf("tiles %d and %d overlap", o, i+1)
+				}
+				used[y*cols+x] = i + 1
+			}
+		}
+	}
+	return ""
 }
 
 type wallIn struct {
@@ -1230,6 +1261,23 @@ func (s *Server) validateWall(ctx context.Context, org string, screens []WallScr
 		}
 		if len(sc.Tiles) > sc.Cols*sc.Rows {
 			return fmt.Sprintf("screen %d: more tiles than cells", i+1)
+		}
+		if sc.Rects != nil {
+			if len(sc.Rects) != len(sc.Tiles) {
+				return fmt.Sprintf("screen %d: one rect per tile", i+1)
+			}
+			if msg := checkWallRects(sc.Cols, sc.Rows, sc.Rects); msg != "" {
+				return fmt.Sprintf("screen %d: %s", i+1, msg)
+			}
+			plain := true // a row-by-row grid of single cells needs no rects
+			for k, r := range sc.Rects {
+				if r != (WallRect{k % sc.Cols, k / sc.Cols, 1, 1}) {
+					plain = false
+				}
+			}
+			if plain {
+				sc.Rects = nil
+			}
 		}
 		switch sc.Quality {
 		case "", "auto", "main", "sub":

@@ -579,10 +579,25 @@ dialog.dw-full::backdrop { background: rgba(15, 23, 42, .55); }
 .tl .sel { position: absolute; top: 4px; bottom: 4px; background: color-mix(in srgb, var(--ok) 25%, transparent); border: 1px solid var(--ok); }
 .tl-ax { position: relative; height: 16px; font-size: 11px; color: var(--muted); }
 .tl-ax span { position: absolute; transform: translateX(-50%); }
-.wall-edit-grid { display: grid; gap: 4px; }
-.wall-edit-grid select { width: 100%; min-width: 0; font-size: 12px; padding: 2px; }
+.wall-edit-grid { display: grid; gap: 3px; }
 .wall-preview { display: inline-grid; gap: 2px; width: 120px; aspect-ratio: 16 / 9; vertical-align: middle; }
 .wall-preview i { background: var(--line); border-radius: 1px; } .wall-preview i.on { background: color-mix(in srgb, var(--primary) 55%, transparent); }
+/* wall editor (0.85.0): tiles with their own place and size on the screen's grid; drag to move, corner to resize */
+.wall-edit-grid { aspect-ratio: 16 / 9; max-width: calc(46vh * 16 / 9); margin: 6px 0; background: var(--line); padding: 3px; border-radius: 6px; touch-action: none; }
+.wall-edit-free { border: 1px dashed color-mix(in srgb, var(--muted) 60%, transparent); background: transparent; color: var(--muted); border-radius: 4px; cursor: pointer; font-size: 16px; min-width: 0; min-height: 0; }
+.wall-edit-free:hover { background: color-mix(in srgb, var(--primary) 10%, transparent); }
+.wall-edit-tile { position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px; padding: 2px 4px; border-radius: 4px; min-width: 0; min-height: 0; overflow: hidden;
+  background: color-mix(in srgb, var(--primary) 22%, var(--bg)); border: 1px solid color-mix(in srgb, var(--primary) 55%, transparent); cursor: grab; font-size: 12px; text-align: center; user-select: none; }
+.wall-edit-tile.empty { background: var(--bg); }
+.wall-edit-tile.sel { outline: 2px solid var(--primary); outline-offset: 1px; z-index: 1; }
+.wall-edit-tile span:first-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wall-edit-tile .wall-size { font-size: 10px; color: var(--muted); }
+.wall-edit-handle { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 50%, var(--primary) 50%); }
+.wall-edit-presets { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 6px 0; font-size: 13px; }
+.wall-edit-sel { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: end; margin-top: 4px; }
+.wall-edit-sel > b { align-self: center; }
+.wall-edit-sel label { display: inline-flex; flex-direction: column; width: auto; margin: 0; }
+.wall-edit-sel select { max-width: 260px; }
 /* the wall page: every pixel for video */
 body.wall { background: #000; color: #e5e7eb; overflow: hidden; }
 body.wall main { padding: 0; }
@@ -590,6 +605,10 @@ body.wall main { padding: 0; }
 .wall-grid .cell { position: relative; background: #000; overflow: hidden; min-width: 0; min-height: 0; }
 .wall-grid .cell .cap { position: absolute; left: 6px; bottom: 4px; font-size: 12px; color: #fff; text-shadow: 0 1px 2px #000; pointer-events: none; display: flex; gap: 6px; align-items: center; }
 .wall-grid .cell.max { position: fixed; inset: 0; z-index: 5; }
+.wall-grid .cell[data-id] { cursor: zoom-in; } .wall-grid .cell.max { cursor: zoom-out; }
+.wall-max-bar { position: absolute; right: 10px; bottom: 10px; z-index: 3; display: flex; gap: 6px; }
+.wall-max-bar .btn { background: rgba(15,18,22,.85); color: #e5e7eb; border-color: #2a313a; }
+.wall-max-bar { left: 10px; align-items: center; } .wall-max-name { flex: 1; color: #fff; font-size: 14px; text-shadow: 0 1px 2px #000; }
 .wall-bar { position: fixed; left: 50%; top: 8px; transform: translateX(-50%); z-index: 10; display: flex; gap: 8px; align-items: center; padding: 6px 10px; background: rgba(15,18,22,.9);
   border: 1px solid #2a313a; border-radius: 8px; color: #e5e7eb; transition: opacity .3s; }
 .wall-bar.idle { opacity: 0; pointer-events: none; }
@@ -814,7 +833,7 @@ html.no-page-zoom, html.no-page-zoom body { touch-action: pan-x pan-y; }
 /* video wall as a list: cameras below each other, full width, scrolling */
 body.wall.wall-list { overflow: auto; }
 body.wall.wall-list .wall-grid { position: static; grid-template-columns: 1fr !important; grid-template-rows: none !important; gap: 4px; padding: 56px 0 4px; min-height: 100vh; background: #000; }
-body.wall.wall-list .wall-grid .cell { aspect-ratio: 16 / 9; }
+body.wall.wall-list .wall-grid .cell { aspect-ratio: 16 / 9; grid-column: auto !important; grid-row: auto !important; }
 body.wall.wall-list .wall-grid .cell:not([data-id]) { display: none; }
 .wall-bar { max-width: calc(100vw - 16px); flex-wrap: wrap; justify-content: center; }
 @media (max-width: 700px) { .wall-bar #all { display: none; } }
