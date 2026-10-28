@@ -116,6 +116,15 @@ func (t *Track) SameParams(o *Track) bool {
 		bytes.Equal(t.VPS, o.VPS) && t.Width == o.Width && t.Height == o.Height && t.Audio.Same(o.Audio)
 }
 
+// Continues reports whether the new parameter sets o of the same connection can go on under t without the consumers
+// starting over: same codec, picture size and MSE type. Cameras rewrite their SPS/PPS now and then (frame rate and
+// timing in an idle-scene mode, 0.85.0); the new sets travel in front of every key frame (withParams), so live
+// players, recordings and the detector decode them in-band while the stream (and its MP4 initialization) stays.
+func (t *Track) Continues(o *Track) bool {
+	return t != nil && o != nil && len(t.SPS) > 0 && t.Codec == o.Codec && (t.Codec == H264 || t.Codec == H265) &&
+		t.Width == o.Width && t.Height == o.Height && t.Width > 0 && t.MIME() == o.MIME()
+}
+
 // Browser reports whether browsers can play the track through Media Source Extensions (MJPEG is shown as pictures).
 func (t *Track) Browser() bool { return t.Codec == H264 || t.Codec == H265 }
 

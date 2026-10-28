@@ -22,7 +22,10 @@ func AnnexB(t *Track, s *Sample) []byte {
 	if s.JPEG != nil {
 		return s.JPEG
 	}
-	au := withParams(s.Key, t, s.AU)
+	au := s.AU
+	if !hasParams(t.Codec, au) { // samples from a camera carry them already (and the newest ones, 0.85.0)
+		au = withParams(s.Key, t, au)
+	}
 	n := 0
 	for _, u := range au {
 		n += 4 + len(u)

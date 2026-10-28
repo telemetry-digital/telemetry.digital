@@ -88,6 +88,7 @@ func (s *Source) decoder(ctx context.Context, desc *description.Session, ptsOf f
 		}
 		t := &Track{Codec: H264, SPS: f264.SPS, PPS: f264.PPS}
 		t.size()
+		vp := &videoParams{pub: t, cur: t}
 		var dtsx *h264.DTSExtractor
 		onPacket = func(pkt *rtp.Packet) {
 			pts, ok := ptsOf(medi, pkt)
@@ -98,11 +99,12 @@ func (s *Source) decoder(ctx context.Context, desc *description.Session, ptsOf f
 			if err != nil {
 				return
 			}
-			nt, out := h264Params(t, au)
-			if nt != t {
-				t, dtsx = nt, nil
+			out, restart := vp.take(au)
+			if restart {
+				dtsx = nil
 			}
-			if len(t.SPS) == 0 || len(t.PPS) == 0 || len(out) == 0 {
+			cur := vp.cur
+			if len(cur.SPS) == 0 || len(cur.PPS) == 0 || len(out) == 0 {
 				return
 			}
 			key := h264.IsRandomAccess(out)
@@ -112,13 +114,13 @@ func (s *Source) decoder(ctx context.Context, desc *description.Session, ptsOf f
 				}
 				dtsx = h264.NewDTSExtractor()
 			}
-			out = withParams(key, t, out)
+			out = withParams(key, cur, out)
 			dts, err := dtsx.Extract(out, pts)
 			if err != nil {
 				dtsx = nil
 				return
 			}
-			s.publish(ctx, t, &Sample{Time: wall(dts), DTS: dts, PTSOffset: int32(pts - dts), Key: key, AU: out})
+			s.publish(ctx, vp.pub, &Sample{Time: wall(dts), DTS: dts, PTSOffset: int32(pts - dts), Key: key, AU: out})
 		}
 	case desc.FindFormat(&f265) != nil:
 		medi, forma = desc.FindFormat(&f265), f265
@@ -128,6 +130,7 @@ func (s *Source) decoder(ctx context.Context, desc *description.Session, ptsOf f
 		}
 		t := &Track{Codec: H265, VPS: f265.VPS, SPS: f265.SPS, PPS: f265.PPS}
 		t.size()
+		vp := &videoParams{pub: t, cur: t}
 		var dtsx *h265.DTSExtractor
 		onPacket = func(pkt *rtp.Packet) {
 			pts, ok := ptsOf(medi, pkt)
@@ -138,11 +141,12 @@ func (s *Source) decoder(ctx context.Context, desc *description.Session, ptsOf f
 			if err != nil {
 				return
 			}
-			nt, out := h265Params(t, au)
-			if nt != t {
-				t, dtsx = nt, nil
+			out, restart := vp.take(au)
+			if restart {
+				dtsx = nil
 			}
-			if len(t.VPS) == 0 || len(t.SPS) == 0 || len(t.PPS) == 0 || len(out) == 0 {
+			cur := vp.cur
+			if len(cur.VPS) == 0 || len(cur.SPS) == 0 || len(cur.PPS) == 0 || len(out) == 0 {
 				return
 			}
 			key := h265.IsRandomAccess(out)
@@ -152,13 +156,13 @@ func (s *Source) decoder(ctx context.Context, desc *description.Session, ptsOf f
 				}
 				dtsx = h265.NewDTSExtractor()
 			}
-			out = withParams(key, t, out)
+			out = withParams(key, cur, out)
 			dts, err := dtsx.Extract(out, pts)
 			if err != nil {
 				dtsx = nil
 				return
 			}
-			s.publish(ctx, t, &Sample{Time: wall(dts), DTS: dts, PTSOffset: int32(pts - dts), Key: key, AU: out})
+			s.publish(ctx, vp.pub, &Sample{Time: wall(dts), DTS: dts, PTSOffset: int32(pts - dts), Key: key, AU: out})
 		}
 	case desc.FindFormat(&fjpeg) != nil:
 		medi, forma = desc.FindFormat(&fjpeg), fjpeg
@@ -254,6 +258,32 @@ func h265Params(t *Track, au [][]byte) (*Track, [][]byte) {
 	return t, out
 }
 
+// videoParams follows the parameter sets of one H.264/H.265 connection: cur holds the latest sets, pub the Track the
+// samples are published under. A change that pub.Continues keeps pub (the picture goes on; the new sets travel in
+// front of the key frames); any other change (codec profile, picture size) publishes a new Track, so the consumers
+// start over.
+type videoParams struct{ pub, cur *Track }
+
+// take removes the parameter sets from an access unit; restart reports a new published Track (the DTS extractor
+// starts again; for sets that continue it reads the new SPS in front of the next key frame itself).
+func (p *videoParams) take(au [][]byte) (out [][]byte, restart bool) {
+	var nt *Track
+	if p.cur.Codec == H265 {
+		nt, out = h265Params(p.cur, au)
+	} else {
+		nt, out = h264Params(p.cur, au)
+	}
+	if nt == p.cur {
+		return out, false
+	}
+	p.cur = nt
+	if p.pub.Continues(nt) {
+		return out, false
+	}
+	p.pub = nt
+	return out, true
+}
+
 // withParams puts the parameter sets in front of key frames, so every recorded fragment decodes on its own.
 func withParams(key bool, t *Track, au [][]byte) [][]byte {
 	if !key {
@@ -266,6 +296,20 @@ func withParams(key bool, t *Track, au [][]byte) [][]byte {
 		return append([][]byte{t.VPS, t.SPS, t.PPS}, au...)
 	}
 	return au
+}
+
+// hasParams reports whether an access unit starts with its parameter sets (VPS or SPS).
+func hasParams(codec string, au [][]byte) bool {
+	if len(au) == 0 || len(au[0]) == 0 {
+		return false
+	}
+	switch codec {
+	case H264:
+		return h264.NALUType(au[0][0]&0x1f) == h264.NALUTypeSPS
+	case H265:
+		return h265.NALUType((au[0][0]>>1)&0x3f) == h265.NALUType_VPS_NUT
+	}
+	return false
 }
 
 var errNotMultipart = fmt.Errorf("not a multipart MJPEG stream")
