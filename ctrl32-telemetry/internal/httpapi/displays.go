@@ -395,7 +395,8 @@ func (s *Server) displayState(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	out := map[string]any{"id": d.ID, "name": d.Name, "version": d.Updated.UnixMilli(), "items": items, "popup": d.Content.Popup, "cameras": cams,
-		"popup_seconds": d.Content.PopupSeconds, "locale": d.Content.Locale, "active": active, "server_time": time.Now()}
+		"popup_seconds": d.Content.PopupSeconds, "locale": d.Content.Locale, "active": active, "server_time": time.Now(),
+		"server_version": s.version} // the display reloads its page when the server was updated (0.85.1)
 	if d.Command != nil && d.Command.Until.After(time.Now()) {
 		out["command"] = d.Command
 	}
