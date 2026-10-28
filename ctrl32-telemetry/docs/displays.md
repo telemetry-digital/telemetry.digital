@@ -61,6 +61,10 @@ Pairing, changing and disconnecting displays needs `display.manage` (engineers a
   `chrome --kiosk --autoplay-policy=no-user-gesture-required https://<server>/display`
   (Windows: a shortcut in the Startup folder; Linux or Raspberry Pi: an autostart entry). The display stays paired over
   restarts and reconnects by itself after a network or server outage (it shows a red notice meanwhile).
+- After a server update the display reloads its page by itself (the state carries `server_version`): 0–30 s later at
+  random, at most once in 10 minutes. *Reload* reloads at once; a command issued before the page loaded is ignored.
+  Signed-in wall pages check `/healthz` once a minute and reload the same way, but not while a camera is enlarged or a
+  recording is open.
 - The page keeps the screen awake (Wake Lock) and hides the cursor; the first click switches to full screen.
 - Each display decodes its own video: for 20 camera tiles on the sub-stream a mini-PC with Intel graphics is enough.
   The server does not decode video — it only forwards the streams it already receives from the cameras.

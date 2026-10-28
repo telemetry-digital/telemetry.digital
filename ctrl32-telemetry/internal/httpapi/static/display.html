@@ -167,14 +167,20 @@ function handleEvents() {
   }
   wasActive = STATE.active;
 }
+// A command counts only when it was issued after this page loaded: seq is the server's time of the command (ns), the
+// page's load time is taken on the server's clock (server_time of the state), so a skewed PC clock does not matter.
+// The newest command handled is kept for the tab, so a reload never handles its own command again (0.85.1: the first
+// command a display ever got — e.g. Reload after an update — used to be dropped).
+let clockSkew = 0; // server clock − this PC's clock, ms
 function handleCommand(c) {
   if (!c || c.seq <= lastCmd) return;
-  const first = lastCmd === 0; lastCmd = c.seq;
+  lastCmd = c.seq;
   try { sessionStorage.setItem('ctrl32.display.cmd', String(c.seq)); } catch (x) { /* ignore */ }
+  if (c.seq / 1e6 < performance.timeOrigin + clockSkew - 2000) return; // issued before this page loaded
   const secs = Math.max(1, (new Date(c.until) - Date.now()) / 1000);
   if (c.action === 'camera') popup(c.camera, c.name, `${t('sent by')} ${c.by}`, secs, c.quality);
   else if (c.action === 'identify') { const el = $('#ident'); el.innerHTML = `<div>${esc(STATE.name)}</div><small>${esc(t('This display'))}</small>`; el.hidden = false; setTimeout(() => { el.hidden = true; }, secs * 1000); }
-  else if (c.action === 'reload' && !first) location.reload();
+  else if (c.action === 'reload') location.reload();
   else if (c.action === 'clear') { for (const p of popups.values()) p.player.close(); popups.clear(); renderOverlay(); $('#ident').hidden = true; }
 }
 
@@ -191,8 +197,10 @@ function handleMessage(m) {
 async function poll() {
   clearTimeout(pollT);
   try {
-    const s = await api('GET', '/api/v1/display/state');
+    const t0 = Date.now(), s = await api('GET', '/api/v1/display/state');
     $('#status').hidden = true;
+    if (s.server_time) clockSkew = Date.parse(s.server_time) - (t0 + Date.now()) / 2;
+    checkServerVersion(s.server_version);
     // switch only to a language the server has enabled (otherwise the page would reload forever)
     if (s.locale && s.locale !== ctrl32.locale && (ctrl32.langs.enabled || []).includes(s.locale)) { ctrl32.setLocale(s.locale); return; }
     STATE = s; window.ctrl32DisplayCameras = s.cameras || {}; window.ctrl32DisplayActive = s.active || {};
@@ -204,6 +212,21 @@ async function poll() {
     $('#status').hidden = false; $('#status').textContent = t('Connection to the server lost — retrying…');
   }
   pollT = setTimeout(poll, 4000);
+}
+// After a server update the page reloads itself (new page and scripts): 0–30 s later, so many displays do not all
+// come at once; at most once in 10 minutes per tab, so a server that flips between versions cannot loop it.
+let serverVersion = null, updateT = null;
+function checkServerVersion(v) {
+  if (!v) return;
+  if (serverVersion === null) { serverVersion = v; return; }
+  if (v === serverVersion || updateT) return;
+  let last = 0;
+  try { last = +(sessionStorage.getItem('ctrl32.display.updated') || 0); } catch (x) { /* ignore */ }
+  if (Date.now() - last < 10 * 60 * 1000) return;
+  updateT = setTimeout(() => {
+    try { sessionStorage.setItem('ctrl32.display.updated', String(Date.now())); } catch (x) { /* ignore */ }
+    location.reload();
+  }, Math.random() * 30000);
 }
 function start() {
   try { lastCmd = +(sessionStorage.getItem('ctrl32.display.cmd') || 0); } catch (x) { /* ignore */ }

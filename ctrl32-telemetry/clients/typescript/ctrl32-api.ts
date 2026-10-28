@@ -4488,6 +4488,8 @@ export class Ctrl32Client {
     popup?: string;
     popup_seconds?: number;
     server_time?: string;
+    /** version of the server; the display reloads its page when it changes (0.85.1) */
+    server_version?: string;
     /** changes when the content changes */
     version?: number;
   }> {
@@ -4505,6 +4507,8 @@ export class Ctrl32Client {
     popup?: string;
     popup_seconds?: number;
     server_time?: string;
+    /** version of the server; the display reloads its page when it changes (0.85.1) */
+    server_version?: string;
     /** changes when the content changes */
     version?: number;
   }>('GET', `/api/v1/display/state`, undefined, undefined, false);

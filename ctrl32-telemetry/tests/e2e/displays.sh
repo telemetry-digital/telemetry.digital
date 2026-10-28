@@ -68,6 +68,7 @@ grep -q 'ctrl32_display_pair' "$KJ" && [[ "$(grep -P '\tctrl32_display_pair\t' "
 
 echo "== what a display may read"
 kiosk GET /api/v1/display/state; check "state" "$(st) $(jx '[j.name, j.items.length, j.locale, j.items[1].screen].join(" ")')" "200 Control room $SUF 2 sk 0"
+check "state carries the server version and time (reload after an update, commands after the page loaded)" "$(jx "j.server_version === '$(curl -s "$BASE/healthz" | node -pe 'JSON.parse(require("fs").readFileSync(0)).version')' && !isNaN(Date.parse(j.server_time))")" true
 check "camera names of its content only" "$(jx "Object.keys(j.cameras).sort().join(',')")" "$(echo -e "$GATE\n$PIN\n$YARD" | sort | paste -sd,)"
 kiosk GET "/api/v1/public/~$SLUG"; check "its dashboard" "$(st)" 200
 kiosk GET "/api/v1/public/~$OTHER"; check "another dashboard refused" "$(st)" 404
