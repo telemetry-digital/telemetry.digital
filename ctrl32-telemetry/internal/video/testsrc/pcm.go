@@ -82,7 +82,9 @@ func nal(header byte, rbsp []byte) []byte {
 
 // Encoder makes I_PCM frames of a fixed size (multiples of 16).
 type Encoder struct {
-	W, H  int
+	W, H int
+	// FPS, when set, adds VUI timing information to the SPS (cameras change it on their own: idle-scene modes)
+	FPS   int
 	frame int
 	idr   int
 }
@@ -103,7 +105,23 @@ func (e *Encoder) SPS() []byte {
 	w.bit(1) // frame_mbs_only_flag
 	w.bit(1) // direct_8x8_inference_flag
 	w.bit(0) // frame_cropping_flag
-	w.bit(0) // vui_parameters_present_flag
+	if e.FPS <= 0 {
+		w.bit(0) // vui_parameters_present_flag
+		return nal(0x67, w.trailing())
+	}
+	w.bit(1)                    // vui_parameters_present_flag
+	w.bit(0)                    // aspect_ratio_info_present_flag
+	w.bit(0)                    // overscan_info_present_flag
+	w.bit(0)                    // video_signal_type_present_flag
+	w.bit(0)                    // chroma_loc_info_present_flag
+	w.bit(1)                    // timing_info_present_flag
+	w.bits(1, 32)               // num_units_in_tick
+	w.bits(uint64(2*e.FPS), 32) // time_scale
+	w.bit(1)                    // fixed_frame_rate_flag
+	w.bit(0)                    // nal_hrd_parameters_present_flag
+	w.bit(0)                    // vcl_hrd_parameters_present_flag
+	w.bit(0)                    // pic_struct_present_flag
+	w.bit(0)                    // bitstream_restriction_flag
 	return nal(0x67, w.trailing())
 }
 

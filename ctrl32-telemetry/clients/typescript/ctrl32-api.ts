@@ -1601,12 +1601,23 @@ export type VideoSettings = {
 export type VideoWall = {
   id?: string;
   name?: string;
-  /** a click on a camera opens its player with the recordings (users with video.playback) */
+  /** the enlarged camera offers its recordings (users with video.playback) */
   playback_on_click?: boolean;
   screens?: WallScreen[];
   /** tiles above which automatic screens use the sub-stream */
   sub_stream_above?: number;
   updated_at?: string;
+};
+
+export type WallRect = {
+  /** height in cells, 1–rows */
+  h: number;
+  /** width in cells, 1–cols */
+  w: number;
+  /** column of the top left cell, 0-based */
+  x: number;
+  /** row of the top left cell, 0-based */
+  y: number;
 };
 
 export type WallScreen = {
@@ -1616,6 +1627,7 @@ export type WallScreen = {
   name?: string;
   /** auto: sub-stream above the video setting wall_sub_stream_above */
   quality?: "auto" | "main" | "sub";
+  rects?: WallRect[];
   /** 1–8 */
   rows: number;
   tiles?: (string | null)[];
@@ -11052,7 +11064,7 @@ export class Ctrl32Client {
   postVideoWalls(body: {
     /** ≤ 80 */
     name: string;
-    /** a click on a camera tile opens its player with the recordings, for users with video.playback (playing back is audited); default false, omitted keeps the value */
+    /** a click on a tile enlarges the camera on every wall; with this the enlarged camera offers a Recordings button that opens its player with the recordings, for users with video.playback (playing back is audited); default false, omitted keeps the value */
     playback_on_click?: boolean;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
@@ -11076,7 +11088,7 @@ export class Ctrl32Client {
   putVideoWallsId(id: string, body: {
     /** ≤ 80 */
     name?: string;
-    /** a click on a camera tile opens its player with the recordings, for users with video.playback (playing back is audited); default false, omitted keeps the value */
+    /** a click on a tile enlarges the camera on every wall; with this the enlarged camera offers a Recordings button that opens its player with the recordings, for users with video.playback (playing back is audited); default false, omitted keeps the value */
     playback_on_click?: boolean;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;

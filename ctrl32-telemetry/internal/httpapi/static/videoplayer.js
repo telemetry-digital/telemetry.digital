@@ -368,4 +368,24 @@
     const fps = Math.round((m.fps || 0) * 10) / 10, kb = Math.round(m.kbps || 0);
     return `${CODEC[m.codec] || String(m.codec).toUpperCase()} ${m.width || '?'}×${m.height || '?'} · ${fps} fps · ${kb >= 10000 ? (kb / 1000).toFixed(1) + ' Mbit/s' : kb + ' kbit/s'}`;
   };
+  // Tiles of a video wall screen on its grid (0.85.0): with rects every tile has its own place and size (cells, x/y
+  // zero-based from the top left), otherwise the tiles fill the grid row by row, one cell each. Cells without a tile
+  // come back as empty 1×1 tiles (i = -1), so the grid stays complete. Returns [{i, id, x, y, w, h}] in reading order;
+  // fits = false when a tile leaves the grid or overlaps another (the server refuses such a screen).
+  window.ctrl32Player.wallPlace = (sc) => {
+    const cols = sc.cols, rows = sc.rows, tiles = sc.tiles || [], rects = sc.rects;
+    const used = new Array(cols * rows).fill(false), out = [];
+    let fits = true;
+    tiles.forEach((id, i) => {
+      const r = rects ? rects[i] : {x: i % cols, y: Math.floor(i / cols), w: 1, h: 1};
+      if (!r || r.w < 1 || r.h < 1 || r.x < 0 || r.y < 0 || r.x + r.w > cols || r.y + r.h > rows) { fits = false; return; }
+      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) { if (used[y * cols + x]) fits = false; used[y * cols + x] = true; }
+      out.push({i, id: id || null, x: r.x, y: r.y, w: r.w, h: r.h});
+    });
+    for (let c = 0; c < cols * rows; c++) if (!used[c]) out.push({i: -1, id: null, x: c % cols, y: Math.floor(c / cols), w: 1, h: 1});
+    out.sort((a, b) => a.y - b.y || a.x - b.x);
+    return Object.assign(out, {fits});
+  };
+  // CSS for a placed tile
+  window.ctrl32Player.wallArea = (r) => `grid-column:${r.x + 1} / span ${r.w};grid-row:${r.y + 1} / span ${r.h}`;
 })();

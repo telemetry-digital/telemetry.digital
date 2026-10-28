@@ -34,12 +34,11 @@ function render() {
   document.title = `${WALL.name} · ${sc.name || t('Screen') + ' ' + (SCREEN + 1)}`;
   const g = $('#grid');
   g.style.gridTemplateColumns = `repeat(${sc.cols}, 1fr)`; g.style.gridTemplateRows = `repeat(${sc.rows}, 1fr)`;
-  const cells = [];
-  for (let i = 0; i < sc.cols * sc.rows; i++) {
-    const id = (sc.tiles || [])[i], c = id && CAMS[id];
-    cells.push(`<div class="cell" data-i="${i}" ${c ? `data-id="${id}"` : ''}>${c ? `<div class="cap"><span class="cam-dot"></span><span class="notranslate">${esc(c.name)}</span></div>` : ''}</div>`);
-  }
-  g.innerHTML = cells.join('');
+  // tiles may span several cells (0.85.0); the placement is the server's (ctrl32Player.wallPlace)
+  g.innerHTML = ctrl32Player.wallPlace(sc).map(r => {
+    const c = r.id && CAMS[r.id];
+    return `<div class="cell${r.w > 1 || r.h > 1 ? ' big' : ''}" data-i="${r.i}" style="${ctrl32Player.wallArea(r)}" ${c ? `data-id="${r.id}"` : ''}>${c ? `<div class="cap"><span class="cam-dot"></span><span class="notranslate">${esc(c.name)}</span></div>` : ''}</div>`;
+  }).join('');
   // the screen's choice; automatic: the sub-stream for many tiles, the main stream for a few large ones
   const quality = sc.quality === 'main' || sc.quality === 'sub' ? sc.quality : sc.cols * sc.rows > (WALL.sub_stream_above ?? 4) ? 'sub' : 'main';
   for (const el of g.querySelectorAll('.cell[data-id]')) {
@@ -47,20 +46,27 @@ function render() {
     const p = ctrl32Player(el, {url: `/api/v1/video/cameras/${el.dataset.id}/live?quality=${quality}`, live: true,
       onState: s => { dotEl.className = 'cam-dot ' + (s === 'online' ? 'online' : s === 'offline' ? 'offline' : ''); }});
     el.prepend(p.el); players.push(p);
-    // a click enlarges the tile to the whole screen (main stream), another click returns; on a wall allowing playback
-    // (and for a user allowed to play back) a click opens the camera's player with its recordings instead
-    el.ondblclick = el.onclick = () => PLAY ? playback(el.dataset.id) : maximize(el);
-    if (PLAY) el.title = t('Click: playback');
+    // a click enlarges the tile to the whole screen (main stream), another click or Esc returns (0.85.0: on every
+    // wall); on a wall allowing playback the enlarged camera offers its recordings
+    el.onclick = () => maximize(el);
+    el.title = t('Click: enlarge');
   }
   $('#screen').innerHTML = WALL.screens.map((s, i) => `<option value="${i}"${i === SCREEN ? ' selected' : ''}>${esc(s.name || t('Screen') + ' ' + (i + 1))} (${s.cols}×${s.rows})</option>`).join('');
 }
 let big = null;
 function maximize(el) {
-  if (big) { big.p.close(); big.el.classList.remove('max'); const was = big.el; big = null; if (was === el) return; }
+  if (big) { big.p.close(); big.btn.remove(); big.el.classList.remove('max'); const was = big.el; big = null; if (was === el) return; }
   el.classList.add('max');
   const p = ctrl32Player(el, {url: `/api/v1/video/cameras/${el.dataset.id}/live?quality=main`, live: true});
   p.el.style.position = 'absolute'; p.el.style.inset = '0'; p.el.style.zIndex = '1';
-  big = {el, p};
+  const btn = document.createElement('div'); btn.className = 'wall-max-bar';
+  const c = CAMS[el.dataset.id];
+  btn.innerHTML = `<span class="notranslate wall-max-name">${esc(c ? c.name : '')}</span>${PLAY ? `<button class="btn small" type="button" data-rec>${esc(t('Recordings'))}</button>` : ''}<button class="btn small" type="button" data-back>${esc(t('Back to the wall'))} (Esc)</button>`;
+  btn.onclick = e => e.stopPropagation();
+  const rec = btn.querySelector('[data-rec]'); if (rec) rec.onclick = () => playback(el.dataset.id);
+  btn.querySelector('[data-back]').onclick = () => maximize(el);
+  el.appendChild(btn);
+  big = {el, p, btn};
 }
 // Playback from the wall (0.82.0): the camera page (live, timeline, recordings) in a layer over the wall; the tiles
 // stop meanwhile (one decoder less per tile on the wall PC) and start again when the layer closes.

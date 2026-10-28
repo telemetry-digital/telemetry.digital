@@ -269,6 +269,15 @@ WID=$(jx j.id); check "screens stored" "$(jx 'j.screens.map(s => s.name + ":" + 
 req POST /api/v1/video/walls "{\"name\":\"x\",\"reason\":\"e2e\",\"screens\":[{\"cols\":9,\"rows\":1,\"tiles\":[]}]}"; check "grid size validated" "$(st)" 400
 req POST /api/v1/video/walls "{\"name\":\"x\",\"reason\":\"e2e\",\"screens\":[{\"cols\":1,\"rows\":1,\"tiles\":[\"00000000-0000-7000-8000-000000000000\"]}]}"; check "unknown camera refused" "$(st)" 400
 req POST /api/v1/video/walls "{\"name\":\"x\",\"reason\":\"e2e\",\"screens\":[{\"cols\":1,\"rows\":1,\"tiles\":[\"$CAM\",\"$DOOR\"]}]}"; check "more tiles than cells refused" "$(st)" 400
+# tiles with their own place and size (0.85.0): a 3×2 tile, a tall 1×2 beside it, an empty 1×1 and one more below
+RW="{\"name\":\"Rects $SUF\",\"reason\":\"e2e\",\"screens\":[{\"cols\":6,\"rows\":4,\"tiles\":[\"$CAM\",\"$DOOR\",null,\"$CAM\"],\"rects\":[{\"x\":0,\"y\":0,\"w\":3,\"h\":2},{\"x\":3,\"y\":0,\"w\":1,\"h\":2},{\"x\":4,\"y\":0,\"w\":1,\"h\":1},{\"x\":5,\"y\":3,\"w\":1,\"h\":1}]}]}"
+req POST /api/v1/video/walls "$RW"; check "wall with tile rects stored" "$(st) $(jx 'j.screens[0].rects.map(r => r.x + "," + r.y + "," + r.w + "x" + r.h).join(" ")')" "201 0,0,3x2 3,0,1x2 4,0,1x1 5,3,1x1"
+RWID=$(jx j.id); req DELETE "/api/v1/video/walls/$RWID?reason=e2e"
+req POST /api/v1/video/walls "{\"name\":\"x\",\"reason\":\"e2e\",\"screens\":[{\"cols\":3,\"rows\":3,\"tiles\":[\"$CAM\",\"$DOOR\"],\"rects\":[{\"x\":0,\"y\":0,\"w\":2,\"h\":2},{\"x\":1,\"y\":1,\"w\":1,\"h\":1}]}]}"; check "overlapping tiles refused" "$(st) $(jx j.error)" "400 screen 1: tiles 1 and 2 overlap"
+req POST /api/v1/video/walls "{\"name\":\"x\",\"reason\":\"e2e\",\"screens\":[{\"cols\":3,\"rows\":3,\"tiles\":[\"$CAM\"],\"rects\":[{\"x\":2,\"y\":0,\"w\":2,\"h\":1}]}]}"; check "tile outside the grid refused" "$(st)" 400
+req POST /api/v1/video/walls "{\"name\":\"x\",\"reason\":\"e2e\",\"screens\":[{\"cols\":3,\"rows\":3,\"tiles\":[\"$CAM\",\"$DOOR\"],\"rects\":[{\"x\":0,\"y\":0,\"w\":1,\"h\":1}]}]}"; check "one rect per tile required" "$(st)" 400
+req POST /api/v1/video/walls "{\"name\":\"Plain $SUF\",\"reason\":\"e2e\",\"screens\":[{\"cols\":2,\"rows\":2,\"tiles\":[\"$CAM\",\"$DOOR\"],\"rects\":[{\"x\":0,\"y\":0,\"w\":1,\"h\":1},{\"x\":1,\"y\":0,\"w\":1,\"h\":1}]}]}"; check "a plain grid is stored without rects" "$(st) $(jx 'j.screens[0].rects === undefined')" "201 true"
+RWID=$(jx j.id); req DELETE "/api/v1/video/walls/$RWID?reason=e2e"
 req PUT /api/v1/video/walls/$WID '{"name":"Renamed","reason":"e2e"}'; check "wall renamed, screens kept" "$(jx 'j.name + " " + j.screens.length')" "Renamed 2"
 req GET /api/v1/video/walls; check "wall listed" "$(jx "j.some(w => w.id === '$WID')")" true
 curl -s -o /dev/null -w '%{http_code}' "$BASE/video/walls/$WID" > "$TMP/s"; check "wall page served" "$(st)" 200

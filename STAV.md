@@ -1,4 +1,4 @@
-# Stav práce (aktualizované 22. 10. 2026, 0.84.2)
+# Stav práce (aktualizované 28. 10. 2026, 0.85.0)
 
 ## Hotové (vo vetve `main`, otestované)
 
@@ -60,6 +60,7 @@
 | 0.84.0 | **Animovaná grafika v knižnici a ČOV.** Triedy `c32-*` v importovaných SVG (točenie, kývanie, pulz, stúpanie, padanie, tok, blikanie, oneskorenia), štýl pridá server (`?anim=1&speed=`), súbor nič vlastné nespustí; dynamika „Animovať, keď“ (aj pre vstavané symboly); symbol prevzdušňovania s bublinkami; oprava obrazov s > 50 tagmi (hodnoty po dávkach 50); `install-wg-modem.sh` (Raspberry Pi ako WireGuard modem pre PLC) | unit `httpapi`; e2e `hmi_objects` 34; headless `scada`, `scada_editor`; Chrome |
 | 0.84.1 | **Bezpečnostná oprava:** Go 1.27.3 (GO-2026-6809 / CVE-2026-111943, `crypto/x509` prijímal kompromitované medziľahlé certifikáty pri odchádzajúcich TLS spojeniach), bez zmeny kódu | govulncheck 0 dosiahnuteľných, `go vet`, `go test ./...` |
 | 0.84.2 | **Oprava výpadku po reštarte:** keď server pri štarte zlyhá (napr. databáza ešte nebeží), chybu zapíše a skončí, takže ho systemd/Windows spustí znova — predtým proces visel bez logu (produkcia 20.–22. 10. nedostupná) | unit `service` (2 nové) |
+| 0.85.0 | **Steny: dlaždice v ľubovoľnej veľkosti a mieste, zväčšenie na každej stene; kamery bez výpadkov pri zmene SPS/PPS.** `rects` `{x,y,w,h}` na dlaždicu (bez prekrytia, na mriežke; bez rects obyčajná mriežka), editor s ťahaním, zmenou veľkosti za roh, pridaním na voľné políčko, poliami a usporiadaniami (rovnaké, 1/2/4 veľké + malé); stena aj displej ich kreslia; klik zväčší kameru s hlavným prúdom na každej stene, pri `playback_on_click` tlačidlo Záznamy; kamera, ktorá mení SPS/PPS (časovanie VUI), už nezačína odznova (Track ostáva, nové sady v prúde) | unit `TestCheckWallRects`, `TestParamsChangeKeepsTheStream`; e2e `video` 188, `displays` 84 (+7 ďalších sád); headless `wall_layout` 27 (nová); Chrome |
 | 0.63.2 | Úvodná stránka portálu = prihlásenie s krátkou ukážkou možností (Zariadenia a dáta, Dashboardy a SCADA, Video NVR, Energie a reporty, Automatizácia a AI; 19 jazykov), menu bez zaoblení | headless `front_page`, e2e `landing`, `i18n_auth` |
 
 Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (`tests/run-all.sh`) pre 0.54.0 (27. 9. 2026): všetko prešlo okrem 3 kontrol času NTP v `ops`, ktoré potrebujú internet (v tomto kontajneri nedostupný) — nesúvisí s kódom.

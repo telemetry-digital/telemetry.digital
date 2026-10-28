@@ -87,12 +87,11 @@ async function showItem(it) {
     const g = document.createElement('div'); g.className = 'wall-grid'; st.appendChild(g);
     g.style.gridTemplateColumns = `repeat(${sc.cols}, 1fr)`; g.style.gridTemplateRows = `repeat(${sc.rows}, 1fr)`;
     const quality = sc.quality === 'main' || sc.quality === 'sub' ? sc.quality : sc.cols * sc.rows > (w.sub_stream_above ?? 4) ? 'sub' : 'main';
-    let html = '';
-    for (let i = 0; i < sc.cols * sc.rows; i++) {
-      const id = (sc.tiles || [])[i], name = id && w.cameras[id];
-      html += `<div class="cell" ${name ? `data-id="${esc(id)}"` : ''}>${name ? `<div class="cap"><span class="cam-dot"></span><span class="notranslate">${esc(name)}</span></div>` : ''}</div>`;
-    }
-    g.innerHTML = html;
+    // tiles may span several cells (0.85.0)
+    g.innerHTML = ctrl32Player.wallPlace(sc).map(r => {
+      const name = r.id && w.cameras[r.id];
+      return `<div class="cell" style="${ctrl32Player.wallArea(r)}" ${name ? `data-id="${esc(r.id)}"` : ''}>${name ? `<div class="cap"><span class="cam-dot"></span><span class="notranslate">${esc(name)}</span></div>` : ''}</div>`;
+    }).join('');
     for (const el of g.querySelectorAll('.cell[data-id]')) {
       const dot = el.querySelector('.cam-dot');
       const p = ctrl32Player(el, {url: `/api/v1/display/cameras/${el.dataset.id}/live?quality=${quality}`, live: true,
