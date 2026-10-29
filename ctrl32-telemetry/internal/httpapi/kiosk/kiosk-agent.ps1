@@ -12,8 +12,10 @@ function Log($m) {
     if ((Test-Path $log) -and (Get-Item $log).Length -gt 1MB) { Move-Item $log "$log.1" -Force }
     Add-Content -Path $log -Value ("{0:yyyy-MM-dd HH:mm:ss} {1}" -f (Get-Date), $m)
 }
-function Read-Json($p) { try { return (Get-Content $p -Raw -Encoding UTF8 | ConvertFrom-Json) } catch { return $null } }
-function Tail($p, $n) { if (Test-Path $p) { return @(Get-Content $p -Tail $n) } return @() }
+function Read-Json($p) { try { return (Get-Content $p -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json) } catch { return $null } }
+# plain strings: lines from Get-Content carry PSPath and other note properties that ConvertTo-Json would serialize
+function Tail($p, $n) { if (Test-Path $p) { return @(Get-Content $p -Tail $n | ForEach-Object { [string]$_ }) } return @() }
+function Scripts-Version { $v = Get-Content (Join-Path $base 'version.txt') -ErrorAction SilentlyContinue | Select-Object -First 1; if ($v) { return [string]$v } return $null }
 
 $cfg = Read-Json (Join-Path $base 'agent.json')
 if (-not $cfg -or -not $cfg.server -or -not $cfg.token) { Log 'agent.json missing or incomplete - run the setup script again'; exit 1 }
@@ -61,7 +63,7 @@ function Get-Report {
     $kiosks = @(Get-CimInstance Win32_Process -Filter "Name='chrome.exe' OR Name='msedge.exe'" | Where-Object { $_.CommandLine -like '*--kiosk*' -and $_.CommandLine -like '*--user-data-dir*' }).Count
     $reboot = (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') -or (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending')
     $ips = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } | ForEach-Object { $_.IPAddress })
-    $ver = (Get-Content (Join-Path $base 'version.txt') -ErrorAction SilentlyContinue | Select-Object -First 1)
+    $ver = Scripts-Version
     return @{
         hostname = $env:COMPUTERNAME; windows = "$($os.Caption) $($os.Version)"; boot = $os.LastBootUpTime.ToUniversalTime().ToString('o')
         uptime_s = [int]((Get-Date) - $os.LastBootUpTime).TotalSeconds; user = $cs.UserName; model = "$($cs.Manufacturer) $($cs.Model)"
@@ -130,7 +132,7 @@ function Invoke-Op($c) {
 }
 
 # ---- the loop ---------------------------------------------------------------------------------------------------------
-Log "agent started (scripts $(Get-Content (Join-Path $base 'version.txt') -ErrorAction SilentlyContinue | Select-Object -First 1))"
+Log "agent started (scripts $(Scripts-Version))"
 $result = $null
 $rebootBy = $null
 $restartSelf = $false
