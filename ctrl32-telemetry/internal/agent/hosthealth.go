@@ -177,14 +177,30 @@ func smartDisks(ctx context.Context) ([]SMARTDisk, string) {
 		if len(f) == 0 || !strings.HasPrefix(f[0], "/dev/") {
 			continue
 		}
-		args := []string{"-H", "-i", "-A", f[0]}
-		if len(f) >= 3 && f[1] == "-d" {
-			args = []string{"-H", "-i", "-A", "-d", f[2], f[0]}
-		}
-		out, _ := run(ctx, 20*time.Second, "smartctl", args...) // exit codes carry flags; the text decides
-		smartCache.disks = append(smartCache.disks, parseSmart(f[0], out))
+		smartCache.disks = append(smartCache.disks, smartDisk(ctx, f))
 	}
 	return smartCache.disks, smartCache.state
+}
+
+// smartDisk reads one disk of `smartctl --scan` (/dev/sdb -d scsi # …). The scan names SATA disks behind a SAS/RAID
+// controller "scsi", which hides the ATA health: smartctl decides the type itself first, then tries the scanned
+// type (megaraid,N, nvme, …) and SAT; a disk none of them can read stays "unknown".
+func smartDisk(ctx context.Context, f []string) SMARTDisk {
+	tries := [][]string{nil}
+	if len(f) >= 3 && f[1] == "-d" && f[2] != "scsi" && f[2] != "auto" {
+		tries = append(tries, []string{"-d", f[2]})
+	}
+	tries = append(tries, []string{"-d", "sat"})
+	var d SMARTDisk
+	for _, t := range tries {
+		args := append(append([]string{"-H", "-i", "-A"}, t...), f[0])
+		out, _ := run(ctx, 20*time.Second, "smartctl", args...) // exit codes carry flags; the text decides
+		d = parseSmart(f[0], out)
+		if d.Health != "unknown" {
+			return d
+		}
+	}
+	return d
 }
 
 func parseSmart(dev, out string) SMARTDisk {

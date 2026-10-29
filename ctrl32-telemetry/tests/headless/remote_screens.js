@@ -12,7 +12,7 @@ const base = process.env.BASE || "http://127.0.0.1:8080";
 const out = process.env.OUT || ".";
 const lang = process.env.LANG_UI || "en";
 const port = 9367;
-const proc = spawn(chrome, ["--headless=new", "--no-first-run", "--remote-debugging-port=" + port, "--user-data-dir=" + (process.env.TEMP || "/tmp") + "/cdp-profile-remote", "--window-size=1400,1000", "about:blank"], { stdio: "ignore" });
+const proc = spawn(chrome, ["--headless=new", "--no-first-run", "--remote-debugging-port=" + port, "--user-data-dir=" + (process.env.TEMP || "/tmp") + "/cdp-profile-remote", "--window-size=1366,900", "about:blank"], { stdio: "ignore" });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function json(url) { return new Promise((res, rej) => http.get(url, (r) => { let d = ""; r.on("data", (c) => (d += c)); r.on("end", () => res(JSON.parse(d))); }).on("error", rej)); }
 let pass = 0, fail = 0, cleanup = async () => {}; const problems = [];

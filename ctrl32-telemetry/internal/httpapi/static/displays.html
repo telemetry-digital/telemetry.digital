@@ -12,6 +12,11 @@
   p.small, .small { font-size: 12px; }
   #kiosks td { vertical-align: top; }
   .kv-mini { font-size: 12px; line-height: 1.5; }
+  /* the command buttons wrap inside their column instead of pushing the table past the screen */
+  #list td.actions-cell, #kiosks td.actions-cell { white-space: normal; width: 1%; min-width: 150px; max-width: 280px; }
+  #list td.actions-cell .btn, #kiosks td.actions-cell .btn { margin: 0 4px 4px 0; }
+  #list td, #kiosks td { overflow-wrap: anywhere; }
+  @media (max-width: 1500px) { #list td.actions-cell, #kiosks td.actions-cell { max-width: 200px; } }
 </style>
 </head>
 <body>
