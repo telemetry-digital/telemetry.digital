@@ -54,6 +54,12 @@ flag, and against ADR-0012 and the threat model ("no shell to the server").
    them on needs `display.screenshot` and a reason; each screenshot needs `display.screenshot` and a reason, is
    audited, is accepted only for the request it answers, and is kept in memory only until the requester fetches it
    once (at most 3 minutes). New permission `display.screenshot`, granted to `org_admin` only.
+   **Supplemented 29. 10. 2026 (0.86.5):** the picture comes from each kiosk browser (Chrome DevTools protocol,
+   `Page.captureScreenshot`, one per monitor) on a debugging port that Chrome opens on 127.0.0.1 only. The first
+   implementation grabbed the desktop in PowerShell, which Microsoft Defender blocks as
+   `HackTool:PowerShell/EmpireGetScreenshot.C`; rewording such code to slip past the signature or adding an antivirus
+   exclusion on a customer's PC was rejected. Consequence: any local process on the kiosk PC can drive the kiosk browser
+   through that port — accepted for a single-purpose PC whose only user is the kiosk account (threat model).
 7. **MeshCentral stays the emergency path.** A server setting holds its address and the node of this server; a kiosk PC
    may carry its own node. *Emergency remote desktop* returns a `gotonode=…&viewmode=11` link after a reason and audits
    `remote.mesh_open`; MeshCentral keeps its own sign-in with two factors. Still MeshCentral's: a host that does not boot

@@ -72,7 +72,8 @@ it closes) and a small agent. The PC then reports its state on the Displays page
 decoding, browser, pending Windows updates, kiosk windows) and an engineer can *restart the browsers*, *reboot* it or
 *update its scripts* from there, with a reason that goes to the audit trail. A *screenshot* of the PC is possible only
 after an administrator allowed it for that PC (it can show camera pictures without privacy masks); each one needs the
-permission `display.screenshot` and a reason, and the picture is fetched once and never stored. Link the displays to
+permission `display.screenshot` and a reason, and the pictures (one per monitor, taken by the kiosk browser: the display
+page only) are fetched once and never stored. Link the displays to
 the monitors of the PC under *Edit* (a display started by the launcher suggests its PC and monitor). Details:
 `docs/remote-management.md`.
 

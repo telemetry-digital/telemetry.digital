@@ -33,6 +33,12 @@ kiosk per monitor, screenshots, restarts).
   agent polls every 15 s; operations wait 10 minutes; results stored with the PC.
 - Screenshots: off per PC; enabling needs `display.screenshot` + reason; each one `display.screenshot` + reason,
   audited, in memory only, fetched once by the requester, gone after 3 minutes.
+- Screenshots come from the kiosk browsers (0.86.5): the launcher starts the kiosk of monitor *i* with
+  `--remote-debugging-port=9222+i` (`cdp_port` in `launcher.json`); Chrome listens on 127.0.0.1 only (no listening
+  address is given). The agent (SYSTEM) takes `Page.captureScreenshot` (JPEG, quality 70) of the display page of every
+  monitor and sends one picture per monitor. A desktop grab in PowerShell (0.86.0–0.86.4) is blocked by Microsoft
+  Defender (AMSI, `HackTool:PowerShell/EmpireGetScreenshot.C`) and is gone; the picture now shows only the display
+  page, not other windows on the desktop.
 - MeshCentral: https address and node of the server as a server setting; node per kiosk PC; opening audited with a
   reason; link `/?gotonode=<node>&viewmode=11&hide=16`.
 
@@ -65,8 +71,10 @@ browsers or reboots it with a reason. After a server update *scripts outdated* �
 
 ### Story 5 — See the wall's screen (P2, sensitive)
 
-An administrator allows screenshots for the PC (reason), takes one (reason), sees it once; it is not stored. Without
-`display.screenshot` or with screenshots off the request is refused.
+An administrator allows screenshots for the PC (reason), takes one (reason), sees it once — one picture per monitor,
+named by the display linked to it; it is not stored. Without `display.screenshot` or with screenshots off the request
+is refused. A monitor whose browser cannot be reached is named with the agent's message; when no monitor can be
+taken, the agent's message is shown instead of a picture.
 
 ### Story 6 — Emergency (P2)
 
@@ -83,7 +91,10 @@ at the server's node and asks for its own sign-in.
   user may see.
 - **FR-005** Kiosk PCs: CRUD, credential (hash, shown once, replaceable), setup script, scripts download, report,
   closed operations, results, links of displays to monitors (one display per monitor), removal.
-- **FR-006** Screenshots under FR-005 with the rules above; permission `display.screenshot` (org_admin).
+- **FR-006** Screenshots under FR-005 with the rules above; permission `display.screenshot` (org_admin). Since 0.86.5
+  one picture per monitor from the kiosk browser's DevTools port on 127.0.0.1 (`POST /api/v1/kiosk/screenshot?seq=&monitor=`);
+  `GET /api/v1/kiosks/{id}/screenshot` answers JSON with the pictures once, 202 while monitors are missing and the
+  agent has not answered, 502 `capture_failed` when none was taken.
 - **FR-007** MeshCentral settings and audited links for the server and for kiosk PCs.
 - **FR-008** UI: System → Operating system, System → Logs, Remote management card, async update progress; Displays:
   health, Kiosk PCs section and dialogs. 18 languages.

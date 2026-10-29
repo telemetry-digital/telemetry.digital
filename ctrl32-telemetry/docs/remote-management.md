@@ -23,7 +23,7 @@ MeshCentral asks for its own sign-in with two factors.
 | Logs of the service, the agent, Caddy, PostgreSQL, WireGuard, Cloudflare Tunnel, the kernel | System → Logs | `system.admin` |
 | What each display shows: camera tiles playing or not, screen, page version | Displays | `display.control` |
 | Kiosk PCs: setup script, state, restart the browsers, reboot, update the scripts | Displays → Kiosk PCs | `display.manage` |
-| Screenshot of a kiosk PC (off per PC until allowed; fetched once, never stored) | Displays → Kiosk PCs | `display.screenshot` |
+| Screenshot of a kiosk PC, one picture per monitor (off per PC until allowed; fetched once, never stored) | Displays → Kiosk PCs | `display.screenshot` |
 | Emergency remote desktop (MeshCentral) of the server or a kiosk PC | System → Server, Displays → Kiosk PCs | `system.admin` / `display.manage` |
 
 The operating system pages need a Linux server with apt (Debian, Ubuntu). On a Windows server they say so: install the
@@ -66,11 +66,16 @@ SYSTEM and administrators; the kiosk user writes only into `user\`):
 
 - **kiosk-launcher.ps1** (task *ctrl32 kiosk launcher*, at the kiosk user's logon): one Chrome kiosk per monitor with
   its own profile (`profile-0` = the top left monitor), started again within 30 s when it closes; the taskbar is kept
-  hidden.
+  hidden. Each kiosk gets a DevTools debugging port (`--remote-debugging-port`, 9222 for monitor 1, 9223 for monitor 2,
+  …; `cdp_port` in `launcher.json`) for the screenshot. Chrome opens it on 127.0.0.1 only, so nothing outside the PC
+  reaches it; any program running on the PC itself could drive the kiosk browser through it, which is accepted for a
+  PC that does nothing but show the displays. A kiosk started by older scripts without the port is restarted once.
 - **kiosk-agent.ps1** (task *ctrl32 kiosk agent*, SYSTEM): every 15 s it reports the PC (Windows, uptime, CPU, video
   decoding, memory, disk, browser version, kiosk windows, pending Windows updates, a pending restart, the launcher's
   monitors and its log) and performs what an operator asked for — *report now*, *restart the browsers*, *reboot*,
-  *update the scripts* (the versions of this server), *screenshot*. Nothing else; it never runs text from the server.
+  *update the scripts* (the versions of this server), *screenshot* (since 0.86.5 it asks each kiosk browser for a
+  picture of its page over the DevTools port — one picture per monitor, the display page only; a desktop grab in
+  PowerShell is blocked by Microsoft Defender as a hacking tool). Nothing else; it never runs text from the server.
   Its credential is in `agent.json`, readable by SYSTEM and administrators only.
 
 The PC connects to the server; nothing connects to the PC. *Replace credential* stops the old one at once; *Remove*

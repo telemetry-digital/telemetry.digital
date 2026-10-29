@@ -1,6 +1,7 @@
 // Headless Chrome: the screens of spec 034 (0.86.0) — System → Operating system (updates, the upgrade with its log,
 // health), System → Logs, the Remote management card, and Displays with the tiles a display reports and the Kiosk PCs
-// section (a PC registered and reporting through its agent's API, the setup dialog). Against the agent's simulation.
+// section (a PC registered and reporting through its agent's API, the setup dialog, a screenshot with one picture per
+// monitor as the agent of 0.86.5 sends them). Against the agent's simulation.
 // Screenshots go to OUT (remote-*.png); LANG=sk takes them in Slovak.
 //   BASE=http://127.0.0.1:8080 OUT=/tmp node tests/headless/remote_screens.js
 const { spawn } = require("child_process");
@@ -103,6 +104,20 @@ const check = (name, got, want) => { if (JSON.stringify(got) === JSON.stringify(
   await ev(`setupDialog(KIOSKS.find(k => k.id === ${JSON.stringify(KID)}), ${JSON.stringify(TOK)})`); await sleep(400);
   await shot("kiosk-setup");
   await ev(`document.querySelector('#kioskSetupDlg').close()`);
+
+  // ---- a screenshot: one picture per monitor, taken by the kiosk browsers (0.86.5); this page stands in for them
+  await api("PUT", `/api/v1/kiosks/${KID}`, { screenshots: true, reason: "probe" });
+  const jpg = (await send("Page.captureScreenshot", { format: "jpeg", quality: 60 })).result.data;
+  const cmd = await api("POST", `/api/v1/kiosks/${KID}/command`, { action: "screenshot", reason: "probe" });
+  check("screenshot asked", cmd.status, 200);
+  await ev(`void screenshot(KIOSKS.find(k => k.id === ${JSON.stringify(KID)}))`);
+  for (const m of [0, 1]) {
+    check(`monitor ${m + 1} sends its picture`, await ev(`fetch('/api/v1/kiosk/screenshot?seq=${cmd.body.seq}&monitor=${m}',{method:'POST',headers:{'Content-Type':'image/jpeg','X-Kiosk-Token':${JSON.stringify(TOK)}},body:Uint8Array.from(atob(${JSON.stringify(jpg)}), c => c.charCodeAt(0))}).then(r=>r.status)`), 200);
+  }
+  check("the dialog shows one picture per monitor", await waitFor(`document.querySelectorAll('#shotImgs img').length === 2 && [...document.querySelectorAll('#shotImgs img')].every(i => i.complete && i.naturalWidth > 0)`), true);
+  check("…named by monitor and display", await ev(`document.querySelector('#shotImgs figcaption').textContent.includes('Horny monitor ${suf}')`), true);
+  await shot("kiosk-screenshot");
+  await ev(`document.querySelector('#shotDlg').close()`);
 
   await cleanup();
   console.log("problems:", problems.length ? JSON.stringify(problems) : "none");
