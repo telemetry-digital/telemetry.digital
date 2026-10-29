@@ -1,0 +1,19 @@
+meta {
+  name: Update banner of the web UI
+  type: http
+  seq: 37
+}
+
+get {
+  url: {{baseUrl}}/api/v1/server/updates/notice
+  body: none
+  auth: inherit
+}
+
+docs {
+  Update banner of the web UI
+  
+  A newer version for the banner of system administrators (empty when the mode is manual or the server is up to date). From the last check, no network access.
+  
+  Requires permission `system.admin`.
+}

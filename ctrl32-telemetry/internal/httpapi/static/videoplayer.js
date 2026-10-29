@@ -38,6 +38,9 @@
       statsEl.textContent = ctrl32Player.statsText(m);
     }
     let ws = null, ms = null, sb = null, queue = [], closed = false, retry = null, mode = '', lastT = null, drawing = false, pendingJpeg = null, stallTimer = null;
+    // when the picture last moved on (health of a display, 0.86.0): new video time, or a new JPEG frame
+    let lastMove = 0, lastTime = -1, onlineAt = 0;
+    video.addEventListener('timeupdate', () => { if (video.currentTime !== lastTime) { lastTime = video.currentTime; lastMove = performance.now(); } });
     // the sound (spec 020)
     let audio = null, ams = null, asb = null, aqueue = [], soundOn = false;
     function resetAudio() {
@@ -130,7 +133,7 @@
     if (window.ResizeObserver) new ResizeObserver(placeMasks).observe(stage);
     video.addEventListener('loadedmetadata', placeMasks); video.addEventListener('resize', placeMasks);
     function say(text) { msg.textContent = text ? T(text) : ''; msg.hidden = !text; }
-    function state(s, e) { box.dataset.state = s; if (s !== 'online') lastStats = null; if (typeof drawStats === 'function') drawStats(); if (opts.onState) opts.onState(s, e || ''); }
+    function state(s, e) { if (s === 'online' && box.dataset.state !== 'online') onlineAt = performance.now(); box.dataset.state = s; if (s !== 'online') lastStats = null; if (typeof drawStats === 'function') drawStats(); if (opts.onState) opts.onState(s, e || ''); }
 
     function resetMedia() {
       if (ms) { try { if (ms.readyState === 'open') ms.endOfStream(); } catch (e) { /* closing */ } }
@@ -198,6 +201,7 @@
         if (canvas.width !== bmp.width || canvas.height !== bmp.height) { canvas.width = bmp.width; canvas.height = bmp.height; placeMasks(); }
         canvas.getContext('2d').drawImage(bmp, 0, 0);
         bmp.close();
+        lastMove = performance.now();
       } catch (e) { /* a broken picture */ }
       drawing = false;
       if (pendingJpeg) { const d = pendingJpeg; pendingJpeg = null; drawJPEG(d); }
@@ -328,6 +332,15 @@
       // switch the sound on or off (on needs a user gesture in browsers); true when there is sound to hear
       sound(on) { soundOn = !!on; if (soundOn) { const c = pcmCtx(); if (c) c.resume().catch(() => {}); } else if (actx) actx.suspend().catch(() => {}); if (audio) { audio.muted = !soundOn; if (soundOn) { syncAudio(); audio.play().catch(() => {}); } else audio.pause(); } return box.dataset.audio === '1'; },
       get hasSound() { return box.dataset.audio === '1'; },
+      // playing (the picture moved on in the last 10 s), stalled (connected, but the picture stands), connecting,
+      // offline or unsupported (the browser cannot play the codec)
+      get health() {
+        const s = box.dataset.state;
+        const now = performance.now();
+        if (s === 'online') return lastMove && now - lastMove < 10000 ? 'playing' : now - onlineAt < 10000 ? 'connecting' : 'stalled';
+        if (s === 'offline' || s === 'unsupported') return s;
+        return 'connecting';
+      },
       // the stream information overlay on or off
       stats(on) { statsOn = !!on; drawStats(); },
       close() {

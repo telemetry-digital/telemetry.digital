@@ -1,0 +1,27 @@
+meta {
+  name: Remove a kiosk PC
+  type: http
+  seq: 18
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/kiosks/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~reason: 
+}
+
+docs {
+  Remove a kiosk PC
+  
+  Its agent is locked out at once; its displays stay paired and are unlinked. Audited as kiosk.remove.
+  
+  Requires permission `display.manage`.
+}

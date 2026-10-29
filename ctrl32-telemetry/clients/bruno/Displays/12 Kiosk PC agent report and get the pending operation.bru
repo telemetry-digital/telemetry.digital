@@ -1,0 +1,24 @@
+meta {
+  name: Kiosk PC agent report and get the pending operation
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/v1/kiosk/report
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "report": {},
+    "result": {}
+  }
+}
+
+docs {
+  Kiosk PC agent: report and get the pending operation
+  
+  Called by the agent on the PC every 15 s with its report (free form, at most 48 KiB) and the result of the last operation `{seq, action, ok, message}`; answers with the pending operation, the current version of the scripts and the poll interval.
+}

@@ -307,7 +307,7 @@ func (a *Server) hUpdatePackage(w http.ResponseWriter, r *http.Request) {
 	if q.Get("install") == "1" && info.HasBinary {
 		minutes, _ := strconv.Atoi(q.Get("rollback_minutes"))
 		in := UpdateRequest{Version: info.Version, Source: "package", Mode: q.Get("mode"), Backup: q.Get("backup") == "1", RollbackMinutes: minutes,
-			UpdatesUntil: q.Get("updates_until"), Actor: q.Get("actor"), Reason: q.Get("reason")}
+			UpdatesUntil: q.Get("updates_until"), Actor: q.Get("actor"), Reason: q.Get("reason"), Async: q.Get("async") == "1"}
 		up, e := a.install(r.Context(), in, dirSource{dir: stagedDir()})
 		if e != nil {
 			writeUpdateErr(w, e)

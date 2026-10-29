@@ -1,0 +1,30 @@
+meta {
+  name: Ask a kiosk PC for an operation
+  type: http
+  seq: 19
+}
+
+post {
+  url: {{baseUrl}}/api/v1/kiosks/:id/command
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "action": "report",
+    "reason": "string"
+  }
+}
+
+docs {
+  Ask a kiosk PC for an operation
+  
+  A closed list the PC's agent performs within its poll (15 s): `report` (report now), `restart_browsers` (the launcher starts them again within 30 s), `reboot` (in 10 s), `update_scripts` (the agent and launcher of this server version), `screenshot` (needs display.screenshot and screenshots allowed for the PC; fetch it with GET …/screenshot). The operation waits 10 minutes for the PC. Audited as kiosk.command.
+  
+  Requires permission `display.manage`.
+}

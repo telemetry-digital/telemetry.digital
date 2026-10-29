@@ -99,10 +99,12 @@ check "available, signed, key, date" "$(jx 'j.available.version + " " + j.availa
 req GET /api/v1/server/updates/notice; check "no banner: the same version" "$(st) $(jx 'Object.keys(j).length')" "200 0"
 req POST /api/v1/server/update '{"version":"9.9.9","reason":"e2e"}'; check "another version than offered" "$(st) $(jx j.code)" "409 version"
 req POST /api/v1/server/update "{\"version\":\"$VER\",\"backup\":true,\"reason\":\"e2e online\"}"
-check "online installation" "$(st) $(jx 'j.version + " " + j.key_id + " " + !!j.backup')" "200 $VER build-test true"
+# 0.86.0: the answer comes once the release is verified; the backup and the installation follow in the background
+check "online installation started (202 once verified)" "$(st) $(jx 'j.version + " " + j.key_id + " " + j.phase + " " + !j.backup')" "202 $VER build-test installing true"
+ID=$(jx j.id)
 check "health guard: done" "$(wait_done)" done
 req GET /api/v1/server/updates
-check "history: online, manual, backup" "$(jx '(h => h.source + " " + h.mode + " " + h.actor + " " + !!h.backup)(j.state.history[0])')" "online manual $USER true"
+check "history: online, manual, backup, in the background" "$(jx "(h => h.id + ' ' + h.source + ' ' + h.mode + ' ' + h.actor + ' ' + !!h.backup + ' ' + h.async)(j.state.history[0])")" "$ID online manual $USER true true"
 req GET "/api/v1/audit?action=server.update_result&limit=5"; check "result audited" "$(jx 'j.entries.some(e=>(e.reason||"").includes("online") && (e.reason||"").endsWith("done"))')" true
 
 echo "== offline package"
@@ -118,14 +120,14 @@ printf 'not a zip' > "$TMP/junk.zip"; upload "$TMP/junk.zip" "$PASS" "e2e junk";
 upload "$TMP/good.zip" "$PASS" "e2e stage only" -F install=0
 check "verified and staged only" "$(st) $(jx 'j.package.version + " " + j.package.key_id + " " + j.package.has_binary + " " + (j.update === undefined)')" "200 $VER build-test true true"
 upload "$TMP/good.zip" "$PASS" "e2e offline" -F backup=1
-check "uploaded and installed" "$(st) $(jx 'j.update.version + " " + !!j.update.backup')" "200 $VER true"
+check "uploaded, verified, installing in the background" "$(st) $(jx 'j.update.version + " " + j.update.phase')" "200 $VER installing"
 check "health guard: done" "$(wait_done)" done
-req GET /api/v1/server/updates; check "history: package" "$(jx 'j.state.history[0].source + " " + j.state.staged.version')" "package $VER"
+req GET /api/v1/server/updates; check "history: package with a backup" "$(jx 'j.state.history[0].source + " " + j.state.staged.version + " " + !!j.state.history[0].backup')" "package $VER true"
 req GET "/api/v1/audit?action=server.update_package&limit=20"
 check "refusals audited" "$(jx 'j.entries.filter(e=>e.new_value && e.new_value.refused).length >= 3')" true
 check "installation audited" "$(jx 'j.entries.some(e=>e.reason==="e2e offline" && e.new_value && e.new_value.installed)')" true
-req POST /api/v1/server/update '{"source":"package","reason":"e2e from the staged package"}'
-check "install the staged package again" "$(st) $(jx j.version)" "200 $VER"
+req POST /api/v1/server/update '{"source":"package","wait":true,"backup":true,"reason":"e2e from the staged package"}'
+check "install the staged package again, waiting for it (wait: the behaviour before 0.86.0)" "$(st) $(jx 'j.version + " " + !!j.backup + " " + !j.phase')" "200 $VER true true"
 check "health guard: done" "$(wait_done)" done
 
 echo "== command line through the agent"

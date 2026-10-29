@@ -1,0 +1,29 @@
+meta {
+  name: Setup script of a kiosk PC
+  type: http
+  seq: 22
+}
+
+post {
+  url: {{baseUrl}}/api/v1/kiosks/:id/setup
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "token": "string"
+  }
+}
+
+docs {
+  Setup script of a kiosk PC
+  
+  The PowerShell setup script for the PC with its credential (the caller sends it: the server keeps only its hash). Run once as administrator on the PC: kiosk user with automatic logon (its password stays on the PC), power and lock screen, Windows Update at 03:00, browser policies, the launcher (one Chrome kiosk per monitor) and the agent as scheduled tasks.
+  
+  Requires permission `display.manage`.
+}

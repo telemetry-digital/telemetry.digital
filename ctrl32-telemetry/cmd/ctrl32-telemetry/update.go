@@ -39,6 +39,7 @@ import (
 //	        downloads the latest release with verification into a directory for a web server in the customer's
 //	        network; the servers then use it with [agent] update_url = "http://mirror.example.local/ctrl32"
 //	ctrl32-telemetry update guard …                        internal: started by the agent after an installation
+//	ctrl32-telemetry update os-upgrade …                   internal: the upgrade of the system packages (ADR-0025)
 func cmdUpdate(args []string) error {
 	if len(args) > 0 {
 		switch args[0] {
@@ -48,6 +49,8 @@ func cmdUpdate(args []string) error {
 			return cmdUpdateMirror(args[1:])
 		case "guard":
 			return cmdUpdateGuard(args[1:])
+		case "os-upgrade":
+			return cmdUpdateOSUpgrade(args[1:])
 		}
 	}
 	fs := flag.NewFlagSet("update", flag.ContinueOnError)
@@ -364,4 +367,21 @@ func cmdUpdateGuard(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return agent.Guard(ctx, *path, *state, *id, *bin, logger.With("component", "update-guard"))
+}
+
+// cmdUpdateOSUpgrade is `update os-upgrade`, started by the agent in its own systemd unit (ADR-0025): apt-get update
+// and full-upgrade, the output into the job's log, the result next to it.
+func cmdUpdateOSUpgrade(args []string) error {
+	fs := flag.NewFlagSet("update os-upgrade", flag.ContinueOnError)
+	dir := fs.String("dir", "", "job directory of the agent")
+	id := fs.String("id", "", "job id")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *dir == "" || *id == "" || os.Geteuid() != 0 {
+		return errors.New("update os-upgrade is started by the server agent (as root)")
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return agent.RunOSUpgrade(ctx, *dir, *id, nil)
 }

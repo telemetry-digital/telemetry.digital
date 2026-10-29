@@ -278,7 +278,7 @@
         { href: '/vpn', label: 'VPN', show: can('vpn.manage') && !can('system.admin') }, { href: '/settings/export', label: 'Organization export', show: cw && can('user.admin') }] },
       { href: '/organizations', label: 'System', icon: ICON.system, show: can('system.admin'), sec: 'system', children: [
         { href: '/organizations', label: 'Organizations' }, { href: '/server', label: 'Server' }, { href: '/server/domain', label: 'Domain and TLS' },
-        { href: '/server/vpn', label: 'VPN' }, { href: '/server/backups', label: 'Backups' }, { href: '/server/redundancy', label: 'Redundant database' }, { href: '/server/updates', label: 'Updates' },
+        { href: '/server/vpn', label: 'VPN' }, { href: '/server/backups', label: 'Backups' }, { href: '/server/redundancy', label: 'Redundant database' }, { href: '/server/updates', label: 'Updates' }, { href: '/server/os', label: 'Operating system' }, { href: '/server/logs', label: 'Logs' },
         { href: '/server/email', label: 'E-mail (SMTP)' },
         { href: '/server/license', label: 'License' }, { href: '/landing/edit', label: 'Front page' }] },
       { head: '' },

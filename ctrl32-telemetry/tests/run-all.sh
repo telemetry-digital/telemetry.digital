@@ -174,7 +174,7 @@ if has e2e; then
     [[ $n == iam ]] && continue
     if skip "$n"; then res "e2e $n" skipped; continue; fi
     # the VPN suites and the detector installation run against the agent's simulation
-    if [[ $n == vpn || $n == vpn2 || $n == vpn3 || $n == analytics_install || $n == updates || $n == backups ]]; then start_server "$CONFIG_VPN"; else start_server; fi
+    if [[ $n == vpn || $n == vpn2 || $n == vpn3 || $n == analytics_install || $n == updates || $n == backups || $n == remote || $n == remote_screens ]]; then start_server "$CONFIG_VPN"; else start_server; fi
     timeout 600 bash "$f" > "$LOGS/e2e-$n.log" 2>&1; rc=$?
     okc=$(grep -c '^  ok' "$LOGS/e2e-$n.log"); bad=$(grep -c 'FAIL' "$LOGS/e2e-$n.log")
     if [[ $rc == 0 && $bad == 0 ]]; then res "e2e $n" "ok ($okc)"; else res "e2e $n" "FAIL ($bad of $((okc + bad)), test-results/e2e-$n.log)"; fi
@@ -202,7 +202,7 @@ if has headless; then
       # needs a real camera behind a relay (CAM=<camera id>); neither belongs in an unattended run
       [[ $n == docshots || $n == camera_relay ]] && continue
       if skip "$n"; then res "headless $n" skipped; continue; fi
-      if [[ $n == vpn || $n == vpn2 || $n == vpn3 || $n == updates || $n == backups ]]; then start_server "$CONFIG_VPN"; else start_server; fi
+      if [[ $n == vpn || $n == vpn2 || $n == vpn3 || $n == updates || $n == backups || $n == remote || $n == remote_screens ]]; then start_server "$CONFIG_VPN"; else start_server; fi
       CHROME=$WORK/chrome TEMP=$WORK OUT=$LOGS/screenshots LOGIN=1 SLUG=$SHOWCASE SLUGS=$SHOWCASE \
         timeout 180 node "$f" > "$LOGS/headless-$n.log" 2>&1; rc=$?
       probs=$(grep '^problems:' "$LOGS/headless-$n.log" | grep -v 'problems: none' | head -1)

@@ -34,6 +34,8 @@
   <a href="/server/backups" data-section="backups">Backups</a>
   <a href="/server/redundancy" data-section="redundancy">Redundant database</a>
   <a href="/server/updates" data-section="updates">Updates</a>
+  <a href="/server/os" data-section="os">Operating system</a>
+  <a href="/server/logs" data-section="logs">Logs</a>
   <a href="/server/email" data-section="email">E-mail (SMTP)</a>
   <a href="/server/license" data-section="license">License</a>
 </nav>
@@ -49,6 +51,16 @@
     <div class="card"><h2>Storage and files</h2><dl class="kv" id="kvFiles"></dl></div>
     <div class="card"><h2>Components</h2><dl class="kv" id="kvVersions"></dl></div>
     <div class="card"><h2>Object counting</h2><div id="acBody"></div></div>
+    <div class="card"><h2>Remote management</h2>
+      <p class="muted small">This server and its kiosk PCs are maintained here: updates of ctrl32 telemetry and of the operating system, reboot, logs, displays. For an emergency — the server does not start, the network needs repair — a remote desktop through MeshCentral (its own sign-in with two factors) can be opened from here; every opening is recorded in the audit trail.</p>
+      <form id="remoteForm" class="form" style="margin-top:8px">
+        <label>MeshCentral address <input name="mesh_url" class="notranslate" placeholder="https://mesh.example.com" maxlength="200"></label>
+        <label>Node of this server in MeshCentral <input name="mesh_node" class="notranslate" maxlength="120" autocomplete="off" placeholder="from the device's details or gotonode= in the address bar"></label>
+        <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+        <div class="err" id="remoteErr"></div>
+        <div class="actions"><button class="btn" type="submit">Save</button><button class="btn danger" type="button" id="remoteOpen" hidden>Emergency remote desktop</button></div>
+      </form>
+    </div>
   </div>
   <div class="card" style="margin-top:16px"><h2>Services and containers</h2>
     <div class="table-wrap"><table id="units"><thead><tr><th>Unit</th><th>State</th><th>At boot</th><th></th></tr></thead><tbody></tbody></table></div>
@@ -317,6 +329,49 @@
   </div>
 </section>
 
+<section data-section="os">
+  <div class="page-head"><h1>Operating system</h1><span class="grow"></span><button class="btn" id="osCheckBtn" type="button">Check for updates</button><button class="btn primary" id="osUpgradeBtn" type="button">Install updates</button><button class="btn danger" id="osRebootBtn" type="button">Reboot server</button></div>
+  <div class="card agent-off" id="agentNoteOS" hidden></div>
+  <div class="card agent-off" id="osUnsupported" hidden></div>
+  <div class="card" id="osRebootCard" hidden></div>
+  <div class="grid">
+    <div class="card"><h2>Status</h2><dl class="kv" id="kvOS"></dl></div>
+    <div class="card"><h2>Health</h2><dl class="kv" id="kvHealth"></dl></div>
+  </div>
+  <div class="card" style="margin-top:16px" id="osJobCard" hidden><h2 id="osJobTitle"></h2><pre class="conf notranslate" id="osLog" style="max-height:420px;overflow:auto"></pre></div>
+  <div class="card" style="margin-top:16px"><h2>Available updates</h2>
+    <p class="muted small">Installing runs apt-get update and apt-get full-upgrade without questions (changed configuration files are kept) in its own system unit, so it finishes even when services restart. Services that use upgraded libraries may restart for a moment; a new kernel needs a reboot.</p>
+    <div class="table-wrap"><table id="osPkgs"><thead><tr><th>Package</th><th>Installed</th><th>New</th><th>Source</th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <div class="card" style="margin-top:16px"><h2>History</h2>
+    <div class="table-wrap"><table id="osHist"><thead><tr><th>Started</th><th>Job</th><th>By</th><th>Result</th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <dialog id="rebootDlg">
+    <form id="rebootForm" class="form" method="dialog">
+      <h2 style="margin-top:0">Reboot the server</h2>
+      <p class="muted">The server restarts in one minute (it can be cancelled until then). Users, devices, cameras and displays disconnect for a few minutes and reconnect by themselves; recordings pause meanwhile.</p>
+      <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+      <label class="inline"><input type="checkbox" name="sure" required><span>I want to reboot this server now</span></label>
+      <div class="err" id="rebootErr"></div>
+      <div class="actions"><button class="btn danger" type="submit">Reboot in 1 minute</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button></div>
+    </form>
+  </dialog>
+</section>
+
+<section data-section="logs">
+  <div class="page-head"><h1>Logs</h1><span class="grow"></span>
+    <select id="logUnit" aria-label="Log"></select>
+    <select id="logLines" aria-label="Lines"><option>100</option><option selected>200</option><option>500</option><option>2000</option></select>
+    <label class="inline"><input type="checkbox" id="logFollow"><span>Follow</span></label>
+    <button class="btn" id="logRefresh" type="button">Refresh</button></div>
+  <div class="card agent-off" id="agentNoteLogs" hidden></div>
+  <div class="card">
+    <input id="logFilter" placeholder="Filter (text in the line)" style="width:100%;margin-bottom:8px" aria-label="Filter">
+    <div class="err" id="logErr"></div>
+    <pre class="conf notranslate" id="logText" style="max-height:70vh;overflow:auto"></pre>
+  </div>
+</section>
+
 <section data-section="email">
   <div class="page-head"><h1>E-mail (SMTP)</h1></div>
   <div class="card agent-off" id="smtpNote" hidden></div>
@@ -414,7 +469,7 @@
 <script src="/analytics-check.js"></script>
 <script>
 const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api;
-const TITLES = {overview: 'Server', domain: 'Domain and TLS', backups: 'Backups', redundancy: 'Redundant database', updates: 'Updates', email: 'E-mail (SMTP)', license: 'License'};
+const TITLES = {overview: 'Server', domain: 'Domain and TLS', backups: 'Backups', redundancy: 'Redundant database', updates: 'Updates', os: 'Operating system', logs: 'Logs', email: 'E-mail (SMTP)', license: 'License'};
 let INFO = null;
 function kv(el, rows){ el.innerHTML = rows.filter(r => r).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v == null || v === '' ? '<span class="muted">—</span>' : v}</dd>`).join(''); }
 function dur(s){ if(!s && s !== 0) return ''; const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60); return (d ? d + ' d ' : '') + (h ? h + ' h ' : '') + m + ' min'; }
@@ -424,7 +479,7 @@ function agentNote(){
   const a = INFO.agent; let msg = '';
   if(!a.configured) msg = '<b>Server agent not configured.</b> Host operations (restart, backups, updates; on Linux also domain and WireGuard) are available where the server agent <code>ctrl32-telemetry-agent</code> runs (systemd unit or Windows service); this instance shows read-only information.';
   else if(!a.connected) msg = '<b>Server agent not reachable:</b> ' + esc(a.error || 'unknown error') + '. Check <code>systemctl status ctrl32-telemetry-agent</code>.';
-  for(const id of ['agentNote','agentNoteDomain','agentNoteBk','agentNoteUpd']){ const el = $('#' + id); el.hidden = !msg; el.innerHTML = msg; }
+  for(const id of ['agentNote','agentNoteDomain','agentNoteBk','agentNoteUpd','agentNoteOS','agentNoteLogs']){ const el = $('#' + id); el.hidden = !msg; el.innerHTML = msg; }
   return !!msg;
 }
 function timeRow(t){ if(!t || !t.enabled) return '<span class="muted">not configured (no NTP server)</span>'; const os = t.os_sync === 'no' ? ' · <span class="badge warn">the operating system reports the clock as not synchronized</span>' : ''; if(t.ok) return `<span class="badge ok">ok</span> ${Math.round(t.offset_ms)} ms · ${esc(t.server)} · ${fmt(t.checked_at)}${os}`; if(!t.checked_at || t.checked_at.startsWith('0001')) return `<span class="muted">…</span> ${esc(t.server)}`; return `<span class="badge warn">unreachable</span> ${esc(t.error || '')} · ${esc(t.server)} · ${fmt(t.checked_at)}${os}`; }
@@ -432,12 +487,14 @@ function renderOverview(){
   const c = INFO.config, st = INFO.agent.status, h = st && st.host;
   if(st && st.agent && st.agent.os === 'windows'){ for(const sec of ['domain', 'vpn']){ const a = document.querySelector(`.subnav a[data-section="${sec}"]`); if(a) a.hidden = true; } }
   kv($('#kvService'), [['Version', esc(INFO.version)], ['Profile', esc(c.profile)], ['Process started', fmt(INFO.started_at)], ['PID', INFO.pid], ['Go', esc(INFO.go)], ['Goroutines', INFO.goroutines], ['Connected devices (MQTT)', INFO.broker.connected_clients], ['Time sync', timeRow(INFO.time)]]);
-  kv($('#kvHost'), h ? [['Hostname', esc(h.hostname)], ['System', esc(h.os) + ' · ' + esc(h.kernel) + ' · ' + esc(h.arch)], ['Uptime', dur(h.uptime_seconds)], ['Load', (h.load||[]).map(x => x.toFixed(2)).join(' / ')], ['CPUs', h.cpus], ['Memory', `${h.mem_avail_mb} MB free of ${h.mem_total_mb} MB`], ...(h.disks||[]).map(d => ['Disk ' + d.path, `${d.free_gb.toFixed(1)} GB free of ${d.total_gb.toFixed(1)} GB`]), ['Time zone', esc(h.timezone || '')], ['Server time', fmt(h.time)]] : [['Host', '<span class="muted">needs the server agent</span>'], ['OS / arch', esc(INFO.os + ' / ' + INFO.arch)]]);
+  const hp = st && st.health;
+  kv($('#kvHost'), h ? [hp ? ['Health', healthBadges(hp)] : null, ['Hostname', esc(h.hostname)], ['System', esc(h.os) + ' · ' + esc(h.kernel) + ' · ' + esc(h.arch)], ['Uptime', dur(h.uptime_seconds)], ['Load', (h.load||[]).map(x => x.toFixed(2)).join(' / ')], ['CPUs', h.cpus], ['Memory', `${h.mem_avail_mb} MB free of ${h.mem_total_mb} MB`], ...(h.disks||[]).map(d => ['Disk ' + d.path, `${d.free_gb.toFixed(1)} GB free of ${d.total_gb.toFixed(1)} GB`]), ['Time zone', esc(h.timezone || '')], ['Server time', fmt(h.time)]] : [['Host', '<span class="muted">needs the server agent</span>'], ['OS / arch', esc(INFO.os + ' / ' + INFO.arch)]]);
   kv($('#kvNet'), [['Public URL', `<a href="${esc(c.base_url)}" target="_blank" rel="noopener">${esc(c.base_url)}</a>`], ['HTTP listen', esc(c.http_listen) + (c.http_tls ? ' (TLS)' : '')], ['Public read-only access', c.public_read ? '<span class="badge warn">enabled (demo)</span>' : 'off'], ['MQTT', esc(c.mqtt_listen)], ['MQTT over TLS', esc(c.mqtt_tls_listen)], ['MQTT over WebSocket', esc(c.mqtt_ws_listen)], ['MQTT inside VPN', esc(c.mqtt_vpn_listen)], ['SMTP', c.smtp_host ? esc(c.smtp_host + ':' + c.smtp_port) : '<span class="muted">not configured (no e-mail)</span>'], ['Agent socket', esc(c.agent_socket)]]);
   const d = INFO.database;
   kv($('#kvDb'), [['Server', esc(c.db)], ['PostgreSQL', esc(d.server_version || '')], ['Size', (d.size_mb||0).toFixed(1) + ' MB'], ['Organizations', d.organizations], ['Users', d.users], ['Devices', d.devices], ['Sites', d.sites], ['Stored reports', d.reports], ['Pending commands', d.pending_commands]]);
   kv($('#kvFiles'), [['Reports', esc(c.report_storage)], ['Firmware', esc(c.fota_storage) + ` (max ${c.fota_max_mb} MB)`], ['Typst', esc(c.typst_path || 'typst on PATH')], ['Log file', esc(c.log_file) + ` (${esc(c.log_level)})`], ['Gap check', esc(c.gap_check)], ['Metrics (Prometheus)', '<a href="/metrics" target="_blank" rel="noopener">/metrics</a>'], ['Security contact (security.txt)', '<a href="/.well-known/security.txt" target="_blank" rel="noopener">/.well-known/security.txt</a>']]);
   window.ctrl32AnalyticsCheck.render($('#acBody'));
+  renderRemote();
   kv($('#kvVersions'), st ? Object.entries(st.versions || {}).map(([k, v]) => [k, esc(v)]) : [['Components', '<span class="muted">needs the server agent</span>']]);
   const rows = [];
   if(st){ for(const s of st.services) rows.push(`<tr><td>${esc(s.label)} <span class="muted">${esc(s.unit)}</span></td><td>${badge(s.active)}</td><td>${badge(s.enabled)}</td><td>${s.unit === 'ctrl32-telemetry-agent' ? '<button class="btn small" data-restart="agent" type="button">Restart</button>' : (s.unit.startsWith('wg-quick') ? '<button class="btn small" data-restart="wireguard" type="button">Restart</button>' : '')}</td></tr>`);
@@ -504,8 +561,25 @@ $('#updModeForm').onsubmit = async e => { e.preventDefault(); const f = e.target
   catch(x){ $('#updModeErr').textContent = x.message; } };
 $('#updCheckBtn').onclick = () => renderUpdates(true).catch(x => ctrl32.toast(x.message,'bad'));
 $('#updForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#updErr').textContent=''; $('#updMsg').textContent = ctrl32.t(f.backup.checked ? 'Backing up, downloading and verifying…' : 'Downloading and verifying…'); $('#updSubmit').disabled = true;
-  try{ const r = await api('POST','/api/v1/server/update',{version: f.version.value.trim(), backup: f.backup.checked, reason: f.reason.value}); $('#updMsg').textContent = r.message + ' (SHA-256 ' + r.sha256.slice(0, 16) + '…). ' + ctrl32.t('Reloading in 15 s.'); setTimeout(() => location.reload(), 15000); }
-  catch(x){ $('#updErr').textContent = x.message; $('#updMsg').textContent=''; } finally { $('#updSubmit').disabled = false; } };
+  try{ const r = await api('POST','/api/v1/server/update',{version: f.version.value.trim(), backup: f.backup.checked, reason: f.reason.value}); $('#updMsg').textContent = ctrl32.t('Verified') + ' (SHA-256 ' + r.sha256.slice(0, 16) + '…). ' + ctrl32.t('Installing in the background…'); followUpdate(r.id, $('#updMsg')); }
+  catch(x){ $('#updErr').textContent = x.message; $('#updMsg').textContent=''; $('#updSubmit').disabled = false; } };
+// 0.86.0: the server answers as soon as the release is verified; the backup, the installation and the restart follow in
+// the background. The page follows the record in the history, also while the service restarts, then reloads.
+async function followUpdate(id, el){
+  const t0 = Date.now(); let lost = false;
+  while(Date.now() - t0 < 60 * 60e3){
+    await new Promise(r => setTimeout(r, 3000));
+    let h = null;
+    try{ const u = await api('GET','/api/v1/server/updates'); h = ((u.state || {}).history || []).find(x => x.id === id); if(lost){ lost = false; } }
+    catch(x){ lost = true; el.textContent = ctrl32.t('The service restarts — waiting for the new version…'); continue; }
+    if(!h) continue;
+    if(h.phase === 'installing') el.textContent = ctrl32.t(h.backup ? 'Backup taken; installing…' : 'Installing in the background…');
+    else if(h.phase === 'restarting') el.textContent = ctrl32.t('Installed; waiting for the new version to answer healthy…');
+    else if(h.phase === 'rolling_back') el.textContent = ctrl32.t('rolling back');
+    else if(h.phase === 'done'){ el.textContent = ctrl32.t('Installed') + ' ' + h.to + '. ' + ctrl32.t('Reloading in 5 s.'); setTimeout(() => location.reload(), 5000); return; }
+    else { el.textContent = ''; $('#updErr').textContent = ctrl32.t(PHASES[h.phase] || h.phase) + (h.error ? ': ' + h.error : ''); $('#updSubmit').disabled = false; renderUpdates().catch(() => {}); return; }
+  }
+}
 $('#pkgForm').onsubmit = e => { e.preventDefault(); const f = e.target; $('#pkgErr').textContent=''; $('#pkgMsg').textContent='';
   const file = f.file.files[0]; if(!file) return;
   const max = ((UPD && UPD.state && UPD.state.max_package_mb) || 2048) * 1048576;
@@ -518,9 +592,98 @@ $('#pkgForm').onsubmit = e => { e.preventDefault(); const f = e.target; $('#pkgE
     if(xhr.status !== 200){ $('#pkgErr').textContent = r.error || ('HTTP ' + xhr.status); $('#pkgMsg').textContent=''; return; }
     f.password.value=''; f.code.value='';
     const p = r.package || {};
-    if(r.update){ $('#pkgMsg').textContent = ctrl32.t('Verified') + ' ' + p.version + ' (' + (p.key_id || '') + '). ' + r.update.message + ' ' + ctrl32.t('Reloading in 15 s.'); setTimeout(() => location.reload(), 15000); }
+    if(r.update){ $('#pkgMsg').textContent = ctrl32.t('Verified') + ' ' + p.version + ' (' + (p.key_id || '') + '). ' + ctrl32.t('Installing in the background…'); followUpdate(r.update.id, $('#pkgMsg')); }
     else { $('#pkgMsg').textContent = ctrl32.t('Verified and staged') + ' ' + p.version + (p.has_binary ? '' : ' — ' + ctrl32.t('the package has no server binary for this platform; its detector parts are ready for the detector installation')); renderUpdates(); } };
   xhr.open('POST', '/api/v1/server/update/package'); if(ctrl32.csrf) xhr.setRequestHeader('X-CSRF-Token', ctrl32.csrf); xhr.send(fd); };
+
+// ---- operating system (0.86.0, ADR-0025): packages, upgrade job with its log, reboot, health
+function healthBadges(hp){
+  const b = [];
+  for(const r of hp.raid || []) b.push(`<span class="badge ${r.health === 'ok' ? 'ok' : r.health === 'rebuilding' ? 'warn' : 'bad'}">RAID ${esc(r.name)} ${esc(r.level || '')}: ${esc(ctrl32.t(r.health))}${r.progress ? ' ' + esc(r.progress) : ''}</span>`);
+  for(const l of hp.links || []) b.push(`<span class="badge ${l.state === 'up' ? 'ok' : 'bad'}">${esc(l.name)} ${esc(l.state)}${l.speed_mbps ? ' ' + (l.speed_mbps >= 1000 ? l.speed_mbps / 1000 + ' Gbit/s' : l.speed_mbps + ' Mbit/s') : ''}</span>`);
+  for(const d of hp.disks || []) b.push(`<span class="badge ${d.health === 'PASSED' ? 'ok' : d.health === 'FAILED' ? 'bad' : ''}" title="${esc((d.model || '') + ' ' + (d.serial || ''))}">${esc(d.device.replace('/dev/', ''))} SMART ${esc(d.health)}${d.temperature_c ? ' · ' + d.temperature_c + ' °C' : ''}</span>`);
+  if(hp.smart === 'unavailable') b.push(`<span class="muted">${esc(ctrl32.t('SMART: install smartmontools to see the health of the disks'))}</span>`);
+  if(hp.reboot_required) b.push(`<span class="badge warn">${esc(ctrl32.t('reboot required'))}</span>`);
+  return b.join(' ') || '<span class="muted">—</span>';
+}
+let OS = null, osTimer = null;
+const JOB = {check: 'Check for updates', upgrade: 'Installation of the updates'};
+async function renderOS(refresh){
+  clearTimeout(osTimer);
+  try{ OS = await api('GET', '/api/v1/server/os' + (refresh ? '?refresh=1' : '')); }
+  catch(x){ $('#osUnsupported').hidden = false; $('#osUnsupported').textContent = x.message; for(const b of ['#osCheckBtn','#osUpgradeBtn','#osRebootBtn']) $(b).disabled = true; return; }
+  const o = OS, st = INFO.agent.status, hp = st && st.health;
+  $('#osUnsupported').hidden = o.supported; $('#osUnsupported').textContent = o.supported ? '' : ctrl32.t('Linux servers only') + ': ' + (o.reason || '');
+  const busy = !!o.job || o.checking;
+  $('#osCheckBtn').disabled = !o.supported || busy; $('#osUpgradeBtn').disabled = !o.supported || busy || !o.upgrade_count; $('#osRebootBtn').disabled = !o.supported || busy || !!o.reboot;
+  kv($('#kvOS'), o.supported ? [['Updates available', o.upgrade_count ? `<span class="badge primary">${o.upgrade_count}</span>` + (o.security_count ? ` <span class="badge warn">${o.security_count} ${esc(ctrl32.t('security'))}</span>` : '') : `<span class="badge ok">${esc(ctrl32.t('up to date'))}</span>`],
+    ['Package lists from', o.lists_updated_at ? fmt(o.lists_updated_at) : '—'], ['Checked', fmt(o.checked_at)], o.list_error ? ['Error', esc(o.list_error)] : null,
+    ['Reboot required', o.reboot_required ? `<span class="badge warn">${esc(ctrl32.t('yes'))}</span> <span class="muted notranslate">${esc((o.reboot_packages || []).join(', '))}</span>` : esc(ctrl32.t('no'))],
+    ['Running since', fmt(o.booted_at)], ['Package manager', esc(o.package_manager || '')]] : [['Operating system', '<span class="muted">' + esc(ctrl32.t('needs a Linux server with apt')) + '</span>']]);
+  kv($('#kvHealth'), hp ? [['RAID', (hp.raid || []).length ? healthBadges({raid: hp.raid}) : '<span class="muted">' + esc(ctrl32.t('no software RAID')) + '</span>'], ['Network', healthBadges({links: hp.links})], ['Disks', healthBadges({disks: hp.disks, smart: hp.smart})],
+    ...(st.host.disks || []).map(d => ['Disk ' + d.path, `${d.free_gb.toFixed(1)} GB free of ${d.total_gb.toFixed(1)} GB`])] : [['Health', '<span class="muted">' + esc(ctrl32.t('needs the server agent on Linux')) + '</span>']]);
+  const rc = $('#osRebootCard');
+  rc.hidden = !o.reboot;
+  if(o.reboot){ rc.innerHTML = `<b>${esc(ctrl32.t('Reboot scheduled'))}</b> ${fmt(o.reboot.at)} · ${esc(o.reboot.actor || '')} · <span class="notranslate">${esc(o.reboot.reason || '')}</span> <button class="btn small" type="button" id="rebootCancel">${esc(ctrl32.t('Cancel the reboot'))}</button>`;
+    $('#rebootCancel').onclick = () => askReason('Cancel the reboot', '', async reason => { await api('POST', '/api/v1/server/os/reboot/cancel', {reason}); ctrl32.toast(ctrl32.t('reboot cancelled'), 'ok'); renderOS(); }); }
+  const j = o.job || o.last;
+  $('#osJobCard').hidden = !j;
+  if(j){ $('#osJobTitle').innerHTML = `${esc(ctrl32.t(JOB[j.kind] || j.kind))} · ${fmt(j.started_at)} · ${j.phase === 'running' ? '<span class="badge warn">' + esc(ctrl32.t('running')) + '</span>' : j.phase === 'done' ? '<span class="badge ok">' + esc(ctrl32.t('done')) + '</span>' : '<span class="badge bad">' + esc(ctrl32.t('failed')) + '</span>'}`;
+    const pre = $('#osLog'), atEnd = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20; pre.textContent = (j.log || '') + (j.error ? '\n' + j.error : ''); if(atEnd) pre.scrollTop = pre.scrollHeight; }
+  $('#osPkgs tbody').innerHTML = (o.upgrades || []).map(u => `<tr><td class="notranslate"><b>${esc(u.name)}</b>${u.security ? ' <span class="badge warn">' + esc(ctrl32.t('security')) + '</span>' : ''}${u.new ? ' <span class="badge">' + esc(ctrl32.t('new')) + '</span>' : ''}</td><td class="notranslate">${esc(u.from || '—')}</td><td class="notranslate">${esc(u.to)}</td><td class="muted notranslate" style="font-size:12px">${esc(u.origin || '')}</td></tr>`).join('')
+    || `<tr><td colspan="4" class="muted">${esc(ctrl32.t(o.supported ? 'no updates available' : 'needs a Linux server with apt'))}</td></tr>`;
+  $('#osHist tbody').innerHTML = (o.history || []).map(h => `<tr><td>${fmt(h.started_at)}</td><td>${esc(ctrl32.t(JOB[h.kind] || h.kind))}${h.upgrades ? ' · ' + h.upgrades : ''}</td><td>${esc(h.actor || '')} <span class="muted">${esc(h.reason || '')}</span></td><td>${h.phase === 'done' ? '<span class="badge ok">' + esc(ctrl32.t('done')) + '</span>' : h.phase === 'running' ? '<span class="badge warn">' + esc(ctrl32.t('running')) + '</span>' : '<span class="badge bad">' + esc(ctrl32.t('failed')) + '</span> <span class="muted">' + esc(h.error || '') + '</span>'}${h.reboot_required ? ' <span class="badge warn">' + esc(ctrl32.t('reboot required')) + '</span>' : ''}</td></tr>`).join('')
+    || `<tr><td colspan="4" class="muted">${esc(ctrl32.t('nothing yet'))}</td></tr>`;
+  if(SEC === 'os' && (busy || o.reboot)) osTimer = setTimeout(() => renderOS().catch(() => {}), 2500);
+}
+$('#osCheckBtn').onclick = () => askReason('Check for updates', 'Downloads the package lists (apt-get update) and lists what can be upgraded. Nothing is installed.', async reason => { await api('POST', '/api/v1/server/os/check', {reason}); renderOS(); });
+$('#osUpgradeBtn').onclick = () => askReason('Install the updates of the operating system', 'apt-get full-upgrade runs in the background; this page shows its log. Services that use upgraded libraries may restart for a moment.', async reason => { await api('POST', '/api/v1/server/os/upgrade', {reason}); ctrl32.toast(ctrl32.t('installation started'), 'ok'); renderOS(); });
+$('#osRebootBtn').onclick = () => { $('#rebootForm').reset(); $('#rebootErr').textContent = ''; $('#rebootDlg').showModal(); };
+$('#rebootForm').onsubmit = async e => { e.preventDefault(); $('#rebootErr').textContent = '';
+  try{ const rb = await api('POST', '/api/v1/server/os/reboot', {reason: e.target.reason.value}); $('#rebootDlg').close(); await renderOS(); waitForReboot(rb); }
+  catch(x){ $('#rebootErr').textContent = x.message; } };
+// after the reboot the page waits until the server answers again (it was away), then reloads
+async function waitForReboot(rb){
+  let away = false; const t0 = Date.now();
+  while(Date.now() - t0 < 20 * 60e3){
+    await new Promise(r => setTimeout(r, 4000));
+    let ok = false;
+    try{ ok = (await fetch('/healthz', {cache: 'no-store'})).ok; }catch(_){ ok = false; }
+    const rc = $('#osRebootCard'); rc.hidden = false;
+    if(!ok){ away = true; rc.innerHTML = '<b>' + esc(ctrl32.t('The server is rebooting — this page reconnects by itself…')) + '</b>'; continue; }
+    if(away){ rc.innerHTML = '<b>' + esc(ctrl32.t('The server is back.')) + '</b>'; ctrl32.toast(ctrl32.t('The server is back.'), 'ok'); setTimeout(() => location.reload(), 3000); return; }
+    if(Date.now() > new Date(rb.at).getTime() + 5 * 60e3) return; // cancelled or did not happen
+  }
+}
+// ---- logs: the closed list of the agent
+const LOGS = {app: 'ctrl32 telemetry', agent: 'server agent', caddy: 'reverse proxy (Caddy)', postgresql: 'PostgreSQL', wireguard: 'WireGuard (wg0)', cloudflared: 'Cloudflare Tunnel', kernel: 'kernel'};
+let logTimer = null, LOGLINES = [];
+async function renderLogs(){
+  clearTimeout(logTimer);
+  const sel = $('#logUnit'); if(!sel.options.length){ sel.innerHTML = Object.entries(LOGS).map(([k, v]) => `<option value="${k}">${esc(ctrl32.t(v))}</option>`).join(''); }
+  $('#logErr').textContent = '';
+  try{ const r = await api('GET', `/api/v1/server/logs?unit=${encodeURIComponent(sel.value)}&lines=${$('#logLines').value}`); LOGLINES = r.lines || []; if(r.error) $('#logErr').textContent = r.error; drawLogs(); }
+  catch(x){ $('#logErr').textContent = x.message; LOGLINES = []; drawLogs(); }
+  if(SEC === 'logs' && $('#logFollow').checked) logTimer = setTimeout(() => renderLogs(), 5000);
+}
+function drawLogs(){
+  const f = $('#logFilter').value.trim().toLowerCase(), pre = $('#logText'), atEnd = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
+  pre.textContent = LOGLINES.filter(l => !f || l.toLowerCase().includes(f)).join('\n') || ctrl32.t('no lines');
+  if(atEnd || !pre.dataset.seen){ pre.scrollTop = pre.scrollHeight; pre.dataset.seen = '1'; }
+}
+$('#logUnit').onchange = () => { $('#logText').dataset.seen = ''; renderLogs(); }; $('#logLines').onchange = () => renderLogs(); $('#logRefresh').onclick = () => renderLogs();
+$('#logFollow').onchange = () => renderLogs(); $('#logFilter').oninput = drawLogs;
+// ---- remote management: MeshCentral as the emergency path
+let REMOTE = null;
+async function renderRemote(){
+  try{ REMOTE = await api('GET', '/api/v1/server/remote'); }catch(_){ return; }
+  const f = $('#remoteForm'); if(!f.dataset.filled){ f.mesh_url.value = REMOTE.mesh_url || ''; f.mesh_node.value = REMOTE.mesh_node || ''; f.dataset.filled = '1'; }
+  $('#remoteOpen').hidden = !(REMOTE.mesh_url && REMOTE.mesh_node);
+}
+$('#remoteForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#remoteErr').textContent = '';
+  try{ await api('PUT', '/api/v1/server/remote', {mesh_url: f.mesh_url.value.trim(), mesh_node: f.mesh_node.value.trim(), reason: f.reason.value}); f.reason.value = ''; f.dataset.filled = ''; ctrl32.toast(ctrl32.t('saved'), 'ok'); renderRemote(); }
+  catch(x){ $('#remoteErr').textContent = x.message; } };
+$('#remoteOpen').onclick = () => askReason('Emergency remote desktop', 'Opens this server in MeshCentral (it asks for its own sign-in). The opening is recorded in the audit trail.', async reason => { const r = await api('POST', '/api/v1/server/remote/open', {reason}); window.open(r.url, '_blank', 'noopener'); });
 
 // ---- e-mail (SMTP)
 let SMTP = null;
@@ -715,7 +878,7 @@ $('#licRenew').onclick = async () => { const reason = ctrl32.ask('Reason for ren
 $('#licRemove').onclick = async () => { const reason = prompt(ctrl32.t('Reason for removing the license (audit trail)')); if(!reason) return;
   try{ await api('DELETE','/api/v1/server/license?reason=' + encodeURIComponent(reason)); ctrl32.toast(ctrl32.t('license removed'),'ok'); renderLicense(); }catch(x){ $('#licErr').textContent = x.message; } };
 let SEC = 'overview';
-async function load(){ if(SEC === 'license') return renderLicense(); if(SEC === 'email') return renderEmail(); INFO = await api('GET','/api/v1/server'); agentNote(); ({overview: renderOverview, domain: renderDomain, backups: renderBackups, redundancy: renderRedundancy, updates: () => renderUpdates()})[SEC](); }
+async function load(){ if(SEC === 'license') return renderLicense(); if(SEC === 'email') return renderEmail(); INFO = await api('GET','/api/v1/server'); agentNote(); ({overview: renderOverview, domain: renderDomain, backups: renderBackups, redundancy: renderRedundancy, updates: () => renderUpdates(), os: () => renderOS(), logs: () => renderLogs()})[SEC](); }
 ctrl32.ready({requireAuth: true, requirePerm: 'system.admin'}).then(() => { SEC = ctrl32.section('overview', Object.keys(TITLES)); document.title = TITLES[SEC] + ' — Server'; load().catch(x => ctrl32.toast(x.message,'bad')); });
 </script>
 </body>

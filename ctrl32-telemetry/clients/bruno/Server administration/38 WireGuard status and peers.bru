@@ -1,0 +1,17 @@
+meta {
+  name: WireGuard status and peers
+  type: http
+  seq: 38
+}
+
+get {
+  url: {{baseUrl}}/api/v1/server/wireguard
+  body: none
+  auth: inherit
+}
+
+docs {
+  WireGuard status and peers
+  
+  Requires permission `system.admin`.
+}

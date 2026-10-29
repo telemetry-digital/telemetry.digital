@@ -1,0 +1,25 @@
+meta {
+  name: Check for operating system updates
+  type: http
+  seq: 20
+}
+
+post {
+  url: {{baseUrl}}/api/v1/server/os/check
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Check for operating system updates
+  
+  Downloads the package lists (apt-get update) and lists the upgrades again, as a job in the background (202); nothing is installed. 409 `busy` while a job, an update or a backup runs. Audited as server.os_check.
+  
+  Requires permission `system.admin`.
+}

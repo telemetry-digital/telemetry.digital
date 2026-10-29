@@ -1,0 +1,23 @@
+meta {
+  name: Check the distribution point now
+  type: http
+  seq: 36
+}
+
+post {
+  url: {{baseUrl}}/api/v1/server/updates/check
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {}
+}
+
+docs {
+  Check the distribution point now
+  
+  Reads VERSION and the signed manifest of the update URL now (otherwise once a day).
+  
+  Requires permission `system.admin`.
+}

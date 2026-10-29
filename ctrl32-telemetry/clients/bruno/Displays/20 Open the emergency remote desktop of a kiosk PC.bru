@@ -1,0 +1,29 @@
+meta {
+  name: Open the emergency remote desktop of a kiosk PC
+  type: http
+  seq: 20
+}
+
+post {
+  url: {{baseUrl}}/api/v1/kiosks/:id/remote
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Open the emergency remote desktop of a kiosk PC
+  
+  The MeshCentral link to the PC (needs the MeshCentral address of the server and the PC's node). Audited as remote.mesh_open.
+  
+  Requires permission `display.manage`.
+}

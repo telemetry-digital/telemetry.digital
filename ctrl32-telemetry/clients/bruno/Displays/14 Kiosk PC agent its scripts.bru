@@ -1,0 +1,17 @@
+meta {
+  name: Kiosk PC agent its scripts
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/v1/kiosk/scripts
+  body: none
+  auth: inherit
+}
+
+docs {
+  Kiosk PC agent: its scripts
+  
+  The agent, the launcher, the screenshot helper and the launcher settings of this PC, with their version.
+}

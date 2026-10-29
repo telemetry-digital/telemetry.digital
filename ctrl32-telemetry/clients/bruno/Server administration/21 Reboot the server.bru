@@ -1,0 +1,26 @@
+meta {
+  name: Reboot the server
+  type: http
+  seq: 21
+}
+
+post {
+  url: {{baseUrl}}/api/v1/server/os/reboot
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "delay_s": 1,
+    "reason": "string"
+  }
+}
+
+docs {
+  Reboot the server
+  
+  A reboot in `delay_s` seconds (30–3600, default 60) through a systemd timer; it can be cancelled until then. Refused (409 `busy`) while an operating system job, an update of ctrl32 telemetry, a backup or a restore test runs, or another reboot is scheduled. Audited as server.reboot.
+  
+  Requires permission `system.admin`.
+}

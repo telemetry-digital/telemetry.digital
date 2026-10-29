@@ -1,0 +1,24 @@
+meta {
+  name: Logs of the server
+  type: http
+  seq: 18
+}
+
+get {
+  url: {{baseUrl}}/api/v1/server/logs
+  body: none
+  auth: inherit
+}
+
+params:query {
+  unit: 
+  ~lines: 
+}
+
+docs {
+  Logs of the server
+  
+  The tail of one log of a closed list, through the server agent: `app` (ctrl32 telemetry), `agent`, `caddy` (reverse proxy container), `postgresql` (database container), `wireguard`, `cloudflared` (Cloudflare Tunnel), `kernel` (this boot). Linux (journal, Docker) only; lines longer than 2000 characters are cut.
+  
+  Requires permission `system.admin`.
+}

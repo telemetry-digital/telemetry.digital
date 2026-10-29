@@ -1,0 +1,19 @@
+meta {
+  name: Remote management settings (MeshCentral)
+  type: http
+  seq: 24
+}
+
+get {
+  url: {{baseUrl}}/api/v1/server/remote
+  body: none
+  auth: inherit
+}
+
+docs {
+  Remote management settings (MeshCentral)
+  
+  The address of the MeshCentral server used as the emergency remote desktop and the node of this server in it (ADR-0025).
+  
+  Requires permission `system.admin`.
+}

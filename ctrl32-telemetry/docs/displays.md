@@ -55,8 +55,30 @@ On **Displays** (permission `display.control`, operators have it) or from a came
 
 Pairing, changing and disconnecting displays needs `display.manage` (engineers and administrators).
 
+## What a display reports (0.86.0)
+
+Every 30 seconds the display page tells the server what it shows: each camera tile with its state — *playing* (the
+picture moved on in the last 10 s), *picture stands* (connected but frozen), *connecting*, *camera offline*, *cannot
+play* (the browser does not support the codec, e.g. H.265 in Firefox) — and since when, the screen size and the version
+of its page. The Displays list shows it next to the state, for example **39/39 playing**, or **38/39 playing** with the
+camera that is not. Only cameras the display may show are reported.
+
+## Kiosk PCs (0.86.0)
+
+A Windows PC behind one or more displays is best set up as a **kiosk PC** (Displays → Kiosk PCs → *Add kiosk PC*):
+its setup script prepares the PC (kiosk user with automatic logon, power, Windows Update at night, browser policies)
+and installs a launcher (one Chrome kiosk per monitor, each with its own profile = its own display, started again when
+it closes) and a small agent. The PC then reports its state on the Displays page (Windows, uptime, load, video
+decoding, browser, pending Windows updates, kiosk windows) and an engineer can *restart the browsers*, *reboot* it or
+*update its scripts* from there, with a reason that goes to the audit trail. A *screenshot* of the PC is possible only
+after an administrator allowed it for that PC (it can show camera pictures without privacy masks); each one needs the
+permission `display.screenshot` and a reason, and the picture is fetched once and never stored. Link the displays to
+the monitors of the PC under *Edit* (a display started by the launcher suggests its PC and monitor). Details:
+`docs/remote-management.md`.
+
 ## Setting up the computer
 
+- Windows: a kiosk PC (above) does all of the following by itself.
 - Start the browser in kiosk mode when the computer starts, for example
   `chrome --kiosk --autoplay-policy=no-user-gesture-required https://<server>/display`
   (Windows: a shortcut in the Startup folder; Linux or Raspberry Pi: an autostart entry). The display stays paired over

@@ -1,0 +1,28 @@
+meta {
+  name: Register a kiosk PC
+  type: http
+  seq: 16
+}
+
+post {
+  url: {{baseUrl}}/api/v1/kiosks
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "monitors": 1,
+    "name": "string",
+    "reason": "string",
+    "server_url": "string"
+  }
+}
+
+docs {
+  Register a kiosk PC
+  
+  Returns the PC's credential once (`token`); its setup script (`POST /api/v1/kiosks/{id}/setup`) carries it. `server_url`: this server as the PC reaches it (empty: base_url). Audited as kiosk.create.
+  
+  Requires permission `display.manage`.
+}

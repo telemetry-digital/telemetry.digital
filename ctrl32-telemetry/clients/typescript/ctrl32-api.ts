@@ -464,7 +464,14 @@ export type Display = {
   command?: Record<string, unknown>;
   content?: DisplayContent;
   created_at?: string;
+  /** what the page reported in the last 3 minutes: page_version, screen, item, tiles, playing, problems [{camera, name, state, since_s}], kiosk, monitor */
+  health?: Record<string, unknown>;
+  health_at?: string;
   id?: string;
+  /** its monitor (0-based) */
+  kiosk_monitor?: number;
+  /** kiosk PC it runs on (empty: none) */
+  kiosk_pc?: string;
   last_agent?: string;
   last_ip?: string;
   last_seen_at?: string;
@@ -638,6 +645,40 @@ export type IncidentEvent = {
   /** opened, fields, note, status or notified */
   event?: string;
   id?: string;
+};
+
+export type KioskPC = {
+  /** the pending operation */
+  command?: Record<string, unknown>;
+  created_at?: string;
+  displays?: ({
+    id?: string;
+    monitor?: number;
+    name?: string;
+    online?: boolean;
+  })[];
+  id?: string;
+  last_ip?: string;
+  last_seen_at?: string;
+  mesh_node?: string;
+  monitors?: number;
+  name?: string;
+  /** reported within 90 s */
+  online?: boolean;
+  /** the last report of its agent */
+  report?: Record<string, unknown>;
+  /** the answer to the last operation: seq, action, ok, message, at */
+  result?: Record<string, unknown>;
+  /** screenshots allowed */
+  screenshots?: boolean;
+  /** the PC runs them */
+  scripts_current?: boolean;
+  /** version of the scripts of this server */
+  scripts_version?: string;
+  server_url?: string;
+  /** has a credential */
+  set_up?: boolean;
+  updated_at?: string;
 };
 
 export type LandingBlock = {
@@ -850,6 +891,62 @@ export type Notification = {
   status?: "scheduled" | "sent" | "failed" | "cancelled";
   step?: number;
   subject?: string;
+};
+
+export type OSJob = {
+  actor?: string;
+  error?: string;
+  exit_code?: number;
+  finished_at?: string;
+  id?: string;
+  kind?: "check" | "upgrade";
+  /** tail of the log (state only) */
+  log?: string;
+  phase?: "running" | "done" | "failed";
+  reason?: string;
+  reboot_required?: boolean;
+  started_at?: string;
+  /** check: available; upgrade: upgraded or newly installed */
+  upgrades?: number;
+};
+
+export type OSReboot = {
+  actor?: string;
+  /** when it reboots */
+  at?: string;
+  id?: string;
+  reason?: string;
+  requested_at?: string;
+};
+
+export type OSState = {
+  booted_at?: string;
+  checked_at?: string;
+  checking?: boolean;
+  history?: OSJob[];
+  job?: OSJob;
+  last?: OSJob;
+  list_error?: string;
+  /** package lists downloaded */
+  lists_updated_at?: string;
+  /** apt */
+  package_manager?: string;
+  /** why not */
+  reason?: string;
+  reboot?: OSReboot;
+  reboot_packages?: string[];
+  reboot_required?: boolean;
+  security_count?: number;
+  supported?: boolean;
+  upgrade_count?: number;
+  upgrades?: ({
+    from?: string;
+    name?: string;
+    new?: boolean;
+    origin?: string;
+    security?: boolean;
+    to?: string;
+  })[];
 };
 
 export type Observation = {
@@ -4448,6 +4545,35 @@ export class Ctrl32Client {
     return this.request<Response>('GET', `/api/v1/display/cameras/${encodeURIComponent(id)}/live`, undefined, undefined, true);
   }
 
+  /** Kiosk: what it shows
+   *
+   * The display page reports every 30 s (at most every 10 s, else 429): each camera tile with its state — playing (the picture moved on in the last 10 s), stalled (connected, the picture stands), connecting, offline (the camera), unsupported (the browser cannot play its codec) — and since when, the screen size, the version of the page, the title of what it shows, and the kiosk PC and monitor its launcher named in the address. Only cameras the display may show are kept. The Displays list shows it (`health`) for 3 minutes.
+   * 
+   * Requires permission `display`. */
+  postDisplayHealth(body: {
+    item?: string;
+    /** kiosk PC from ?kiosk= */
+    kiosk?: string;
+    /** 0–7 from ?monitor= */
+    monitor?: number;
+    page_version?: string;
+    /** w, h, vw, vh, dpr */
+    screen?: Record<string, unknown>;
+    tiles?: ({
+      camera?: string;
+      since_s?: number;
+      state?: "playing" | "stalled" | "connecting" | "offline" | "unsupported";
+    })[];
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/display/health`, undefined, body, false);
+  }
+
   /** Kiosk: paired, or a pairing code
    *
    * Called by the kiosk page. A paired kiosk (display cookie) gets paired = true. Otherwise a pairing is created (15 minutes, at most 20 waiting per address): the code to show is returned once and a secret is set as an HttpOnly cookie; after an administrator entered the code, the next call with that cookie sets the display cookie. With code_known the waiting pairing is kept. */
@@ -5761,6 +5887,215 @@ export class Ctrl32Client {
     event?: string;
     note?: string;
   }>('POST', `/api/v1/ingest/chirpstack/${encodeURIComponent(id)}`, query, body, false);
+  }
+
+  /** Kiosk PC agent: report and get the pending operation
+   *
+   * Called by the agent on the PC every 15 s with its report (free form, at most 48 KiB) and the result of the last operation `{seq, action, ok, message}`; answers with the pending operation, the current version of the scripts and the poll interval. */
+  postKioskReport(body: {
+    /** hostname, windows, uptime_s, cpu_pct, gpu_decode_pct, ram_*, disk_*, browser, browser_windows, windows_updates, reboot_pending, scripts_version, launcher, … */
+    report?: Record<string, unknown>;
+    /** seq, action, ok, message */
+    result?: Record<string, unknown>;
+  }): Promise<{
+    /** seq, action, by, until */
+    command?: Record<string, unknown>;
+    /** id, name, monitors */
+    kiosk?: Record<string, unknown>;
+    poll_s?: number;
+    scripts_version?: string;
+  }> {
+    return this.request<{
+    /** seq, action, by, until */
+    command?: Record<string, unknown>;
+    /** id, name, monitors */
+    kiosk?: Record<string, unknown>;
+    poll_s?: number;
+    scripts_version?: string;
+  }>('POST', `/api/v1/kiosk/report`, undefined, body, false);
+  }
+
+  /** Kiosk PC agent: deliver a screenshot
+   *
+   * Body image/jpeg or image/png, at most 8 MB; accepted only for the screenshot asked for (`seq`) while the PC allows screenshots. */
+  postKioskScreenshot(query: { seq: string; /** the operation */ }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/kiosk/screenshot`, query, undefined, false);
+  }
+
+  /** Kiosk PC agent: its scripts
+   *
+   * The agent, the launcher, the screenshot helper and the launcher settings of this PC, with their version. */
+  getKioskScripts(): Promise<{
+    /** name → text */
+    files?: Record<string, unknown>;
+    version?: string;
+  }> {
+    return this.request<{
+    /** name → text */
+    files?: Record<string, unknown>;
+    version?: string;
+  }>('GET', `/api/v1/kiosk/scripts`, undefined, undefined, false);
+  }
+
+  /** Kiosk PCs
+   *
+   * The Windows PCs behind the displays (0.86.0, ADR-0025) with the last report of their agent (PC, Windows, browser, load, monitors, Windows updates, launcher), the displays on their monitors, the pending operation and the last result, and whether their scripts are current.
+   * 
+   * Requires permission `display.manage`. */
+  getKiosks(): Promise<KioskPC[]> {
+    return this.request<KioskPC[]>('GET', `/api/v1/kiosks`, undefined, undefined, false);
+  }
+
+  /** Register a kiosk PC
+   *
+   * Returns the PC's credential once (`token`); its setup script (`POST /api/v1/kiosks/{id}/setup`) carries it. `server_url`: this server as the PC reaches it (empty: base_url). Audited as kiosk.create.
+   * 
+   * Requires permission `display.manage`. */
+  postKiosks(body: {
+    /** 1–8 */
+    monitors?: number;
+    /** ≤ 80 */
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** http(s) address, e.g. http://10.0.0.5:8080 */
+    server_url?: string;
+  }): Promise<{
+    kiosk?: KioskPC;
+    /** credential of the PC's agent (shown once) */
+    token?: string;
+  }> {
+    return this.request<{
+    kiosk?: KioskPC;
+    /** credential of the PC's agent (shown once) */
+    token?: string;
+  }>('POST', `/api/v1/kiosks`, undefined, body, false);
+  }
+
+  /** Change a kiosk PC
+   *
+   * Fields left out keep their value. `displays` links the displays to the monitors (one display per monitor, 0 = top left; replaces the links). `screenshots` allows screenshots of this PC — turning it on needs display.screenshot. `mesh_node`: the PC in MeshCentral (emergency remote desktop). Audited as kiosk.update.
+   * 
+   * Requires permission `display.manage`. */
+  putKiosksId(id: string, body: {
+    displays?: ({
+      /** display */
+      id?: string;
+      /** 0-based */
+      monitor?: number;
+    })[];
+    mesh_node?: string;
+    /** 1–8 */
+    monitors?: number;
+    name?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** off by default */
+    screenshots?: boolean;
+    server_url?: string;
+  }): Promise<KioskPC> {
+    return this.request<KioskPC>('PUT', `/api/v1/kiosks/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Remove a kiosk PC
+   *
+   * Its agent is locked out at once; its displays stay paired and are unlinked. Audited as kiosk.remove.
+   * 
+   * Requires permission `display.manage`. */
+  deleteKiosksId(id: string, query?: { reason?: string; /** required */ }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/kiosks/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Ask a kiosk PC for an operation
+   *
+   * A closed list the PC's agent performs within its poll (15 s): `report` (report now), `restart_browsers` (the launcher starts them again within 30 s), `reboot` (in 10 s), `update_scripts` (the agent and launcher of this server version), `screenshot` (needs display.screenshot and screenshots allowed for the PC; fetch it with GET …/screenshot). The operation waits 10 minutes for the PC. Audited as kiosk.command.
+   * 
+   * Requires permission `display.manage`. */
+  postKiosksIdCommand(id: string, body: {
+    action: "report" | "restart_browsers" | "reboot" | "update_scripts" | "screenshot";
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    action?: string;
+    by?: string;
+    /** ms */
+    seq?: number;
+    until?: string;
+  }> {
+    return this.request<{
+    action?: string;
+    by?: string;
+    /** ms */
+    seq?: number;
+    until?: string;
+  }>('POST', `/api/v1/kiosks/${encodeURIComponent(id)}/command`, undefined, body, false);
+  }
+
+  /** Open the emergency remote desktop of a kiosk PC
+   *
+   * The MeshCentral link to the PC (needs the MeshCentral address of the server and the PC's node). Audited as remote.mesh_open.
+   * 
+   * Requires permission `display.manage`. */
+  postKiosksIdRemote(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    url?: string;
+  }> {
+    return this.request<{
+    url?: string;
+  }>('POST', `/api/v1/kiosks/${encodeURIComponent(id)}/remote`, undefined, body, false);
+  }
+
+  /** The screenshot asked for
+   *
+   * 202 `{waiting: true}` until the PC sent it; then the picture once (it is not stored; after 3 minutes it is gone). Only for the user who asked for it.
+   * 
+   * Requires permission `display.screenshot`. */
+  getKiosksIdScreenshot(id: string): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/kiosks/${encodeURIComponent(id)}/screenshot`, undefined, undefined, true);
+  }
+
+  /** Setup script of a kiosk PC
+   *
+   * The PowerShell setup script for the PC with its credential (the caller sends it: the server keeps only its hash). Run once as administrator on the PC: kiosk user with automatic logon (its password stays on the PC), power and lock screen, Windows Update at 03:00, browser policies, the launcher (one Chrome kiosk per monitor) and the agent as scheduled tasks.
+   * 
+   * Requires permission `display.manage`. */
+  postKiosksIdSetup(id: string, body: {
+    /** the PC's credential */
+    token: string;
+  }): Promise<Response> {
+    return this.request<Response>('POST', `/api/v1/kiosks/${encodeURIComponent(id)}/setup`, undefined, body, true);
+  }
+
+  /** Replace the credential of a kiosk PC
+   *
+   * The old credential stops at once; the PC reports again after its setup script ran with the new one. Audited as kiosk.token.
+   * 
+   * Requires permission `display.manage`. */
+  postKiosksIdToken(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** shown once */
+    token?: string;
+  }> {
+    return this.request<{
+    /** shown once */
+    token?: string;
+  }>('POST', `/api/v1/kiosks/${encodeURIComponent(id)}/token`, undefined, body, false);
   }
 
   /** The published front page
@@ -9648,6 +9983,142 @@ export class Ctrl32Client {
   }>('POST', `/api/v1/server/license/renew`, undefined, body, false);
   }
 
+  /** Logs of the server
+   *
+   * The tail of one log of a closed list, through the server agent: `app` (ctrl32 telemetry), `agent`, `caddy` (reverse proxy container), `postgresql` (database container), `wireguard`, `cloudflared` (Cloudflare Tunnel), `kernel` (this boot). Linux (journal, Docker) only; lines longer than 2000 characters are cut.
+   * 
+   * Requires permission `system.admin`. */
+  getServerLogs(query: { unit: string; /** app, agent, caddy, postgresql, wireguard, cloudflared, kernel */ lines?: number; /** 1–2000, default 200 */ }): Promise<{
+    error?: string;
+    label?: string;
+    lines?: string[];
+    unit?: string;
+  }> {
+    return this.request<{
+    error?: string;
+    label?: string;
+    lines?: string[];
+    unit?: string;
+  }>('GET', `/api/v1/server/logs`, query, undefined, false);
+  }
+
+  /** Operating system: updates, reboot, jobs
+   *
+   * Through the server agent, Linux servers with apt (Debian, Ubuntu) only (ADR-0025): the package upgrades a full upgrade would install (from the package lists of the last check; computed again every 5 minutes or with `refresh=1`), how many are security updates, whether a reboot is required and for which packages, a scheduled reboot, the running job with the tail of its log, the newest finished job with its log and the history. Elsewhere `supported` is false with the reason (Windows: Windows Update). Finished jobs are written to the audit trail (server.os_job_result) once.
+   * 
+   * Requires permission `system.admin`. */
+  getServerOs(query?: { refresh?: string; /** 1: list the upgrades again now */ }): Promise<OSState> {
+    return this.request<OSState>('GET', `/api/v1/server/os`, query, undefined, false);
+  }
+
+  /** Check for operating system updates
+   *
+   * Downloads the package lists (apt-get update) and lists the upgrades again, as a job in the background (202); nothing is installed. 409 `busy` while a job, an update or a backup runs. Audited as server.os_check.
+   * 
+   * Requires permission `system.admin`. */
+  postServerOsCheck(body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<OSJob> {
+    return this.request<OSJob>('POST', `/api/v1/server/os/check`, undefined, body, false);
+  }
+
+  /** Reboot the server
+   *
+   * A reboot in `delay_s` seconds (30–3600, default 60) through a systemd timer; it can be cancelled until then. Refused (409 `busy`) while an operating system job, an update of ctrl32 telemetry, a backup or a restore test runs, or another reboot is scheduled. Audited as server.reboot.
+   * 
+   * Requires permission `system.admin`. */
+  postServerOsReboot(body: {
+    /** 30–3600, default 60 */
+    delay_s?: number;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<OSReboot> {
+    return this.request<OSReboot>('POST', `/api/v1/server/os/reboot`, undefined, body, false);
+  }
+
+  /** Cancel the scheduled reboot
+   *
+   * 404 `not_found` when none is scheduled. Audited as server.reboot_cancel.
+   * 
+   * Requires permission `system.admin`. */
+  postServerOsRebootCancel(body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('POST', `/api/v1/server/os/reboot/cancel`, undefined, body, false);
+  }
+
+  /** Install the operating system updates
+   *
+   * apt-get update and apt-get full-upgrade without questions (changed configuration files are kept) in its own systemd unit, so it finishes when services — also the server agent — restart; the log is in the state. Services using upgraded libraries may restart; a new kernel needs a reboot (`reboot_required`). 409 `busy` while a job, an update, a backup or a scheduled reboot is pending; 501 `unsupported` off Linux/apt. Audited as server.os_upgrade (with the number of pending upgrades), the result as server.os_job_result; a failure is mailed to the server administrators.
+   * 
+   * Requires permission `system.admin`. */
+  postServerOsUpgrade(body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<OSJob> {
+    return this.request<OSJob>('POST', `/api/v1/server/os/upgrade`, undefined, body, false);
+  }
+
+  /** Remote management settings (MeshCentral)
+   *
+   * The address of the MeshCentral server used as the emergency remote desktop and the node of this server in it (ADR-0025).
+   * 
+   * Requires permission `system.admin`. */
+  getServerRemote(): Promise<{
+    mesh_node?: string;
+    mesh_url?: string;
+  }> {
+    return this.request<{
+    mesh_node?: string;
+    mesh_url?: string;
+  }>('GET', `/api/v1/server/remote`, undefined, undefined, false);
+  }
+
+  /** Set the remote management settings
+   *
+   * `mesh_url`: https address of the MeshCentral server (empty: none); `mesh_node`: the node id of this server in MeshCentral (from the device's details or `gotonode=` in its address; a `node/<domain>/` prefix is removed). Audited as server.remote_settings.
+   * 
+   * Requires permission `system.admin`. */
+  putServerRemote(body: {
+    mesh_node?: string;
+    /** https://mesh.example.com */
+    mesh_url?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    mesh_node?: string;
+    mesh_url?: string;
+  }> {
+    return this.request<{
+    mesh_node?: string;
+    mesh_url?: string;
+  }>('PUT', `/api/v1/server/remote`, undefined, body, false);
+  }
+
+  /** Open the emergency remote desktop of this server
+   *
+   * The MeshCentral link to the remote desktop of this server (`viewmode=11`); MeshCentral asks for its own sign-in, the link carries no credential. 409 `not_configured` without the address or the node. Audited as remote.mesh_open with the reason.
+   * 
+   * Requires permission `system.admin`. */
+  postServerRemoteOpen(body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    url?: string;
+  }> {
+    return this.request<{
+    url?: string;
+  }>('POST', `/api/v1/server/remote/open`, undefined, body, false);
+  }
+
   /** Restart the service (through the agent)
    *
    * Requires permission `system.admin`. */
@@ -9773,6 +10244,8 @@ export class Ctrl32Client {
    *
    * The agent installs a release only when its manifest (`release.json`) carries a valid Ed25519 signature of a key built into this version and the binary matches the size and SHA-256 the manifest lists (ADR-0024). From the update URL (the portal or a mirror) or, with `source` package, from the offline package staged by an upload. Optionally a backup first; the running binary is kept, the migrations run, and when they fail the previous binary returns and the database is restored from that backup. After the restart the previous version returns automatically unless the new one answers healthy within the rollback time of the update settings. With a license whose included updates end (`updates_until`), a release dated later (signed release date) is refused with 402 `updates_ended` and the running system stays as it is; servers without a license always update. Refusals: 409 `version` (the distribution point offers another version), 409 `busy`, 502 `signature` / `checksum` / `unsigned`, 500 `rolled_back`.
    * 
+   * Since 0.86.0 the answer comes as soon as the release is verified and its binary staged: 202 with the installation `id` and `phase` installing; the backup, the migrations and the restart follow in the background, so a proxy that cuts long requests (Cloudflare: 100 s) cannot break an update with a backup. Follow the record with this id in the history of `GET /api/v1/server/updates` (installing → restarting → done, rolled_back or failed); the result is also written to the audit trail (server.update_result). `wait: true` keeps the earlier behaviour: 200 when everything is done (or 500 `rolled_back`).
+   * 
    * Requires permission `system.admin`. */
   postServerUpdate(body: {
     /** take a backup first (database, configuration) */
@@ -9782,25 +10255,31 @@ export class Ctrl32Client {
     source?: "" | "package";
     /** release version, e.g. 0.76.0 (optional with source package) */
     version?: string;
+    /** answer only when the installation is done (before 0.86.0 always) */
+    wait?: boolean;
   }): Promise<{
-    /** backup file taken first */
+    /** backup file taken first (wait only) */
     backup?: string;
     /** installation id in the history */
     id?: string;
     /** trusted key that verified the release */
     key_id?: string;
     message?: string;
+    /** installing (without wait) */
+    phase?: string;
     sha256?: string;
     version?: string;
   }> {
     return this.request<{
-    /** backup file taken first */
+    /** backup file taken first (wait only) */
     backup?: string;
     /** installation id in the history */
     id?: string;
     /** trusted key that verified the release */
     key_id?: string;
     message?: string;
+    /** installing (without wait) */
+    phase?: string;
     sha256?: string;
     version?: string;
   }>('POST', `/api/v1/server/update`, undefined, body, false);

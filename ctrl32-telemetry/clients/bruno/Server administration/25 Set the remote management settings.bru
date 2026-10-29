@@ -1,0 +1,27 @@
+meta {
+  name: Set the remote management settings
+  type: http
+  seq: 25
+}
+
+put {
+  url: {{baseUrl}}/api/v1/server/remote
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "mesh_node": "string",
+    "mesh_url": "string",
+    "reason": "string"
+  }
+}
+
+docs {
+  Set the remote management settings
+  
+  `mesh_url`: https address of the MeshCentral server (empty: none); `mesh_node`: the node id of this server in MeshCentral (from the device's details or `gotonode=` in its address; a `node/<domain>/` prefix is removed). Audited as server.remote_settings.
+  
+  Requires permission `system.admin`.
+}

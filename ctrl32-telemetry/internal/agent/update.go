@@ -408,8 +408,26 @@ func (a *Server) install(ctx context.Context, in UpdateRequest, src releaseSourc
 		source = "package"
 	}
 	rec := UpdateRecord{ID: randomID()[:12], From: a.version, To: p.version, Mode: mode, Source: source, KeyID: p.keyID, SHA256: p.sha,
-		Actor: in.Actor, Reason: in.Reason, Phase: "installing", StartedAt: time.Now().UTC()}
+		Actor: in.Actor, Reason: in.Reason, Phase: "installing", StartedAt: time.Now().UTC(), Async: in.Async}
 	saveRecord(rec)
+	if in.Async {
+		// the release is verified and staged: the rest runs in the background (the history shows the result). The
+		// record in phase installing keeps other installations out (busy); a.mu is taken by the background part.
+		go func() {
+			a.mu.Lock()
+			defer a.mu.Unlock()
+			if _, e := a.complete(ctx, in, p, rec); e != nil {
+				a.log.Warn("update failed", "id", rec.ID, "to", rec.To, "err", e.msg)
+			}
+		}()
+		return &UpdateResult{ID: rec.ID, Version: p.version, SHA256: p.sha, KeyID: p.keyID, Phase: "installing",
+			Message: "verified; " + map[bool]string{true: "the backup, the installation", false: "the installation"}[in.Backup] + " and the restart follow in the background — see the history"}, nil
+	}
+	return a.complete(ctx, in, p, rec)
+}
+
+// complete takes the backup, puts the verified binary in place, runs the migrations and restarts (or rolls back).
+func (a *Server) complete(ctx context.Context, in UpdateRequest, p *prepared, rec UpdateRecord) (*UpdateResult, *updateErr) {
 	fail := func(status int, msg string) (*UpdateResult, *updateErr) {
 		rec.Phase, rec.Error, rec.FinishedAt = "failed", msg, time.Now().UTC()
 		saveRecord(rec)

@@ -1,0 +1,23 @@
+meta {
+  name: The screenshot asked for
+  type: http
+  seq: 21
+}
+
+get {
+  url: {{baseUrl}}/api/v1/kiosks/:id/screenshot
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  The screenshot asked for
+  
+  202 `{waiting: true}` until the PC sent it; then the picture once (it is not stored; after 3 minutes it is gone). Only for the user who asked for it.
+  
+  Requires permission `display.screenshot`.
+}

@@ -1,0 +1,36 @@
+meta {
+  name: Kiosk what it shows
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/display/health
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "item": "string",
+    "kiosk": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "monitor": 1,
+    "page_version": "string",
+    "screen": {},
+    "tiles": [
+      {
+        "camera": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+        "since_s": 1,
+        "state": "playing"
+      }
+    ]
+  }
+}
+
+docs {
+  Kiosk: what it shows
+  
+  The display page reports every 30 s (at most every 10 s, else 429): each camera tile with its state — playing (the picture moved on in the last 10 s), stalled (connected, the picture stands), connecting, offline (the camera), unsupported (the browser cannot play its codec) — and since when, the screen size, the version of the page, the title of what it shows, and the kiosk PC and monitor its launcher named in the address. Only cameras the display may show are kept. The Displays list shows it (`health`) for 3 minutes.
+  
+  Requires permission `display`.
+}

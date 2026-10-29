@@ -1,0 +1,17 @@
+meta {
+  name: Displays
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/displays
+  body: none
+  auth: inherit
+}
+
+docs {
+  Displays
+  
+  Requires permission `display.control`.
+}

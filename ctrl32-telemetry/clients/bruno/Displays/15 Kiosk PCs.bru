@@ -1,0 +1,19 @@
+meta {
+  name: Kiosk PCs
+  type: http
+  seq: 15
+}
+
+get {
+  url: {{baseUrl}}/api/v1/kiosks
+  body: none
+  auth: inherit
+}
+
+docs {
+  Kiosk PCs
+  
+  The Windows PCs behind the displays (0.86.0, ADR-0025) with the last report of their agent (PC, Windows, browser, load, monitors, Windows updates, launcher), the displays on their monitors, the pending operation and the last result, and whether their scripts are current.
+  
+  Requires permission `display.manage`.
+}

@@ -175,6 +175,7 @@ func (a *Server) routes() http.Handler {
 		a.analyticsRoutes(mux) // stand-in downloads into the simulation directory (setup.SimulatedArtifacts)
 		a.updateRoutes(mux)    // installs into the simulation directory; no restart, no database restore
 		a.backupRoutes(mux)    // backups in the simulation directory with a stand-in dump; no database restore
+		a.osRoutes(mux)        // package upgrades, jobs and reboots are simulated (simUpgrades, simulateUpgrade)
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 501, "not available in the VPN simulation of the agent (vpn_simulate)")
 		})
@@ -190,6 +191,7 @@ func (a *Server) routes() http.Handler {
 	a.analyticsRoutes(mux)
 	a.updateRoutes(mux)
 	a.backupRoutes(mux)
+	a.osRoutes(mux)
 	mux.HandleFunc("POST /replica/promote", a.hReplicaPromote)
 	return mux
 }
@@ -437,6 +439,7 @@ func (a *Server) hStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	st.Caddy = a.caddyState()
 	st.WireGuard = a.wgState(ctx)
+	st.Health = a.hostHealth(ctx)
 	writeJSON(w, 200, st)
 }
 
@@ -476,8 +479,9 @@ func hostInfo() HostInfo {
 			h.MemAvailMB = kb / 1024
 		}
 	}
-	for _, p := range []string{"/", "/var/lib/ctrl32-telemetry"} {
-		if d, ok := diskInfo(p); ok {
+	// the recordings often have their own disk (or RAID); a path on the same file system as the one before is skipped
+	for _, p := range []string{"/", "/var/lib/ctrl32-telemetry", "/var/lib/ctrl32-telemetry/video"} {
+		if d, ok := diskInfo(p); ok && !sameDisk(h.Disks, d) {
 			h.Disks = append(h.Disks, d)
 		}
 	}
@@ -489,6 +493,16 @@ func hostInfo() HostInfo {
 		}
 	}
 	return h
+}
+
+// sameDisk: the file system of d is already listed.
+func sameDisk(list []DiskInfo, d DiskInfo) bool {
+	for _, x := range list {
+		if d.dev != 0 && x.dev == d.dev {
+			return true
+		}
+	}
+	return false
 }
 
 // ---- Caddy ----------------------------------------------------------------------------------------

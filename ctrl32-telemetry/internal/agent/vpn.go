@@ -222,6 +222,7 @@ func (a *Server) hStatusSimulated(w http.ResponseWriter, r *http.Request) {
 	st.Host = HostInfo{Arch: runtime.GOARCH, CPUs: runtime.NumCPU(), Time: time.Now()}
 	st.Host.Hostname, _ = os.Hostname()
 	st.WireGuard = a.wgState(r.Context())
+	st.Health = a.hostHealth(r.Context())
 	writeJSON(w, 200, st)
 }
 

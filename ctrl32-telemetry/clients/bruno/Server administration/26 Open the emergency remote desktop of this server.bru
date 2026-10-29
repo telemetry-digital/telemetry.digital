@@ -1,0 +1,25 @@
+meta {
+  name: Open the emergency remote desktop of this server
+  type: http
+  seq: 26
+}
+
+post {
+  url: {{baseUrl}}/api/v1/server/remote/open
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Open the emergency remote desktop of this server
+  
+  The MeshCentral link to the remote desktop of this server (`viewmode=11`); MeshCentral asks for its own sign-in, the link carries no credential. 409 `not_configured` without the address or the node. Audited as remote.mesh_open with the reason.
+  
+  Requires permission `system.admin`.
+}

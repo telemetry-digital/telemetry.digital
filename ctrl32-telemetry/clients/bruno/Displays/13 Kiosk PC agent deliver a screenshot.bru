@@ -1,0 +1,21 @@
+meta {
+  name: Kiosk PC agent deliver a screenshot
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/api/v1/kiosk/screenshot
+  body: none
+  auth: inherit
+}
+
+params:query {
+  seq: 
+}
+
+docs {
+  Kiosk PC agent: deliver a screenshot
+  
+  Body image/jpeg or image/png, at most 8 MB; accepted only for the screenshot asked for (`seq`) while the PC allows screenshots.
+}

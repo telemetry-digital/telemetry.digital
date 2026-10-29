@@ -21,6 +21,7 @@ type Status struct {
 	Versions   map[string]string `json:"versions"`
 	Caddy      CaddyState        `json:"caddy"`
 	WireGuard  WireGuardState    `json:"wireguard"`
+	Health     *HostHealth       `json:"health,omitempty"` // Linux: RAID, network links, disks (SMART), reboot required
 }
 
 type AgentInfo struct {
@@ -50,6 +51,7 @@ type DiskInfo struct {
 	Path    string  `json:"path"`
 	TotalGB float64 `json:"total_gb"`
 	FreeGB  float64 `json:"free_gb"`
+	dev     uint64  // Linux: the file system's device (0 elsewhere)
 }
 
 type ServiceState struct {
@@ -213,6 +215,10 @@ type UpdateRequest struct {
 	RollbackMinutes int    `json:"rollback_minutes,omitempty"`
 	Actor           string `json:"actor,omitempty"`  // who asked (user name, "automatic", "cli"), for the history
 	Reason          string `json:"reason,omitempty"` // the reason of the audit trail, for the history
+	// Async (0.86.0): the agent answers as soon as the release is verified and its binary staged; the backup, the
+	// migrations and the restart follow in the background and the result is in the history. A request through a
+	// proxy that cuts long requests (Cloudflare: 100 s) no longer breaks an update with a backup.
+	Async bool `json:"async,omitempty"`
 }
 
 type UpdateResult struct {
@@ -222,6 +228,7 @@ type UpdateResult struct {
 	KeyID   string `json:"key_id,omitempty"` // the trusted key that verified the release ("" = unsigned, development only)
 	Backup  string `json:"backup,omitempty"`
 	Message string `json:"message"`
+	Phase   string `json:"phase,omitempty"` // async: installing (follow the record with this id in the history)
 }
 
 // UpdateRecord is one installation in the agent's history (update.json). Phases: installing, restarting (the guard
@@ -244,6 +251,7 @@ type UpdateRecord struct {
 	Deadline   time.Time `json:"deadline,omitzero"`
 	FinishedAt time.Time `json:"finished_at,omitzero"`
 	Audited    bool      `json:"audited,omitempty"` // the server wrote the result into its audit trail
+	Async      bool      `json:"async,omitempty"`   // started with async: the person follows the result here (0.86.0)
 }
 
 // PackageInfo describes a verified offline package staged on the server.
@@ -281,6 +289,119 @@ type PackageResult struct {
 // AckRequest marks records of the history as written into the server's audit trail.
 type AckRequest struct {
 	IDs []string `json:"ids"`
+}
+
+// ---- operating system (hostos.go, hosthealth.go; ADR-0025)
+
+// OSState is the maintenance state of the operating system packages.
+type OSState struct {
+	Supported      bool             `json:"supported"`
+	Reason         string           `json:"reason,omitempty"` // why not (Windows, no apt)
+	PackageManager string           `json:"package_manager,omitempty"`
+	Upgrades       []PackageUpgrade `json:"upgrades"`
+	UpgradeCount   int              `json:"upgrade_count"`
+	SecurityCount  int              `json:"security_count"`
+	CheckedAt      time.Time        `json:"checked_at,omitzero"`       // when the list was computed
+	ListsUpdatedAt time.Time        `json:"lists_updated_at,omitzero"` // when the package lists were downloaded (apt-get update)
+	ListError      string           `json:"list_error,omitempty"`
+	Checking       bool             `json:"checking"`
+	RebootRequired bool             `json:"reboot_required"`
+	RebootPackages []string         `json:"reboot_packages"`
+	Reboot         *OSReboot        `json:"reboot,omitempty"` // a scheduled reboot
+	BootedAt       time.Time        `json:"booted_at,omitzero"`
+	Job            *OSJob           `json:"job,omitempty"`  // the running job with the tail of its log
+	Last           *OSJob           `json:"last,omitempty"` // the newest finished job with the tail of its log
+	History        []OSJob          `json:"history"`
+}
+
+type PackageUpgrade struct {
+	Name     string `json:"name"`
+	From     string `json:"from,omitempty"` // empty for a new package (e.g. a new kernel)
+	To       string `json:"to"`
+	Origin   string `json:"origin,omitempty"`
+	Security bool   `json:"security,omitempty"`
+	New      bool   `json:"new,omitempty"`
+}
+
+// OSJob is a refresh of the package lists (check) or an upgrade of the packages (upgrade).
+type OSJob struct {
+	ID             string    `json:"id"`
+	Kind           string    `json:"kind"` // check, upgrade
+	Actor          string    `json:"actor,omitempty"`
+	Reason         string    `json:"reason,omitempty"`
+	Phase          string    `json:"phase"` // running, done, failed
+	StartedAt      time.Time `json:"started_at"`
+	FinishedAt     time.Time `json:"finished_at,omitzero"`
+	ExitCode       int       `json:"exit_code,omitempty"`
+	Upgrades       int       `json:"upgrades,omitempty"` // check: available; upgrade: upgraded or newly installed
+	RebootRequired bool      `json:"reboot_required,omitempty"`
+	Error          string    `json:"error,omitempty"`
+	Log            string    `json:"log,omitempty"`
+	Audited        bool      `json:"audited,omitempty"`
+}
+
+// OSRequest carries who asks and why (for the agent's records; the web service writes the audit trail).
+type OSRequest struct {
+	Actor  string `json:"actor,omitempty"`
+	Reason string `json:"reason,omitempty"`
+}
+
+type OSRebootRequest struct {
+	DelaySeconds int    `json:"delay_s,omitempty"` // 30..3600, default 60
+	Actor        string `json:"actor,omitempty"`
+	Reason       string `json:"reason,omitempty"`
+}
+
+type OSReboot struct {
+	ID          string    `json:"id"`
+	RequestedAt time.Time `json:"requested_at"`
+	At          time.Time `json:"at"`
+	Actor       string    `json:"actor,omitempty"`
+	Reason      string    `json:"reason,omitempty"`
+}
+
+// LogResult is the tail of one log of the closed list (GET /logs).
+type LogResult struct {
+	Unit  string   `json:"unit"`
+	Label string   `json:"label"`
+	Lines []string `json:"lines"`
+	Error string   `json:"error,omitempty"`
+}
+
+// HostHealth is read-only: software RAID, the network links, the disks' own health and a pending reboot.
+type HostHealth struct {
+	RAID           []RAIDArray `json:"raid"`
+	Links          []NetLink   `json:"links"`
+	Disks          []SMARTDisk `json:"disks"`
+	SMART          string      `json:"smart"` // ok, unavailable (no smartctl), error
+	RebootRequired bool        `json:"reboot_required"`
+	Problems       []string    `json:"problems"` // short findings for a badge
+}
+
+type RAIDArray struct {
+	Name     string   `json:"name"`
+	Level    string   `json:"level"`
+	State    string   `json:"state"`   // active, inactive
+	Devices  []string `json:"devices"` // members, (F) = failed
+	Health   string   `json:"health"`  // ok, degraded, rebuilding, failed
+	Progress string   `json:"progress,omitempty"`
+	Status   string   `json:"status,omitempty"` // e.g. [2/1] [U_]
+}
+
+type NetLink struct {
+	Name      string `json:"name"`
+	State     string `json:"state"` // up, down, …
+	SpeedMbps int    `json:"speed_mbps,omitempty"`
+	Duplex    string `json:"duplex,omitempty"`
+	MAC       string `json:"mac,omitempty"`
+}
+
+type SMARTDisk struct {
+	Device      string `json:"device"`
+	Model       string `json:"model,omitempty"`
+	Serial      string `json:"serial,omitempty"`
+	Health      string `json:"health"` // PASSED, FAILED, unknown
+	Temperature int    `json:"temperature_c,omitempty"`
 }
 
 // Result is the generic acknowledgement.

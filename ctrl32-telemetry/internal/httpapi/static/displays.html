@@ -7,6 +7,12 @@
 <meta name="theme-color" content="#e30613">
 <link rel="stylesheet" href="/app.css">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  pre.conf { font-size: 12px; white-space: pre-wrap; word-break: break-all; margin: 0; padding: 8px; background: var(--bg-soft, rgba(127,127,127,.1)); border-radius: var(--radius); }
+  p.small, .small { font-size: 12px; }
+  #kiosks td { vertical-align: top; }
+  .kv-mini { font-size: 12px; line-height: 1.5; }
+</style>
 </head>
 <body>
 <header class="topbar"></header>
@@ -16,11 +22,58 @@
   <div class="table-wrap"><table id="list"><thead><tr><th style="width:28px"><input type="checkbox" id="selAll" aria-label="Select all"></th><th>Display</th><th>Shows</th><th>State</th><th>Last seen</th><th></th></tr></thead><tbody></tbody></table></div>
   <div class="card muted" id="empty" hidden><p>No displays yet. Open <code id="kioskUrl"></code> on the computer at the wall and pair it with the code it shows.</p></div>
 
+  <div class="card" id="kioskCard" style="margin-top:16px" hidden>
+    <div class="row"><h2 style="margin:0">Kiosk PCs</h2><span class="grow"></span><button class="btn primary small" type="button" id="kioskAdd">Add kiosk PC</button></div>
+    <p class="muted">The Windows computers behind the displays. A small agent on each PC reports its state and carries out what is asked here: restart the browsers, reboot, update its scripts, and a screenshot when it is allowed for the PC. The PC connects to this server; nothing connects to the PC.</p>
+    <div class="table-wrap"><table id="kiosks"><thead><tr><th>PC</th><th>Monitors</th><th>State</th><th>PC load</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+
+  <dialog id="kioskDlg" style="max-width:min(680px,96vw)"><form class="form" id="kioskForm">
+    <h2 style="margin-top:0" id="kioskTitle">Add kiosk PC</h2>
+    <div class="row2"><label>Name <input name="name" required maxlength="80" placeholder="Wall PC, control room"></label>
+      <label>Monitors <input name="monitors" type="number" min="1" max="8" value="2" required></label></div>
+    <label>Address of this server as the PC reaches it <input name="server_url" class="notranslate" maxlength="200" placeholder="http://10.0.0.5:8080"></label>
+    <div id="kioskEditOnly">
+      <div id="kioskMonitors"></div>
+      <label>MeshCentral node of the PC (emergency remote desktop; optional) <input name="mesh_node" class="notranslate" maxlength="120" autocomplete="off" placeholder="node id from the device's details in MeshCentral"></label>
+      <label class="check"><input type="checkbox" name="screenshots"> Allow screenshots of this PC</label>
+      <p class="muted small" id="kioskShotNote">A screenshot shows the whole screen, also camera pictures without privacy masks. Each one needs the permission to see screenshots and a reason, is recorded in the audit trail and is not kept on the server.</p>
+    </div>
+    <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
+    <div class="err" id="kioskErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" id="kioskNewToken">Replace credential</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </form></dialog>
+
+  <dialog id="kioskSetupDlg" style="max-width:min(720px,96vw)"><div class="form">
+    <h2 style="margin-top:0">Set up <span id="kioskSetupName" class="notranslate"></span></h2>
+    <p>Credential of the PC (shown only now; it is in the setup script):</p>
+    <pre class="conf notranslate" id="kioskTok" style="user-select:all"></pre>
+    <ol class="muted" style="line-height:1.7;padding-left:20px">
+      <li>Download the setup script and copy it to the PC (keep it private: it carries the credential).</li>
+      <li>On the PC open PowerShell as administrator and run:</li>
+    </ol>
+    <pre class="conf notranslate" id="kioskCmd"></pre>
+    <ol class="muted" start="3" style="line-height:1.7;padding-left:20px">
+      <li>Restart the PC: it signs in as the kiosk user and every monitor shows a pairing code. Pair each monitor with Pair display, then link the displays to the monitors in Edit of the PC.</li>
+      <li>Delete the script from the PC afterwards.</li>
+    </ol>
+    <div class="err" id="kioskSetupErr"></div>
+    <div class="actions"><button class="btn primary" type="button" id="kioskDownload">Download setup script</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </div></dialog>
+
+  <dialog id="shotDlg" style="max-width:96vw"><div class="form">
+    <h2 style="margin-top:0">Screenshot of <span id="shotName" class="notranslate"></span></h2>
+    <p class="muted" id="shotMsg"></p>
+    <img id="shotImg" alt="" hidden style="max-width:100%;max-height:75vh;display:block;border-radius:var(--radius)">
+    <div class="actions"><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </div></dialog>
+
   <div class="card" style="margin-top:16px"><h2 style="margin-top:0">Setting up a display computer</h2>
     <ol class="muted" style="line-height:1.7;margin:0;padding-left:20px">
       <li>On the computer at the wall open <code class="notranslate" id="kioskUrl2"></code> in Chrome or Edge — it shows a code.</li>
       <li>Here choose <b>Pair display</b>, enter the code, name the display and choose what it shows.</li>
-      <li>For permanent use start the browser in kiosk mode when the computer starts, for example
+      <li>On Windows the simplest way is a kiosk PC (above): its setup script prepares the PC, starts one kiosk per monitor and keeps them running, and the PC can then be restarted, updated and checked from here.</li>
+      <li>Otherwise start the browser in kiosk mode when the computer starts, for example
         <code class="notranslate">chrome --kiosk --autoplay-policy=no-user-gesture-required <span class="kurl"></span></code>
         (Windows: a shortcut in the Startup folder; Linux or Raspberry Pi: an autostart entry). The display stays paired over restarts.</li>
       <li>Each display computer decodes its own video: for 20 camera tiles a mini-PC with Intel graphics is enough; the server only forwards the streams.</li>
@@ -89,9 +142,10 @@ function render() {
   const sel = new Set([...document.querySelectorAll('.dsel:checked')].map(i => i.value));
   $('#list tbody').innerHTML = LIST.filter(d => !LOC || d.location === LOC).map(d => `<tr>
     <td><input type="checkbox" class="dsel" value="${d.id}" ${sel.has(d.id) ? 'checked' : ''} aria-label="Select"></td>
-    <td><b class="notranslate">${esc(d.name)}</b>${d.location ? `<div class="muted notranslate" style="font-size:12px">${esc(d.location)}</div>` : ''}${d.content.popup !== 'none' ? ` <span class="badge" title="${esc(t('Enlarges cameras with an event'))}">${esc(t('alarms'))}</span>` : ''}</td>
+    <td><b class="notranslate">${esc(d.name)}</b>${d.location ? `<div class="muted notranslate" style="font-size:12px">${esc(d.location)}</div>` : ''}${kioskOf(d)}${d.content.popup !== 'none' ? ` <span class="badge" title="${esc(t('Enlarges cameras with an event'))}">${esc(t('alarms'))}</span>` : ''}</td>
     <td>${describe(d.content)}</td>
     <td>${!d.paired ? `<span class="badge warn">${esc(t('waiting for the device'))}</span>` : d.online ? `<span class="badge ok">${esc(t('showing'))}</span>` : `<span class="badge bad">${esc(t('not showing'))}</span>`}
+      ${healthHtml(d)}
       ${d.message ? `<div style="font-size:12px"><span class="badge ${d.message.level === 'alarm' ? 'bad' : d.message.level === 'warning' ? 'warn' : 'primary'}">${esc(t('message'))}</span> <span class="notranslate">${esc(d.message.text)}</span></div>` : ''}
       ${d.command ? `<div class="muted" style="font-size:12px">${esc(d.command.action === 'camera' ? t('camera') + ': ' + d.command.name : t(d.command.action))} · ${esc(d.command.by)}</div>` : ''}</td>
     <td>${d.last_seen_at ? esc(ctrl32.fmt(d.last_seen_at)) + `<div class="muted notranslate" style="font-size:12px">${esc(d.last_ip)}</div>` : '—'}</td>
@@ -109,6 +163,155 @@ function render() {
     try { await api('DELETE', `/api/v1/displays/${b.dataset.del}?reason=${encodeURIComponent(r)}`); load(); } catch (x) { ctrl32.toast(x.message, 'bad'); }
   };
 }
+// what the display reported with its poll (0.86.0): camera tiles playing, the ones that are not, screen and page
+const TILE_STATE = {stalled: 'picture stands', connecting: 'connecting', offline: 'camera offline', unsupported: 'cannot play'};
+function healthHtml(d) {
+  const h = d.health; if (!h || !d.online) return '';
+  let s = '';
+  if (h.tiles) {
+    const ok = h.playing === h.tiles;
+    const bad = (h.problems || []).map(p => `<span class="notranslate">${esc(p.name || t('camera'))}</span> (${esc(t(TILE_STATE[p.state] || p.state))})`);
+    s += `<div style="font-size:12px;margin-top:2px"><span class="badge ${ok ? 'ok' : 'warn'}">${h.playing}/${h.tiles} ${esc(t('playing'))}</span>${bad.length ? ' <span class="muted">' + bad.slice(0, 8).join(', ') + (bad.length > 8 ? ' …' : '') + '</span>' : ''}</div>`;
+  }
+  const sc = h.screen || {};
+  const bits = [sc.w ? `${sc.w}×${sc.h}` : '', h.page_version ? t('page') + ' ' + h.page_version : ''].filter(Boolean);
+  if (bits.length) s += `<div class="muted notranslate" style="font-size:12px">${esc(bits.join(' · '))}</div>`;
+  return s;
+}
+function kioskOf(d) {
+  if (!d.kiosk_pc) return '';
+  const k = KIOSKS.find(x => x.id === d.kiosk_pc);
+  return `<div class="muted" style="font-size:12px">${esc(t('kiosk PC'))} <span class="notranslate">${esc(k ? k.name : '…')}</span>${d.kiosk_monitor != null ? ' · ' + esc(t('monitor')) + ' ' + (d.kiosk_monitor + 1) : ''}</div>`;
+}
+
+// ---- kiosk PCs (0.86.0) ----
+let KIOSKS = [], KEDIT = null, KSETUP = null;
+const OPS = {restart_browsers: 'restart the browsers', reboot: 'reboot', update_scripts: 'update the scripts', report: 'report now', screenshot: 'screenshot'};
+function dur(s) { if (s == null) return ''; const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return (d ? d + ' d ' : '') + (h ? h + ' h ' : '') + m + ' min'; }
+function renderKiosks() {
+  $('#kioskCard').hidden = !can('display.manage');
+  if (!can('display.manage')) return;
+  $('#kiosks tbody').innerHTML = KIOSKS.map(k => {
+    const r = k.report || {}, ls = r.launcher || {};
+    const mons = [...Array(k.monitors).keys()].map(i => { const d = (k.displays || []).find(x => x.monitor === i);
+      return `<div>${i + 1}: ${d ? `<span class="notranslate">${esc(d.name)}</span> <span class="badge ${d.online ? 'ok' : 'bad'}">${esc(t(d.online ? 'showing' : 'not showing'))}</span>` : `<span class="muted">${esc(t('no display linked'))}</span>`}</div>`; }).join('');
+    const state = [
+      k.online ? `<span class="badge ok">${esc(t('online'))}</span>` : k.last_seen_at ? `<span class="badge bad">${esc(t('offline'))}</span> ${esc(ctrl32.fmt(k.last_seen_at))}` : `<span class="badge warn">${esc(t('not set up yet'))}</span>`,
+      r.uptime_s != null ? `${esc(t('running for'))} ${esc(dur(r.uptime_s))}` : '',
+      r.browser ? `${esc(t('browser'))} <span class="notranslate">${esc(r.browser)}</span> · ${esc(t('kiosk windows'))} ${esc(r.browser_windows ?? '?')}/${k.monitors}` : '',
+      r.windows_updates != null && r.windows_updates >= 0 ? (r.windows_updates ? `<span class="badge warn">${esc(t('Windows updates pending'))}: ${r.windows_updates}</span>` : esc(t('Windows up to date'))) : '',
+      r.reboot_pending ? `<span class="badge warn">${esc(t('restart pending'))}</span>` : '',
+      r.scripts_version ? (k.scripts_current ? esc(t('scripts current')) : `<span class="badge warn">${esc(t('scripts outdated'))}</span>`) : '',
+      k.command ? `<span class="badge primary">${esc(t(OPS[k.command.action] || k.command.action))}</span> ${esc(k.command.by)} …` : '',
+      k.result ? `${k.result.ok ? '✓' : '<span class="badge bad">✗</span>'} ${esc(t(OPS[k.result.action] || k.result.action || ''))}: <span class="notranslate">${esc(k.result.message || '')}</span> <span class="muted">${esc(ctrl32.fmt(k.result.at))}</span>` : ''
+    ].filter(Boolean).map(x => `<div>${x}</div>`).join('');
+    const load = k.report ? [
+      r.cpu_pct != null ? `CPU ${r.cpu_pct} %` : '', r.gpu_decode_pct != null ? `${esc(t('video decoding'))} ${r.gpu_decode_pct} %` : '',
+      r.ram_total_mb ? `RAM ${(r.ram_free_mb / 1024).toFixed(1)} / ${(r.ram_total_mb / 1024).toFixed(1)} GB ${esc(t('free'))}` : '',
+      r.disk_free_gb != null ? `${esc(t('disk'))} C: ${r.disk_free_gb} GB ${esc(t('free'))}` : ''].filter(Boolean).map(x => `<div>${x}</div>`).join('') : '';
+    const sys = [r.hostname, r.windows, r.model, (r.ip || []).join(', ')].filter(Boolean).map(esc).join(' · ');
+    return `<tr><td><b class="notranslate">${esc(k.name)}</b>${sys ? `<div class="muted notranslate small">${sys}</div>` : ''}${r.user ? `<div class="muted small">${esc(t('signed in'))}: <span class="notranslate">${esc(r.user)}</span></div>` : ''}</td>
+      <td class="kv-mini">${mons}</td><td class="kv-mini">${state}</td><td class="kv-mini">${load}</td>
+      <td class="actions-cell">
+        <button class="btn small" type="button" data-kop="restart_browsers" data-k="${k.id}">Restart browsers</button>
+        <button class="btn small" type="button" data-kop="reboot" data-k="${k.id}">Reboot</button>
+        ${k.screenshots && can('display.screenshot') ? `<button class="btn small" type="button" data-kop="screenshot" data-k="${k.id}">Screenshot</button>` : ''}
+        <button class="btn small" type="button" data-kop="update_scripts" data-k="${k.id}">Update scripts</button>
+        ${k.mesh_node ? `<button class="btn small" type="button" data-kmesh="${k.id}" title="${esc(t('Opens the PC in MeshCentral (its own sign-in); recorded in the audit trail'))}">Emergency remote desktop</button>` : ''}
+        <button class="btn small" type="button" data-kedit="${k.id}">Edit</button>
+        <button class="btn small" type="button" data-kdel="${k.id}">Remove</button></td></tr>`;
+  }).join('') || `<tr><td colspan="5" class="muted">${esc(t('No kiosk PCs yet. Add one to set up a Windows PC for the displays with one script.'))}</td></tr>`;
+  for (const b of document.querySelectorAll('[data-kop]')) b.onclick = () => kioskOp(KIOSKS.find(k => k.id === b.dataset.k), b.dataset.kop);
+  for (const b of document.querySelectorAll('[data-kedit]')) b.onclick = () => kioskDialog(KIOSKS.find(k => k.id === b.dataset.kedit));
+  for (const b of document.querySelectorAll('[data-kmesh]')) b.onclick = async () => {
+    const reason = ctrl32.ask('Reason for opening the remote desktop of the PC (audit trail)'); if (!reason) return;
+    try { const r = await api('POST', `/api/v1/kiosks/${b.dataset.kmesh}/remote`, {reason}); window.open(r.url, '_blank', 'noopener'); } catch (x) { ctrl32.toast(x.message, 'bad'); } };
+  for (const b of document.querySelectorAll('[data-kdel]')) b.onclick = async () => {
+    const reason = ctrl32.ask('Reason for removing the kiosk PC (its agent is locked out; its displays stay paired)'); if (!reason) return;
+    try { await api('DELETE', `/api/v1/kiosks/${b.dataset.kdel}?reason=${encodeURIComponent(reason)}`); loadKiosks(); } catch (x) { ctrl32.toast(x.message, 'bad'); } };
+}
+const OP_ASK = {restart_browsers: 'Reason for restarting the browsers of the PC (the displays are dark for about 30 s)', reboot: 'Reason for rebooting the PC (the displays are dark for about 2 minutes)',
+  update_scripts: 'Reason for updating the scripts of the PC', report: 'Reason', screenshot: 'Reason for the screenshot (it can show camera pictures without privacy masks; audit trail)'};
+async function kioskOp(k, action) {
+  const reason = ctrl32.ask(OP_ASK[action]); if (!reason) return;
+  try {
+    await api('POST', `/api/v1/kiosks/${k.id}/command`, {action, reason});
+    if (action === 'screenshot') return screenshot(k);
+    ctrl32.toast(t('sent to the PC; it acts within 15 s'), 'ok'); loadKiosks();
+  } catch (x) { ctrl32.toast(x.message, 'bad'); }
+}
+async function screenshot(k) {
+  $('#shotName').textContent = k.name; $('#shotImg').hidden = true; $('#shotImg').removeAttribute('src');
+  $('#shotMsg').textContent = t('Waiting for the PC…'); $('#shotDlg').showModal();
+  for (let i = 0; i < 45 && $('#shotDlg').open; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    const r = await fetch(`/api/v1/kiosks/${k.id}/screenshot`, {credentials: 'same-origin', cache: 'no-store'});
+    if (r.status === 202) continue;
+    if (!r.ok) { const e = await r.json().catch(() => ({})); $('#shotMsg').textContent = e.error || ('HTTP ' + r.status); return; }
+    const url = URL.createObjectURL(await r.blob());
+    $('#shotImg').src = url; $('#shotImg').hidden = false; $('#shotMsg').textContent = `${t('taken')} ${new Date().toLocaleTimeString(document.documentElement.lang || undefined)} · ${t('not kept on the server')}`;
+    $('#shotDlg').addEventListener('close', () => URL.revokeObjectURL(url), {once: true});
+    loadKiosks(); return;
+  }
+  if ($('#shotDlg').open) { $('#shotMsg').textContent = t('The PC did not send a screenshot. Is it online and the kiosk user signed in?'); loadKiosks(); }
+}
+function kioskDialog(k) {
+  KEDIT = k || null; const f = $('#kioskForm'); f.reset(); $('#kioskErr').textContent = '';
+  $('#kioskTitle').textContent = t(k ? 'Edit kiosk PC' : 'Add kiosk PC');
+  $('#kioskEditOnly').hidden = !k; $('#kioskNewToken').hidden = !k;
+  f.server_url.value = k ? k.server_url : location.origin;
+  if (k) {
+    f.name.value = k.name; f.monitors.value = k.monitors; f.mesh_node.value = k.mesh_node || ''; f.screenshots.checked = k.screenshots;
+    f.screenshots.disabled = !k.screenshots && !can('display.screenshot');
+    renderMonitorLinks(k);
+    f.monitors.oninput = () => renderMonitorLinks(k);
+  }
+  $('#kioskDlg').showModal();
+}
+// one display per monitor; a display that reported this PC and monitor (from the launcher's address) is suggested
+function renderMonitorLinks(k) {
+  const n = Math.max(1, Math.min(8, +$('#kioskForm').monitors.value || k.monitors));
+  $('#kioskMonitors').innerHTML = `<b>${esc(t('Displays on the monitors'))}</b>` + [...Array(n).keys()].map(i => {
+    const cur = (k.displays || []).find(x => x.monitor === i), hint = LIST.find(d => d.health && d.health.kiosk === k.id && d.health.monitor === i);
+    const sel = cur ? cur.id : hint ? hint.id : '';
+    return `<label>${esc(t('Monitor'))} ${i + 1}${i === 0 ? ' (' + esc(t('top left')) + ')' : ''} <select data-mon="${i}" class="notranslate"><option value="">—</option>${LIST.map(d => `<option value="${d.id}"${d.id === sel ? ' selected' : ''}>${esc(d.name)}${hint && hint.id === d.id && !cur ? ' ← ' + esc(t('reported by the display')) : ''}</option>`).join('')}</select></label>`;
+  }).join('');
+}
+$('#kioskAdd').onclick = () => kioskDialog(null);
+$('#kioskForm').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#kioskErr').textContent = '';
+  try {
+    if (KEDIT) {
+      const displays = [...document.querySelectorAll('#kioskMonitors select')].filter(s => s.value).map(s => ({id: s.value, monitor: +s.dataset.mon}));
+      await api('PUT', '/api/v1/kiosks/' + KEDIT.id, {name: f.name.value, monitors: +f.monitors.value, server_url: f.server_url.value.trim(), mesh_node: f.mesh_node.value.trim(), screenshots: f.screenshots.checked, displays, reason: f.reason.value});
+      $('#kioskDlg').close(); ctrl32.toast(t('saved'), 'ok');
+    } else {
+      const r = await api('POST', '/api/v1/kiosks', {name: f.name.value, monitors: +f.monitors.value, server_url: f.server_url.value.trim(), reason: f.reason.value});
+      $('#kioskDlg').close(); setupDialog(r.kiosk, r.token);
+    }
+    loadKiosks();
+  } catch (x) { $('#kioskErr').textContent = x.message; } };
+$('#kioskNewToken').onclick = async () => {
+  const reason = ctrl32.ask('Reason for replacing the credential (the PC stops reporting until its setup script runs again)'); if (!reason) return;
+  try { const r = await api('POST', `/api/v1/kiosks/${KEDIT.id}/token`, {reason}); $('#kioskDlg').close(); setupDialog(KEDIT, r.token); } catch (x) { $('#kioskErr').textContent = x.message; } };
+function setupDialog(k, token) {
+  KSETUP = {k, token}; $('#kioskSetupName').textContent = k.name; $('#kioskTok').textContent = token; $('#kioskSetupErr').textContent = '';
+  $('#kioskCmd').textContent = 'powershell -ExecutionPolicy Bypass -File .\\setup-kiosk.ps1';
+  $('#kioskSetupDlg').showModal();
+}
+$('#kioskDownload').onclick = async () => {
+  try {
+    const r = await fetch(`/api/v1/kiosks/${KSETUP.k.id}/setup`, {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': ctrl32.csrf || ''}, body: JSON.stringify({token: KSETUP.token})});
+    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || 'HTTP ' + r.status); }
+    const name = ((r.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || 'setup-kiosk.ps1';
+    $('#kioskCmd').textContent = 'powershell -ExecutionPolicy Bypass -File .\\' + name;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob()); a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  } catch (x) { $('#kioskSetupErr').textContent = x.message; } };
+async function loadKiosks() {
+  if (!can('display.manage')) return renderKiosks();
+  try { KIOSKS = await api('GET', '/api/v1/kiosks'); renderKiosks(); render(); } catch (x) { ctrl32.toast(x.message, 'bad'); }
+}
+
 async function command(id, body) {
   try { await api('POST', `/api/v1/displays/${id}/command`, body); ctrl32.toast(t('sent to the display'), 'ok'); load(); } catch (x) { ctrl32.toast(x.message, 'bad'); }
 }
@@ -191,7 +394,7 @@ ctrl32.ready({requireAuth: true, requirePerm: 'display.control'}).then(async () 
   $('#pairBtn').hidden = !can('display.manage'); $('#pairBtn').onclick = () => dialog(null);
   const [d, w, c] = await Promise.all([api('GET', '/api/v1/dashboards').catch(() => []), can('video.view') ? api('GET', '/api/v1/video/walls').catch(() => []) : [], can('video.view') ? api('GET', '/api/v1/video/cameras').catch(() => []) : []]);
   DASH = d; WALLS = w; CAMS = c;
-  load(); setInterval(() => { if (!document.hidden && !document.querySelector('dialog[open]')) load(); }, 10000);
+  load(); loadKiosks(); setInterval(() => { if (!document.hidden && !document.querySelector('dialog[open]')) { load(); loadKiosks(); } }, 10000);
 });
 </script>
 </body>

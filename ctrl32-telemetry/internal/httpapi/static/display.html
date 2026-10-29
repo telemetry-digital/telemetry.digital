@@ -96,6 +96,7 @@ async function showItem(it) {
       const dot = el.querySelector('.cam-dot');
       const p = ctrl32Player(el, {url: `/api/v1/display/cameras/${el.dataset.id}/live?quality=${quality}`, live: true,
         onState: s => { dot.className = 'cam-dot ' + (s === 'online' ? 'online' : s === 'offline' ? 'offline' : ''); }});
+      p.camera = el.dataset.id;
       el.prepend(p.el); players.push(p);
     }
     markActive();
@@ -228,10 +229,31 @@ function checkServerVersion(v) {
     location.reload();
   }, Math.random() * 30000);
 }
+// What this display shows, for the Displays screen (0.86.0): every camera tile with its state and since when, the
+// screen and the page version; the kiosk launcher names its PC and monitor in the address (?kiosk=…&monitor=…).
+const tileSince = new Map(); // camera → {state, at}
+async function reportHealth() {
+  if (!STATE) return;
+  const now = Date.now(), tiles = [];
+  for (const p of players) {
+    if (!p.camera || !p.el.isConnected) continue;
+    const st = p.health, prev = tileSince.get(p.camera);
+    if (!prev || prev.state !== st) tileSince.set(p.camera, {state: st, at: now});
+    tiles.push({camera: p.camera, state: st, since_s: Math.round((now - tileSince.get(p.camera).at) / 1000)});
+  }
+  const q = new URLSearchParams(location.search), mon = parseInt(q.get('monitor'), 10);
+  const body = {page_version: serverVersion || '', item: $('#title').textContent || '', tiles,
+    screen: {w: screen.width, h: screen.height, vw: innerWidth, vh: innerHeight, dpr: devicePixelRatio || 1}};
+  if (q.get('kiosk')) body.kiosk = q.get('kiosk');
+  if (mon >= 0 && mon <= 7) body.monitor = mon;
+  try { await api('POST', '/api/v1/display/health', body); } catch (x) { /* the next report tries again */ }
+}
 function start() {
   try { lastCmd = +(sessionStorage.getItem('ctrl32.display.cmd') || 0); } catch (x) { /* ignore */ }
   poll();
+  if (!healthT) { setTimeout(reportHealth, 15000); healthT = setInterval(reportHealth, 30000); }
 }
+let healthT = null;
 
 // keep the screen on and the cursor away; the first click switches to full screen
 async function wake() { try { if ('wakeLock' in navigator) (await navigator.wakeLock.request('screen')).addEventListener('release', () => setTimeout(wake, 1000)); } catch (x) { /* not allowed yet */ } }

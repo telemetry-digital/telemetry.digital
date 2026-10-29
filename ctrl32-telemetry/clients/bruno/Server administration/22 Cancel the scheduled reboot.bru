@@ -1,0 +1,25 @@
+meta {
+  name: Cancel the scheduled reboot
+  type: http
+  seq: 22
+}
+
+post {
+  url: {{baseUrl}}/api/v1/server/os/reboot/cancel
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Cancel the scheduled reboot
+  
+  404 `not_found` when none is scheduled. Audited as server.reboot_cancel.
+  
+  Requires permission `system.admin`.
+}

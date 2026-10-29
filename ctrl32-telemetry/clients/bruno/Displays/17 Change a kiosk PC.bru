@@ -1,0 +1,40 @@
+meta {
+  name: Change a kiosk PC
+  type: http
+  seq: 17
+}
+
+put {
+  url: {{baseUrl}}/api/v1/kiosks/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "displays": [
+      {
+        "id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+        "monitor": 1
+      }
+    ],
+    "mesh_node": "string",
+    "monitors": 1,
+    "name": "string",
+    "reason": "string",
+    "screenshots": true,
+    "server_url": "string"
+  }
+}
+
+docs {
+  Change a kiosk PC
+  
+  Fields left out keep their value. `displays` links the displays to the monitors (one display per monitor, 0 = top left; replaces the links). `screenshots` allows screenshots of this PC — turning it on needs display.screenshot. `mesh_node`: the PC in MeshCentral (emergency remote desktop). Audited as kiosk.update.
+  
+  Requires permission `display.manage`.
+}

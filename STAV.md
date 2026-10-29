@@ -1,4 +1,4 @@
-# Stav práce (aktualizované 28. 10. 2026, 0.85.1)
+# Stav práce (aktualizované 29. 10. 2026, 0.86.0)
 
 ## Hotové (vo vetve `main`, otestované)
 
@@ -62,6 +62,7 @@
 | 0.84.2 | **Oprava výpadku po reštarte:** keď server pri štarte zlyhá (napr. databáza ešte nebeží), chybu zapíše a skončí, takže ho systemd/Windows spustí znova — predtým proces visel bez logu (produkcia 20.–22. 10. nedostupná) | unit `service` (2 nové) |
 | 0.85.0 | **Steny: dlaždice v ľubovoľnej veľkosti a mieste, zväčšenie na každej stene; kamery bez výpadkov pri zmene SPS/PPS.** `rects` `{x,y,w,h}` na dlaždicu (bez prekrytia, na mriežke; bez rects obyčajná mriežka), editor s ťahaním, zmenou veľkosti za roh, pridaním na voľné políčko, poliami a usporiadaniami (rovnaké, 1/2/4 veľké + malé); stena aj displej ich kreslia; klik zväčší kameru s hlavným prúdom na každej stene, pri `playback_on_click` tlačidlo Záznamy; kamera, ktorá mení SPS/PPS (časovanie VUI), už nezačína odznova (Track ostáva, nové sady v prúde) | unit `TestCheckWallRects`, `TestParamsChangeKeepsTheStream`; e2e `video` 188, `displays` 84 (+7 ďalších sád); headless `wall_layout` 27 (nová); Chrome |
 | 0.85.1 | **Displeje po aktualizácii servera načítajú novú stránku** (stav nesie `server_version`, náhodne do 30 s, najviac raz za 10 min; stena `wall.html` cez `/healthz`), **Reload ako prvý príkaz už funguje** (ignoruje sa len príkaz vydaný pred načítaním stránky, podľa hodín servera) | e2e `displays` 85; headless `display_reload` 7 (nová) |
+| 0.86.0 | **Vzdialená správa v ctrl32 telemetry, MeshCentral len núdzová cesta (ADR-0025, spec 034):** operačný systém servera z UI (zoznam aktualizácií, inštalácia vo vlastnej systemd jednotke so živým záznamom, reštart o 60 s so zrušením, zdravie RAID/linky/SMART, záznamy z pevného zoznamu), aktualizácia ctrl32 odpovedá 202 po overení (Cloudflare ju už neskráti; `wait`), obrazovky hlásia dlaždice („39/39 hrá“), kioskové PC (inštalačný skript, launcher + agent SYSTEM s uzavretým zoznamom operácií, snímky predvolene vypnuté s `display.screenshot`), tlačidlo Núdzová vzdialená plocha (MeshCentral, audit) | unit agent + httpapi; e2e `remote` 86 (nová), `updates` (202); headless `remote_screens` 15 (nová, en+sk) |
 | 0.63.2 | Úvodná stránka portálu = prihlásenie s krátkou ukážkou možností (Zariadenia a dáta, Dashboardy a SCADA, Video NVR, Energie a reporty, Automatizácia a AI; 19 jazykov), menu bez zaoblení | headless `front_page`, e2e `landing`, `i18n_auth` |
 
 Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (`tests/run-all.sh`) pre 0.54.0 (27. 9. 2026): všetko prešlo okrem 3 kontrol času NTP v `ops`, ktoré potrebujú internet (v tomto kontajneri nedostupný) — nesúvisí s kódom.

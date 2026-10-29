@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/vpn"
@@ -168,7 +169,7 @@ func (c *Client) DisconnectUplink(ctx context.Context) (*WireGuardState, error) 
 func (c *Client) Update(ctx context.Context, in UpdateRequest) (*UpdateResult, error) {
 	var r UpdateResult
 	timeout := 10 * time.Minute
-	if in.Backup {
+	if in.Backup && !in.Async {
 		timeout = 50 * time.Minute
 	}
 	err := c.do(ctx, "POST", "/update", in, &r, timeout)
@@ -182,6 +183,69 @@ func (c *Client) UpdateState(ctx context.Context) (*UpdateState, error) {
 		return nil, err
 	}
 	return &st, nil
+}
+
+// OS is the maintenance state of the operating system (refresh: compute the list of upgrades again).
+func (c *Client) OS(ctx context.Context, refresh bool) (*OSState, error) {
+	path := "/os"
+	if refresh {
+		path += "?refresh=1"
+	}
+	return c.os(ctx, path)
+}
+
+// OSJobs is the state without asking apt (the jobs and their results; for the audit trail).
+func (c *Client) OSJobs(ctx context.Context) (*OSState, error) { return c.os(ctx, "/os?jobs=1") }
+
+func (c *Client) os(ctx context.Context, path string) (*OSState, error) {
+	var st OSState
+	if err := c.do(ctx, "GET", path, nil, &st, 60*time.Second); err != nil {
+		return nil, err
+	}
+	return &st, nil
+}
+
+// OSCheck refreshes the package lists in the background (a job).
+func (c *Client) OSCheck(ctx context.Context, in OSRequest) (*OSJob, error) {
+	var j OSJob
+	err := c.do(ctx, "POST", "/os/check", in, &j, 30*time.Second)
+	return &j, err
+}
+
+// OSUpgrade starts the upgrade of the operating system packages in its own systemd unit.
+func (c *Client) OSUpgrade(ctx context.Context, in OSRequest) (*OSJob, error) {
+	var j OSJob
+	err := c.do(ctx, "POST", "/os/upgrade", in, &j, 60*time.Second)
+	return &j, err
+}
+
+// OSReboot schedules a reboot of the host.
+func (c *Client) OSReboot(ctx context.Context, in OSRebootRequest) (*OSReboot, error) {
+	var rb OSReboot
+	err := c.do(ctx, "POST", "/os/reboot", in, &rb, 60*time.Second)
+	return &rb, err
+}
+
+// OSRebootCancel cancels the scheduled reboot.
+func (c *Client) OSRebootCancel(ctx context.Context, in OSRequest) (*OSReboot, error) {
+	var rb OSReboot
+	err := c.do(ctx, "POST", "/os/reboot/cancel", in, &rb, 30*time.Second)
+	return &rb, err
+}
+
+// AckOS marks finished jobs as written into the audit trail.
+func (c *Client) AckOS(ctx context.Context, ids []string) error {
+	return c.do(ctx, "POST", "/os/ack", AckRequest{IDs: ids}, nil, 20*time.Second)
+}
+
+// Logs is the tail of one log of the closed list (unit: app, agent, caddy, postgresql, wireguard, cloudflared, kernel).
+func (c *Client) Logs(ctx context.Context, unit string, lines int) (*LogResult, error) {
+	var lr LogResult
+	q := url.Values{"unit": {unit}, "lines": {strconv.Itoa(lines)}}
+	if err := c.do(ctx, "GET", "/logs?"+q.Encode(), nil, &lr, 40*time.Second); err != nil {
+		return nil, err
+	}
+	return &lr, nil
 }
 
 // AckUpdates marks results as written into the audit trail.

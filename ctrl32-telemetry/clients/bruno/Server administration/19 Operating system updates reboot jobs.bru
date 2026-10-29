@@ -1,0 +1,23 @@
+meta {
+  name: Operating system updates reboot jobs
+  type: http
+  seq: 19
+}
+
+get {
+  url: {{baseUrl}}/api/v1/server/os
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~refresh: 
+}
+
+docs {
+  Operating system: updates, reboot, jobs
+  
+  Through the server agent, Linux servers with apt (Debian, Ubuntu) only (ADR-0025): the package upgrades a full upgrade would install (from the package lists of the last check; computed again every 5 minutes or with `refresh=1`), how many are security updates, whether a reboot is required and for which packages, a scheduled reboot, the running job with the tail of its log, the newest finished job with its log and the history. Elsewhere `supported` is false with the reason (Windows: Windows Update). Finished jobs are written to the audit trail (server.os_job_result) once.
+  
+  Requires permission `system.admin`.
+}

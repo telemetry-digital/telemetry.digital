@@ -289,6 +289,7 @@ func (s *Server) updatesLoop() {
 func (s *Server) updateTick(ctx context.Context, now time.Time) {
 	s.auditUpdateResults(ctx)
 	s.auditBackupResults(ctx)
+	s.auditOSResults(ctx, nil)
 	st := s.loadUpdateSettings(ctx)
 	if st.Mode == "manual" {
 		return
@@ -558,6 +559,10 @@ func (s *Server) serverUpdate(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Version, Reason, Source string
 		Backup                  bool
+		// Wait keeps the answer until the installation is done (before 0.86.0 always). Without it the answer comes
+		// as soon as the release is verified (202): a proxy that cuts long requests (Cloudflare, 100 s) cannot break
+		// an update with a backup; the result is in the history (GET /api/v1/server/updates) and the audit trail.
+		Wait bool
 	}
 	if err := decodeJSON(r, &in, 1024); err != nil {
 		writeErr(w, 400, err.Error())
@@ -580,8 +585,10 @@ func (s *Server) serverUpdate(w http.ResponseWriter, r *http.Request) {
 	until := s.updatesUntil(r.Context())
 	st := s.loadUpdateSettings(r.Context())
 	p := PrincipalFrom(r.Context())
-	res, err := s.agent.Update(r.Context(), agent.UpdateRequest{Version: in.Version, UpdatesUntil: until, Mode: "manual", Source: in.Source, Backup: in.Backup,
-		RollbackMinutes: st.RollbackMinutes, Actor: p.Username, Reason: in.Reason})
+	// a caller that goes away (a proxy timeout) does not stop the verification half-way
+	ctx := context.WithoutCancel(r.Context())
+	res, err := s.agent.Update(ctx, agent.UpdateRequest{Version: in.Version, UpdatesUntil: until, Mode: "manual", Source: in.Source, Backup: in.Backup,
+		RollbackMinutes: st.RollbackMinutes, Actor: p.Username, Reason: in.Reason, Async: !in.Wait})
 	if err != nil {
 		var ce *agent.CodedError
 		if errors.As(err, &ce) {
@@ -600,7 +607,11 @@ func (s *Server) serverUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "server.update", "server", res.Version, map[string]any{"version": s.version},
-		map[string]any{"version": res.Version, "sha256": res.SHA256, "key_id": res.KeyID, "backup": res.Backup, "id": res.ID, "source": in.Source}, in.Reason)
+		map[string]any{"version": res.Version, "sha256": res.SHA256, "key_id": res.KeyID, "backup": res.Backup, "id": res.ID, "source": in.Source, "async": !in.Wait}, in.Reason)
+	if !in.Wait {
+		writeJSON(w, 202, res)
+		return
+	}
 	writeJSON(w, 200, res)
 }
 
@@ -657,6 +668,9 @@ func (s *Server) serverUpdatePackage(w http.ResponseWriter, r *http.Request) {
 		}
 		if fields["backup"] == "1" || fields["backup"] == "true" || fields["backup"] == "on" {
 			q.Set("backup", "1")
+		}
+		if fields["wait"] != "1" { // 0.86.0: the installation continues in the background once the package is verified
+			q.Set("async", "1")
 		}
 		st := s.loadUpdateSettings(r.Context())
 		q.Set("rollback_minutes", strconv.Itoa(st.RollbackMinutes))

@@ -85,12 +85,21 @@ type displayRow struct {
 	Created       time.Time
 	Location      string
 	Message       *displayMessage
+	KioskPC       string // the kiosk PC it runs on (0.86.0), "" = none
+	KioskMonitor  *int
+	Health        *displayHealth
+	HealthAt      *time.Time
 }
 
 func (d *displayRow) json() map[string]any {
 	out := map[string]any{"id": d.ID, "name": d.Name, "content": d.Content, "paired": d.Paired, "last_seen_at": d.LastSeen,
 		"last_ip": d.LastIP, "last_agent": d.LastAgent, "offline_alert": d.OfflineAlert, "created_at": d.Created, "updated_at": d.Updated, "location": d.Location,
-		"online": d.LastSeen != nil && time.Since(*d.LastSeen) < 90*time.Second}
+		"online": d.LastSeen != nil && time.Since(*d.LastSeen) < 90*time.Second, "kiosk_pc": d.KioskPC, "kiosk_monitor": d.KioskMonitor}
+	// what the page reported with its poll (fresh: the last 3 minutes)
+	if d.Health != nil && d.HealthAt != nil && time.Since(*d.HealthAt) < 3*time.Minute {
+		out["health"] = d.Health.summary()
+		out["health_at"] = d.HealthAt
+	}
 	if d.Command != nil && d.Command.Until.After(time.Now()) {
 		out["command"] = d.Command
 	}
@@ -100,13 +109,21 @@ func (d *displayRow) json() map[string]any {
 	return out
 }
 
-const displayCols = `id::text, org_id::text, name, content, command, updated_at, token_hash IS NOT NULL, last_seen_at, COALESCE(last_ip, ''), COALESCE(last_agent, ''), offline_alert, created_at, location, message`
+const displayCols = `id::text, org_id::text, name, content, command, updated_at, token_hash IS NOT NULL, last_seen_at, COALESCE(last_ip, ''), COALESCE(last_agent, ''), offline_alert, created_at, location, message,
+	COALESCE(kiosk_pc_id::text, ''), kiosk_monitor, health, health_at`
 
 func scanDisplay(row pgx.Row) (*displayRow, error) {
 	d := &displayRow{}
-	var content, cmd, msg []byte
-	if err := row.Scan(&d.ID, &d.Org, &d.Name, &content, &cmd, &d.Updated, &d.Paired, &d.LastSeen, &d.LastIP, &d.LastAgent, &d.OfflineAlert, &d.Created, &d.Location, &msg); err != nil {
+	var content, cmd, msg, health []byte
+	if err := row.Scan(&d.ID, &d.Org, &d.Name, &content, &cmd, &d.Updated, &d.Paired, &d.LastSeen, &d.LastIP, &d.LastAgent, &d.OfflineAlert, &d.Created, &d.Location, &msg,
+		&d.KioskPC, &d.KioskMonitor, &health, &d.HealthAt); err != nil {
 		return nil, err
+	}
+	if len(health) > 0 {
+		d.Health = &displayHealth{}
+		if json.Unmarshal(health, d.Health) != nil {
+			d.Health = nil
+		}
 	}
 	if len(msg) > 0 {
 		d.Message = &displayMessage{}
@@ -578,6 +595,16 @@ func (s *Server) listDisplays(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for _, d := range list {
 		j := d.json()
+		// the cameras that do not play are named, like a camera sent to it, only for users who may see them
+		if h, ok := j["health"].(map[string]any); ok {
+			for _, p := range h["problems"].([]map[string]any) {
+				if row, visible := s.cameraRow(r.Context(), org, p["camera"].(string)); visible {
+					p["name"] = row.name
+				} else {
+					p["camera"] = ""
+				}
+			}
+		}
 		// a camera sent by someone else stays unnamed for a user limited to other camera groups
 		if c, ok := j["command"].(*displayCommand); ok && c.Camera != "" {
 			if _, visible := s.cameraRow(r.Context(), org, c.Camera); !visible {

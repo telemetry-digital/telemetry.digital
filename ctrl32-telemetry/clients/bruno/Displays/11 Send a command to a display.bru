@@ -1,0 +1,34 @@
+meta {
+  name: Send a command to a display
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/v1/displays/:id/command
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "action": "camera",
+    "camera": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "level": "info",
+    "quality": "main",
+    "seconds": 1,
+    "text": "string"
+  }
+}
+
+docs {
+  Send a command to a display
+  
+  camera: show a camera the operator may see (seconds 5–3600); identify: show the display's name; reload; clear: back to the content (also ends a message); message: an announcement (info as a band at the bottom, warning at the top, alarm over the whole screen) shown apart from cameras. Audited.
+  
+  Requires permission `display.control`.
+}

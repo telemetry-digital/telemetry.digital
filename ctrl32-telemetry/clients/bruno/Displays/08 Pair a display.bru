@@ -1,0 +1,43 @@
+meta {
+  name: Pair a display
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/displays/pair
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "code": "string",
+    "content": {
+      "items": [
+        {
+          "kind": "dashboard",
+          "screen": 1,
+          "seconds": 1,
+          "slug": "string",
+          "wall": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00"
+        }
+      ],
+      "locale": "string",
+      "popup": "none",
+      "popup_seconds": 1
+    },
+    "location": "string",
+    "name": "string",
+    "offline_alert": true,
+    "reason": "string"
+  }
+}
+
+docs {
+  Pair a display
+  
+  Enter the code the kiosk shows (case-insensitive; 10 wrong codes in 10 minutes block the user for a while). Returns the device's address and browser. Audited.
+  
+  Requires permission `display.manage`.
+}

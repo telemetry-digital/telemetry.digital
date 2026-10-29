@@ -1,0 +1,25 @@
+meta {
+  name: Install the operating system updates
+  type: http
+  seq: 23
+}
+
+post {
+  url: {{baseUrl}}/api/v1/server/os/upgrade
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Install the operating system updates
+  
+  apt-get update and apt-get full-upgrade without questions (changed configuration files are kept) in its own systemd unit, so it finishes when services — also the server agent — restart; the log is in the state. Services using upgraded libraries may restart; a new kernel needs a reboot (`reboot_required`). 409 `busy` while a job, an update, a backup or a scheduled reboot is pending; 501 `unsupported` off Linux/apt. Audited as server.os_upgrade (with the number of pending upgrades), the result as server.os_job_result; a failure is mailed to the server administrators.
+  
+  Requires permission `system.admin`.
+}
