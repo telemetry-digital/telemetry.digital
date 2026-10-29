@@ -5917,8 +5917,8 @@ export class Ctrl32Client {
 
   /** Kiosk PC agent: deliver a screenshot
    *
-   * Body image/jpeg or image/png, at most 8 MB; accepted only for the screenshot asked for (`seq`) while the PC allows screenshots. */
-  postKioskScreenshot(query: { seq: string; /** the operation */ }): Promise<{
+   * Body image/jpeg or image/png, at most 8 MB, one picture per monitor (`monitor`, 0-based; without it monitor 0); accepted only for the screenshot asked for (`seq`), once per monitor, while the PC allows screenshots. */
+  postKioskScreenshot(query: { seq: string; /** the operation */ monitor?: number; /** 0-based monitor of the PC */ }): Promise<{
     /** true on success */
     ok?: boolean;
   }> {
@@ -5930,7 +5930,7 @@ export class Ctrl32Client {
 
   /** Kiosk PC agent: its scripts
    *
-   * The agent, the launcher, the screenshot helper and the launcher settings of this PC, with their version. */
+   * The agent, the launcher and the launcher settings of this PC (with `cdp_port`, the DevTools port of monitor 0 on 127.0.0.1 of the PC), with their version. `capture.ps1` is a stub kept for agents before 0.86.5, which refuse an update without it; the new agent deletes it. */
   getKioskScripts(): Promise<{
     /** name → text */
     files?: Record<string, unknown>;
@@ -6061,11 +6061,35 @@ export class Ctrl32Client {
 
   /** The screenshot asked for
    *
-   * 202 `{waiting: true}` until the PC sent it; then the picture once (it is not stored; after 3 minutes it is gone). Only for the user who asked for it.
+   * One picture per monitor, taken by the kiosk browser of that monitor (the display page only, not the rest of the desktop; since 0.86.5). 202 `{waiting: true, received, monitors}` until every monitor sent its picture or the agent reported its result; then the pictures once (they are not stored; after 3 minutes they are gone), with the agent's message when a monitor failed. 502 `capture_failed` with the agent's message when no monitor could be taken. Only for the user who asked for it. Before 0.86.5 this answered with one image/jpeg.
    * 
    * Requires permission `display.screenshot`. */
-  getKiosksIdScreenshot(id: string): Promise<Response> {
-    return this.request<Response>('GET', `/api/v1/kiosks/${encodeURIComponent(id)}/screenshot`, undefined, undefined, true);
+  getKiosksIdScreenshot(id: string): Promise<{
+    /** the agent's result, e.g. which monitor failed */
+    message?: string;
+    monitors?: ({
+      /** image/jpeg */
+      content_type?: string;
+      /** base64 */
+      image?: string;
+      /** 0-based */
+      monitor?: number;
+    })[];
+    taken_at?: string;
+  }> {
+    return this.request<{
+    /** the agent's result, e.g. which monitor failed */
+    message?: string;
+    monitors?: ({
+      /** image/jpeg */
+      content_type?: string;
+      /** base64 */
+      image?: string;
+      /** 0-based */
+      monitor?: number;
+    })[];
+    taken_at?: string;
+  }>('GET', `/api/v1/kiosks/${encodeURIComponent(id)}/screenshot`, undefined, undefined, false);
   }
 
   /** Setup script of a kiosk PC

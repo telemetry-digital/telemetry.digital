@@ -1,7 +1,7 @@
 # ctrl32 telemetry - kiosk agent (spec 034, ADR-0025). Runs as SYSTEM (scheduled task "ctrl32 kiosk agent"): every
 # few seconds it reports the state of this PC to the server and performs what an operator asked for, from a closed
-# list only - restart the browsers, reboot, report now, update these scripts, screenshot. It never runs anything the
-# server sends as text. Its credential is in agent.json, readable by SYSTEM and administrators only.
+# list only - restart the browsers, reboot, report now, update these scripts, screenshot of the kiosk pages. It never
+# runs anything the server sends as text. Its credential is in agent.json, readable by SYSTEM and administrators only.
 $ErrorActionPreference = 'Continue'
 $base = 'C:\ProgramData\ctrl32-kiosk'
 $udir = Join-Path $base 'user'
@@ -87,7 +87,7 @@ function Restart-Browsers {
 
 function Update-Scripts {
     $r = Invoke-RestMethod -Method Get -Uri ($server + '/api/v1/kiosk/scripts') -Headers $headers -TimeoutSec 60 -UseBasicParsing
-    $allowed = @('kiosk-agent.ps1', 'kiosk-launcher.ps1', 'capture.ps1', 'launcher.json')
+    $allowed = @('kiosk-agent.ps1', 'kiosk-launcher.ps1', 'launcher.json')
     foreach ($name in $allowed) {
         $text = $r.files.$name
         if (-not $text) { throw "the server sent no $name" }
@@ -102,22 +102,61 @@ function Update-Scripts {
     return "scripts $($r.version) installed"
 }
 
+# A screenshot comes from each kiosk browser itself (Chrome DevTools Protocol, Page.captureScreenshot) on the debugging
+# port the launcher opened for that monitor on 127.0.0.1 only: just the page of the display, never the rest of the
+# desktop, and no screen-capture code on this PC.
+function Get-PageShot($port) {
+    try { $list = Invoke-RestMethod -Uri "http://127.0.0.1:$port/json/list" -TimeoutSec 5 -UseBasicParsing }
+    catch { throw "debugging port $port not reachable (the kiosk window is not running or was started by older scripts; the launcher restarts it within 30 s)" }
+    # the display page, not one of the browser's own pages (chrome://...)
+    $pages = @($list | Where-Object { $_.type -eq 'page' -and $_.webSocketDebuggerUrl -and $_.url -like 'http*' })
+    $page = @($pages | Where-Object { $_.url -like '*/display*' }) + $pages | Select-Object -First 1
+    if (-not $page) { throw "no page in the browser on port $port" }
+    $ws = [System.Net.WebSockets.ClientWebSocket]::new()
+    $cts = [System.Threading.CancellationTokenSource]::new(30000)
+    try {
+        [void]$ws.ConnectAsync([Uri]$page.webSocketDebuggerUrl, $cts.Token).GetAwaiter().GetResult()
+        $req = [Text.Encoding]::UTF8.GetBytes('{"id":1,"method":"Page.captureScreenshot","params":{"format":"jpeg","quality":70}}')
+        [void]$ws.SendAsync([ArraySegment[byte]]::new($req), [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $cts.Token).GetAwaiter().GetResult()
+        $buf = New-Object byte[] 262144
+        for ($n = 0; $n -lt 20; $n++) {
+            $ms = New-Object IO.MemoryStream
+            do {
+                $r = $ws.ReceiveAsync([ArraySegment[byte]]::new($buf), $cts.Token).GetAwaiter().GetResult()
+                $ms.Write($buf, 0, $r.Count)
+            } until ($r.EndOfMessage -or $r.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close)
+            if ($r.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close) { throw "the browser on port $port closed the connection" }
+            $text = [Text.Encoding]::UTF8.GetString($ms.ToArray())
+            if ($text -notmatch '^\{"id":1,') { continue }   # an event, not the answer
+            # a pattern, not ConvertFrom-Json: Windows PowerShell refuses JSON over 2 MB
+            $m = [regex]::Match($text, '"data":"([A-Za-z0-9+/=]+)"')
+            if ($m.Success) { return , [Convert]::FromBase64String($m.Groups[1].Value) }   # one byte[], not unrolled
+            $e = [regex]::Match($text, '"message":"([^"]*)"')
+            throw "the browser on port $port refused the screenshot: $($e.Groups[1].Value)"
+        }
+        throw "no answer from the browser on port $port"
+    } finally { $ws.Dispose(); $cts.Dispose() }
+}
+
+# one picture per monitor, each sent on its own
 function Send-Screenshot($seq) {
-    $loc = Read-Json (Join-Path $base 'local.json')
-    $user = if ($loc -and $loc.kiosk_user) { $loc.kiosk_user } else { throw 'no kiosk user in local.json' }
-    $shot = Join-Path $udir 'shot.jpg'
-    Remove-Item $shot -ErrorAction SilentlyContinue
-    $a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$base\capture.ps1`""
-    $p = New-ScheduledTaskPrincipal -UserId "$env:COMPUTERNAME\$user" -LogonType Interactive -RunLevel Limited
-    Register-ScheduledTask -TaskName 'ctrl32 kiosk screenshot' -Action $a -Principal $p -Force | Out-Null
-    Start-ScheduledTask -TaskName 'ctrl32 kiosk screenshot'
-    for ($i = 0; $i -lt 30 -and -not (Test-Path $shot); $i++) { Start-Sleep -Seconds 1 }
-    Unregister-ScheduledTask -TaskName 'ctrl32 kiosk screenshot' -Confirm:$false -ErrorAction SilentlyContinue
-    if (-not (Test-Path $shot)) { throw "no screenshot (is $user signed in?)" }
-    $bytes = [IO.File]::ReadAllBytes($shot)
-    Remove-Item $shot -Force
-    Invoke-RestMethod -Method Post -Uri ($server + '/api/v1/kiosk/screenshot?seq=' + $seq) -Headers $headers -ContentType 'image/jpeg' -Body $bytes -TimeoutSec 60 -UseBasicParsing | Out-Null
-    return "screenshot sent ($([int]($bytes.Length / 1024)) KB)"
+    $lc = Read-Json (Join-Path $base 'launcher.json')
+    $first = if ($lc -and $lc.cdp_port) { [int]$lc.cdp_port } else { 9222 }
+    $ls = Read-Json (Join-Path $udir 'launcher-state.json')
+    $count = if ($ls -and $ls.screens) { @($ls.screens).Count } else { 1 }
+    if ($lc -and $lc.monitors -gt 0) { $count = [Math]::Min($count, [int]$lc.monitors) }
+    $sent = 0; $kb = 0; $failed = @()
+    for ($i = 0; $i -lt $count; $i++) {
+        try {
+            $bytes = Get-PageShot ($first + $i)
+            Invoke-RestMethod -Method Post -Uri ($server + '/api/v1/kiosk/screenshot?seq=' + $seq + '&monitor=' + $i) -Headers $headers -ContentType 'image/jpeg' -Body $bytes -TimeoutSec 60 -UseBasicParsing | Out-Null
+            $sent++; $kb += [int]($bytes.Length / 1024)
+        } catch { $failed += "monitor $($i + 1): $($_.Exception.Message)" }
+    }
+    if ($sent -eq 0) { throw ($failed -join '; ') }
+    $msg = "screenshots of $sent of $count monitors sent ($kb KB)"
+    if ($failed) { $msg += '; ' + ($failed -join '; ') }
+    return $msg
 }
 
 function Invoke-Op($c) {
@@ -133,6 +172,8 @@ function Invoke-Op($c) {
 
 # ---- the loop ---------------------------------------------------------------------------------------------------------
 Log "agent started (scripts $(Scripts-Version))"
+# the screen-capture helper of the scripts before 0.86.5; an older agent that installed these scripts left a stub
+Remove-Item (Join-Path $base 'capture.ps1') -Force -ErrorAction SilentlyContinue
 $result = $null
 $rebootBy = $null
 $restartSelf = $false

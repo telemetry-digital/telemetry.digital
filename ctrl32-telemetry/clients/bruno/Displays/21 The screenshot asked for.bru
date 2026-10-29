@@ -17,7 +17,7 @@ params:path {
 docs {
   The screenshot asked for
   
-  202 `{waiting: true}` until the PC sent it; then the picture once (it is not stored; after 3 minutes it is gone). Only for the user who asked for it.
+  One picture per monitor, taken by the kiosk browser of that monitor (the display page only, not the rest of the desktop; since 0.86.5). 202 `{waiting: true, received, monitors}` until every monitor sent its picture or the agent reported its result; then the pictures once (they are not stored; after 3 minutes they are gone), with the agent's message when a monitor failed. 502 `capture_failed` with the agent's message when no monitor could be taken. Only for the user who asked for it. Before 0.86.5 this answered with one image/jpeg.
   
   Requires permission `display.screenshot`.
 }

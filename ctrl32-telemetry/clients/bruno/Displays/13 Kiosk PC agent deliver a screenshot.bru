@@ -12,10 +12,11 @@ post {
 
 params:query {
   seq: 
+  ~monitor: 
 }
 
 docs {
   Kiosk PC agent: deliver a screenshot
   
-  Body image/jpeg or image/png, at most 8 MB; accepted only for the screenshot asked for (`seq`) while the PC allows screenshots.
+  Body image/jpeg or image/png, at most 8 MB, one picture per monitor (`monitor`, 0-based; without it monitor 0); accepted only for the screenshot asked for (`seq`), once per monitor, while the PC allows screenshots.
 }

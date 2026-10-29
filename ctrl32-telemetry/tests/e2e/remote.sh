@@ -104,7 +104,8 @@ grep -qi 'attachment; filename="setup-kiosk-wall-pc' "$TMP/h" && ok "…as a dow
 agent c32k_nope POST /api/v1/kiosk/report '{"report":{}}'; check "agent: unknown credential" "$(st)" 401
 agent "$TOK" GET /api/v1/kiosk/scripts; check "agent: its scripts" "$(st) $(jx 'Object.keys(j.files).sort().join() + " " + j.version.length')" "200 capture.ps1,kiosk-agent.ps1,kiosk-launcher.ps1,launcher.json 12"
 SV=$(jx j.version)
-check "…the launcher settings of this PC" "$(jx "JSON.parse(j.files['launcher.json']).url + ' ' + JSON.parse(j.files['launcher.json']).monitors + ' ' + JSON.parse(j.files['launcher.json']).kiosk")" "http://10.0.0.5:8080/display 2 $KID"
+check "…the launcher settings of this PC" "$(jx "JSON.parse(j.files['launcher.json']).url + ' ' + JSON.parse(j.files['launcher.json']).monitors + ' ' + JSON.parse(j.files['launcher.json']).kiosk + ' ' + JSON.parse(j.files['launcher.json']).cdp_port")" "http://10.0.0.5:8080/display 2 $KID 9222"
+check "…screenshots from the browsers, no screen grab (0.86.5)" "$(jx "j.files['kiosk-agent.ps1'].includes('Page.captureScreenshot') + ' ' + /CopyFromScreen/.test(JSON.stringify(j.files)) + ' ' + j.files['kiosk-launcher.ps1'].includes('--remote-debugging-port=')")" "true false true"
 REP="{\"report\":{\"hostname\":\"DESKTOP-$SUF\",\"windows\":\"Windows 11 Pro\",\"uptime_s\":3600,\"cpu_pct\":19,\"gpu_decode_pct\":43,\"ram_total_mb\":7900,\"ram_free_mb\":4200,\"browser\":\"130.0\",\"browser_windows\":2,\"scripts_version\":\"$SV\"},\"result\":null}"
 agent "$TOK" POST /api/v1/kiosk/report "$REP"; check "agent reports" "$(st) $(jx 'j.poll_s + " " + j.scripts_version + " " + !j.command')" "200 15 $SV true"
 req GET /api/v1/kiosks; check "online with its report, scripts current" "$(jx "(k => k.online + ' ' + k.report.hostname + ' ' + k.scripts_current)(j.find(k => k.id === '$KID'))")" "true DESKTOP-$SUF true"
@@ -123,14 +124,34 @@ req PUT "/api/v1/kiosks/$KID" '{"screenshots":true}'; check "allowing them needs
 req PUT "/api/v1/kiosks/$KID" '{"screenshots":true,"reason":"e2e: checking the wall remotely"}'; check "screenshots allowed" "$(st) $(jx j.screenshots)" "200 true"
 check "…audited with the reason" "$(audited kiosk.update 'e2e: checking the wall remotely')" true
 req POST "/api/v1/kiosks/$KID/command" '{"action":"screenshot","reason":"e2e is the wall dark?"}'; SEQ=$(jx j.seq); check "screenshot asked" "$(st)" 200
-req GET "/api/v1/kiosks/$KID/screenshot"; check "…waiting for the PC" "$(st) $(jx j.waiting)" "202 true"
-printf '\xff\xd8\xff\xe0fake jpeg for e2e' > "$TMP/shot.jpg"
-curl -s -X POST -H "X-Kiosk-Token: $TOK" -H "Content-Type: image/jpeg" --data-binary @"$TMP/shot.jpg" -o "$TMP/b" -w '%{http_code}' "$BASE/api/v1/kiosk/screenshot?seq=1" > "$TMP/s"; check "only the picture asked for" "$(st)" 409
-curl -s -X POST -H "X-Kiosk-Token: $TOK" -H "Content-Type: text/plain" --data-binary @"$TMP/shot.jpg" -o "$TMP/b" -w '%{http_code}' "$BASE/api/v1/kiosk/screenshot?seq=$SEQ" > "$TMP/s"; check "only a picture" "$(st)" 415
-curl -s -X POST -H "X-Kiosk-Token: $TOK" -H "Content-Type: image/jpeg" --data-binary @"$TMP/shot.jpg" -o "$TMP/b" -w '%{http_code}' "$BASE/api/v1/kiosk/screenshot?seq=$SEQ" > "$TMP/s"; check "the agent delivers it" "$(st)" 200
-curl -s -b "$JAR" -o "$TMP/got.jpg" -w '%{http_code} %{content_type}' "$BASE/api/v1/kiosks/$KID/screenshot" > "$TMP/s"; check "fetched once" "$(st) $(cmp -s "$TMP/shot.jpg" "$TMP/got.jpg" && echo same)" "200 image/jpeg same"
+req GET "/api/v1/kiosks/$KID/screenshot"; check "…waiting for the PC" "$(st) $(jx 'j.waiting + " " + j.received + "/" + j.monitors')" "202 true 0/2"
+# one picture per monitor, taken by the kiosk browsers (0.86.5)
+printf '\xff\xd8\xff\xe0fake jpeg monitor 1' > "$TMP/shot0.jpg"; printf '\xff\xd8\xff\xe0fake jpeg monitor 2' > "$TMP/shot1.jpg"
+upload() { curl -s -X POST -H "X-Kiosk-Token: $TOK" -H "Content-Type: $1" --data-binary @"$2" -o "$TMP/b" -w '%{http_code}' "$BASE/api/v1/kiosk/screenshot?$3" > "$TMP/s"; }
+upload image/jpeg "$TMP/shot0.jpg" "seq=1&monitor=0"; check "only the picture asked for" "$(st)" 409
+upload text/plain "$TMP/shot0.jpg" "seq=$SEQ&monitor=0"; check "only a picture" "$(st)" 415
+upload image/jpeg "$TMP/shot0.jpg" "seq=$SEQ&monitor=2"; check "only a monitor the PC has" "$(st)" 400
+upload image/jpeg "$TMP/shot0.jpg" "seq=$SEQ&monitor=0"; check "monitor 1 delivers its picture" "$(st)" 200
+upload image/jpeg "$TMP/shot0.jpg" "seq=$SEQ&monitor=0"; check "…once" "$(st)" 409
+req GET "/api/v1/kiosks/$KID/screenshot"; check "…still waiting for monitor 2" "$(st) $(jx 'j.received + "/" + j.monitors')" "202 1/2"
+upload image/jpeg "$TMP/shot1.jpg" "seq=$SEQ&monitor=1"; check "monitor 2 delivers its picture" "$(st)" 200
+req GET "/api/v1/kiosks/$KID/screenshot"
+B64_0=$(base64 < "$TMP/shot0.jpg" | tr -d '\n'); B64_1=$(base64 < "$TMP/shot1.jpg" | tr -d '\n')
+check "fetched once, one picture per monitor" "$(st) $(jx "j.monitors.map(m => m.monitor + ':' + m.content_type + ':' + (m.image === ['$B64_0', '$B64_1'][m.monitor])).join()")" "200 0:image/jpeg:true,1:image/jpeg:true"
 req GET "/api/v1/kiosks/$KID/screenshot"; check "…and gone" "$(st)" 404
 check "screenshot audited with its reason" "$(audited kiosk.command 'e2e is the wall dark?')" true
+# a monitor that fails: the agent's result ends the screenshot with the pictures it has and its message
+req POST "/api/v1/kiosks/$KID/command" '{"action":"screenshot","reason":"e2e one monitor dark"}'; SEQ=$(jx j.seq)
+upload image/jpeg "$TMP/shot0.jpg" "seq=$SEQ&monitor=0"
+RES="\"result\":{\"seq\":$SEQ,\"action\":\"screenshot\",\"ok\":true,\"message\":\"screenshots of 1 of 2 monitors sent; monitor 2: debugging port 9223 not reachable\"}"
+agent "$TOK" POST /api/v1/kiosk/report "${REP/$NORES/$RES}"
+req GET "/api/v1/kiosks/$KID/screenshot"; check "…the pictures it has, with the agent's message" "$(st) $(jx 'j.monitors.length + " " + j.message.includes("9223")')" "200 1 true"
+# nothing taken: the agent's error, no picture
+req POST "/api/v1/kiosks/$KID/command" '{"action":"screenshot","reason":"e2e browsers closed"}'; SEQ=$(jx j.seq)
+RES="\"result\":{\"seq\":$SEQ,\"action\":\"screenshot\",\"ok\":false,\"message\":\"monitor 1: debugging port 9222 not reachable\"}"
+agent "$TOK" POST /api/v1/kiosk/report "${REP/$NORES/$RES}"
+req GET "/api/v1/kiosks/$KID/screenshot"; check "nothing taken: 502 with the agent's message" "$(st) $(jx 'j.code + " " + j.error.includes("9222")')" "502 capture_failed true"
+req GET "/api/v1/kiosks/$KID/screenshot"; check "…and gone" "$(st)" 404
 req PUT "/api/v1/kiosks/$KID" "{\"displays\":[{\"id\":\"$DID\",\"monitor\":2}],\"reason\":\"e2e\"}"; check "a monitor the PC does not have" "$(st)" 400
 req PUT "/api/v1/kiosks/$KID" "{\"displays\":[{\"id\":\"$DID\",\"monitor\":0},{\"id\":\"$DID\",\"monitor\":1}],\"reason\":\"e2e\"}"; check "a display on one monitor only" "$(st)" 400
 req PUT "/api/v1/kiosks/$KID" "{\"displays\":[{\"id\":\"$DID\",\"monitor\":1}],\"reason\":\"e2e link\"}"; check "display linked to monitor 2" "$(st)" 200

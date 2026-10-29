@@ -164,11 +164,12 @@ $agentJson = Join-Path $base 'agent.json'
 & icacls $agentJson /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
 $local = @{ kiosk_user = $KioskUser; profiles = $(if ($ProfileDir) { $ProfileDir } else { Join-Path $udir 'profiles' }) }
 [IO.File]::WriteAllText((Join-Path $base 'local.json'), ($local | ConvertTo-Json), $utf8)
-foreach ($name in 'kiosk-agent.ps1', 'kiosk-launcher.ps1', 'capture.ps1', 'launcher.json') {
+foreach ($name in 'kiosk-agent.ps1', 'kiosk-launcher.ps1', 'launcher.json') {
     $text = $scripts.files.$name
     if (-not $text) { throw "the server sent no $name" }
     [IO.File]::WriteAllText((Join-Path $base $name), $text, $utf8)
 }
+Remove-Item (Join-Path $base 'capture.ps1') -Force -ErrorAction SilentlyContinue   # helper of setups before 0.86.5
 Set-Content (Join-Path $base 'version.txt') $scripts.version -Encoding ASCII
 
 Step 'scheduled tasks'

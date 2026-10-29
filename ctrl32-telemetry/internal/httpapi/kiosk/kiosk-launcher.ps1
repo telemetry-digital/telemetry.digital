@@ -25,6 +25,10 @@ function Find-Browser($preferred) {
     return $null
 }
 
+# the DevTools port of a monitor's browser: the agent takes the screenshot of the page there. Chrome listens on
+# 127.0.0.1 only (no listening address is given on purpose), so nothing outside this PC reaches it.
+function Debug-Port($cfg, $i) { $first = if ($cfg.cdp_port) { [int]$cfg.cdp_port } else { 9222 }; return $first + $i }
+
 function Start-Kiosk($cfg, $profiles, $browser, $i, $screen) {
     $b = $screen.Bounds
     $prof = Join-Path $profiles "profile-$i"
@@ -34,6 +38,7 @@ function Start-Kiosk($cfg, $profiles, $browser, $i, $screen) {
         '--kiosk', '--no-first-run', '--no-default-browser-check', '--noerrdialogs', '--disable-infobars',
         '--disable-session-crashed-bubble', '--disable-features=Translate,InfiniteSessionRestore',
         '--autoplay-policy=no-user-gesture-required',
+        "--remote-debugging-port=$(Debug-Port $cfg $i)",
         "--window-position=$($b.X),$($b.Y)", "--window-size=$($b.Width),$($b.Height)"
     )
     # a page over plain HTTP in the local network needs to count as secure for wake lock and full screen
@@ -66,6 +71,7 @@ New-Item -ItemType Directory -Force -Path $udir | Out-Null
 Start-Sleep -Seconds 15   # let the network and the monitors settle after the logon
 Log "launcher started as $env:USERNAME"
 [Ctrl32AppBar]::AutoHide()
+$portRestart = @{}
 while ($true) {
     $cfg = Read-Json (Join-Path $base 'launcher.json')
     $loc = Read-Json (Join-Path $base 'local.json')
@@ -73,14 +79,22 @@ while ($true) {
     $browser = Find-Browser ($(if ($loc) { $loc.browser } else { $null }))
     # monitors from the top left, row by row (stacked monitors: profile-0 = the top one)
     $screens = @([System.Windows.Forms.Screen]::AllScreens | Sort-Object { $_.Bounds.Y }, { $_.Bounds.X })
-    $running = @(Get-CimInstance Win32_Process -Filter "Name='chrome.exe' OR Name='msedge.exe'" | ForEach-Object { $_.CommandLine })
+    $procs = @(Get-CimInstance Win32_Process -Filter "Name='chrome.exe' OR Name='msedge.exe'")
     $want = $screens.Count
     if ($cfg -and $cfg.monitors -gt 0) { $want = [Math]::Min($screens.Count, [int]$cfg.monitors) }
     $up = @()
     if ($cfg -and $cfg.url -and $browser) {
         for ($i = 0; $i -lt $want; $i++) {
-            $tag = "profile-$i"
-            if (-not ($running | Where-Object { $_ -like "*$tag*" })) { Start-Kiosk $cfg $profiles $browser $i $screens[$i]; Start-Sleep -Seconds 5 }
+            $mine = @($procs | Where-Object { $_.CommandLine -like "*profile-$i*" })
+            # a kiosk started without its debugging port (older scripts) starts again with it, once per launcher run
+            if ($mine -and -not $portRestart[$i] -and -not ($mine | Where-Object { $_.CommandLine -like "*--remote-debugging-port=$(Debug-Port $cfg $i)*" })) {
+                $portRestart[$i] = $true
+                Log "monitor $i runs without its debugging port: starting it again"
+                foreach ($p in $mine) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }
+                Start-Sleep -Seconds 2
+                $mine = @()
+            }
+            if (-not $mine) { Start-Kiosk $cfg $profiles $browser $i $screens[$i]; Start-Sleep -Seconds 5 }
             else { $up += $i }
         }
     } elseif (-not $browser) { Log 'no Chrome or Edge found' }

@@ -6,7 +6,9 @@ package httpapi
 // scripts: the launcher (one Chrome kiosk per monitor, each its own paired display) and the agent (a SYSTEM task that
 // reports the PC's state and performs a closed list of operations). The agent asks; the server never connects to the
 // PC. A screenshot can show unmasked camera pictures: it is off per PC until turned on with a reason, needs
-// display.screenshot and a reason each time, is audited, and the picture stays in memory only until it is fetched.
+// display.screenshot and a reason each time, is audited, and the pictures stay in memory only until they are fetched.
+// Since 0.86.5 the pictures come from the kiosk browsers themselves (one per monitor, DevTools protocol on a port of
+// 127.0.0.1), not from a screen grab of the desktop, which Microsoft Defender blocks as a hacking tool.
 //
 //	GET    /api/v1/kiosks                      display.manage   PCs with their last report and their displays
 //	POST   /api/v1/kiosks                      display.manage   {name, monitors, server_url, reason} → 201 {kiosk, token}
@@ -15,10 +17,10 @@ package httpapi
 //	POST   /api/v1/kiosks/{id}/token           display.manage   {reason} → {token}: a new credential, the old one stops
 //	POST   /api/v1/kiosks/{id}/setup           display.manage   {token} → setup-kiosk-….ps1
 //	POST   /api/v1/kiosks/{id}/command         display.manage   {action: report|restart_browsers|reboot|update_scripts|screenshot, reason}
-//	GET    /api/v1/kiosks/{id}/screenshot      display.screenshot  the picture asked for by this user (once)
+//	GET    /api/v1/kiosks/{id}/screenshot      display.screenshot  the pictures asked for by this user (once), one per monitor
 //	POST   /api/v1/kiosks/{id}/remote          display.manage   {reason} → {url}: emergency remote desktop (MeshCentral)
 //	POST   /api/v1/kiosk/report                kiosk token      {report, result} → {command, scripts_version, poll_s}
-//	POST   /api/v1/kiosk/screenshot?seq=       kiosk token      image/jpeg
+//	POST   /api/v1/kiosk/screenshot?seq=&monitor=  kiosk token  image/jpeg
 //	GET    /api/v1/kiosk/scripts               kiosk token      {version, files}
 
 import (
@@ -51,7 +53,14 @@ const (
 	kioskPoll        = 15 // seconds between the agent's reports
 	shotTTL          = 3 * time.Minute
 	maxShotBytes     = 8 << 20
+	kioskCDPPort     = 9222 // DevTools port of monitor 0 on 127.0.0.1 of the PC; monitor i uses kioskCDPPort+i
 )
+
+// kioskScriptNames are the files the agent installs and keeps up to date. capture.ps1 is no longer one of them
+// (0.86.5), but agents of 0.86.0–0.86.4 refuse an update without it: they get a stub, which the new agent deletes.
+var kioskScriptNames = []string{"kiosk-agent.ps1", "kiosk-launcher.ps1", "launcher.json", "capture.ps1"}
+
+const captureStub = "# ctrl32 telemetry: not used since 0.86.5 (screenshots come from the kiosk browsers). The agent deletes this file.\r\n"
 
 var kioskActions = []string{"report", "restart_browsers", "reboot", "update_scripts", "screenshot"}
 
@@ -145,8 +154,8 @@ func (s *Server) kioskServerURL(k *kioskRow) string {
 // kioskScripts are the files the agent installs: the scripts as they are in the binary and the launcher settings of
 // this PC. version changes with any of them.
 func (s *Server) kioskScripts(k *kioskRow) (string, map[string]string) {
-	files := map[string]string{}
-	for _, n := range []string{"kiosk-agent.ps1", "kiosk-launcher.ps1", "capture.ps1"} {
+	files := map[string]string{"capture.ps1": captureStub}
+	for _, n := range []string{"kiosk-agent.ps1", "kiosk-launcher.ps1"} {
 		b, _ := kioskFS.ReadFile("kiosk/" + n)
 		files[n] = string(b)
 	}
@@ -155,10 +164,11 @@ func (s *Server) kioskScripts(k *kioskRow) (string, map[string]string) {
 	if u, err := url.Parse(srv); err == nil {
 		origin = u.Scheme + "://" + u.Host
 	}
-	lj, _ := json.MarshalIndent(map[string]any{"url": srv + "/display", "origin": origin, "monitors": k.Monitors, "kiosk": k.ID, "name": k.Name}, "", "  ")
+	lj, _ := json.MarshalIndent(map[string]any{"url": srv + "/display", "origin": origin, "monitors": k.Monitors, "kiosk": k.ID, "name": k.Name,
+		"cdp_port": kioskCDPPort}, "", "  ")
 	files["launcher.json"] = string(lj)
 	h := sha256.New()
-	for _, n := range []string{"kiosk-agent.ps1", "kiosk-launcher.ps1", "capture.ps1", "launcher.json"} {
+	for _, n := range kioskScriptNames {
 		h.Write([]byte(n + "\x00" + files[n] + "\x00"))
 	}
 	return hex.EncodeToString(h.Sum(nil))[:12], files
@@ -547,13 +557,13 @@ func (s *Server) commandKiosk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Action == "screenshot" {
-		pendingShot(k.ID, c.Seq, p.UserID)
+		pendingShot(k.ID, c.Seq, p.UserID, k.Monitors)
 	}
 	s.audit(r, "kiosk.command", "kiosk_pc", k.ID, nil, map[string]any{"action": in.Action, "kiosk": k.Name, "seq": c.Seq}, in.Reason)
 	writeJSON(w, 200, c)
 }
 
-// screenshots in memory: asked for by one user, delivered by the agent, fetched once
+// screenshots in memory: asked for by one user, delivered by the agent one picture per monitor, fetched once
 var shots = struct {
 	sync.Mutex
 	m map[string]*shot
@@ -563,15 +573,37 @@ type shot struct {
 	seq   int64
 	user  string
 	asked time.Time
-	img   []byte
-	ctype string
-	at    time.Time
+	want  int               // the monitors of the PC
+	imgs  map[int]shotImage // by monitor (0-based)
+	done  bool              // the agent reported the result of the operation
+	msg   string            // …and its message
+	at    time.Time         // the first picture or the result arrived
 }
 
-func pendingShot(kiosk string, seq int64, user string) {
+type shotImage struct {
+	data  []byte
+	ctype string
+}
+
+// complete: every monitor sent its picture, or the agent has finished (some monitors may have failed)
+func (x *shot) complete() bool { return x.done || len(x.imgs) >= x.want }
+
+func pendingShot(kiosk string, seq int64, user string, monitors int) {
 	shots.Lock()
 	defer shots.Unlock()
-	shots.m[kiosk] = &shot{seq: seq, user: user, asked: time.Now()}
+	shots.m[kiosk] = &shot{seq: seq, user: user, asked: time.Now(), want: max(monitors, 1), imgs: map[int]shotImage{}}
+}
+
+// shotDone records the agent's result of a screenshot operation.
+func shotDone(kiosk string, seq int64, msg string) {
+	shots.Lock()
+	defer shots.Unlock()
+	if x := shots.m[kiosk]; x != nil && x.seq == seq && !x.done {
+		x.done, x.msg = true, msg
+		if x.at.IsZero() {
+			x.at = time.Now()
+		}
+	}
 }
 
 func dropShot(kiosk string) {
@@ -582,7 +614,7 @@ func dropShot(kiosk string) {
 
 func expireShots() {
 	for id, x := range shots.m {
-		if time.Since(x.asked) > shotTTL+7*time.Minute || (x.img != nil && time.Since(x.at) > shotTTL) {
+		if time.Since(x.asked) > shotTTL+7*time.Minute || (!x.at.IsZero() && time.Since(x.at) > shotTTL) {
 			delete(shots.m, id)
 		}
 	}
@@ -599,6 +631,7 @@ func (s *Server) kioskScreenshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := PrincipalFrom(r.Context())
+	w.Header().Set("Cache-Control", "no-store")
 	shots.Lock()
 	expireShots()
 	x := shots.m[k.ID]
@@ -607,17 +640,28 @@ func (s *Server) kioskScreenshot(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "no screenshot asked for by you")
 		return
 	}
-	if x.img == nil {
+	if !x.complete() {
+		got := len(x.imgs)
 		shots.Unlock()
-		writeJSON(w, 202, map[string]any{"waiting": true, "asked_at": x.asked})
+		writeJSON(w, 202, map[string]any{"waiting": true, "asked_at": x.asked, "received": got, "monitors": x.want})
 		return
 	}
-	img, ctype := x.img, x.ctype
 	delete(shots.m, k.ID) // fetched once; never stored
 	shots.Unlock()
-	w.Header().Set("Content-Type", ctype)
-	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write(img)
+	if len(x.imgs) == 0 {
+		writeJSON(w, 502, map[string]string{"error": "the PC took no screenshot: " + x.msg, "code": "capture_failed"})
+		return
+	}
+	mons := make([]int, 0, len(x.imgs))
+	for m := range x.imgs {
+		mons = append(mons, m)
+	}
+	slices.Sort(mons)
+	out := make([]map[string]any, 0, len(mons))
+	for _, m := range mons {
+		out = append(out, map[string]any{"monitor": m, "content_type": x.imgs[m].ctype, "image": x.imgs[m].data}) // []byte → base64
+	}
+	writeJSON(w, 200, map[string]any{"taken_at": x.at, "message": x.msg, "monitors": out})
 }
 
 func (s *Server) kioskRemote(w http.ResponseWriter, r *http.Request) {
@@ -692,6 +736,9 @@ func (s *Server) kioskReport(w http.ResponseWriter, r *http.Request) {
 			if k.Command != nil && k.Command.Seq == seq {
 				k.Command = nil
 			}
+			if res.Action == "screenshot" {
+				shotDone(k.ID, seq, truncateStr(res.Message, 500))
+			}
 			if res.Action == "reboot" || !res.OK {
 				s.log.Info("kiosk operation result", "kiosk", k.Name, "action", res.Action, "ok", res.OK, "message", truncateStr(res.Message, 200))
 			}
@@ -723,6 +770,15 @@ func (s *Server) kioskScreenshotUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	seq, _ := strconv.ParseInt(r.URL.Query().Get("seq"), 10, 64)
+	monitor := 0 // agents before 0.86.5 send one picture without a monitor
+	if v := r.URL.Query().Get("monitor"); v != "" {
+		m, err := strconv.Atoi(v)
+		if err != nil || m < 0 || m >= max(k.Monitors, 1) {
+			writeErr(w, 400, "monitor: 0 to the number of monitors of the PC minus 1")
+			return
+		}
+		monitor = m
+	}
 	ct := r.Header.Get("Content-Type")
 	if ct != "image/jpeg" && ct != "image/png" {
 		writeErr(w, 415, "image/jpeg or image/png")
@@ -741,11 +797,18 @@ func (s *Server) kioskScreenshotUpload(w http.ResponseWriter, r *http.Request) {
 	defer shots.Unlock()
 	expireShots()
 	x := shots.m[k.ID]
-	// only the picture that was asked for, and only while the PC still allows screenshots
-	if x == nil || x.seq != seq || x.img != nil || !k.Screenshots {
+	// only the pictures that were asked for, one per monitor, and only while the PC still allows screenshots
+	if x == nil || x.seq != seq || x.complete() || !k.Screenshots {
 		writeErr(w, 409, "no screenshot was asked for")
 		return
 	}
-	x.img, x.ctype, x.at = b, ct, time.Now()
+	if _, dup := x.imgs[monitor]; dup {
+		writeErr(w, 409, "this monitor already sent its picture")
+		return
+	}
+	x.imgs[monitor] = shotImage{data: b, ctype: ct}
+	if x.at.IsZero() {
+		x.at = time.Now()
+	}
 	writeJSON(w, 200, map[string]any{"ok": true})
 }

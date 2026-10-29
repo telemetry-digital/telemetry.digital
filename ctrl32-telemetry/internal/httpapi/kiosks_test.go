@@ -58,8 +58,15 @@ func TestKioskScriptsAndSetup(t *testing.T) {
 			t.Fatalf("no %s", n)
 		}
 	}
-	if !strings.Contains(files["launcher.json"], `"url": "http://10.48.8.30:8080/display"`) || !strings.Contains(files["launcher.json"], `"origin": "http://10.48.8.30:8080"`) || !strings.Contains(files["launcher.json"], `"monitors": 2`) {
+	if !strings.Contains(files["launcher.json"], `"url": "http://10.48.8.30:8080/display"`) || !strings.Contains(files["launcher.json"], `"origin": "http://10.48.8.30:8080"`) || !strings.Contains(files["launcher.json"], `"monitors": 2`) || !strings.Contains(files["launcher.json"], `"cdp_port": 9222`) {
 		t.Errorf("launcher.json: %s", files["launcher.json"])
+	}
+	// screenshots come from the browsers (0.86.5): no screen grab left, the DevTools port only on 127.0.0.1
+	if strings.Contains(files["capture.ps1"], "CopyFromScreen") || strings.Contains(files["kiosk-agent.ps1"], "CopyFromScreen") || !strings.Contains(files["kiosk-agent.ps1"], "Page.captureScreenshot") {
+		t.Error("the screenshot still grabs the screen")
+	}
+	if !strings.Contains(files["kiosk-launcher.ps1"], "--remote-debugging-port=") || strings.Contains(files["kiosk-launcher.ps1"], "--remote-debugging-address") || !strings.Contains(files["kiosk-agent.ps1"], "http://127.0.0.1:$port/json/list") {
+		t.Error("the DevTools port must stay on 127.0.0.1")
 	}
 	// the scripts are read by Windows PowerShell 5.1 as ANSI: ASCII only
 	for n, text := range files {
@@ -97,6 +104,32 @@ func TestKioskScriptsAndSetup(t *testing.T) {
 	k.ServerURL = ""
 	if _, text := s.kioskSetupScript(k, "c32k_x"); !strings.Contains(text, "$Server = 'https://portal.example.com'") {
 		t.Error("base_url as the default")
+	}
+}
+
+func TestShotPerMonitor(t *testing.T) {
+	pendingShot("k-test", 7, "u", 2)
+	defer dropShot("k-test")
+	x := shots.m["k-test"]
+	if x.complete() {
+		t.Fatal("complete before any picture")
+	}
+	x.imgs[0] = shotImage{data: []byte{0xFF, 0xD8}}
+	if x.complete() {
+		t.Fatal("complete with 1 of 2 monitors")
+	}
+	shotDone("k-test", 6, "other operation")
+	if x.done {
+		t.Fatal("the result of another operation ended it")
+	}
+	shotDone("k-test", 7, "screenshots of 1 of 2 monitors sent; monitor 2: debugging port 9223 not reachable")
+	if !x.complete() || x.msg == "" {
+		t.Fatal("the agent's result ends it")
+	}
+	pendingShot("k-test", 8, "u", 1)
+	shots.m["k-test"].imgs[0] = shotImage{data: []byte{0xFF, 0xD8}}
+	if !shots.m["k-test"].complete() {
+		t.Fatal("all monitors sent")
 	}
 }
 

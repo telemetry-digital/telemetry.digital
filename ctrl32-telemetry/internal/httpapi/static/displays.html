@@ -45,7 +45,7 @@
       <div id="kioskMonitors"></div>
       <label>MeshCentral node of the PC (emergency remote desktop; optional) <input name="mesh_node" class="notranslate" maxlength="120" autocomplete="off" placeholder="node id from the device's details in MeshCentral"></label>
       <label class="check"><input type="checkbox" name="screenshots"> Allow screenshots of this PC</label>
-      <p class="muted small" id="kioskShotNote">A screenshot shows the whole screen, also camera pictures without privacy masks. Each one needs the permission to see screenshots and a reason, is recorded in the audit trail and is not kept on the server.</p>
+      <p class="muted small" id="kioskShotNote">A screenshot shows the page of each monitor as the kiosk browser draws it, also camera pictures without privacy masks. Each one needs the permission to see screenshots and a reason, is recorded in the audit trail and is not kept on the server.</p>
     </div>
     <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
     <div class="err" id="kioskErr"></div>
@@ -72,7 +72,7 @@
   <dialog id="shotDlg" style="max-width:96vw"><div class="form">
     <h2 style="margin-top:0">Screenshot of <span id="shotName" class="notranslate"></span></h2>
     <p class="muted" id="shotMsg"></p>
-    <img id="shotImg" alt="" hidden style="max-width:100%;max-height:75vh;display:block;border-radius:var(--radius)">
+    <div id="shotImgs" style="display:grid;gap:12px"></div>
     <div class="actions"><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
   </div></dialog>
 
@@ -248,20 +248,25 @@ async function kioskOp(k, action) {
     ctrl32.toast(t('sent to the PC; it acts within 15 s'), 'ok'); loadKiosks();
   } catch (x) { ctrl32.toast(x.message, 'bad'); }
 }
+// one picture per monitor, taken by the kiosk browser itself (only the display page, not the rest of the desktop)
 async function screenshot(k) {
-  $('#shotName').textContent = k.name; $('#shotImg').hidden = true; $('#shotImg').removeAttribute('src');
+  $('#shotName').textContent = k.name; $('#shotImgs').innerHTML = '';
   $('#shotMsg').textContent = t('Waiting for the PC…'); $('#shotDlg').showModal();
   for (let i = 0; i < 45 && $('#shotDlg').open; i++) {
     await new Promise(r => setTimeout(r, 2000));
     const r = await fetch(`/api/v1/kiosks/${k.id}/screenshot`, {credentials: 'same-origin', cache: 'no-store'});
     if (r.status === 202) continue;
-    if (!r.ok) { const e = await r.json().catch(() => ({})); $('#shotMsg').textContent = e.error || ('HTTP ' + r.status); return; }
-    const url = URL.createObjectURL(await r.blob());
-    $('#shotImg').src = url; $('#shotImg').hidden = false; $('#shotMsg').textContent = `${t('taken')} ${new Date().toLocaleTimeString(document.documentElement.lang || undefined)} · ${t('not kept on the server')}`;
-    $('#shotDlg').addEventListener('close', () => URL.revokeObjectURL(url), {once: true});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { $('#shotMsg').textContent = j.error || ('HTTP ' + r.status); loadKiosks(); return; }
+    $('#shotImgs').innerHTML = (j.monitors || []).map(m => { const d = (k.displays || []).find(x => x.monitor === m.monitor);
+      return `<figure style="margin:0"><figcaption class="muted small">${esc(t('monitor'))} ${m.monitor + 1}${d ? ' · <span class="notranslate">' + esc(d.name) + '</span>' : ''}</figcaption>
+        <img alt="" src="data:${esc(m.content_type)};base64,${m.image}" style="max-width:100%;max-height:70vh;display:block;border-radius:var(--radius)"></figure>`; }).join('');
+    const missing = (j.monitors || []).length < k.monitors ? ' · ' + j.message : '';
+    $('#shotMsg').textContent = `${t('taken')} ${new Date(j.taken_at || Date.now()).toLocaleTimeString(document.documentElement.lang || undefined)} · ${t('not kept on the server')}${missing}`;
+    $('#shotDlg').addEventListener('close', () => { $('#shotImgs').innerHTML = ''; }, {once: true});
     loadKiosks(); return;
   }
-  if ($('#shotDlg').open) { $('#shotMsg').textContent = t('The PC did not send a screenshot. Is it online and the kiosk user signed in?'); loadKiosks(); }
+  if ($('#shotDlg').open) { $('#shotMsg').textContent = t('The PC did not send a screenshot. Is it online and are its kiosk windows running?'); loadKiosks(); }
 }
 function kioskDialog(k) {
   KEDIT = k || null; const f = $('#kioskForm'); f.reset(); $('#kioskErr').textContent = '';
