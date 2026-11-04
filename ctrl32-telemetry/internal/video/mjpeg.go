@@ -60,7 +60,7 @@ func (s *Source) httpMJPEG(ctx context.Context) error {
 			}
 		}
 		now := time.Now()
-		s.publish(ctx, t, &Sample{Time: now, DTS: int64(now.Sub(started)) * ClockRate / int64(time.Second), Key: true, JPEG: img})
+		s.publish(ctx, t, &Sample{Time: now, DTS: durationToTicks(now.Sub(started)), Key: true, JPEG: img})
 	}
 }
 

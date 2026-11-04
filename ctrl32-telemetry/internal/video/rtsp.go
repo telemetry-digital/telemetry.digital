@@ -77,7 +77,7 @@ func (s *Source) decoder(ctx context.Context, desc *description.Session, ptsOf f
 	var forma format.Format
 	var onPacket func(pkt *rtp.Packet)
 	started := time.Now()
-	wall := func(dts int64) time.Time { return started.Add(time.Duration(dts) * time.Second / ClockRate) }
+	wall := func(dts int64) time.Time { return started.Add(ticksToDuration(dts)) }
 
 	switch {
 	case desc.FindFormat(&f264) != nil:

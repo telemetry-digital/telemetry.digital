@@ -25,6 +25,17 @@ const (
 // ClockRate of all timestamps (the RTP video clock).
 const ClockRate = 90000
 
+// ticksToDuration converts ClockRate ticks to a duration. Multiplying the ticks by time.Second in one step overflows
+// int64 after 28.47 hours, which a camera connected for that long does reach.
+func ticksToDuration(t int64) time.Duration {
+	return time.Duration(t/ClockRate)*time.Second + time.Duration(t%ClockRate)*time.Second/ClockRate
+}
+
+// durationToTicks converts a duration to ClockRate ticks, without the overflow described at ticksToDuration.
+func durationToTicks(d time.Duration) int64 {
+	return int64(d/time.Second)*ClockRate + int64(d%time.Second)*ClockRate/int64(time.Second)
+}
+
 // Track describes the video of one connection or one recorded file. A new connection always yields a new Track, so a
 // consumer knows it must start over (new MP4 initialization, new recording file).
 type Track struct {

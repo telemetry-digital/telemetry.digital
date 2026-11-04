@@ -235,7 +235,7 @@ func (s *segment) write(b []byte) error {
 func (r *recorder) index(seg *segment) {
 	end := seg.last
 	if seg.mux.lastDur > 0 {
-		end = end.Add(time.Duration(seg.mux.lastDur) * time.Second / ClockRate)
+		end = end.Add(ticksToDuration(int64(seg.mux.lastDur)))
 	}
 	_, err := r.m.pool.Exec(context.Background(), `UPDATE core.video_segment SET ended_at = $2, bytes = $3 WHERE id = $1`, seg.id, end, seg.bytes)
 	if err != nil {

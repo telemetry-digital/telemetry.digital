@@ -41,7 +41,14 @@ type Playback struct {
 	pending []Packet
 	started bool // reached `from`
 	gop     []Packet
+	looked  bool // searched for a long file covering `from`
 }
+
+// A file above seekMinSize is entered by bisection, to seekNear before the requested time.
+const (
+	seekMinSize = 1 << 30
+	seekNear    = 64 << 20
+)
 
 type segRow struct {
 	id         int64
@@ -168,12 +175,105 @@ func (p *Playback) openNext(ctx context.Context) error {
 		if !t.SameParams(p.track) {
 			p.track = t
 		}
+		p.seekLong()
 		p.outBase = p.outEnd
 		return nil
 	}
 }
 
+// seekLong moves the read position of a very long file close before `from`: walking days of fragments from the start
+// would take about an hour on a disk. Files of normal length are read from their start.
+func (p *Playback) seekLong() {
+	fi, err := p.fh.Stat()
+	if err != nil || fi.Size() < seekMinSize {
+		return
+	}
+	p.off = seekFragment(p.fh, p.off, fi.Size(), p.vid, durationToTicks(p.from.Sub(p.seg.start)), seekNear)
+}
+
+// seekFragment bisects a recorded file between off (the end of its initialization) and size for a fragment whose
+// picture starts at or before the DTS want, at most about near bytes before the one that passes it. The result is a
+// fragment's offset, or off when nothing better is known; readFragment continues from there.
+func seekFragment(f *os.File, off, size int64, vid int, want, near int64) int64 {
+	lo, hi := off, size
+	for hi-lo > near {
+		mid := lo + (hi-lo)/2
+		at, dts, ok := fragmentAfter(f, mid, hi, vid)
+		switch {
+		case !ok || dts > want:
+			hi = mid
+		default:
+			lo = at
+		}
+	}
+	return lo
+}
+
+// fragmentAfter finds the first complete fragment with a picture at or after off, below end; it returns its offset and
+// the DTS of its first picture. A file holds no index, so it looks for a moof box followed by an mdat box.
+func fragmentAfter(f *os.File, off, end int64, vid int) (at, dts int64, ok bool) {
+	buf := make([]byte, 4<<20)
+	for off < end {
+		n, _ := f.ReadAt(buf, off)
+		if n < 8 {
+			return 0, 0, false
+		}
+		for i := 0; ; {
+			j := bytes.Index(buf[i:n], []byte("moof"))
+			if j < 0 {
+				break
+			}
+			cand := off + int64(i+j) - 4
+			i += j + 4
+			if cand < off || cand >= end {
+				continue
+			}
+			typ, moof, err := readBox(f, cand)
+			if err != nil || typ != "moof" {
+				continue
+			}
+			typ, mdat, err := readBox(f, cand+int64(len(moof)))
+			if err != nil || typ != "mdat" {
+				continue
+			}
+			var parts fmp4.Parts
+			if parts.Unmarshal(append(moof, mdat...)) != nil {
+				continue
+			}
+			for _, part := range parts {
+				for _, pt := range part.Tracks {
+					if pt.ID == vid {
+						return cand, int64(pt.BaseTime), true
+					}
+				}
+			}
+		}
+		off += int64(n) - 8 // a box name split between two reads is found in the next one
+	}
+	return 0, 0, false
+}
+
+// findLong moves the start of the search back to a file that began long before `from` and still covers it.
+func (p *Playback) findLong(ctx context.Context) error {
+	p.looked = true
+	var oldest *time.Time
+	err := p.m.pool.QueryRow(ctx, `SELECT min(started_at) FROM core.video_segment WHERE camera_id = $1::uuid AND started_at <= $2 AND ended_at >= $3`,
+		p.camID, p.after, p.from.Add(-15*time.Second)).Scan(&oldest)
+	if err != nil {
+		return err
+	}
+	if oldest != nil {
+		p.after = oldest.Add(-time.Microsecond)
+	}
+	return nil
+}
+
 func (p *Playback) fetch(ctx context.Context) error {
+	if !p.looked {
+		if err := p.findLong(ctx); err != nil {
+			return err
+		}
+	}
 	q := `SELECT id, started_at, ended_at, path FROM core.video_segment
 		WHERE camera_id = $1::uuid AND (started_at, id) > ($2, $3) ORDER BY started_at, id LIMIT 30`
 	rows, err := p.m.pool.Query(ctx, q, p.camID, p.after, p.afterID)
@@ -291,7 +391,7 @@ func (p *Playback) readFragment() error {
 				for _, s := range pt.Samples {
 					dts := at * ClockRate / sr
 					out = append(out, Packet{Track: p.track, Sample: &Sample{
-						Time: p.seg.start.Add(time.Duration(dts) * time.Second / ClockRate), DTS: p.outBase + dts, Audio: s.Payload, ADur: s.Duration}})
+						Time: p.seg.start.Add(ticksToDuration(dts)), DTS: p.outBase + dts, Audio: s.Payload, ADur: s.Duration}})
 					at += int64(s.Duration)
 				}
 				continue
@@ -302,7 +402,7 @@ func (p *Playback) readFragment() error {
 			dts := int64(pt.BaseTime)
 			for _, s := range pt.Samples {
 				smp := &Sample{
-					Time:      p.seg.start.Add(time.Duration(dts) * time.Second / ClockRate),
+					Time:      p.seg.start.Add(ticksToDuration(dts)),
 					DTS:       p.outBase + dts,
 					PTSOffset: s.PTSOffset,
 					Key:       !s.IsNonSyncSample,
@@ -352,6 +452,8 @@ func (p *Playback) emit(pk Packet) {
 	}
 	if pk.Sample.Key {
 		p.gop = p.gop[:0]
+	} else if len(p.gop) == 0 {
+		return // after a seek: nothing can be decoded before the first key frame
 	}
 	p.gop = append(p.gop, pk)
 	if !pk.Sample.Time.Before(p.from) {

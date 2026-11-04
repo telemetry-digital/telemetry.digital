@@ -211,9 +211,10 @@ func (m *Manager) resync(ctx context.Context) {
 }
 
 // repair fixes the index of files that were still being written when the server stopped abruptly: their end is
-// the file's last modification.
+// the file's last modification. The same goes for a file of any age that ends before it starts (before 0.86.6 the
+// time of a connection older than 28.47 hours overflowed and such a file was never closed).
 func (m *Manager) repair(ctx context.Context) {
-	rows, err := m.pool.Query(ctx, `SELECT id, path, ended_at, bytes FROM core.video_segment WHERE started_at > now() - interval '1 day'`)
+	rows, err := m.pool.Query(ctx, `SELECT id, path, ended_at, bytes FROM core.video_segment WHERE started_at > now() - interval '1 day' OR ended_at < started_at`)
 	if err != nil {
 		return
 	}
