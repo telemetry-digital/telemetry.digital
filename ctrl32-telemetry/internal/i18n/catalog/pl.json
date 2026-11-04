@@ -3610,6 +3610,8 @@
  "Drag a tile to move it, drag its corner to change its size; a click on a free cell adds a tile.": "Przeciągnij kafelek, aby go przesunąć, przeciągnij róg, aby zmienić rozmiar; kliknięcie wolnej komórki dodaje kafelek.",
  "Drag over the hour detail to select a part": "Przeciągnij po widoku godziny, aby wybrać fragment",
  "the end must be after the start": "koniec musi być po początku",
+ "download: at most 24 hours": "pobieranie: najwyżej 24 godziny",
+ "evidence package: at most one hour": "pakiet dowodowy: najwyżej jedna godzina",
  "Add a tile here": "Dodaj tu kafelek",
  "Tile": "Kafelek",
  "From column": "Od kolumny",

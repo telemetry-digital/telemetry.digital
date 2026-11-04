@@ -3610,6 +3610,8 @@
  "Drag a tile to move it, drag its corner to change its size; a click on a free cell adds a tile.": "Arrastre un mosaico para moverlo y su esquina para cambiar su tamaño; un clic en una celda libre añade un mosaico.",
  "Drag over the hour detail to select a part": "Arrastre sobre el detalle de la hora para seleccionar una parte",
  "the end must be after the start": "el final debe ser posterior al inicio",
+ "download: at most 24 hours": "descarga: 24 horas como máximo",
+ "evidence package: at most one hour": "paquete de pruebas: una hora como máximo",
  "Add a tile here": "Añadir un mosaico aquí",
  "Tile": "Mosaico",
  "From column": "Desde la columna",

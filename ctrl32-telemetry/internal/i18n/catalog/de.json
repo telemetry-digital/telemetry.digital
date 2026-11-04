@@ -3610,6 +3610,8 @@
  "Drag a tile to move it, drag its corner to change its size; a click on a free cell adds a tile.": "Kachel ziehen, um sie zu verschieben, an der Ecke ziehen, um die Größe zu ändern; ein Klick auf eine freie Zelle fügt eine Kachel hinzu.",
  "Drag over the hour detail to select a part": "Ziehen Sie über die Stundenansicht, um einen Abschnitt auszuwählen",
  "the end must be after the start": "das Ende muss nach dem Beginn liegen",
+ "download: at most 24 hours": "Download: höchstens 24 Stunden",
+ "evidence package: at most one hour": "Beweispaket: höchstens eine Stunde",
  "Add a tile here": "Hier eine Kachel hinzufügen",
  "Tile": "Kachel",
  "From column": "Ab Spalte",

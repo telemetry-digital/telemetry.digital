@@ -3610,6 +3610,8 @@
  "Drag a tile to move it, drag its corner to change its size; a click on a free cell adds a tile.": "A csempét húzással mozgathatja, a sarkát húzva átméretezheti; üres cellára kattintva csempét ad hozzá.",
  "Drag over the hour detail to select a part": "Egy rész kijelöléséhez húzza az egeret az óra részletes nézetén",
  "the end must be after the start": "a vége a kezdet után legyen",
+ "download: at most 24 hours": "letöltés: legfeljebb 24 óra",
+ "evidence package: at most one hour": "bizonyítékcsomag: legfeljebb egy óra",
  "Add a tile here": "Csempe hozzáadása ide",
  "Tile": "Csempe",
  "From column": "Oszloptól",

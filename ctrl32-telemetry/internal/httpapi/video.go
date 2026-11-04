@@ -1090,7 +1090,8 @@ func (s *Server) cameraExport(w http.ResponseWriter, r *http.Request) {
 	if !s.maskedExportAllowed(w, r, c) {
 		return
 	}
-	from, to, msg := parseRange(r.URL.Query(), time.Hour)
+	// the file is streamed from the recordings as it is made, so a long range takes no room on the server
+	from, to, msg := parseRange(r.URL.Query(), 24*time.Hour)
 	if msg != "" {
 		writeErr(w, 400, msg)
 		return

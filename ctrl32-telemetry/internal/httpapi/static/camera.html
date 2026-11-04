@@ -357,10 +357,10 @@ $('#tl2').onpointerup = e => {
 // the value of a date and time field: local time, to the second
 const localField = ms => new Date(ms - new Date(ms).getTimezoneOffset() * 60000).toISOString().slice(0, 19);
 function updateSel(typed) {
-  const ok = SEL && Math.abs(SEL[1] - SEL[0]) <= HOURMS;
-  $('#export').disabled = !ok; $('#evidence').disabled = !ok; $('#hold').disabled = !SEL;
+  const span = SEL ? Math.abs(SEL[1] - SEL[0]) : 0, inDay = SEL && span <= DAYMS, inHour = SEL && span <= HOURMS;
+  $('#export').disabled = !inDay; $('#evidence').disabled = !inHour; $('#hold').disabled = !SEL;
   if (typed !== true) { $('#selFrom').value = SEL ? localField(Math.min(...SEL)) : ''; $('#selTo').value = SEL ? localField(Math.max(...SEL)) : ''; }
-  $('#selInfo').textContent = SEL ? `${hm(Math.min(...SEL))} – ${hm(Math.max(...SEL))}${ok ? '' : ' (' + t('at most one hour') + ')'}` :
+  $('#selInfo').textContent = SEL ? `${hm(Math.min(...SEL))} – ${hm(Math.max(...SEL))}${inHour ? '' : ' (' + t(inDay ? 'evidence package: at most one hour' : 'download: at most 24 hours') + ')'}` :
     typed === true && $('#selFrom').value && $('#selTo').value ? t('the end must be after the start') : t('Drag over the hour detail to select a part');
 }
 // an exact range, also across an hour or midnight; the empty field starts one hour from the other one

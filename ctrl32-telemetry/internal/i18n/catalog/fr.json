@@ -3610,6 +3610,8 @@
  "Drag a tile to move it, drag its corner to change its size; a click on a free cell adds a tile.": "Faites glisser une tuile pour la déplacer, son coin pour changer sa taille ; un clic sur une case libre ajoute une tuile.",
  "Drag over the hour detail to select a part": "Faites glisser sur le détail de l’heure pour sélectionner une partie",
  "the end must be after the start": "la fin doit être après le début",
+ "download: at most 24 hours": "téléchargement : 24 heures au maximum",
+ "evidence package: at most one hour": "paquet de preuves : une heure au maximum",
  "Add a tile here": "Ajouter une tuile ici",
  "Tile": "Tuile",
  "From column": "Depuis la colonne",

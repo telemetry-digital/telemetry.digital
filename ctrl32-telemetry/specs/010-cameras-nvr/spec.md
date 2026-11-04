@@ -57,7 +57,7 @@ are shown), adds the sub-stream `…/102` for tiles and saves; the password is s
 - **FR-002** Continuous recording into fragmented MP4 files of about 60 s starting with key frames, indexed in the database.
 - **FR-003** Retention per camera (days) and a disk limit for all recordings.
 - **FR-004** Live and recorded video over WebSocket (fMP4 for MSE, JPEG for MJPEG); playback speed 0.25–16.
-- **FR-005** Export of at most one hour as MP4.
+- **FR-005** Export of at most 24 hours as MP4 (one hour until 0.86.10).
 - **FR-006** Video walls: 1–8 screens of 1×1…8×8 tiles, opened on all monitors at once.
 - **FR-007** Permissions video.view / video.playback / video.manage; audit of changes, playback and export.
 

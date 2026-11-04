@@ -11028,7 +11028,7 @@ export class Ctrl32Client {
 
   /** Download recorded video
    *
-   * One MP4 file (fragmented) of at most one hour; a change of resolution or codec ends it early. The recorded sound is the second track only for people with video.audio. Written to the audit trail (video.export).
+   * One MP4 file (fragmented) of at most 24 hours; a change of resolution or codec ends it early. The recorded sound is the second track only for people with video.audio. Written to the audit trail (video.export).
    * 
    * Requires permission `video.playback`. */
   getVideoCamerasIdExport(id: string, query?: { from?: string; /** RFC 3339, required */ to?: string; /** RFC 3339, required */ }): Promise<Response> {

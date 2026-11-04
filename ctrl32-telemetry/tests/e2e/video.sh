@@ -118,7 +118,7 @@ TO=$(node -e "console.log(new Date(Date.parse('$REC_FROM') + 4000).toISOString()
 curl -s -b "$JAR" -o "$TMP/clip.mp4" -D "$TMP/h" -w '%{http_code}' "$BASE/api/v1/video/cameras/$CAM/export?from=$REC_FROM&to=$TO" > "$TMP/s"
 check "export" "$(st) $(grep -i '^content-type' "$TMP/h" | tr -d '\r' | cut -d' ' -f2)" "200 video/mp4"
 check "export is an MP4 with fragments" "$(node -e 'const b=require("fs").readFileSync(process.argv[1]); const t=[]; for (let o=0; o<b.length;) { const n=b.readUInt32BE(o); t.push(b.toString("latin1",o+4,o+8)); if(n<8) break; o+=n; } console.log(t.slice(0,3).join(",") + " " + (t.filter(x=>x==="moof").length >= 2))' "$TMP/clip.mp4")" "ftyp,moov,moof true"
-req GET "/api/v1/video/cameras/$CAM/export?from=$FROM&to=$(iso '+1 hour')"; check "export limited to one hour" "$(st)" 400
+req GET "/api/v1/video/cameras/$CAM/export?from=$FROM&to=$(iso '+24 hours')"; check "export limited to 24 hours" "$(st)" 400
 req GET "/api/v1/export/audit?format=csv"
 check "playback and export audited" "$(grep -c "video.playback\|video.export" "$TMP/b" | awk '{print ($1 >= 2)}')" 1
 

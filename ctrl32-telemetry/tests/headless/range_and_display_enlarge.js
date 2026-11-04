@@ -48,7 +48,10 @@ const check = (name, got, want) => { if (JSON.stringify(got) === JSON.stringify(
   check("the selection itself is exact, and the day and hour follow", await ev(`JSON.stringify([new Date(SEL[0]).toTimeString().slice(0,8), new Date(SEL[1]).toTimeString().slice(0,8), new Date(HOUR).getHours(), document.querySelector('#day').value])`), JSON.stringify(["18:35:00", "19:25:00", 18, "2026-11-03"]));
   await set("2026-11-03T18:00:00", "2026-11-03T19:00:01"); await sleep(300);
   s = await st();
-  check("more than an hour: downloads off, holding allowed", [s.x, s.e, s.h, s.i.includes("(")], [true, true, false, true]);
+  check("more than an hour: MP4 and holding allowed, evidence package off", [s.x, s.e, s.h, s.i.includes("(")], [false, true, false, true]);
+  await set("2026-11-03T18:00:00", "2026-11-04T18:00:01"); await sleep(300);
+  s = await st();
+  check("more than 24 hours: downloads off, holding allowed", [s.x, s.e, s.h, s.i.includes("(")], [true, true, false, true]);
   await set("2026-11-03T23:50:00", "2026-11-04T00:10:00"); await sleep(500);
   s = await st();
   check("across midnight", [s.x, s.f, s.t], [false, "2026-11-03T23:50", "2026-11-04T00:10"]);
