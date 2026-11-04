@@ -3608,6 +3608,7 @@
  "2 large + small": "2 големи + малки",
  "4 large + small": "4 големи + малки",
  "Drag a tile to move it, drag its corner to change its size; a click on a free cell adds a tile.": "Плъзнете плочка, за да я преместите, плъзнете ъгъла ѝ, за да промените размера; щракване върху свободна клетка добавя плочка.",
+ "Drag over the hour detail to select a part": "Изберете част чрез плъзгане върху детайла на часа",
  "Add a tile here": "Добавяне на плочка тук",
  "Tile": "Плочка",
  "From column": "От колона",

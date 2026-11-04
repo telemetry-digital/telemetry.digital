@@ -3608,6 +3608,7 @@
  "2 large + small": "2 nagy + kicsik",
  "4 large + small": "4 nagy + kicsik",
  "Drag a tile to move it, drag its corner to change its size; a click on a free cell adds a tile.": "A csempét húzással mozgathatja, a sarkát húzva átméretezheti; üres cellára kattintva csempét ad hozzá.",
+ "Drag over the hour detail to select a part": "Egy rész kijelöléséhez húzza az egeret az óra részletes nézetén",
  "Add a tile here": "Csempe hozzáadása ide",
  "Tile": "Csempe",
  "From column": "Oszloptól",

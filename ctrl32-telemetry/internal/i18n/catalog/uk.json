@@ -3608,6 +3608,7 @@
  "2 large + small": "2 великі + малі",
  "4 large + small": "4 великі + малі",
  "Drag a tile to move it, drag its corner to change its size; a click on a free cell adds a tile.": "Перетягніть плитку, щоб перемістити її, перетягніть кут, щоб змінити розмір; клацання на вільній клітинці додає плитку.",
+ "Drag over the hour detail to select a part": "Перетягніть по деталі години, щоб вибрати частину",
  "Add a tile here": "Додати сюди плитку",
  "Tile": "Плитка",
  "From column": "Від стовпця",

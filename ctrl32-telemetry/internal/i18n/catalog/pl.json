@@ -3608,6 +3608,7 @@
  "2 large + small": "2 duże + małe",
  "4 large + small": "4 duże + małe",
  "Drag a tile to move it, drag its corner to change its size; a click on a free cell adds a tile.": "Przeciągnij kafelek, aby go przesunąć, przeciągnij róg, aby zmienić rozmiar; kliknięcie wolnej komórki dodaje kafelek.",
+ "Drag over the hour detail to select a part": "Przeciągnij po widoku godziny, aby wybrać fragment",
  "Add a tile here": "Dodaj tu kafelek",
  "Tile": "Kafelek",
  "From column": "Od kolumny",

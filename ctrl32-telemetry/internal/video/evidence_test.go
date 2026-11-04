@@ -3,6 +3,7 @@ package video
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"io"
@@ -53,6 +54,49 @@ func rewrite(t *testing.T, src string, name string, change func([]byte) []byte) 
 	p := filepath.Join(t.TempDir(), "t.zip")
 	_ = os.WriteFile(p, buf.Bytes(), 0o600)
 	return p
+}
+
+// The fingerprint of a file stops when the caller goes away, and a package with a file too large to check says so.
+func TestEvidenceLargeFile(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "a.mp4")
+	if err := os.WriteFile(p, []byte("abc"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	sum, err := fingerprint(context.Background(), f)
+	if err != nil || sum != "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" {
+		t.Fatalf("sha-256: %s %v", sum, err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := fingerprint(ctx, f); err == nil {
+		t.Fatal("went on after the caller left")
+	}
+
+	_, key, _ := ed25519.GenerateKey(rand.Reader)
+	var buf bytes.Buffer
+	man := EvidenceManifest{Camera: map[string]string{"id": "c1"}, Segments: []EvidenceSegment{{File: "long.mp4", SHA256: "x", NotChecked: true}}}
+	if err := writeEvidence(&buf, key, &man, func(w io.Writer) error { _, err := w.Write([]byte("v")); return err }); err != nil {
+		t.Fatal(err)
+	}
+	pkg := filepath.Join(t.TempDir(), "e.zip")
+	if err := os.WriteFile(pkg, buf.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := VerifyEvidence(pkg, key.Public().(ed25519.PublicKey))
+	if err != nil || !rep.SignatureValid || !rep.VideoHashValid {
+		t.Fatalf("package: %+v %v", rep, err)
+	}
+	if len(rep.Problems) != 1 || !strings.Contains(rep.Problems[0], "too large") {
+		t.Fatalf("problems: %v", rep.Problems)
+	}
+	if !strings.Contains(evidenceReadme(man), "sha256_not_checked") {
+		t.Fatal("the README does not explain it")
+	}
 }
 
 func TestEvidencePackage(t *testing.T) {

@@ -180,6 +180,8 @@ func (s *Server) cameraEvidence(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, msg)
 		return
 	}
+	// fingerprints and the package take a while: the answer may come long after the default write timeout
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(60 * time.Minute))
 	pb := s.video.Playback(c.id, from, to)
 	defer pb.Close()
 	first, err := pb.Next(r.Context())

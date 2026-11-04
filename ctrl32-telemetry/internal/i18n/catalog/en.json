@@ -3608,6 +3608,7 @@
  "2 large + small": "2 large + small",
  "4 large + small": "4 large + small",
  "Drag a tile to move it, drag its corner to change its size; a click on a free cell adds a tile.": "Drag a tile to move it, drag its corner to change its size; a click on a free cell adds a tile.",
+ "Drag over the hour detail to select a part": "Drag over the hour detail to select a part",
  "Add a tile here": "Add a tile here",
  "Tile": "Tile",
  "From column": "From column",

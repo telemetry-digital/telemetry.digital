@@ -356,7 +356,7 @@ $('#tl2').onpointerup = e => {
 function updateSel() {
   const ok = SEL && Math.abs(SEL[1] - SEL[0]) <= HOURMS;
   $('#export').disabled = !ok; $('#evidence').disabled = !ok; $('#hold').disabled = !SEL;
-  $('#selInfo').textContent = SEL ? `${hm(Math.min(...SEL))} – ${hm(Math.max(...SEL))}${ok ? '' : ' (' + t('at most one hour') + ')'}` : '';
+  $('#selInfo').textContent = SEL ? `${hm(Math.min(...SEL))} – ${hm(Math.max(...SEL))}${ok ? '' : ' (' + t('at most one hour') + ')'}` : t('Drag over the hour detail to select a part');
 }
 // evidence (spec 015): hold the selection so it is never deleted; a signed package for the police or an insurer
 function holdList() {
@@ -404,7 +404,7 @@ ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(async ({me}) =
   $('#bSound').hidden = !(CAM && CAM.audio && can('video.audio'));
   $('#hold').hidden = $('#evidence').hidden = !can('video.evidence');
   ptzUI(); activity(); setInterval(() => { if (!document.hidden) activity(); }, 3000);
-  if (can('video.playback')) { $('#recPanel').hidden = false; await loadRecordings(); setInterval(() => { if (!document.hidden && dayStart(DAY).getTime() === dayStart(Date.now()).getTime()) loadRecordings(); }, 30000); }
+  if (can('video.playback')) { $('#recPanel').hidden = false; updateSel(); await loadRecordings(); setInterval(() => { if (!document.hidden && dayStart(DAY).getTime() === dayStart(Date.now()).getTime()) loadRecordings(); }, 30000); }
   const q = new URLSearchParams(location.search);
   if (q.get('t') && can('video.playback')) playFrom(+q.get('t')); else live();
 });

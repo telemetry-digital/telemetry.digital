@@ -108,4 +108,17 @@ func TestLongFileRepairedAndPlayedDB(t *testing.T) {
 	if d := pk.Sample.Time.Sub(from).Abs(); d > 2*time.Second {
 		t.Errorf("playback starts at %v, want %v", pk.Sample.Time, from)
 	}
+
+	// an evidence package names the file; a file too large to read at export is marked, not read
+	segs, err := m.EvidenceSegments(ctx, cam, from, from.Add(10*time.Second))
+	if err != nil || len(segs) != 1 || segs[0].NotChecked || segs[0].SHA256Now == "" {
+		t.Fatalf("segments of a normal size: %+v %v", segs, err)
+	}
+	old := evidenceHashMax
+	evidenceHashMax = 1000
+	defer func() { evidenceHashMax = old }()
+	segs, err = m.EvidenceSegments(ctx, cam, from, from.Add(10*time.Second))
+	if err != nil || len(segs) != 1 || !segs[0].NotChecked || segs[0].SHA256Now != "" || segs[0].Unchanged {
+		t.Fatalf("too large a file: %+v %v", segs, err)
+	}
 }

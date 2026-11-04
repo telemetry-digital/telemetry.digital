@@ -87,7 +87,31 @@ type EvidenceSegment struct {
 	SHA256       string    `json:"sha256_recorded"` // computed while recording ("" when the server stopped while writing)
 	SHA256Now    string    `json:"sha256_now"`      // computed at export
 	Unchanged    bool      `json:"unchanged"`
+	NotChecked   bool      `json:"sha256_not_checked,omitempty"` // too large to read at export, see evidenceHashMax
 	HeldEvidence bool      `json:"held"`
+}
+
+// evidenceHashMax is the largest file whose fingerprint is computed again at export. Files of the normal length stay
+// far below it; a file of days (written before 0.86.6) would take many minutes while the caller waits for the package.
+var evidenceHashMax int64 = 4 << 30
+
+// fingerprint computes the SHA-256 of a file; it stops when ctx ends.
+func fingerprint(ctx context.Context, f *os.File) (string, error) {
+	h := sha256.New()
+	buf := make([]byte, 1<<20)
+	for {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		n, err := f.Read(buf)
+		h.Write(buf[:n])
+		if errors.Is(err, io.EOF) {
+			return hex.EncodeToString(h.Sum(nil)), nil
+		}
+		if err != nil {
+			return "", err
+		}
+	}
 }
 
 // EvidenceSegments lists the recorded files of a camera in a range with their fingerprints then and now.
@@ -111,10 +135,20 @@ func (m *Manager) EvidenceSegments(ctx context.Context, camID string, from, to t
 		if err != nil {
 			continue
 		}
-		h := sha256.New()
-		_, _ = io.Copy(h, f)
+		if fi, err := f.Stat(); err == nil && fi.Size() > evidenceHashMax {
+			f.Close()
+			out[i].NotChecked = true
+			continue
+		}
+		now, err := fingerprint(ctx, f)
 		f.Close()
-		out[i].SHA256Now = hex.EncodeToString(h.Sum(nil))
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if err != nil {
+			continue
+		}
+		out[i].SHA256Now = now
 		out[i].Unchanged = out[i].SHA256 != "" && out[i].SHA256 == out[i].SHA256Now
 	}
 	return out, nil
@@ -201,6 +235,13 @@ func writeEvidence(w io.Writer, key ed25519.PrivateKey, man *EvidenceManifest, w
 }
 
 func evidenceReadme(man EvidenceManifest) string {
+	note := ""
+	for _, s := range man.Segments {
+		if s.NotChecked {
+			note = "\nA recorded file marked sha256_not_checked was too large to read at export: it was not compared with its\nfingerprint from recording time. The hash of video.mp4 and the signature are not affected.\n"
+			break
+		}
+	}
 	return fmt.Sprintf(`Evidence package — %s
 Camera: %s (%s)
 Recorded: %s – %s (UTC)
@@ -216,8 +257,8 @@ To verify:
   2. Run: ctrl32-telemetry verify-evidence <this file.zip>
      or check by hand: sha256sum video.mp4 must equal manifest.json video.sha256, and the signature must verify
      with the public key (for example with openssl pkeyutl -verify -rawin).
-`, man.Format, man.Camera["name"], man.Camera["id"], man.From.UTC().Format(time.RFC3339), man.To.UTC().Format(time.RFC3339),
-		man.ExportedAt.UTC().Format(time.RFC3339), man.ExportedBy["username"], man.Reason, man.KeyFP)
+%s`, man.Format, man.Camera["name"], man.Camera["id"], man.From.UTC().Format(time.RFC3339), man.To.UTC().Format(time.RFC3339),
+		man.ExportedAt.UTC().Format(time.RFC3339), man.ExportedBy["username"], man.Reason, man.KeyFP, note)
 }
 
 // EvidenceReport is what verification found.
@@ -309,7 +350,9 @@ func VerifyEvidence(zipPath string, trusted ed25519.PublicKey) (*EvidenceReport,
 		rep.Problems = append(rep.Problems, "video.mp4 does not match the hash in the manifest: the video was changed")
 	}
 	for _, s := range rep.Manifest.Segments {
-		if !s.Unchanged {
+		if s.NotChecked {
+			rep.Problems = append(rep.Problems, "recorded file "+s.File+": too large, its fingerprint was not compared at export (the hash of video.mp4 is not affected)")
+		} else if !s.Unchanged {
 			rep.Problems = append(rep.Problems, "recorded file "+s.File+": fingerprint from recording time missing or different (noted at export)")
 		}
 	}

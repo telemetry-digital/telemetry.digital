@@ -3608,6 +3608,7 @@
  "2 large + small": "2 suurta + pienet",
  "4 large + small": "4 suurta + pienet",
  "Drag a tile to move it, drag its corner to change its size; a click on a free cell adds a tile.": "Siirrä ruutua vetämällä, muuta kokoa vetämällä kulmasta; napsautus vapaaseen soluun lisää ruudun.",
+ "Drag over the hour detail to select a part": "Valitse osa vetämällä tunnin tarkennuksen yli",
  "Add a tile here": "Lisää ruutu tähän",
  "Tile": "Ruutu",
  "From column": "Sarakkeesta",
