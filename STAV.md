@@ -75,7 +75,7 @@
 | 0.86.9 | Stránka kamery: polia Od a Do pre presný výber na sekundu, aj cez hranicu hodiny a polnoc (ťahanie ich vypĺňa, prázdne pole sa doplní o hodinu). Obrazovka (kiosk): klik na dlaždicu steny ju zväčší s hlavným prúdom, späť ďalší klik, Esc, tlačidlo alebo samo po 5 min; záznamy sa neponúkajú, lebo kiosk nemá používateľa | headless `range_and_display_enlarge` 21/21 |
 | 0.86.10 | Stiahnutie MP4 najviac 24 h (predtým 1 h; súbor sa posiela priebežne, na serveri nezaberá miesto). Dôkazový ZIP ostáva 1 h (balík sa pred odoslaním skladá celý) | e2e `video` 168/172 (4 = chýbajúci `python3`), headless 22/22, na dev stiahnutých 4,33 h (2,3 GB) za 62 s |
 
-**Nasadenie 0.86.10 (4. 11. 2026):** portál a BB cez API so zálohou. Celý dlhý súbor sa na BB nesťahoval (rýchlosť tunela), len vzorka.
+**Nasadenie 0.86.10 (4. 11. 2026):** portál a BB cez API so zálohou. Cez tunel okolo 12:40 len ~21 kB/s, aj pri statickom súbore (ráno ~750 kB/s), takže brzda je pravdepodobne pripojenie lokality, nie nahrávky; dlhý súbor sa na BB celý nestiahol a prechod z dlhého súboru na nové sa na BB neoveril. Rýchlosť v LAN BB sa nemerala.
 
 **Nasadenie 0.86.9 (4. 11. 2026):** portál 07:34 a BB 07:35 UTC cez API so zálohou. BB: oba kiosky sa samy načítali na 0.86.9, hrá 21/21 + 18/18. Klik na fyzickom stenovom PC ešte musí vyskúšať používateľ.
 
