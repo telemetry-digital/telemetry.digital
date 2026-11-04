@@ -35,6 +35,7 @@ type recorder struct {
 
 	started time.Time
 	written atomic.Int64 // unix nanoseconds of the last fragment written (health, spec 014)
+	opened  atomic.Int64 // unix nanoseconds when the file being written was opened, 0 = none (health)
 }
 
 // hold arms the recorder while an event lasts.
@@ -219,6 +220,7 @@ func (r *recorder) open(t *Track, s *Sample) (*segment, error) {
 		os.Remove(full)
 		return nil, err
 	}
+	r.opened.Store(time.Now().UnixNano())
 	return seg, nil
 }
 
@@ -247,6 +249,7 @@ func (r *recorder) close(seg *segment) {
 	if seg == nil {
 		return
 	}
+	r.opened.Store(0)
 	if frag, err := seg.mux.Flush(); err == nil && frag != nil {
 		_ = seg.write(frag)
 	}

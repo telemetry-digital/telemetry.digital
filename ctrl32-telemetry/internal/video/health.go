@@ -106,6 +106,8 @@ func (m *Manager) checkHealth(ctx context.Context) {
 			return m.Incidents.Raise(ctx, c.org, "camera", recKey, "critical", "Camera "+c.name+" is not recording",
 				"The camera sends video but no recording is written (storage full or not writable?).", detail)
 		})
+		seen["camera:"+c.id+":rotation"] = true
+		m.checkRotation(ctx, c.id, c.org, c.name, c.rec, set, after)
 	}
 	// cameras removed or switched off: their incidents end
 	for key := range m.health.raised {
@@ -122,6 +124,28 @@ func (m *Manager) checkHealth(ctx context.Context) {
 		})
 	}
 	m.checkDisplays(ctx, set)
+}
+
+// fileTooLong tells whether a recorded file has stayed open far beyond its length: a file ends at the first key frame
+// after the length, so three lengths and two minutes leave room for cameras with key frames far apart.
+func fileTooLong(opened, now time.Time, segment time.Duration) bool {
+	return !opened.IsZero() && now.Sub(opened) > 3*segment+2*time.Minute
+}
+
+// checkRotation raises an incident for a camera that keeps writing one file. Writing goes on, so nothing else notices
+// it, but such a file is deleted only as a whole and playback has to search inside it.
+func (m *Manager) checkRotation(ctx context.Context, id, org, name string, rec *recorder, set Settings, after time.Duration) {
+	var opened time.Time
+	if n := rec.opened.Load(); n > 0 {
+		opened = time.Unix(0, n)
+	}
+	key := "camera:" + id + ":rotation"
+	bad := fileTooLong(opened, time.Now(), time.Duration(set.SegmentSeconds)*time.Second)
+	m.problem(ctx, key, bad, after, func() error {
+		return m.Incidents.Raise(ctx, org, "camera", key, "major", "Camera "+name+" keeps writing one recording file",
+			"Recording goes on, but no new file starts. When the disk limit or the retention reaches this file, it is deleted as a whole.",
+			map[string]any{"camera_id": id, "camera": name, "file_opened_at": opened, "segment_seconds": set.SegmentSeconds})
+	})
 }
 
 // checkDisplays raises an incident for a paired display not seen for the configured time.
