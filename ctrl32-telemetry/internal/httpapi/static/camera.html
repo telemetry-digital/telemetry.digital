@@ -59,6 +59,7 @@
       <span class="muted" style="font-size:12px">Detail of one hour: click to play, drag to select a part for download</span></div>
     <div class="tl" id="tl2" style="margin-top:6px"></div>
     <div class="tl-ax" id="ax2"></div>
+    <div class="row" style="margin-top:8px"><label class="inline">From <input type="datetime-local" step="1" id="selFrom"></label><label class="inline">To <input type="datetime-local" step="1" id="selTo"></label></div>
     <div class="row" style="margin-top:8px"><span class="muted" style="font-size:12px" id="evLegend"></span><span class="grow"></span>
       <span class="muted" id="selInfo"></span><button class="btn small" type="button" id="export" disabled>Download selection (MP4)</button>
       <button class="btn small" type="button" id="hold" disabled hidden title="Recordings held as evidence are never deleted until released">Hold as evidence</button>
@@ -353,11 +354,28 @@ $('#tl2').onpointerup = e => {
   if (down !== null && Math.abs(x - down) <= 5000) { SEL = null; drawBar('tl2'); updateSel(); playFrom(x); }
   down = null;
 };
-function updateSel() {
+// the value of a date and time field: local time, to the second
+const localField = ms => new Date(ms - new Date(ms).getTimezoneOffset() * 60000).toISOString().slice(0, 19);
+function updateSel(typed) {
   const ok = SEL && Math.abs(SEL[1] - SEL[0]) <= HOURMS;
   $('#export').disabled = !ok; $('#evidence').disabled = !ok; $('#hold').disabled = !SEL;
-  $('#selInfo').textContent = SEL ? `${hm(Math.min(...SEL))} – ${hm(Math.max(...SEL))}${ok ? '' : ' (' + t('at most one hour') + ')'}` : t('Drag over the hour detail to select a part');
+  if (typed !== true) { $('#selFrom').value = SEL ? localField(Math.min(...SEL)) : ''; $('#selTo').value = SEL ? localField(Math.max(...SEL)) : ''; }
+  $('#selInfo').textContent = SEL ? `${hm(Math.min(...SEL))} – ${hm(Math.max(...SEL))}${ok ? '' : ' (' + t('at most one hour') + ')'}` :
+    typed === true && $('#selFrom').value && $('#selTo').value ? t('the end must be after the start') : t('Drag over the hour detail to select a part');
 }
+// an exact range, also across an hour or midnight; the empty field starts one hour from the other one
+function typedSel() {
+  const a = $('#selFrom'), b = $('#selTo');
+  if (a.value && !b.value) b.value = localField(new Date(a.value).getTime() + HOURMS);
+  if (b.value && !a.value) a.value = localField(new Date(b.value).getTime() - HOURMS);
+  const from = new Date(a.value).getTime(), to = new Date(b.value).getTime();
+  SEL = to > from ? [from, to] : null;
+  updateSel(true);
+  if (!SEL) { drawBar('tl2'); drawCursor(); return; }
+  HOUR = new Date(from).setMinutes(0, 0, 0);
+  if (dayStart(from).getTime() !== dayStart(DAY).getTime()) { DAY = new Date(from); loadRecordings(); } else drawTimeline();
+}
+$('#selFrom').onchange = $('#selTo').onchange = typedSel;
 // evidence (spec 015): hold the selection so it is never deleted; a signed package for the police or an insurer
 function holdList() {
   $('#holdList').innerHTML = HOLDS.map(h => `<div><span class="badge warn">${esc(t('evidence'))}</span> <b class="notranslate">${esc(h.title)}</b>${h.case_ref ? ` <span class="muted notranslate">${esc(h.case_ref)}</span>` : ''}

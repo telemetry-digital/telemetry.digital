@@ -3609,6 +3609,7 @@
  "4 large + small": "4 μεγάλα + μικρά",
  "Drag a tile to move it, drag its corner to change its size; a click on a free cell adds a tile.": "Σύρετε ένα πλακίδιο για να το μετακινήσετε, τη γωνία του για να αλλάξετε το μέγεθος· ένα κλικ σε ελεύθερο κελί προσθέτει πλακίδιο.",
  "Drag over the hour detail to select a part": "Σύρετε πάνω στη λεπτομέρεια της ώρας για να επιλέξετε ένα τμήμα",
+ "the end must be after the start": "το τέλος πρέπει να είναι μετά την αρχή",
  "Add a tile here": "Προσθήκη πλακιδίου εδώ",
  "Tile": "Πλακίδιο",
  "From column": "Από στήλη",

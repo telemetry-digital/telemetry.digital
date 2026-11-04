@@ -64,6 +64,7 @@ async function hello() {
 
 // ---- content ----
 function stopContent() {
+  if (big) enlarge(big.el);
   for (const p of players) p.close(); players = [];
   clearInterval(refreshT); refreshT = null; refreshFn = null;
   $('#stage').innerHTML = '';
@@ -98,10 +99,32 @@ async function showItem(it) {
         onState: s => { dot.className = 'cam-dot ' + (s === 'online' ? 'online' : s === 'offline' ? 'offline' : ''); }});
       p.camera = el.dataset.id;
       el.prepend(p.el); players.push(p);
+      el.onclick = () => enlarge(el, w.cameras[el.dataset.id]);
+      el.title = t('Click: enlarge');
     }
     markActive();
   }
 }
+// A click enlarges a tile to the whole screen with the main stream of a camera the display already shows; another click
+// or Esc returns, and so does the time limit, so a forgotten camera does not keep the rest of the wall hidden. A display
+// has no user, so it offers no recordings.
+const ENLARGE_MS = 5 * 60 * 1000;
+let big = null, bigT = null;
+function enlarge(el, name) {
+  clearTimeout(bigT);
+  if (big) { big.p.close(); big.bar.remove(); big.el.classList.remove('max'); const was = big.el; big = null; if (was === el) return; }
+  el.classList.add('max');
+  const p = ctrl32Player(el, {url: `/api/v1/display/cameras/${el.dataset.id}/live?quality=main`, live: true});
+  p.el.style.position = 'absolute'; p.el.style.inset = '0'; p.el.style.zIndex = '1';
+  const bar = document.createElement('div'); bar.className = 'wall-max-bar';
+  bar.innerHTML = `<span class="notranslate wall-max-name">${esc(name || '')}</span><button class="btn small" type="button">${esc(t('Back to the wall'))} (Esc)</button>`;
+  bar.onclick = e => e.stopPropagation();
+  bar.querySelector('button').onclick = () => enlarge(el);
+  el.appendChild(bar);
+  big = {el, p, bar};
+  bigT = setTimeout(() => { if (big) enlarge(big.el); }, ENLARGE_MS);
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && big) enlarge(big.el); });
 // a wall never scrolls: a grid dashboard gets the row height that fills the screen (process screens scale themselves)
 let FITTED = null;
 function fitGrid(spec, box) {
@@ -125,7 +148,9 @@ function rotate() {
   IDX = IDX % items.length;
   const it = items[IDX];
   showItem(it).catch(x => { $('#stage').innerHTML = `<div class="kiosk-empty">${esc(x.message)}</div>`; });
-  if (items.length > 1) rotateT = setTimeout(() => { IDX++; rotate(); }, (it.seconds || 60) * 1000);
+  // the turn waits for an enlarged camera
+  const next = () => { if (big) { rotateT = setTimeout(next, 5000); return; } IDX++; rotate(); };
+  if (items.length > 1) rotateT = setTimeout(next, (it.seconds || 60) * 1000);
 }
 function markActive() {
   for (const el of document.querySelectorAll('.wall-grid .cell[data-id]')) {

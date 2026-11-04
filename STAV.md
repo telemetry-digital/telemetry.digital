@@ -1,4 +1,4 @@
-# Stav práce (aktualizované 4. 11. 2026, 0.86.8)
+# Stav práce (aktualizované 4. 11. 2026, 0.86.9)
 
 ## Hotové (vo vetve `main`, otestované)
 
@@ -72,6 +72,7 @@
 | 0.86.6 | **Oprava nahrávania pri spojení s kamerou dlhšom ako 28,47 h:** výpočet času snímky `time.Duration(dts) * time.Second / ClockRate` pretiekol int64, čas skočil o ~57 h dozadu, nový súbor sa už nezačal a koniec v indexe bol pred začiatkom (chyba od 0.45.0; na BB od 31. 10. 03:19 jeden rastúci súbor na kameru). Opravený prevod (`ticksToDuration`, `durationToTicks`) v RTSP, MJPEG, nahrávaní aj prehrávaní; `repair` pri štarte opraví súbory s koncom pred začiatkom; prehrávanie nájde súbor, ktorý začal dávno pred žiadaným časom, a do súboru nad 1 GiB vstúpi bisekciou | unit + DB test `TestLongFileRepairedAndPlayedDB` (bez opravy zlyhá), e2e `video` 168/172 na Windows PC (4 zlyhania = chýbajúci `python3`; čas v URL v dočasnej kópii prevedený na UTC) |
 | 0.86.7 | Stráženie nahrávania: nový incident „Camera … keeps writing one recording file“ (závažnosť major), keď je jeden súbor otvorený dlhšie ako 3 × dĺžka súboru + 2 min (pri 60 s je to 5 min), po čase z `camera_offline_minutes`; sám sa vyrieši, keď začne nový súbor. Dovtedy túto situáciu nič nehlásilo, lebo zápis pokračoval | unit `TestFileTooLong`, `TestRotationIncident`; e2e `video` 168/172 na Windows PC (4 zlyhania = chýbajúci `python3`), po behu žiadny falošný incident |
 | 0.86.8 | Dôkazový balík (ZIP) zo súboru nad 4 GiB (z obdobia pred 0.86.6): pri exporte sa súbor celý nečíta, manifest ho označí `sha256_not_checked` a `verify-evidence` to nahlási; prepočet odtlačkov sa zastaví, keď klient odíde; predĺžený limit zápisu pre balík. Na stránke kamery nápoveda pri sivých tlačidlách výberu (všetkých 19 katalógov) | unit `TestEvidenceLargeFile`, DB test; e2e `evidence` 26/29 na Windows PC (3 zlyhania prostredia: chýba `zip`, poradie `sort`); headless: nápoveda en/sk, tlačidlá sa po ťahaní zapnú |
+| 0.86.9 | Stránka kamery: polia Od a Do pre presný výber na sekundu, aj cez hranicu hodiny a polnoc (ťahanie ich vypĺňa, prázdne pole sa doplní o hodinu). Obrazovka (kiosk): klik na dlaždicu steny ju zväčší s hlavným prúdom, späť ďalší klik, Esc, tlačidlo alebo samo po 5 min; záznamy sa neponúkajú, lebo kiosk nemá používateľa | headless `range_and_display_enlarge` 21/21 |
 
 **Nasadenie 0.86.8 (4. 11. 2026):** portál a BB ~07:09 UTC cez API so zálohou. BB: dôkazový balík z 2. 11. (súbor 125 GB) cez tunel za 5–15 s, `verify-evidence`: podpis a hash platné, súbor označený ako nekontrolovaný; hodina (1,3 GB) prvý bajt po 42 s, celé stiahnutie cez tunel sa neskúšalo; 39/39 kamier nahráva. Zamknutie ako dôkaz na dlhom súbore sa neskúšalo.
 

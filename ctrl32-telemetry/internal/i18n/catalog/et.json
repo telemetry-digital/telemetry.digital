@@ -3609,6 +3609,7 @@
  "4 large + small": "4 suurt + väikesed",
  "Drag a tile to move it, drag its corner to change its size; a click on a free cell adds a tile.": "Paani liigutamiseks lohistage seda, suuruse muutmiseks lohistage nurgast; klõps vabal lahtril lisab paani.",
  "Drag over the hour detail to select a part": "Osa valimiseks lohistage üle tunni detailvaate",
+ "the end must be after the start": "lõpp peab olema pärast algust",
  "Add a tile here": "Lisa siia paan",
  "Tile": "Paan",
  "From column": "Veerust",

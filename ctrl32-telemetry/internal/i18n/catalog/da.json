@@ -3609,6 +3609,7 @@
  "4 large + small": "4 store + små",
  "Drag a tile to move it, drag its corner to change its size; a click on a free cell adds a tile.": "Træk et felt for at flytte det, træk i hjørnet for at ændre størrelsen; et klik på en ledig celle tilføjer et felt.",
  "Drag over the hour detail to select a part": "Træk hen over timedetaljen for at vælge en del",
+ "the end must be after the start": "slutningen skal ligge efter starten",
  "Add a tile here": "Tilføj et felt her",
  "Tile": "Felt",
  "From column": "Fra kolonne",
