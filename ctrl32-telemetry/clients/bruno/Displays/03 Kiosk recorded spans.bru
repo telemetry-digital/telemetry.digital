@@ -1,0 +1,28 @@
+meta {
+  name: Kiosk recorded spans
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/display/cameras/:id/recordings
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~from: 
+  ~to: 
+}
+
+docs {
+  Kiosk: recorded spans
+  
+  Like /video/cameras/{id}/recordings, for a display with `allow_playback` and a camera of its content.
+  
+  Requires permission `display`.
+}

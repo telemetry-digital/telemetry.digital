@@ -77,6 +77,26 @@ kiosk GET "/api/v1/display/walls/$WALL"; check "its wall with camera names" "$(s
 kiosk GET "/api/v1/display/cameras/$ODD/live"; check "camera of another wall screen refused" "$(st)" 403
 kiosk GET "/api/v1/display/cameras/$GATE/live"; [[ "$(st)" != 403 && "$(st)" != 401 ]] && ok "camera of its dashboard allowed ($(st))" || bad "camera of its dashboard: $(st)"
 kiosk GET "/api/v1/display/cameras/$PIN/live"; [[ "$(st)" != 403 && "$(st)" != 401 ]] && ok "camera on a plan of its dashboard allowed ($(st))" || bad "camera on a plan: $(st)"
+echo "== recordings on a display: off by default, playing only"
+FROMR=$(date -u -d '-1 hour' +%Y-%m-%dT%H:%M:%SZ)
+kiosk GET /api/v1/display/state; check "recordings off by default" "$(jx j.playback)" false
+kiosk GET "/api/v1/display/cameras/$YARD/recordings?from=$FROMR"; check "time line refused while off" "$(st)" 403
+kiosk GET "/api/v1/display/cameras/$YARD/playback?from=$FROMR"; check "playback refused while off" "$(st)" 403
+req GET /api/v1/displays; DIDR=$(jx "(j.displays||j.items||j).find(d => d.name === 'Control room $SUF').id")
+req PUT "/api/v1/displays/$DIDR" '{"allow_playback":true}'; check "switching on needs a reason" "$(st)" 400
+req PUT "/api/v1/displays/$DIDR" '{"allow_playback":true,"reason":"e2e: watching at the wall"}'; check "switched on" "$(st) $(jx j.allow_playback)" "200 true"
+kiosk GET /api/v1/display/state; check "the display knows" "$(jx j.playback)" true
+kiosk GET "/api/v1/display/cameras/$YARD/recordings?from=$FROMR"; check "time line of a camera of its content" "$(st) $(jx 'Array.isArray(j.spans)')" "200 true"
+kiosk GET "/api/v1/display/cameras/$YARD/playback?from=$FROMR"; [[ "$(st)" != 403 && "$(st)" != 401 ]] && ok "playback of a camera of its content allowed ($(st))" || bad "playback: $(st)"
+kiosk GET "/api/v1/display/cameras/$ODD/recordings?from=$FROMR"; check "camera of another wall screen refused" "$(st)" 403
+kiosk GET "/api/v1/display/cameras/$ODD/playback?from=$FROMR"; check "its playback refused" "$(st)" 403
+kiosk GET "/api/v1/display/cameras/$YARD/export?from=$FROMR"; check "no download route for a display" "$(st)" 404
+kiosk GET "/api/v1/video/cameras/$YARD/export?from=$FROMR"; check "the download of a user refused" "$(st)" 401
+kiosk GET "/api/v1/video/cameras/$YARD/evidence?from=$FROMR&reason=x"; check "the evidence package refused" "$(st)" 401
+req GET "/api/v1/audit?action=video.playback&limit=5"; check "playback audited under the display's name" "$(jx 'JSON.stringify(j).includes("display:Control room")')" true
+req GET "/api/v1/audit?action=display.update&limit=5"; check "switching on audited with the reason" "$(jx 'JSON.stringify(j).includes("e2e: watching at the wall")')" true
+req PUT "/api/v1/displays/$DIDR" '{"allow_playback":false,"reason":"e2e: off again"}'; check "switched off" "$(st) $(jx j.allow_playback)" "200 false"
+kiosk GET "/api/v1/display/cameras/$YARD/recordings?from=$FROMR"; check "refused again" "$(st)" 403
 kiosk GET /api/v1/video/cameras; check "no session API with a display cookie" "$(st)" 401
 kiosk GET /api/v1/displays; check "a display cannot list displays" "$(st)" 401
 

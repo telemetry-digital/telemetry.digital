@@ -120,6 +120,35 @@ const check = (name, got, want) => { if (JSON.stringify(got) === JSON.stringify(
   await ev(`clearTimeout(bigT); enlarge(big.el)`); await sleep(300);
   check("the time limit's call returns too", (await state()).max, false);
 
+  console.log("== a display: recordings");
+  await click(tile.x, tile.y); d = await state();
+  check("no Recordings button without the option", await ev(`!!document.querySelector('.wall-max-bar [data-rec]')`), false);
+  await key("Escape"); await sleep(300);
+  const on = await api("PUT", `/api/v1/displays/${DID}`, { allow_playback: true, reason: "probe" });
+  check("the option switched on", [on.status, on.body && on.body.allow_playback], [200, true]);
+  await sleep(6000); // the next poll of the display
+  await click(tile.x, tile.y);
+  check("the enlarged camera has the Recordings button", await ev(`!!document.querySelector('.wall-max-bar [data-rec]')`), true);
+  await ev(`document.querySelector('.wall-max-bar [data-rec]').click()`); await sleep(7000);
+  const rs = () => ev(`JSON.stringify({open:!!document.querySelector('.kiosk-rec'),spans:document.querySelectorAll('.kiosk-rec .tl .span').length,clock:document.querySelector('.kiosk-rec [data-clock]').textContent,state:document.querySelector('.kiosk-rec .kiosk-rec-pic [data-state]') ? document.querySelector('.kiosk-rec .kiosk-rec-pic [data-state]').dataset.state : '',links:document.querySelectorAll('.kiosk-rec a, .kiosk-rec [download]').length})`).then(JSON.parse);
+  let rc = await rs();
+  check("recordings open with their time line and a moving clock", [rc.open, rc.spans > 0, rc.clock.length > 0], [true, true, true]);
+  check("nothing to download", rc.links, 0);
+  if (process.env.OUT) { const p = await send("Page.captureScreenshot", { format: "png" }); require("fs").writeFileSync(process.env.OUT + "/display-recordings.png", Buffer.from(p.result.data, "base64")); }
+  const tlb = JSON.parse(await ev(`(()=>{const b=document.querySelector('.kiosk-rec .tl').getBoundingClientRect();return JSON.stringify({x:b.x,y:b.y,w:b.width,h:b.height})})()`));
+  const c1 = await ev(`document.querySelector('.kiosk-rec [data-clock]').textContent`);
+  await ev(`document.querySelector('.kiosk-rec [data-skip="-60"]').click()`); await sleep(3500);
+  check("a skip moves the clock", (await ev(`document.querySelector('.kiosk-rec [data-clock]').textContent`)) !== c1, true);
+  await ev(`document.querySelector('.kiosk-rec [data-speed="4"]').click()`); await sleep(1500);
+  check("a speed is taken", await ev(`document.querySelector('.kiosk-rec [data-speed="4"]').classList.contains('primary')`), true);
+  await ev(`document.querySelector('.kiosk-rec [data-pause]').click()`); await sleep(300);
+  check("pause", await ev(`document.querySelector('.kiosk-rec [data-pause]').textContent`), "▶");
+  await key("Escape"); await sleep(400);
+  check("Esc returns to the wall", await ev(`!!document.querySelector('.kiosk-rec')`), false);
+  await click(tile.x, tile.y); await ev(`document.querySelector('.wall-max-bar [data-rec]').click()`); await sleep(1500);
+  await api("PUT", `/api/v1/displays/${DID}`, { allow_playback: false, reason: "probe" }); await sleep(6000);
+  check("switching the option off closes them", await ev(`!!document.querySelector('.kiosk-rec')`), false);
+
   check("no script errors", problems, []);
   await cleanup();
   console.log(`passed ${pass}, failed ${fail}`);

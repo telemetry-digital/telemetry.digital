@@ -14,7 +14,9 @@ package httpapi
 //	GET  /api/v1/public/~{slug}/…                 display    dashboards of its content (public_dashboard.go)
 //	GET  /api/v1/displays                         display.control
 //	POST /api/v1/displays/pair                    display.manage  {code, name, content, reason}
-//	PUT  /api/v1/displays/{id}                    display.manage  {name, content, offline_alert, reason}
+//	GET  /api/v1/display/cameras/{id}/playback    display         recordings of a camera it may show, with allow_playback
+//	GET  /api/v1/display/cameras/{id}/recordings  display         their time line, with allow_playback
+//	PUT  /api/v1/displays/{id}                    display.manage  {name, content, offline_alert, allow_playback, reason}
 //	DELETE /api/v1/displays/{id}?reason=          display.manage  revoke
 //	POST /api/v1/displays/{id}/command            display.control {action: camera|identify|reload|clear|message, camera, seconds, quality, text, level}
 //	POST /api/v1/displays/command                 display.control the same for {ids} | {location} | {all: true}
@@ -82,6 +84,7 @@ type displayRow struct {
 	LastIP        string
 	LastAgent     string
 	OfflineAlert  bool
+	AllowPlayback bool // anyone at the display may play the recordings of its cameras (0.86.11)
 	Created       time.Time
 	Location      string
 	Message       *displayMessage
@@ -93,7 +96,7 @@ type displayRow struct {
 
 func (d *displayRow) json() map[string]any {
 	out := map[string]any{"id": d.ID, "name": d.Name, "content": d.Content, "paired": d.Paired, "last_seen_at": d.LastSeen,
-		"last_ip": d.LastIP, "last_agent": d.LastAgent, "offline_alert": d.OfflineAlert, "created_at": d.Created, "updated_at": d.Updated, "location": d.Location,
+		"last_ip": d.LastIP, "last_agent": d.LastAgent, "offline_alert": d.OfflineAlert, "allow_playback": d.AllowPlayback, "created_at": d.Created, "updated_at": d.Updated, "location": d.Location,
 		"online": d.LastSeen != nil && time.Since(*d.LastSeen) < 90*time.Second, "kiosk_pc": d.KioskPC, "kiosk_monitor": d.KioskMonitor}
 	// what the page reported with its poll (fresh: the last 3 minutes)
 	if d.Health != nil && d.HealthAt != nil && time.Since(*d.HealthAt) < 3*time.Minute {
@@ -110,13 +113,13 @@ func (d *displayRow) json() map[string]any {
 }
 
 const displayCols = `id::text, org_id::text, name, content, command, updated_at, token_hash IS NOT NULL, last_seen_at, COALESCE(last_ip, ''), COALESCE(last_agent, ''), offline_alert, created_at, location, message,
-	COALESCE(kiosk_pc_id::text, ''), kiosk_monitor, health, health_at`
+	COALESCE(kiosk_pc_id::text, ''), kiosk_monitor, health, health_at, allow_playback`
 
 func scanDisplay(row pgx.Row) (*displayRow, error) {
 	d := &displayRow{}
 	var content, cmd, msg, health []byte
 	if err := row.Scan(&d.ID, &d.Org, &d.Name, &content, &cmd, &d.Updated, &d.Paired, &d.LastSeen, &d.LastIP, &d.LastAgent, &d.OfflineAlert, &d.Created, &d.Location, &msg,
-		&d.KioskPC, &d.KioskMonitor, &health, &d.HealthAt); err != nil {
+		&d.KioskPC, &d.KioskMonitor, &health, &d.HealthAt, &d.AllowPlayback); err != nil {
 		return nil, err
 	}
 	if len(health) > 0 {
@@ -413,7 +416,8 @@ func (s *Server) displayState(w http.ResponseWriter, r *http.Request) {
 	}
 	out := map[string]any{"id": d.ID, "name": d.Name, "version": d.Updated.UnixMilli(), "items": items, "popup": d.Content.Popup, "cameras": cams,
 		"popup_seconds": d.Content.PopupSeconds, "locale": d.Content.Locale, "active": active, "server_time": time.Now(),
-		"server_version": s.version} // the display reloads its page when the server was updated (0.85.1)
+		"server_version": s.version, // the display reloads its page when the server was updated (0.85.1)
+		"playback":       d.AllowPlayback}
 	if d.Command != nil && d.Command.Until.After(time.Now()) {
 		out["command"] = d.Command
 	}
@@ -480,6 +484,39 @@ func (s *Server) displayLive(w http.ResponseWriter, r *http.Request) {
 	}
 	p := &iam.Principal{OrgID: d.Org, Username: "display:" + d.Name, Permissions: map[string]bool{"video.view": true}}
 	s.cameraLive(w, r.WithContext(context.WithValue(r.Context(), principalKey, p)))
+}
+
+// displayRecorded authorizes a recording request of a display: the option of this display and a camera of its content,
+// under a principal that may only view and play back, so masks stay on and there is no sound. Downloads are refused by
+// having no route for a display.
+func (s *Server) displayRecorded(w http.ResponseWriter, r *http.Request) (*http.Request, bool) {
+	d, ok := s.displayFromCookie(r)
+	if !ok {
+		writeErr(w, 401, "this display is not paired")
+		return nil, false
+	}
+	if !d.AllowPlayback {
+		writeErr(w, 403, "recordings are not allowed on this display")
+		return nil, false
+	}
+	if !s.displayCameras(r.Context(), d)[r.PathValue("id")] {
+		writeErr(w, 403, "this camera is not part of the display's content")
+		return nil, false
+	}
+	p := &iam.Principal{OrgID: d.Org, Username: "display:" + d.Name, Permissions: map[string]bool{"video.view": true, "video.playback": true}}
+	return r.WithContext(context.WithValue(r.Context(), principalKey, p)), true
+}
+
+func (s *Server) displayPlayback(w http.ResponseWriter, r *http.Request) {
+	if r, ok := s.displayRecorded(w, r); ok {
+		s.cameraPlayback(w, r)
+	}
+}
+
+func (s *Server) displayRecordings(w http.ResponseWriter, r *http.Request) {
+	if r, ok := s.displayRecorded(w, r); ok {
+		s.cameraRecordings(w, r)
+	}
 }
 
 // displayShare lets a display read the dashboards of its content like a public link (and their cameras).
@@ -777,6 +814,7 @@ func (s *Server) updateDisplay(w http.ResponseWriter, r *http.Request) {
 		Content      *displayContent `json:"content"`
 		OfflineAlert *bool           `json:"offline_alert"`
 		Location     *string         `json:"location"`
+		Playback     *bool           `json:"allow_playback"`
 		Reason       string          `json:"reason"`
 	}
 	if err := decodeJSON(r, &in, 16<<10); err != nil {
@@ -804,6 +842,14 @@ func (s *Server) updateDisplay(w http.ResponseWriter, r *http.Request) {
 	if in.OfflineAlert != nil {
 		d.OfflineAlert = *in.OfflineAlert
 	}
+	if in.Playback != nil {
+		// nobody hands out through a display what they may not see themselves
+		if *in.Playback && !d.AllowPlayback && !PrincipalFrom(r.Context()).Has("video.playback") {
+			writeErr(w, 403, "allowing recordings on a display needs the permission video.playback")
+			return
+		}
+		d.AllowPlayback = *in.Playback
+	}
 	if in.Location != nil {
 		d.Location = strings.TrimSpace(*in.Location)
 		if len([]rune(d.Location)) > 60 {
@@ -812,13 +858,13 @@ func (s *Server) updateDisplay(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	content, _ := json.Marshal(d.Content)
-	if _, err := s.pool.Exec(r.Context(), `UPDATE core.display SET name = $2, content = $3::jsonb, offline_alert = $4, location = $5, updated_at = now() WHERE id = $1::uuid`,
-		d.ID, d.Name, string(content), d.OfflineAlert, d.Location); err != nil {
+	if _, err := s.pool.Exec(r.Context(), `UPDATE core.display SET name = $2, content = $3::jsonb, offline_alert = $4, location = $5, allow_playback = $6, updated_at = now() WHERE id = $1::uuid`,
+		d.ID, d.Name, string(content), d.OfflineAlert, d.Location, d.AllowPlayback); err != nil {
 		writeErr(w, 500, "update failed")
 		return
 	}
-	s.audit(r, "display.update", "display", d.ID, map[string]any{"name": old["name"], "location": old["location"], "content": old["content"], "offline_alert": old["offline_alert"]},
-		map[string]any{"name": d.Name, "location": d.Location, "content": d.Content, "offline_alert": d.OfflineAlert}, in.Reason)
+	s.audit(r, "display.update", "display", d.ID, map[string]any{"name": old["name"], "location": old["location"], "content": old["content"], "offline_alert": old["offline_alert"], "allow_playback": old["allow_playback"]},
+		map[string]any{"name": d.Name, "location": d.Location, "content": d.Content, "offline_alert": d.OfflineAlert, "allow_playback": d.AllowPlayback}, in.Reason)
 	if fresh, ok := s.loadDisplay(r.Context(), org, d.ID); ok {
 		d = fresh
 	}

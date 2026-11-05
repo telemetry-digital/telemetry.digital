@@ -3610,6 +3610,7 @@
  "Drag a tile to move it, drag its corner to change its size; a click on a free cell adds a tile.": "Paani liigutamiseks lohistage seda, suuruse muutmiseks lohistage nurgast; klõps vabal lahtril lisab paani.",
  "Drag over the hour detail to select a part": "Osa valimiseks lohistage üle tunni detailvaate",
  "the end must be after the start": "lõpp peab olema pärast algust",
+ "Recordings can be played on this display: anyone at it can watch them, without downloading": "Salvestisi saab sellel ekraanil esitada: igaüks selle juures saab neid vaadata, ilma allalaadimiseta",
  "download: at most 24 hours": "allalaadimine: kuni 24 tundi",
  "evidence package: at most one hour": "tõendipakett: kuni üks tund",
  "Add a tile here": "Lisa siia paan",

@@ -1,0 +1,28 @@
+meta {
+  name: Kiosk play a recording
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/display/cameras/:id/playback
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~from: 
+  ~speed: 
+}
+
+docs {
+  Kiosk: play a recording
+  
+  WebSocket like /video/cameras/{id}/playback, for a display with `allow_playback` and a camera of its content, audited as the display. Masks stay on, there is no sound and a display has no way to download.
+  
+  Requires permission `display`.
+}

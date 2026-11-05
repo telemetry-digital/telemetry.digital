@@ -460,6 +460,8 @@ export type Device = {
 };
 
 export type Display = {
+  /** recordings may be played on the display */
+  allow_playback?: boolean;
   /** current operator command */
   command?: Record<string, unknown>;
   content?: DisplayContent;
@@ -4545,6 +4547,44 @@ export class Ctrl32Client {
     return this.request<Response>('GET', `/api/v1/display/cameras/${encodeURIComponent(id)}/live`, undefined, undefined, true);
   }
 
+  /** Kiosk: play a recording
+   *
+   * WebSocket like /video/cameras/{id}/playback, for a display with `allow_playback` and a camera of its content, audited as the display. Masks stay on, there is no sound and a display has no way to download.
+   * 
+   * Requires permission `display`. */
+  getDisplayCamerasIdPlayback(id: string, query?: { from?: string; /** RFC 3339, required */ speed?: string; /** 0.25–16, default 1 */ }): Promise<unknown> {
+    return this.request<unknown>('GET', `/api/v1/display/cameras/${encodeURIComponent(id)}/playback`, query, undefined, false);
+  }
+
+  /** Kiosk: recorded spans
+   *
+   * Like /video/cameras/{id}/recordings, for a display with `allow_playback` and a camera of its content.
+   * 
+   * Requires permission `display`. */
+  getDisplayCamerasIdRecordings(id: string, query?: { from?: string; /** RFC 3339, required */ to?: string; /** RFC 3339, default now */ }): Promise<{
+    bytes?: number;
+    camera?: string;
+    files?: number;
+    from?: string;
+    spans?: ({
+      from?: string;
+      to?: string;
+    })[];
+    to?: string;
+  }> {
+    return this.request<{
+    bytes?: number;
+    camera?: string;
+    files?: number;
+    from?: string;
+    spans?: ({
+      from?: string;
+      to?: string;
+    })[];
+    to?: string;
+  }>('GET', `/api/v1/display/cameras/${encodeURIComponent(id)}/recordings`, query, undefined, false);
+  }
+
   /** Kiosk: what it shows
    *
    * The display page reports every 30 s (at most every 10 s, else 429): each camera tile with its state — playing (the picture moved on in the last 10 s), stalled (connected, the picture stands), connecting, offline (the camera), unsupported (the browser cannot play its codec) — and since when, the screen size, the version of the page, the title of what it shows, and the kiosk PC and monitor its launcher named in the address. Only cameras the display may show are kept. The Displays list shows it (`health`) for 3 minutes.
@@ -4703,6 +4743,8 @@ export class Ctrl32Client {
    *
    * Requires permission `display.manage`. */
   putDisplaysId(id: string, body: {
+    /** anyone at the display may play the recordings of its cameras, without downloading; switching it on needs video.playback; off by default */
+    allow_playback?: boolean;
     content?: DisplayContent;
     location?: string;
     name?: string;

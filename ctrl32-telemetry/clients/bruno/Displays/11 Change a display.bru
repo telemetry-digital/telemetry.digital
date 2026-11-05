@@ -1,18 +1,22 @@
 meta {
-  name: Pair a display
+  name: Change a display
   type: http
-  seq: 8
+  seq: 11
 }
 
-post {
-  url: {{baseUrl}}/api/v1/displays/pair
+put {
+  url: {{baseUrl}}/api/v1/displays/:id
   body: json
   auth: inherit
 }
 
+params:path {
+  id: 
+}
+
 body:json {
   {
-    "code": "string",
+    "allow_playback": true,
     "content": {
       "items": [
         {
@@ -35,9 +39,7 @@ body:json {
 }
 
 docs {
-  Pair a display
-  
-  Enter the code the kiosk shows (case-insensitive; 10 wrong codes in 10 minutes block the user for a while). Returns the device's address and browser. Audited.
+  Change a display
   
   Requires permission `display.manage`.
 }

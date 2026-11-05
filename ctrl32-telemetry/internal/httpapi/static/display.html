@@ -64,6 +64,7 @@ async function hello() {
 
 // ---- content ----
 function stopContent() {
+  closeRec();
   if (big) enlarge(big.el);
   for (const p of players) p.close(); players = [];
   clearInterval(refreshT); refreshT = null; refreshFn = null;
@@ -117,14 +118,79 @@ function enlarge(el, name) {
   const p = ctrl32Player(el, {url: `/api/v1/display/cameras/${el.dataset.id}/live?quality=main`, live: true});
   p.el.style.position = 'absolute'; p.el.style.inset = '0'; p.el.style.zIndex = '1';
   const bar = document.createElement('div'); bar.className = 'wall-max-bar';
-  bar.innerHTML = `<span class="notranslate wall-max-name">${esc(name || '')}</span><button class="btn small" type="button">${esc(t('Back to the wall'))} (Esc)</button>`;
+  bar.innerHTML = `<span class="notranslate wall-max-name">${esc(name || '')}</span>${STATE && STATE.playback ? `<button class="btn small" type="button" data-rec>${esc(t('Recordings'))}</button>` : ''}<button class="btn small" type="button" data-back>${esc(t('Back to the wall'))} (Esc)</button>`;
   bar.onclick = e => e.stopPropagation();
-  bar.querySelector('button').onclick = () => enlarge(el);
+  bar.querySelector('[data-back]').onclick = () => enlarge(el);
+  const recBtn = bar.querySelector('[data-rec]'); if (recBtn) recBtn.onclick = () => openRec(el.dataset.id, name);
   el.appendChild(bar);
   big = {el, p, bar};
   bigT = setTimeout(() => { if (big) enlarge(big.el); }, ENLARGE_MS);
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && big) enlarge(big.el); });
+document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (rec) closeRec(); else if (big) enlarge(big.el); });
+// Recordings of an enlarged camera, on a display with the option (0.86.11): watching only. The wall goes on behind them,
+// and nobody looking at them for a while returns the display to the wall.
+const REC_IDLE_MS = 15 * 60 * 1000, DAY_MS = 24 * 3600 * 1000;
+let rec = null;
+function closeRec() {
+  if (!rec) return;
+  clearTimeout(rec.idle); rec.player.close(); rec.el.remove(); rec = null;
+}
+function openRec(id, name) {
+  closeRec();
+  if (big) enlarge(big.el);
+  const el = document.createElement('div'); el.className = 'kiosk-rec';
+  el.innerHTML = `<div class="kiosk-rec-bar"><b class="notranslate">${esc(name || '')}</b>
+    <button class="btn small" type="button" data-day="-1" aria-label="previous day">‹</button><input type="date" data-date><button class="btn small" type="button" data-day="1" aria-label="next day">›</button>
+    <span class="grow"></span><span class="notranslate" data-clock></span><span class="grow"></span>
+    <button class="btn small" type="button" data-skip="-60">« 60</button><button class="btn small" type="button" data-skip="-10">« 10</button><button class="btn small" type="button" data-pause>❚❚</button><button class="btn small" type="button" data-skip="10">10 »</button><button class="btn small" type="button" data-skip="60">60 »</button>
+    <button class="btn small" type="button" data-speed="1">1×</button><button class="btn small" type="button" data-speed="4">4×</button><button class="btn small" type="button" data-speed="16">16×</button>
+    <button class="btn small" type="button" data-close>${esc(t('Back to the wall'))} (Esc)</button></div>
+    <div class="kiosk-rec-pic"></div><div class="kiosk-rec-tl"><div class="tl"></div><div class="tl-ax"></div><div class="muted" data-info></div></div>`;
+  document.body.appendChild(el);
+  const q = s => el.querySelector(s), tl = q('.tl');
+  const local = ms => { const x = new Date(ms); return new Date(ms - x.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+  const startOf = ms => { const x = new Date(ms); x.setHours(0, 0, 0, 0); return x.getTime(); };
+  const r = {el, idle: null, day: startOf(Date.now()), spans: [], cur: null, paused: false, speed: 1};
+  const draw = () => {
+    const w = ms => Math.min(1, Math.max(0, (ms - r.day) / DAY_MS)) * 100;
+    tl.innerHTML = r.spans.filter(([a, b]) => b > r.day && a < r.day + DAY_MS).map(([a, b]) => `<div class="span" style="left:${w(a)}%;width:${Math.max(0.15, w(b) - w(a))}%"></div>`).join('') +
+      (r.cur !== null && r.cur >= r.day && r.cur < r.day + DAY_MS ? `<div class="cur" style="left:${w(r.cur)}%"></div>` : '');
+  };
+  const play = ms => {
+    r.cur = Math.min(ms, Date.now() - 5000); r.paused = false; q('[data-pause]').textContent = '❚❚'; q('[data-info]').textContent = '';
+    r.player.rate(r.speed);
+    r.player.open(`/api/v1/display/cameras/${encodeURIComponent(id)}/playback?from=${new Date(r.cur).toISOString()}&speed=${r.speed}`, false);
+    for (const b of el.querySelectorAll('[data-speed]')) b.classList.toggle('primary', +b.dataset.speed === r.speed);
+    draw();
+  };
+  const load = async start => {
+    q('[data-date]').value = local(r.day);
+    try {
+      const s = await api('GET', `/api/v1/display/cameras/${encodeURIComponent(id)}/recordings?from=${new Date(r.day).toISOString()}&to=${new Date(r.day + DAY_MS).toISOString()}`);
+      r.spans = s.spans.map(x => [Date.parse(x.from), Date.parse(x.to)]);
+      q('[data-info]').textContent = r.spans.length ? '' : t('No recording on this day');
+      draw();
+      if (start && r.spans.length) play(start(r.spans));
+    } catch (x) { q('[data-info]').textContent = x.message; }
+  };
+  r.player = ctrl32Player(q('.kiosk-rec-pic'), {url: '', live: false, zoom: true,
+    onTime: ms => { r.cur = ms; q('[data-clock]').textContent = new Date(ms).toLocaleString(document.documentElement.lang || undefined); draw(); },
+    onEnd: () => { q('[data-info]').textContent = t('End of the recording'); }});
+  q('.kiosk-rec-pic').appendChild(r.player.el);
+  const awake = () => { clearTimeout(r.idle); r.idle = setTimeout(closeRec, REC_IDLE_MS); };
+  el.addEventListener('pointerdown', awake); el.addEventListener('keydown', awake); el.addEventListener('contextmenu', e => e.preventDefault());
+  q('[data-close]').onclick = closeRec;
+  q('[data-pause]').onclick = () => { if (r.cur === null) return; if (r.paused) { play(r.cur); return; } r.paused = true; r.player.pause(); q('[data-pause]').textContent = '▶'; };
+  for (const b of el.querySelectorAll('[data-skip]')) b.onclick = () => { if (r.cur !== null) play(r.cur + +b.dataset.skip * 1000); };
+  for (const b of el.querySelectorAll('[data-speed]')) b.onclick = () => { r.speed = +b.dataset.speed; if (r.cur !== null) play(r.cur); };
+  for (const b of el.querySelectorAll('[data-day]')) b.onclick = () => { r.day = startOf(r.day + 12 * 3600 * 1000 + +b.dataset.day * DAY_MS); load(s => s[0][0]); };
+  q('[data-date]').onchange = e => { if (e.target.value) { r.day = startOf(new Date(e.target.value + 'T12:00:00').getTime()); load(s => s[0][0]); } };
+  tl.onclick = e => { const b = tl.getBoundingClientRect(); play(r.day + Math.min(1, Math.max(0, (e.clientX - b.left) / b.width)) * DAY_MS); };
+  q('.tl-ax').innerHTML = [0, 3, 6, 9, 12, 15, 18, 21, 24].map(h => `<span style="left:${h / 24 * 100}%">${String(h).padStart(2, '0')}:00</span>`).join('');
+  rec = r; awake();
+  // starts a few minutes before the newest recording of today
+  load(s => Math.max(s[s.length - 1][1] - 5 * 60000, s[s.length - 1][0]));
+}
 // a wall never scrolls: a grid dashboard gets the row height that fills the screen (process screens scale themselves)
 let FITTED = null;
 function fitGrid(spec, box) {
@@ -149,7 +215,7 @@ function rotate() {
   const it = items[IDX];
   showItem(it).catch(x => { $('#stage').innerHTML = `<div class="kiosk-empty">${esc(x.message)}</div>`; });
   // the turn waits for an enlarged camera
-  const next = () => { if (big) { rotateT = setTimeout(next, 5000); return; } IDX++; rotate(); };
+  const next = () => { if (big || rec) { rotateT = setTimeout(next, 5000); return; } IDX++; rotate(); };
   if (items.length > 1) rotateT = setTimeout(next, (it.seconds || 60) * 1000);
 }
 function markActive() {
@@ -230,6 +296,7 @@ async function poll() {
     // switch only to a language the server has enabled (otherwise the page would reload forever)
     if (s.locale && s.locale !== ctrl32.locale && (ctrl32.langs.enabled || []).includes(s.locale)) { ctrl32.setLocale(s.locale); return; }
     STATE = s; window.ctrl32DisplayCameras = s.cameras || {}; window.ctrl32DisplayActive = s.active || {};
+    if (rec && !s.playback) closeRec(); // the option was switched off
     document.title = s.name;
     if (s.version !== VERSION) { VERSION = s.version; IDX = 0; rotate(); }
     markActive(); handleEvents(); handleCommand(s.command); handleMessage(s.message); renderOverlay();
@@ -249,10 +316,12 @@ function checkServerVersion(v) {
   let last = 0;
   try { last = +(sessionStorage.getItem('ctrl32.display.updated') || 0); } catch (x) { /* ignore */ }
   if (Date.now() - last < 10 * 60 * 1000) return;
-  updateT = setTimeout(() => {
+  const go = () => {
+    if (big || rec) { updateT = setTimeout(go, 30000); return; } // not under someone looking at a camera or a recording
     try { sessionStorage.setItem('ctrl32.display.updated', String(Date.now())); } catch (x) { /* ignore */ }
     location.reload();
-  }, Math.random() * 30000);
+  };
+  updateT = setTimeout(go, Math.random() * 30000);
 }
 // What this display shows, for the Displays screen (0.86.0): every camera tile with its state and since when, the
 // screen and the page version; the kiosk launcher names its PC and monitor in the address (?kiosk=…&monitor=…).

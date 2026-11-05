@@ -101,6 +101,7 @@
       <label>… for (s) <input name="popup_seconds" type="number" min="5" max="600" value="30"></label></div>
     <label>Language of the display <select name="locale" id="localeSel"></select></label>
     <label class="check"><input type="checkbox" name="offline_alert" checked> Incident when the display stops showing</label>
+    <label class="check" id="playbackRow" hidden><input type="checkbox" name="allow_playback"> Recordings can be played on this display: anyone at it can watch them, without downloading</label>
     <label>Reason (audit trail) <input name="reason" required maxlength="200"></label>
     <div class="err" id="err"></div>
     <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
@@ -362,12 +363,13 @@ function dialog(d) {
   $('#locList').innerHTML = locations().map(l => `<option value="${esc(l)}">`).join('');
   f.location.value = d ? d.location || '' : LOC;
   if (d) { f.name.value = d.name; f.popup.value = d.content.popup; f.popup_seconds.value = d.content.popup_seconds; f.offline_alert.checked = d.offline_alert; }
+  $('#playbackRow').hidden = !d; f.allow_playback.checked = !!(d && d.allow_playback);
   renderItems(); $('#dlg').showModal();
 }
 $('#form').onsubmit = async e => { e.preventDefault(); const f = e.target; $('#err').textContent = '';
   const content = {items: ITEMS, popup: f.popup.value, popup_seconds: +f.popup_seconds.value, locale: f.locale.value};
   try {
-    if (EDIT) await api('PUT', '/api/v1/displays/' + EDIT.id, {name: f.name.value, location: f.location.value, content, offline_alert: f.offline_alert.checked, reason: f.reason.value});
+    if (EDIT) await api('PUT', '/api/v1/displays/' + EDIT.id, {name: f.name.value, location: f.location.value, content, offline_alert: f.offline_alert.checked, allow_playback: f.allow_playback.checked, reason: f.reason.value});
     else { const r = await api('POST', '/api/v1/displays/pair', {code: f.code.value, name: f.name.value, location: f.location.value, content, offline_alert: f.offline_alert.checked, reason: f.reason.value});
       ctrl32.toast(`${t('paired')}: ${r.device_ip}`, 'ok'); }
     $('#dlg').close(); load();

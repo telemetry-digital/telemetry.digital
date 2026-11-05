@@ -214,6 +214,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.HandleFunc("POST /api/v1/display/health", s.displayHealthReport) // what it shows, for the Displays screen (0.86.0)
 	mux.HandleFunc("GET /api/v1/display/walls/{id}", s.displayWall)
 	mux.HandleFunc("GET /api/v1/display/cameras/{id}/live", s.displayLive)
+	mux.HandleFunc("GET /api/v1/display/cameras/{id}/playback", s.displayPlayback)
+	mux.HandleFunc("GET /api/v1/display/cameras/{id}/recordings", s.displayRecordings)
 	mux.HandleFunc("GET /api/v1/public/{token}", s.publicDashboard)
 	mux.HandleFunc("GET /api/v1/public/{token}/datastreams", s.publicDatastreams)
 	mux.HandleFunc("GET /api/v1/public/{token}/datastreams/latest", s.publicLatest)

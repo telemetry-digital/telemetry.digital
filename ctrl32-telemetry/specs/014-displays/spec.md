@@ -37,6 +37,7 @@ control room with alarm pop-ups, per-camera permissions, health monitoring.
 - FR-004 Commands: camera, identify, clear, reload.
 - FR-005 Camera groups enforced in every camera endpoint; user access editor.
 - FR-006 Health incidents: camera offline / not recording, display dark, video disk nearly full.
+- FR-007 (0.86.9, 0.86.11) A click on a wall tile enlarges it on a display. With the per-display option `allow_playback` (off by default, with a reason, switching on needs `video.playback`) the enlarged camera offers its recordings: playing only, masks on, no sound, no download, audited as the display, for the cameras of its content.
 
 ## Success Criteria
 - SC-001 e2e `displays` (61 checks) and unit tests pass; `video` still passes.

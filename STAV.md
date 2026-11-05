@@ -1,4 +1,4 @@
-# Stav práce (aktualizované 4. 11. 2026, 0.86.10)
+# Stav práce (aktualizované 5. 11. 2026, 0.86.11)
 
 ## Hotové (vo vetve `main`, otestované)
 
@@ -74,6 +74,7 @@
 | 0.86.8 | Dôkazový balík (ZIP) zo súboru nad 4 GiB (z obdobia pred 0.86.6): pri exporte sa súbor celý nečíta, manifest ho označí `sha256_not_checked` a `verify-evidence` to nahlási; prepočet odtlačkov sa zastaví, keď klient odíde; predĺžený limit zápisu pre balík. Na stránke kamery nápoveda pri sivých tlačidlách výberu (všetkých 19 katalógov) | unit `TestEvidenceLargeFile`, DB test; e2e `evidence` 26/29 na Windows PC (3 zlyhania prostredia: chýba `zip`, poradie `sort`); headless: nápoveda en/sk, tlačidlá sa po ťahaní zapnú |
 | 0.86.9 | Stránka kamery: polia Od a Do pre presný výber na sekundu, aj cez hranicu hodiny a polnoc (ťahanie ich vypĺňa, prázdne pole sa doplní o hodinu). Obrazovka (kiosk): klik na dlaždicu steny ju zväčší s hlavným prúdom, späť ďalší klik, Esc, tlačidlo alebo samo po 5 min; záznamy sa neponúkajú, lebo kiosk nemá používateľa | headless `range_and_display_enlarge` 21/21 |
 | 0.86.10 | Stiahnutie MP4 najviac 24 h (predtým 1 h; súbor sa posiela priebežne, na serveri nezaberá miesto). Dôkazový ZIP ostáva 1 h (balík sa pred odoslaním skladá celý) | e2e `video` 168/172 (4 = chýbajúci `python3`), headless 22/22, na dev stiahnutých 4,33 h (2,3 GB) za 62 s |
+| 0.86.11 | Záznamy na obrazovke (kiosku): nastavenie obrazovky `allow_playback` (predvolene vypnuté, s dôvodom, zapnutie len s `video.playback`, migrácia 0060); zväčšená kamera má tlačidlo Záznamy, deň, časová os, posun, pauza, rýchlosť 1/4/16×, bez sťahovania, s maskami, bez zvuku; audit pod názvom obrazovky; po 15 min bez dotyku návrat na stenu (spec 014 FR-007, URS P-29) | e2e `displays` 102/102, headless `range_and_display_enlarge` 32/32; kontrola, že zapnutie bez `video.playback` je zamietnuté, nemá vlastný test |
 
 **Nasadenie 0.86.10 (4. 11. 2026):** portál a BB cez API so zálohou. Cez tunel okolo 12:40 len ~21 kB/s, aj pri statickom súbore (ráno ~750 kB/s), takže brzda je pravdepodobne pripojenie lokality, nie nahrávky; dlhý súbor sa na BB celý nestiahol a prechod z dlhého súboru na nové sa na BB neoveril. Rýchlosť v LAN BB sa nemerala.
 
