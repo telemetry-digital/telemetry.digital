@@ -297,6 +297,9 @@
       cache = html;
     }
     async function refresh() {
+      // a picture that left the page (a display switched to its next screen) stays quiet: its requests would go out
+      // with the token of the screen shown now and be refused
+      if (!host.isConnected) return;
       const tags = [...tagsOf(elements)]; const WG = window.ctrl32Widgets;
       if (tags.length && WG) {
         try { const all = await WG.datastreams(); dsMap = Object.fromEntries(all.map((d) => [d.id, d])); } catch (_) { }

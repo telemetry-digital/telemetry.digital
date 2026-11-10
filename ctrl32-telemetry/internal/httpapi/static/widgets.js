@@ -550,7 +550,7 @@
     if (!ds.size && !devs.size && !allDevs && !alarms) return '';
     const qs = 'datastreams=' + [...ds].slice(0, 200).join(',') + '&devices=' + (allDevs ? 'all' : [...devs].slice(0, 200).join(',')) + '&alarms=' + (alarms ? 1 : 0);
     const pending = new Set();
-    const flush = () => { liveTimer = null; for (const i of pending) { const c = container.querySelector(`.dash-widget[data-i="${i}"]`); if (c) refreshOne(c, true); } pending.clear(); if (layerDue && layer) { layerDue = false; layer.refresh(); } };
+    const flush = () => { liveTimer = null; if (!container.isConnected) { pending.clear(); if (ES === es) { es.close(); ES = null; } return; } for (const i of pending) { const c = container.querySelector(`.dash-widget[data-i="${i}"]`); if (c) refreshOne(c, true); } pending.clear(); if (layerDue && layer) { layerDue = false; layer.refresh(); } };
     const mark = (pred) => { (spec.widgets || []).forEach((w, i) => { if (shown(i) && pred(w, bindsOf(i) || {})) pending.add(i); }); if ((pending.size || layerDue) && !liveTimer) liveTimer = setTimeout(flush, 400); };
     const es = new EventSource(P('/api/v1/stream') + '?' + qs, { withCredentials: true }); ES = es;
     const state = (connected) => window.dispatchEvent(new CustomEvent('ctrl32:live', { detail: { connected } }));
@@ -598,6 +598,7 @@
     for (const card of container.querySelectorAll('.dash-widget')) filterBar(card, spec.widgets[+card.dataset.i], () => refreshOne(card));
     const HEAVY = new Set(['overview_table', 'period_table']);
     const refreshOne = async (card, live) => {
+      if (!container.isConnected) return; // the screen left the page (a display shows the next one)
       const w0 = spec.widgets[+card.dataset.i]; const w = card._ovr ? Object.assign({}, w0, { params: Object.assign({}, w0.params, card._ovr) }) : w0; const body = card.querySelector('.dash-body');
       // a live event refreshes a heavy table at most every 5 s
       if (live && HEAVY.has(w.type) && Date.now() - (card._last || 0) < 5000) { if (!card._later) card._later = setTimeout(() => { card._later = null; refreshOne(card, false); }, 5000); return; }
@@ -620,9 +621,9 @@
     const cardsNow = () => [...container.querySelectorAll('.dash-widget')];
     const bindsOf = (i) => { const c = container.querySelector(`.dash-widget[data-i="${i}"]`); return c && c._res ? c._res.bindings : (spec.widgets[i] || {}).bindings || {}; };
     let liveKey = null;
-    const live = () => { if (opts.live !== false && window.EventSource) { const k = JSON.stringify(spec.widgets.map((w, i) => bindsOf(i))); if (k !== liveKey) { liveKey = k; connectLive(container, spec, refreshOne, layer, bindsOf); } } };
+    const live = () => { if (opts.live !== false && window.EventSource && container.isConnected) { const k = JSON.stringify(spec.widgets.map((w, i) => bindsOf(i))); if (k !== liveKey) { liveKey = k; connectLive(container, spec, refreshOne, layer, bindsOf); } } };
     container._nav = nav;
-    const refresh = async () => { await Promise.all(cardsNow().map((c) => refreshOne(c)).concat(layer ? [layer.refresh()] : [])); if (liveKey !== null) live(); };
+    const refresh = async () => { if (!container.isConnected) return; await Promise.all(cardsNow().map((c) => refreshOne(c)).concat(layer ? [layer.refresh()] : [])); if (liveKey !== null) live(); };
     await refresh();
     live();
     return refresh;

@@ -249,3 +249,5 @@
 
 **10. 11. — 0.87.2: obrazovka so striedaním obrazov.** Pri skúške steny Farmol (prehľad, denník, detail mixéra v slede) mali obrazy po prvom chýbajúce jednotky: zoznam datastreamov (`widgets.js`, 60 s cache) ostal z predchádzajúceho obrazu, ktorý má vlastný verejný token. `setPublic` pri novom tokene cache zahodí. Overené v headless Chrome so spárovanou obrazovkou na dev aj na portáli; automatický test na to nie je.
 
+**10. 11. — 0.87.3: obrazovka – starý obraz už nič nečíta.** Pri striedaní obrazov na portáli ostal prehľad prázdny. Príčina: obraz, ktorý obrazovka práve zmenila, ďalej reagoval na živé udalosti a obnovoval sa – s tokenom nového obrazu (`P()` je globálne), server to odmietol (403) a starý obraz si navyše znova pripojil živý prúd, takže nový obraz prišiel o aktualizácie. Obsah, ktorý už nie je v dokumente (`isConnected`), sa teraz neobnovuje a jeho prúd sa zavrie. Na dev: 3 obrazy v slede, 0 odmietnutých požiadaviek (predtým 49). e2e `dashboards` 89, `displays` 102, `mimics` 41, `live` 24, `logbook` 34.
+
