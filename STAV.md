@@ -81,6 +81,8 @@
 | 0.87.3 | Obrazovka so striedaním: predchádzajúci obraz sa po prepnutí prestane obnovovať (inak čítal s tokenom nového obrazu, dostával 403 a prepisoval mu živý prúd – prehľad ostal prázdny) | e2e `dashboards` 89, `displays` 102, `mimics` 41, `live` 24, `logbook` 34; headless spárovaná obrazovka dev + portál |
 | 0.87.4 | Posledné hodnoty datastreamov cez index (predtým DISTINCT ON cez 400 dní: dávka 50 id 1,5–4,5 s pri sekundových dátach, teraz ~10 ms) | e2e `dashboards` 89, `live` 24, `device_telemetry` 92, `mimics` 41 |
 
+**Nasadenie 0.87.1–0.87.4 (10. 11. 2026):** portál cez API so zálohou. Overené spárovanou skúšobnou obrazovkou (headless, hneď odpárovaná) v organizácii Farmol: prehľad, denník a detail mixéra v slede po 20 s, hodnoty celé hneď po každom prepnutí, denník na obrazovke funguje. Skutočné monitory velína Farmolu ešte nie sú spárované (čaká sa na kódy z ich PC: otvoriť `portal.telemetry.digital/display`).
+
 **Nasadenie 0.87.0 (10. 11. 2026):** portál cez API so zálohou (bez migrácie). BB zatiaľ na 0.86.11 (0.87.0 tam nič nepotrebuje). Farmol: velín pregenerovaný (557 premenných, okná motorov M1–M3 s režimom AUTOMAT/RUČNE, obrazovka `farmol-logy`, denník na detaile mixéra), logo Farmolu v brandingu organizácie, zápisy z denníka overené na C2.
 
 **Nasadenie 0.86.11 (5. 11. 2026):** portál a BB cez API so zálohou (migrácia 0060). Na oboch monitoroch Steny BB zapnuté `allow_playback` s dôvodom. Klik a prehrávanie na fyzickom stenovom PC ešte musí vyskúšať používateľ.
