@@ -764,12 +764,17 @@ func (s *Server) latestValues(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "ids: 1..50 datastream ids")
 		return
 	}
+	// the newest row of each datastream through the (datastream_id, measured_at DESC) index — DISTINCT ON over all
+	// rows of 400 days sorted every reading of the 50 datastreams (seconds with per-second data, 0.87.4)
 	rows, err := s.pool.Query(r.Context(), `
-		SELECT DISTINCT ON (o.datastream_id) o.datastream_id::text, o.measured_at, o.value::float8, o.value_json, o.quality, ds.unit, ds.key, a.name,
+		SELECT ds.id::text, o.measured_at, o.value::float8, o.value_json, o.quality, ds.unit, ds.key, a.name,
 		       COALESCE(EXTRACT(EPOCH FROM ds.expected_interval), 0)::float8
-		FROM core.observation o JOIN core.datastream ds ON ds.id = o.datastream_id JOIN core.asset a ON a.id = ds.asset_id
-		WHERE o.datastream_id = ANY($1::uuid[]) AND ($2 = '' OR o.org_id = $2::uuid) AND o.measured_at > now() - interval '400 days'
-		ORDER BY o.datastream_id, o.measured_at DESC`, ids, orgOf(p))
+		FROM unnest($1::uuid[]) AS x(id)
+		JOIN core.datastream ds ON ds.id = x.id
+		JOIN core.asset a ON a.id = ds.asset_id
+		JOIN LATERAL (SELECT ob.measured_at, ob.value, ob.value_json, ob.quality FROM core.observation ob
+			WHERE ob.datastream_id = x.id AND ($2 = '' OR ob.org_id = $2::uuid) AND ob.measured_at > now() - interval '400 days'
+			ORDER BY ob.measured_at DESC LIMIT 1) o ON true`, ids, orgOf(p))
 	if err != nil {
 		writeErr(w, 500, "query failed")
 		return
