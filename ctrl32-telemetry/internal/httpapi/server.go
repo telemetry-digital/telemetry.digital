@@ -226,6 +226,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.HandleFunc("GET /api/v1/public/{token}/period-table", s.publicPeriodTable)
 	mux.HandleFunc("GET /api/v1/public/{token}/devices", s.publicDevices)
 	mux.HandleFunc("GET /api/v1/public/{token}/alarms", s.publicAlarms)
+	mux.HandleFunc("GET /api/v1/public/{token}/logbook", s.publicLogbook) // paired displays only (0.87.1)
 	mux.HandleFunc("GET /api/v1/public/{token}/annotations", s.publicAnnotations)
 	mux.HandleFunc("GET /api/v1/public/{token}/stream", s.publicStream)
 	mux.HandleFunc("GET /api/v1/public/{token}/hmi/objects/{slug}/svg", s.publicHMIObjectSVG)

@@ -34,6 +34,9 @@ type shareInfo struct {
 	HasAlarms       bool
 	Ents            map[string]bool // entities of the dashboard's aliases, "type:id" (entities.go)
 	Cams            map[string]bool // camera widgets; only a paired display ever plays them
+	// Logbook widgets (0.87.1): only a paired display reads them; LogAll = a logbook without devices (whole org)
+	LogDevs map[string]bool
+	LogAll  bool
 }
 
 func (s *Server) resolveShare(ctx context.Context, token string) (*shareInfo, bool) {
@@ -49,7 +52,7 @@ func (s *Server) resolveShare(ctx context.Context, token string) (*shareInfo, bo
 
 // shareOf reads the current version of a dashboard and what its widgets may read (public links and displays).
 func (s *Server) shareOf(ctx context.Context, org, slug string) (*shareInfo, bool) {
-	si := &shareInfo{DS: map[string]bool{}, Devs: map[string]bool{}, Cams: map[string]bool{}, Ents: map[string]bool{}}
+	si := &shareInfo{DS: map[string]bool{}, Devs: map[string]bool{}, Cams: map[string]bool{}, Ents: map[string]bool{}, LogDevs: map[string]bool{}}
 	var raw []byte
 	err := s.pool.QueryRow(ctx, `SELECT org_id::text, slug, name, spec FROM core.dashboard WHERE org_id = $1::uuid AND slug = $2 AND valid_to IS NULL`, org, slug).
 		Scan(&si.Org, &si.Slug, &si.Name, &raw)
@@ -87,6 +90,17 @@ func (si *shareInfo) collect() {
 			for _, id := range dv {
 				if str, ok := id.(string); ok {
 					si.Devs[str] = true
+				}
+			}
+		}
+		if typ == "logbook" {
+			dv, _ := binds["devices"].([]any)
+			if len(dv) == 0 {
+				si.LogAll = true
+			}
+			for _, id := range dv {
+				if str, ok := id.(string); ok {
+					si.LogDevs[str] = true
 				}
 			}
 		}

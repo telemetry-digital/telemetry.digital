@@ -316,14 +316,14 @@
   // Logbook (0.87.0): commands (who wrote/pressed what, where, value, read-back, reason) and alarm events
   // (raised, escalated, acknowledged with who and why, cleared), newest first; bound devices limit the scope.
   W.logbook = async (el, p, ctx) => {
-    if (PUBLIC) { el.innerHTML = `<span class="muted">${esc(TR('The logbook is not available on public links.'))}</span>`; return; }
+    if (PUBLIC && !PUBLIC.startsWith('~')) { el.innerHTML = `<span class="muted">${esc(TR('The logbook is not available on public links.'))}</span>`; return; }
     const labels = {}; String(p.labels || '').split('\n').forEach((l) => { const i = l.indexOf('='); if (i > 0) labels[l.slice(0, i).trim()] = l.slice(i + 1).trim(); });
     const lab = (k) => (k && labels[k]) || k || '';
     const qs = new URLSearchParams({ limit: String(Math.min(500, p.limit || 30)) });
     const devs = (ctx.bindings && ctx.bindings.devices) || []; if (devs.length) qs.set('devices', devs.join(','));
     if (p.keys) qs.set('keys', String(p.keys).replace(/\s+/g, ''));
     if (p.kinds && p.kinds !== 'all') qs.set('kinds', p.kinds);
-    const r = await api('GET', '/api/v1/logbook?' + qs.toString()); const items = r.items || [];
+    const r = await api('GET', P('/api/v1/logbook') + '?' + qs.toString()); const items = r.items || [];
     const EV = { raised: TR('Alarm raised'), escalated: TR('Alarm escalated'), acknowledged: TR('Alarm acknowledged'), cleared: TR('Alarm cleared'), suppressed: TR('Alarm suppressed'), unsuppressed: TR('Alarm unsuppressed') };
     const val = (v) => v == null ? '' : typeof v === 'number' ? (Number.isInteger(v) ? String(v) : num(v, 2)) : typeof v === 'boolean' ? (v ? TR('on') : TR('off')) : esc(typeof v === 'object' ? JSON.stringify(v) : String(v));
     // one bound device: no Where column; today's entries show the time only (narrow popups stay readable)

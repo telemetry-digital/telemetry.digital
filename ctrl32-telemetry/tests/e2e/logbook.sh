@@ -75,6 +75,20 @@ req GET "/api/v1/dashboards/lb-pic-$SUF"; check "popup target kept" "$(jx 'j.spe
 check "logbook params kept" "$(jx 'j.spec.widgets[0].params.keys')" "sp_*,agi_auto"
 BAD='{"kind":"mimic","layout":{"type":"canvas","width":800,"height":600},"elements":[{"type":"rect","on":[{"act":"popup"}]}]}'
 req POST /api/v1/dashboards "{\"slug\":\"lb-bad-$SUF\",\"name\":\"bad\",\"spec\":$BAD,\"reason\":\"e2e\"}"; check "popup without a target refused" "$(st)" 400
+
+echo "== a paired display reads the logbook of its screen, a public link does not"
+req POST "/api/v1/dashboards/lb-pic-$SUF/share" '{"reason":"e2e"}'; SHARE=$(jx j.token)
+curl -s -o /dev/null -w '%{http_code}' "$BASE/api/v1/public/$SHARE/logbook" > "$TMP/s"; check "public link refused" "$(st)" 403
+KJ="$TMP/kiosk"
+curl -s -b "$KJ" -c "$KJ" -X POST -H 'Content-Type: application/json' -d '{}' -o "$TMP/b" "$BASE/api/v1/display/hello"; CODE=$(jx j.code)
+req POST /api/v1/displays/pair "{\"code\":\"$CODE\",\"name\":\"Logbook wall $SUF\",\"content\":{\"items\":[{\"kind\":\"dashboard\",\"slug\":\"lb-pic-$SUF\"}]},\"reason\":\"e2e\"}"; check "display paired" "$(st)" 201; DISP=$(jx j.id)
+curl -s -b "$KJ" -c "$KJ" -X POST -H 'Content-Type: application/json' -d '{"code_known":true}' -o /dev/null "$BASE/api/v1/display/hello"
+curl -s -b "$KJ" -c "$KJ" -o "$TMP/b" -w '%{http_code}' "$BASE/api/v1/public/~lb-pic-$SUF/logbook?devices=$DEV,$DEV2" > "$TMP/s"
+check "display: only the devices of its logbook widget" "$(st) $(jx '[...new Set(j.items.map(e=>e.device))].join(",")')" "200 Logbook mixer $SUF"
+check "display: keys of the widget may be asked" "$(jx 'j.items.some(e=>e.kind==="command" && e.user)')" "true"
+curl -s -o /dev/null -w '%{http_code}' "$BASE/api/v1/public/~lb-pic-$SUF/logbook" > "$TMP/s"; check "without the display cookie refused" "$([[ $(st) == 200 ]] && echo open || echo refused)" "refused"
+req DELETE "/api/v1/displays/$DISP?reason=e2e"
+req DELETE "/api/v1/dashboards/lb-pic-$SUF/share?reason=e2e"
 req DELETE "/api/v1/dashboards/lb-pic-$SUF?reason=e2e"
 
 echo

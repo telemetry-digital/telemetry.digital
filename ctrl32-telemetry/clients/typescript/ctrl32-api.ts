@@ -7232,6 +7232,19 @@ export class Ctrl32Client {
     return this.request<Response>('GET', `/api/v1/public/${encodeURIComponent(token)}/hmi/objects/${encodeURIComponent(slug)}/svg`, query, undefined, true);
   }
 
+  /** Logbook of a screen on a paired display
+   *
+   * Only for a paired display of the organization (token ~<slug>); public links get 403. Scope: the devices of the screen's logbook widgets. */
+  getPublicTokenLogbook(token: string, query?: { devices?: string; keys?: string; kinds?: string; limit?: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('GET', `/api/v1/public/${encodeURIComponent(token)}/logbook`, query, undefined, false);
+  }
+
   /** Observations (bound datastreams only)
    *
    * Same parameters and cursor pagination as `GET /api/v1/observations`. */

@@ -1,0 +1,28 @@
+meta {
+  name: Logbook of a screen on a paired display
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public/:token/logbook
+  body: none
+  auth: inherit
+}
+
+params:path {
+  token: 
+}
+
+params:query {
+  ~devices: 
+  ~keys: 
+  ~kinds: 
+  ~limit: 
+}
+
+docs {
+  Logbook of a screen on a paired display
+  
+  Only for a paired display of the organization (token ~<slug>); public links get 403. Scope: the devices of the screen's logbook widgets.
+}

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"sort"
@@ -81,7 +82,16 @@ func (s *Server) logbook(w http.ResponseWriter, r *http.Request) {
 		}
 		before = t
 	}
-	kinds := q.Get("kinds")
+	out, err := s.logbookQuery(r.Context(), org, devs, keys, q.Get("kinds"), limit, before)
+	if err != nil {
+		writeErr(w, 500, "query failed")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"items": out})
+}
+
+// logbookQuery merges the commands and alarm events of an organization, newest first.
+func (s *Server) logbookQuery(ctx context.Context, org string, devs, keys []string, kinds string, limit int, before time.Time) ([]logEntry, error) {
 	want := func(k string) bool { return kinds == "" || strings.Contains(kinds, k) }
 	keyOK := func(k string) bool {
 		if len(keys) == 0 {
@@ -95,23 +105,20 @@ func (s *Server) logbook(w http.ResponseWriter, r *http.Request) {
 		return false
 	}
 	var out []logEntry
-	ctx := r.Context()
 	if want("commands") {
 		rows, err := s.pool.Query(ctx, `SELECT c.issued_at, c.method, c.args, c.status, c.issued_by_name, d.id::text, d.name, c.result, coalesce(c.error, ''), coalesce(c.reason, '')
 			FROM core.device_command c JOIN core.device d ON d.id = c.device_id
 			WHERE c.org_id = $1::uuid AND c.issued_at < $2 AND (cardinality($3::uuid[]) = 0 OR c.device_id = ANY($3::uuid[]))
 			ORDER BY c.issued_at DESC LIMIT $4`, org, before, devs, limit*4)
 		if err != nil {
-			writeErr(w, 500, "query failed")
-			return
+			return nil, err
 		}
 		for rows.Next() {
 			var e logEntry
 			var args, res []byte
 			if err := rows.Scan(&e.TS, &e.Event, &args, &e.Status, &e.User, &e.DeviceID, &e.Device, &res, &e.Error, &e.Reason); err != nil {
 				rows.Close()
-				writeErr(w, 500, "scan failed")
-				return
+				return nil, err
 			}
 			var a map[string]any
 			_ = json.Unmarshal(args, &a)
@@ -148,16 +155,14 @@ func (s *Server) logbook(w http.ResponseWriter, r *http.Request) {
 				AND (cardinality($3::uuid[]) = 0 OR coalesce(a.device_id, asg.from_id) = ANY($3::uuid[]))
 			ORDER BY ev.ts DESC LIMIT $4`, org, before, devs, limit*4)
 		if err != nil {
-			writeErr(w, 500, "query failed")
-			return
+			return nil, err
 		}
 		for rows.Next() {
 			var e logEntry
 			var v *float64
 			if err := rows.Scan(&e.TS, &e.Event, &e.User, &e.Reason, &e.Severity, &v, &e.Key, &e.Asset, &e.DeviceID, &e.Device); err != nil {
 				rows.Close()
-				writeErr(w, 500, "scan failed")
-				return
+				return nil, err
 			}
 			if v != nil {
 				e.Value = *v
@@ -176,6 +181,54 @@ func (s *Server) logbook(w http.ResponseWriter, r *http.Request) {
 	}
 	if out == nil {
 		out = []logEntry{}
+	}
+	return out, nil
+}
+
+// publicLogbook serves the logbook widgets of a screen to a paired display of the organization (0.87.1): a control
+// room wall shows who did what. Public links never get it — names and reasons are internal. The devices are those
+// of the screen's logbook widgets (all of the organization for a logbook without devices).
+//
+//	GET /api/v1/public/~<slug>/logbook?devices=&keys=&kinds=&limit=   (paired display only)
+func (s *Server) publicLogbook(w http.ResponseWriter, r *http.Request) {
+	if !strings.HasPrefix(r.PathValue("token"), "~") {
+		writeErr(w, 403, "the logbook is not available on public links")
+		return
+	}
+	si, ok := s.publicShare(w, r)
+	if !ok {
+		return
+	}
+	q := r.URL.Query()
+	devs := []string{}
+	for _, d := range splitIDs(q.Get("devices"), 200) {
+		if si.LogAll || si.LogDevs[d] {
+			devs = append(devs, d)
+		}
+	}
+	if len(devs) == 0 && !si.LogAll {
+		for d := range si.LogDevs {
+			devs = append(devs, d)
+		}
+		if len(devs) == 0 {
+			writeJSON(w, 200, map[string]any{"items": []logEntry{}})
+			return
+		}
+	}
+	keys := []string{}
+	for _, k := range splitIDs(q.Get("keys"), 50) {
+		if cmdKeyRe.MatchString(strings.TrimSuffix(k, "*")) {
+			keys = append(keys, k)
+		}
+	}
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	out, err := s.logbookQuery(r.Context(), si.Org, devs, keys, q.Get("kinds"), limit, time.Now().Add(time.Minute))
+	if err != nil {
+		writeErr(w, 500, "query failed")
+		return
 	}
 	writeJSON(w, 200, map[string]any{"items": out})
 }
