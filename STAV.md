@@ -135,8 +135,8 @@ Vetva zlúčená do `main` (PR #1, 27. 9. 2026, CI zelené). Celá sada testov (
 - **Farmol (nový projekt 10. 11. 2026):** velín miešacej linky (SIMEX C7, mixéry C1–C4, S1–S5, rozvody médií).
   Organizácia **Farmol** (`farmol`, správca `farmol.admin`, prístupy v `.farmol-admin.txt`/`.farmol-token.txt` mimo
   git) s obrazmi `/dashboards/farmol-velin` a `/dashboards/farmol-<jednotka>`; dáta zo simulátora PLC (služba
-  `farmolsim` na produkčnom serveri, OPC UA 127.0.0.1:4860) cez OPC UA konektor, 307 datastreamov, 56 alarmových
-  pravidiel, zápis nastavených hodnôt overený (zápis + spätné čítanie + audit). Podklady a skripty
+  `farmolsim` na produkčnom serveri, OPC UA 127.0.0.1:4860) cez OPC UA konektor, 497 datastreamov, 96 alarmových
+  pravidiel (3 pohony na nádobu: M1+M2 hore, M3 zospodu), zákaznícke účty farmol.zakaznik/velin/vedenie (heslá v `.farmol-users.txt`), zápis nastavených hodnôt overený (zápis + spätné čítanie + audit). Podklady a skripty
   v `_zakaznici/farmol/` (README tam). Demo len **3 dni → okolo 13. 11. 2026 vypnúť** `farmolsim` a konektor (disk
   servera 81 %). Ponuka SK/EN je koncept v Gmaili (doplniť adresáta a cenu). **Sľúbené v ponuke, v platforme
   chýba:** receptúry (knižnica, verzie, načítanie do mixéra s overením) a záznam várky.
