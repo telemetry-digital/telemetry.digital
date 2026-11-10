@@ -16,7 +16,8 @@
   // Public mode: a dashboard published at /p/<token> reads its data from /api/v1/public/<token>/… (no session).
   let PUBLIC = '';
   const P = (path) => PUBLIC ? path.replace('/api/v1/', '/api/v1/public/' + encodeURIComponent(PUBLIC) + '/') : path;
-  function setPublic(token) { PUBLIC = token || ''; }
+  // a display shows several screens in turn: each has its own datastreams, so a new token drops the cached list
+  function setPublic(token) { token = token || ''; if (token !== PUBLIC) { dsCache = null; dsAt = 0; } PUBLIC = token; }
   // "today" runs from local midnight (production screens: output of the day)
   const RANGE_MS = { '1h': 3600e3, '6h': 6 * 3600e3, '8h': 8 * 3600e3, '12h': 12 * 3600e3, '24h': 24 * 3600e3, '7d': 7 * 86400e3, '30d': 30 * 86400e3, '90d': 90 * 86400e3,
     get today() { const d = new Date(); d.setHours(0, 0, 0, 0); return Math.max(60e3, Date.now() - d.getTime()); } };

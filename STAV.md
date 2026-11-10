@@ -1,4 +1,4 @@
-# Stav práce (aktualizované 10. 11. 2026, 0.87.1)
+# Stav práce (aktualizované 10. 11. 2026, 0.87.2)
 
 ## Hotové (vo vetve `main`, otestované)
 
@@ -77,6 +77,7 @@
 | 0.86.11 | Záznamy na obrazovke (kiosku): nastavenie obrazovky `allow_playback` (predvolene vypnuté, s dôvodom, zapnutie len s `video.playback`, migrácia 0060); zväčšená kamera má tlačidlo Záznamy, deň, časová os, posun, pauza, rýchlosť 1/4/16×, bez sťahovania, s maskami, bez zvuku; audit pod názvom obrazovky; po 15 min bez dotyku návrat na stenu (spec 014 FR-007, URS P-29) | e2e `displays` 102/102, headless `range_and_display_enlarge` 32/32; kontrola, že zapnutie bez `video.playback` je zamietnuté, nemá vlastný test |
 | 0.87.0 | **Prevádzkový denník a obraz ako okno.** Widget *Prevádzkový denník* a `GET /api/v1/logbook`: povely (kto, kedy, kde, kľúč, hodnota, spätné čítanie, stav, dôvod) a udalosti alarmov (vznik, eskalácia, potvrdenie – kto a prečo, zánik) v jednom zozname; filtre zariadenia, kľúče s `*`, druh; nie na verejnom odkaze. Klikacia akcia *Otvoriť obraz ako okno* (`popup`) – napr. okno motora s hodnotami, režimom AUTOMAT/RUČNE, ručným chodom, žiadanými otáčkami, trendom a denníkom. 17 textov v 19 jazykoch, dokumentácia (widgets-lists, scada-elements, alarms) | e2e `logbook` 29 (nová), `dashboards` 89, `mimics` 41, `openapi` 17, `i18n_auth` 51; go test httpapi; ručne headless na dev |
 | 0.87.1 | Prevádzkový denník aj na spárovaných obrazovkách (stena velína): len zariadenia denníkových widgetov obrazu, verejný odkaz 403 | e2e `logbook` 34, `displays` 102, `dashboards` 89, `openapi` 17 |
+| 0.87.2 | Obrazovka so striedaním obrazov: po prepnutí na ďalší obraz chýbali jednotky (cache datastreamov z predchádzajúceho obrazu) | headless spárovaná obrazovka dev + portál; bez automatického testu |
 
 **Nasadenie 0.87.0 (10. 11. 2026):** portál cez API so zálohou (bez migrácie). BB zatiaľ na 0.86.11 (0.87.0 tam nič nepotrebuje). Farmol: velín pregenerovaný (557 premenných, okná motorov M1–M3 s režimom AUTOMAT/RUČNE, obrazovka `farmol-logy`, denník na detaile mixéra), logo Farmolu v brandingu organizácie, zápisy z denníka overené na C2.
 

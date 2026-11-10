@@ -247,3 +247,5 @@
 
 **10. 11. — 0.87.1: denník na stene velína.** Používateľ chce SCADA na stene monitorov ako stenu kamier. Obrazovky (displays) SCADA ukazujú, ale bežia v režime verejného odkazu, takže denník tam bol zakázaný. Spárovaná obrazovka je zariadenie organizácie, ktorého obsah určil niekto s `display.manage`: dostane `GET /api/v1/public/~<slug>/logbook`, obmedzený na zariadenia denníkových widgetov obrazu (bez zariadení = celá organizácia). Verejný odkaz dostane 403 – mená a dôvody sú interné. e2e `logbook` 34, `displays` 102, `dashboards` 89, `openapi` 17.
 
+**10. 11. — 0.87.2: obrazovka so striedaním obrazov.** Pri skúške steny Farmol (prehľad, denník, detail mixéra v slede) mali obrazy po prvom chýbajúce jednotky: zoznam datastreamov (`widgets.js`, 60 s cache) ostal z predchádzajúceho obrazu, ktorý má vlastný verejný token. `setPublic` pri novom tokene cache zahodí. Overené v headless Chrome so spárovanou obrazovkou na dev aj na portáli; automatický test na to nie je.
+
