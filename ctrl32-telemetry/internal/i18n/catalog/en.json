@@ -3751,5 +3751,22 @@
  "Backup taken; installing…": "Backup taken; installing…",
  "Installed; waiting for the new version to answer healthy…": "Installed; waiting for the new version to answer healthy…",
  "Reloading in 5 s.": "Reloading in 5 s.",
- "PC load": "PC load"
+ "PC load": "PC load",
+ "Logbook": "Logbook",
+ "Operations log: who sent which command where (setpoint, start/stop, mode) with value, read-back and reason, and the alarm events (raised, acknowledged with who and why, cleared). Optionally limited to the bound devices and keys; labels translate keys.": "Operations log: who sent which command where (setpoint, start/stop, mode) with value, read-back and reason, and the alarm events (raised, acknowledged with who and why, cleared). Optionally limited to the bound devices and keys; labels translate keys.",
+ "commands": "commands",
+ "Keys (comma-separated, prefix*; empty = all)": "Keys (comma-separated, prefix*; empty = all)",
+ "Labels (one key=label per line)": "Labels (one key=label per line)",
+ "The logbook is not available on public links.": "The logbook is not available on public links.",
+ "Alarm raised": "Alarm raised",
+ "Alarm escalated": "Alarm escalated",
+ "Alarm acknowledged": "Alarm acknowledged",
+ "Alarm cleared": "Alarm cleared",
+ "Alarm suppressed": "Alarm suppressed",
+ "Alarm unsuppressed": "Alarm unsuppressed",
+ "read back": "read back",
+ "Where": "Where",
+ "What": "What",
+ "no entries": "no entries",
+ "Open screen as popup": "Open screen as popup"
 }

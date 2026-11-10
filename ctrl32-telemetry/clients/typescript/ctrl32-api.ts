@@ -6328,6 +6328,21 @@ export class Ctrl32Client {
   }>('POST', `/api/v1/landing/versions/${encodeURIComponent(v)}/publish`, undefined, body, false);
   }
 
+  /** Operations log: commands and alarm events, newest first
+   *
+   * Who sent which command to which device (key, value, read-back, status, reason) and alarm events (raised, escalated, acknowledged with the actor and reason, cleared), merged by time. Optional filters: devices, keys (a trailing * matches a prefix), kinds (commands, alarms), before (paging).
+   * 
+   * Requires permission `data.read`. */
+  getLogbook(query?: { devices?: string; /** comma-separated device ids */ keys?: string; /** comma-separated keys; a trailing * matches a prefix */ kinds?: string; /** commands, alarms or both */ limit?: string; /** 1..500, default 100 */ before?: string; /** RFC 3339 time, entries older than it */ }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('GET', `/api/v1/logbook`, query, undefined, false);
+  }
+
   /** Consent page: the authorization request
    *
    * Used by the consent page `/oauth/authorize` in a signed-in browser: validates the OAuth request (client, redirect address, PKCE S256, scope, resource) and names the client. `error` and `redirect` when the request is refused in a way the client must learn.

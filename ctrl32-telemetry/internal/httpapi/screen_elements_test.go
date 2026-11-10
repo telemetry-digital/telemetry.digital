@@ -29,7 +29,7 @@ func TestElementsValid(t *testing.T) {
 		{"id":"t1","type":"symbol","symbol":"tank_vertical","x":100,"y":80,"w":120,"h":220,"tag":"` + tagA + `",
 		 "style":{"shade":true,"stroke":"#334155"},
 		 "dyn":[{"prop":"level","lin":[0,100,0,1]},{"prop":"state","map":[{"op":">=","v":1,"to":"run"},{"op":"==","v":0,"to":"stop"}]}],
-		 "on":[{"act":"faceplate"},{"act":"screen","target":"boiler-house"}]},
+		 "on":[{"act":"faceplate"},{"act":"screen","target":"boiler-house"},{"act":"popup","target":"pump-p1"}]},
 		{"type":"pipe","points":[[10,10],[200,10],[200,300]],"style":{"sw":14,"medium":"#0891b2"},"dyn":[{"prop":"flow","op":">","v":0.5}]},
 		{"type":"text","x":20,"y":20,"w":300,"h":30,"text":"<b>Mixer</b> {value}","style":{"font":22,"bold":true,"color":"#111827"},"group":"g1"},
 		{"type":"image","src":"customer-logo","x":0,"y":0,"w":100,"h":40,"group":"g1"}
@@ -60,6 +60,7 @@ func TestElementsRejected(t *testing.T) {
 		"empty lin range":     `[{"type":"rect","dyn":[{"prop":"level","lin":[5,5,0,1]}]}]`,
 		"url event":           `[{"type":"rect","on":[{"act":"url","target":"https://evil"}]}]`,
 		"screen bad slug":     `[{"type":"rect","on":[{"act":"screen","target":"../admin"}]}]`,
+		"popup without slug":  `[{"type":"rect","on":[{"act":"popup"}]}]`,
 		"command without key": `[{"type":"rect","on":[{"act":"command"}]}]`,
 		"duplicate id":        `[{"id":"a","type":"rect"},{"id":"a","type":"rect"}]`,
 		"far outside":         `[{"type":"rect","x":999999}]`,

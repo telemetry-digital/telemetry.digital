@@ -348,6 +348,7 @@ func showcaseMore(w func(id, typ string, x, y, wd, h int, binds map[string][]str
 		withSource(w("overview", "overview_table", 0, y+23, 12, 5, dsb(nil), map[string]any{"title": "Overview table — every datastream (query source)", "page_size": 10}), map[string]any{}),
 		withAlias(w("etable", "entities_table", 0, y+28, 8, 4, nil, map[string]any{"title": "Entities table — all devices (alias)", "columns": []string{"name", "profile", "site", "alarm", "last_seen"}, "page_size": 10}), "devices"),
 		withAlias(w("selector", "entity_selector", 8, y+28, 4, 1, nil, map[string]any{"title": "Entity selector"}), "devices"),
+		w("logbook", "logbook", 0, y+32, 12, 4, nil, map[string]any{"title": "Logbook — commands and alarm events", "limit": 30}),
 	}
 }
 

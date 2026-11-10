@@ -310,6 +310,9 @@ main { padding-top: 24px; }
 @keyframes sc-flame { from { transform: scaleY(.85); } to { transform: scaleY(1.1); } }
 @media (prefers-reduced-motion: reduce) { .sc-spin, .sc-agit, .sc-flow, .sc-flame, .sc-bub { animation: none; } .sc-blink { animation-duration: 2s; } }
 dialog.sc-dlg { width: min(720px, calc(100vw - 32px)); }
+dialog.sc-dlg:has(.sc-pop) { width: fit-content; max-width: calc(100vw - 32px); }
+.sc-pop .sc-pop-body { max-width: 100%; }
+.sc-pop .sc-pop-body .mimic-wrap { overflow: hidden; }
 .sc-fp-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .sc-fp-val { margin: 4px 0 8px; } .sc-fp-big { font-size: 2em; font-weight: 700; }
 .sc-fp-range { gap: 4px; margin-bottom: 6px; }

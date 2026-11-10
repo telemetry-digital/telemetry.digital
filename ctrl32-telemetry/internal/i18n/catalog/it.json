@@ -3751,5 +3751,22 @@
  "Backup taken; installing…": "Backup eseguito; installazione…",
  "Installed; waiting for the new version to answer healthy…": "Installato; in attesa che la nuova versione risponda sana…",
  "Reloading in 5 s.": "Ricarica tra 5 s.",
- "PC load": "Carico del PC"
+ "PC load": "Carico del PC",
+ "Logbook": "Registro operativo",
+ "Operations log: who sent which command where (setpoint, start/stop, mode) with value, read-back and reason, and the alarm events (raised, acknowledged with who and why, cleared). Optionally limited to the bound devices and keys; labels translate keys.": "Registro operativo: chi ha inviato quale comando e dove (setpoint, avvio/arresto, modalità) con valore, rilettura e motivo, e gli eventi di allarme (insorto, riconosciuto – da chi e perché, rientrato). Facoltativamente limitato ai dispositivi collegati e alle chiavi; le etichette traducono le chiavi.",
+ "commands": "comandi",
+ "Keys (comma-separated, prefix*; empty = all)": "Chiavi (separate da virgole, prefisso*; vuoto = tutte)",
+ "Labels (one key=label per line)": "Etichette (una chiave=etichetta per riga)",
+ "The logbook is not available on public links.": "Il registro operativo non è disponibile tramite link pubblico.",
+ "Alarm raised": "Allarme insorto",
+ "Alarm escalated": "Allarme escalato",
+ "Alarm acknowledged": "Allarme riconosciuto",
+ "Alarm cleared": "Allarme rientrato",
+ "Alarm suppressed": "Allarme soppresso",
+ "Alarm unsuppressed": "Soppressione dell'allarme revocata",
+ "read back": "riletto",
+ "Where": "Dove",
+ "What": "Cosa",
+ "no entries": "nessuna voce",
+ "Open screen as popup": "Apri la schermata in una finestra"
 }

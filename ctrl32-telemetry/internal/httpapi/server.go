@@ -243,6 +243,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("DELETE /api/v1/hmi/objects/{slug}", s.require("content.write", s.deleteHMIObject))
 	mux.Handle("GET /api/v1/hmi/objects/{slug}/svg", s.require("data.read", s.hmiObjectSVG))
 	mux.Handle("GET /api/v1/alarms", s.require("data.read", s.alarms))
+	mux.Handle("GET /api/v1/logbook", s.require("data.read", s.logbook)) // operations log: commands + alarm events (0.87.0)
 	mux.Handle("GET /api/v1/incidents", s.require("data.read", s.listIncidents))
 	mux.Handle("GET /api/v1/incidents/{id}", s.require("data.read", s.getIncident))
 	mux.Handle("POST /api/v1/incidents", s.require("alarm.ack", s.createIncident))

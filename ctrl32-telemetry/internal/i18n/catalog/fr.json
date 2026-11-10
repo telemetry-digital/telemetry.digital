@@ -3751,5 +3751,22 @@
  "Backup taken; installing…": "Sauvegarde faite ; installation…",
  "Installed; waiting for the new version to answer healthy…": "Installé ; en attente d'une réponse saine de la nouvelle version…",
  "Reloading in 5 s.": "Rechargement dans 5 s.",
- "PC load": "Charge du PC"
+ "PC load": "Charge du PC",
+ "Logbook": "Journal d'exploitation",
+ "Operations log: who sent which command where (setpoint, start/stop, mode) with value, read-back and reason, and the alarm events (raised, acknowledged with who and why, cleared). Optionally limited to the bound devices and keys; labels translate keys.": "Journal d'exploitation : qui a envoyé quelle commande et où (consigne, marche/arrêt, mode) avec la valeur, la relecture et le motif, ainsi que les événements d'alarme (apparition, acquittement – par qui et pourquoi, disparition). Limitable aux appareils liés et aux clés ; les libellés traduisent les clés.",
+ "commands": "commandes",
+ "Keys (comma-separated, prefix*; empty = all)": "Clés (séparées par des virgules, préfixe* ; vide = toutes)",
+ "Labels (one key=label per line)": "Libellés (une clé=libellé par ligne)",
+ "The logbook is not available on public links.": "Le journal d'exploitation n'est pas disponible via un lien public.",
+ "Alarm raised": "Alarme apparue",
+ "Alarm escalated": "Alarme escaladée",
+ "Alarm acknowledged": "Alarme acquittée",
+ "Alarm cleared": "Alarme disparue",
+ "Alarm suppressed": "Alarme masquée",
+ "Alarm unsuppressed": "Masquage de l'alarme levé",
+ "read back": "relu",
+ "Where": "Où",
+ "What": "Quoi",
+ "no entries": "aucune entrée",
+ "Open screen as popup": "Ouvrir l'écran dans une fenêtre"
 }

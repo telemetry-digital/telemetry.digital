@@ -3751,5 +3751,22 @@
  "Backup taken; installing…": "Varmuuskopio otettu; asennetaan…",
  "Installed; waiting for the new version to answer healthy…": "Asennettu; odotetaan, että uusi versio vastaa terveenä…",
  "Reloading in 5 s.": "Ladataan uudelleen 5 s:n kuluttua.",
- "PC load": "Kuormitus"
+ "PC load": "Kuormitus",
+ "Logbook": "Käyttöpäiväkirja",
+ "Operations log: who sent which command where (setpoint, start/stop, mode) with value, read-back and reason, and the alarm events (raised, acknowledged with who and why, cleared). Optionally limited to the bound devices and keys; labels translate keys.": "Käyttöpäiväkirja: kuka lähetti minkä komennon minne (asetusarvo, käynnistys/pysäytys, tila) arvon, takaisinluvun ja syyn kanssa, sekä hälytystapahtumat (syntynyt, kuitattu – kuka ja miksi, poistunut). Voidaan rajata sidottuihin laitteisiin ja avaimiin; nimiöt kääntävät avaimet.",
+ "commands": "komennot",
+ "Keys (comma-separated, prefix*; empty = all)": "Avaimet (pilkuin eroteltuna, etuliite*; tyhjä = kaikki)",
+ "Labels (one key=label per line)": "Nimiöt (yksi avain=nimiö riviä kohden)",
+ "The logbook is not available on public links.": "Käyttöpäiväkirja ei ole käytettävissä julkisen linkin kautta.",
+ "Alarm raised": "Hälytys syntyi",
+ "Alarm escalated": "Hälytys eskaloitui",
+ "Alarm acknowledged": "Hälytys kuitattu",
+ "Alarm cleared": "Hälytys poistui",
+ "Alarm suppressed": "Hälytys vaimennettu",
+ "Alarm unsuppressed": "Hälytyksen vaimennus peruttu",
+ "read back": "takaisin luettu",
+ "Where": "Missä",
+ "What": "Mitä",
+ "no entries": "ei merkintöjä",
+ "Open screen as popup": "Avaa näkymä ikkunana"
 }

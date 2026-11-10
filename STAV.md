@@ -1,4 +1,4 @@
-# Stav práce (aktualizované 5. 11. 2026, 0.86.11)
+# Stav práce (aktualizované 10. 11. 2026, 0.87.0)
 
 ## Hotové (vo vetve `main`, otestované)
 
@@ -75,6 +75,7 @@
 | 0.86.9 | Stránka kamery: polia Od a Do pre presný výber na sekundu, aj cez hranicu hodiny a polnoc (ťahanie ich vypĺňa, prázdne pole sa doplní o hodinu). Obrazovka (kiosk): klik na dlaždicu steny ju zväčší s hlavným prúdom, späť ďalší klik, Esc, tlačidlo alebo samo po 5 min; záznamy sa neponúkajú, lebo kiosk nemá používateľa | headless `range_and_display_enlarge` 21/21 |
 | 0.86.10 | Stiahnutie MP4 najviac 24 h (predtým 1 h; súbor sa posiela priebežne, na serveri nezaberá miesto). Dôkazový ZIP ostáva 1 h (balík sa pred odoslaním skladá celý) | e2e `video` 168/172 (4 = chýbajúci `python3`), headless 22/22, na dev stiahnutých 4,33 h (2,3 GB) za 62 s |
 | 0.86.11 | Záznamy na obrazovke (kiosku): nastavenie obrazovky `allow_playback` (predvolene vypnuté, s dôvodom, zapnutie len s `video.playback`, migrácia 0060); zväčšená kamera má tlačidlo Záznamy, deň, časová os, posun, pauza, rýchlosť 1/4/16×, bez sťahovania, s maskami, bez zvuku; audit pod názvom obrazovky; po 15 min bez dotyku návrat na stenu (spec 014 FR-007, URS P-29) | e2e `displays` 102/102, headless `range_and_display_enlarge` 32/32; kontrola, že zapnutie bez `video.playback` je zamietnuté, nemá vlastný test |
+| 0.87.0 | **Prevádzkový denník a obraz ako okno.** Widget *Prevádzkový denník* a `GET /api/v1/logbook`: povely (kto, kedy, kde, kľúč, hodnota, spätné čítanie, stav, dôvod) a udalosti alarmov (vznik, eskalácia, potvrdenie – kto a prečo, zánik) v jednom zozname; filtre zariadenia, kľúče s `*`, druh; nie na verejnom odkaze. Klikacia akcia *Otvoriť obraz ako okno* (`popup`) – napr. okno motora s hodnotami, režimom AUTOMAT/RUČNE, ručným chodom, žiadanými otáčkami, trendom a denníkom. 17 textov v 19 jazykoch, dokumentácia (widgets-lists, scada-elements, alarms) | e2e `logbook` 29 (nová), `dashboards` 89, `mimics` 41, `openapi` 17, `i18n_auth` 51; go test httpapi; ručne headless na dev |
 
 **Nasadenie 0.86.11 (5. 11. 2026):** portál a BB cez API so zálohou (migrácia 0060). Na oboch monitoroch Steny BB zapnuté `allow_playback` s dôvodom. Klik a prehrávanie na fyzickom stenovom PC ešte musí vyskúšať používateľ.
 

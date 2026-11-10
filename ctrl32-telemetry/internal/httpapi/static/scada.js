@@ -318,6 +318,7 @@
     const list = e.on && e.on.length ? e.on : [{ act: 'faceplate' }];
     const ev = list[0];
     if (ev.act === 'screen') { if (!isPublic()) location.href = '/dashboards/' + encodeURIComponent(ev.target); return; }
+    if (ev.act === 'popup') { if (!isPublic()) popupScreen(ev.target, e.name); return; }
     if (ev.act === 'command') { commandDialog(e, ev); return; }
     faceplate(e, live, ev.act === 'trend');
   }
@@ -325,6 +326,27 @@
     let d = document.querySelector('dialog.sc-dlg');
     if (!d) { d = document.createElement('dialog'); d.className = 'sc-dlg'; document.body.appendChild(d); d.addEventListener('click', (ev) => { if (ev.target === d) d.close(); }); }
     return d;
+  }
+  // popupScreen (0.87.0): another screen (a faceplate made as a small picture: values, trend, mode switch, logbook)
+  // in a dialog over the current one; it refreshes every 3 s while open (the page keeps its own live stream).
+  async function popupScreen(slug, name) {
+    const d = dialog(); const WG = window.ctrl32Widgets;
+    d.innerHTML = `<div class="sc-pop"><div class="sc-fp-head"><b class="sc-pop-title">${esc(name || slug)}</b><span class="grow"></span><button class="btn small ghost" type="button" data-close title="Close">✕</button></div><div class="sc-pop-body"><span class="muted">loading…</span></div></div>`;
+    let timer = null;
+    const close = () => { if (timer) clearInterval(timer); timer = null; };
+    for (const b of d.querySelectorAll('[data-close]')) b.onclick = () => d.close();
+    d.addEventListener('close', close, { once: true });
+    d.showModal();
+    try {
+      const r = await ctrl32.api('GET', '/api/v1/dashboards/' + encodeURIComponent(slug));
+      const spec = r.spec || {}; const box = d.querySelector('.sc-pop-body');
+      const w0 = (spec.layout && spec.layout.width) || 900;
+      box.style.width = `min(${w0}px, 92vw)`;
+      if (r.name) d.querySelector('.sc-pop-title').textContent = r.name;
+      const refresh = await WG.render(box, spec, { range: spec.range || '6h', live: false });
+      if (WG.fitMimic) WG.fitMimic(box);
+      timer = setInterval(() => { if (d.open) refresh(); else close(); }, 3000);
+    } catch (x) { d.querySelector('.sc-pop-body').innerHTML = `<span class="muted">${esc(x.message)}</span>`; }
   }
   async function sendCommand(out, device, method, key, value, reason) {
     out.innerHTML = '<span class="muted">sending…</span>';

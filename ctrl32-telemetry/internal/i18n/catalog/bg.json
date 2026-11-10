@@ -3751,5 +3751,22 @@
  "Backup taken; installing…": "Резервното копие е готово; инсталиране…",
  "Installed; waiting for the new version to answer healthy…": "Инсталирано; изчакване новата версия да отговори като здрава…",
  "Reloading in 5 s.": "Презареждане след 5 s.",
- "PC load": "Натоварване"
+ "PC load": "Натоварване",
+ "Logbook": "Оперативен дневник",
+ "Operations log: who sent which command where (setpoint, start/stop, mode) with value, read-back and reason, and the alarm events (raised, acknowledged with who and why, cleared). Optionally limited to the bound devices and keys; labels translate keys.": "Оперативен дневник: кой каква команда е изпратил и къде (зададена стойност, пуск/стоп, режим) със стойност, обратно прочитане и причина, както и алармените събития (възникване, потвърждение – от кого и защо, отпадане). По избор ограничен до свързаните устройства и ключове; етикетите превеждат ключовете.",
+ "commands": "команди",
+ "Keys (comma-separated, prefix*; empty = all)": "Ключове (разделени със запетая, префикс*; празно = всички)",
+ "Labels (one key=label per line)": "Етикети (по един ключ=етикет на ред)",
+ "The logbook is not available on public links.": "Оперативният дневник не е достъпен чрез публична връзка.",
+ "Alarm raised": "Аларма възникна",
+ "Alarm escalated": "Аларма ескалира",
+ "Alarm acknowledged": "Аларма потвърдена",
+ "Alarm cleared": "Аларма отпадна",
+ "Alarm suppressed": "Аларма потисната",
+ "Alarm unsuppressed": "Потискането на алармата е отменено",
+ "read back": "обратно прочетено",
+ "Where": "Къде",
+ "What": "Какво",
+ "no entries": "няма записи",
+ "Open screen as popup": "Отвори екрана като прозорец"
 }

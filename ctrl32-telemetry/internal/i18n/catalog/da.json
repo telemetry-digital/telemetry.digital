@@ -3751,5 +3751,22 @@
  "Backup taken; installing…": "Sikkerhedskopi taget; installerer…",
  "Installed; waiting for the new version to answer healthy…": "Installeret; venter på, at den nye version svarer sund…",
  "Reloading in 5 s.": "Genindlæser om 5 s.",
- "PC load": "Belastning"
+ "PC load": "Belastning",
+ "Logbook": "Driftslog",
+ "Operations log: who sent which command where (setpoint, start/stop, mode) with value, read-back and reason, and the alarm events (raised, acknowledged with who and why, cleared). Optionally limited to the bound devices and keys; labels translate keys.": "Driftslog: hvem sendte hvilken kommando hvorhen (setpunkt, start/stop, tilstand) med værdi, tilbagelæsning og begrundelse, samt alarmhændelser (opstået, kvitteret – af hvem og hvorfor, ophørt). Kan begrænses til de tilknyttede enheder og nøgler; etiketter oversætter nøgler.",
+ "commands": "kommandoer",
+ "Keys (comma-separated, prefix*; empty = all)": "Nøgler (kommasepareret, præfiks*; tom = alle)",
+ "Labels (one key=label per line)": "Etiketter (én nøgle=etiket pr. linje)",
+ "The logbook is not available on public links.": "Driftsloggen er ikke tilgængelig via offentlige links.",
+ "Alarm raised": "Alarm opstået",
+ "Alarm escalated": "Alarm eskaleret",
+ "Alarm acknowledged": "Alarm kvitteret",
+ "Alarm cleared": "Alarm ophørt",
+ "Alarm suppressed": "Alarm undertrykt",
+ "Alarm unsuppressed": "Undertrykkelse af alarm ophævet",
+ "read back": "tilbagelæst",
+ "Where": "Hvor",
+ "What": "Hvad",
+ "no entries": "ingen poster",
+ "Open screen as popup": "Åbn skærm som vindue"
 }

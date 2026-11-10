@@ -3751,5 +3751,22 @@
  "Backup taken; installing…": "Copie de rezervă făcută; se instalează…",
  "Installed; waiting for the new version to answer healthy…": "Instalat; se așteaptă ca noua versiune să răspundă sănătos…",
  "Reloading in 5 s.": "Reîncărcare în 5 s.",
- "PC load": "Încărcare"
+ "PC load": "Încărcare",
+ "Logbook": "Jurnal de exploatare",
+ "Operations log: who sent which command where (setpoint, start/stop, mode) with value, read-back and reason, and the alarm events (raised, acknowledged with who and why, cleared). Optionally limited to the bound devices and keys; labels translate keys.": "Jurnal de exploatare: cine a trimis ce comandă și unde (valoare prescrisă, pornire/oprire, mod) cu valoarea, recitirea și motivul, precum și evenimentele de alarmă (apărută, confirmată – de cine și de ce, dispărută). Opțional limitat la dispozitivele legate și la chei; etichetele traduc cheile.",
+ "commands": "comenzi",
+ "Keys (comma-separated, prefix*; empty = all)": "Chei (separate prin virgulă, prefix*; gol = toate)",
+ "Labels (one key=label per line)": "Etichete (o cheie=etichetă pe rând)",
+ "The logbook is not available on public links.": "Jurnalul de exploatare nu este disponibil prin link public.",
+ "Alarm raised": "Alarmă apărută",
+ "Alarm escalated": "Alarmă escaladată",
+ "Alarm acknowledged": "Alarmă confirmată",
+ "Alarm cleared": "Alarmă dispărută",
+ "Alarm suppressed": "Alarmă suprimată",
+ "Alarm unsuppressed": "Suprimarea alarmei anulată",
+ "read back": "recitit",
+ "Where": "Unde",
+ "What": "Ce",
+ "no entries": "nicio înregistrare",
+ "Open screen as popup": "Deschide ecranul într-o fereastră"
 }

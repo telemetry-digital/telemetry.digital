@@ -3751,5 +3751,22 @@
  "Backup taken; installing…": "Varukoopia tehtud; paigaldatakse…",
  "Installed; waiting for the new version to answer healthy…": "Paigaldatud; oodatakse, et uus versioon vastaks tervena…",
  "Reloading in 5 s.": "Laaditakse uuesti 5 s pärast.",
- "PC load": "Koormus"
+ "PC load": "Koormus",
+ "Logbook": "Käidulogi",
+ "Operations log: who sent which command where (setpoint, start/stop, mode) with value, read-back and reason, and the alarm events (raised, acknowledged with who and why, cleared). Optionally limited to the bound devices and keys; labels translate keys.": "Käidulogi: kes saatis millise käsu kuhu (seadeväärtus, käivitus/seiskamine, režiim) koos väärtuse, tagasilugemise ja põhjusega, ning häiresündmused (tekkinud, kinnitatud – kes ja miks, lõppenud). Valikuliselt piiratud seotud seadmete ja võtmetega; sildid tõlgivad võtmeid.",
+ "commands": "käsud",
+ "Keys (comma-separated, prefix*; empty = all)": "Võtmed (komaga eraldatud, eesliide*; tühi = kõik)",
+ "Labels (one key=label per line)": "Sildid (üks võti=silt rea kohta)",
+ "The logbook is not available on public links.": "Käidulogi pole avaliku lingi kaudu saadaval.",
+ "Alarm raised": "Häire tekkis",
+ "Alarm escalated": "Häire eskaleerus",
+ "Alarm acknowledged": "Häire kinnitatud",
+ "Alarm cleared": "Häire lõppes",
+ "Alarm suppressed": "Häire summutatud",
+ "Alarm unsuppressed": "Häire summutamine tühistatud",
+ "read back": "tagasi loetud",
+ "Where": "Kus",
+ "What": "Mis",
+ "no entries": "kirjeid pole",
+ "Open screen as popup": "Ava kuva aknana"
 }

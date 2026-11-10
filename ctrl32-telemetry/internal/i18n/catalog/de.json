@@ -3751,5 +3751,22 @@
  "Backup taken; installing…": "Sicherung erstellt; Installation läuft…",
  "Installed; waiting for the new version to answer healthy…": "Installiert; warten, bis die neue Version gesund antwortet…",
  "Reloading in 5 s.": "Neu laden in 5 s.",
- "PC load": "Auslastung"
+ "PC load": "Auslastung",
+ "Logbook": "Betriebsbuch",
+ "Operations log: who sent which command where (setpoint, start/stop, mode) with value, read-back and reason, and the alarm events (raised, acknowledged with who and why, cleared). Optionally limited to the bound devices and keys; labels translate keys.": "Betriebsbuch: wer welchen Befehl wohin gesendet hat (Sollwert, Start/Stopp, Betriebsart) mit Wert, Rücklesung und Begründung, sowie die Alarmereignisse (ausgelöst, quittiert – von wem und warum, gegangen). Optional auf die gebundenen Geräte und Schlüssel beschränkt; Bezeichnungen übersetzen Schlüssel.",
+ "commands": "Befehle",
+ "Keys (comma-separated, prefix*; empty = all)": "Schlüssel (kommagetrennt, Präfix*; leer = alle)",
+ "Labels (one key=label per line)": "Bezeichnungen (ein Schlüssel=Bezeichnung pro Zeile)",
+ "The logbook is not available on public links.": "Das Betriebsbuch ist über öffentliche Links nicht verfügbar.",
+ "Alarm raised": "Alarm ausgelöst",
+ "Alarm escalated": "Alarm eskaliert",
+ "Alarm acknowledged": "Alarm quittiert",
+ "Alarm cleared": "Alarm gegangen",
+ "Alarm suppressed": "Alarm unterdrückt",
+ "Alarm unsuppressed": "Alarmunterdrückung aufgehoben",
+ "read back": "zurückgelesen",
+ "Where": "Wo",
+ "What": "Was",
+ "no entries": "keine Einträge",
+ "Open screen as popup": "Bild als Fenster öffnen"
 }

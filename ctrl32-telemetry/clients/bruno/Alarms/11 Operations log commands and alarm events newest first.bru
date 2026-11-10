@@ -1,0 +1,27 @@
+meta {
+  name: Operations log commands and alarm events newest first
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/v1/logbook
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~devices: 
+  ~keys: 
+  ~kinds: 
+  ~limit: 
+  ~before: 
+}
+
+docs {
+  Operations log: commands and alarm events, newest first
+  
+  Who sent which command to which device (key, value, read-back, status, reason) and alarm events (raised, escalated, acknowledged with the actor and reason, cleared), merged by time. Optional filters: devices, keys (a trailing * matches a prefix), kinds (commands, alarms), before (paging).
+  
+  Requires permission `data.read`.
+}

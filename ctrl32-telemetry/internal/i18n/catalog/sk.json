@@ -3751,5 +3751,22 @@
  "Backup taken; installing…": "Záloha hotová; inštaluje sa…",
  "Installed; waiting for the new version to answer healthy…": "Nainštalované; čaká sa, kým nová verzia odpovie ako zdravá…",
  "Reloading in 5 s.": "Obnovenie stránky o 5 s.",
- "PC load": "Vyťaženie"
+ "PC load": "Vyťaženie",
+ "Logbook": "Prevádzkový denník",
+ "Operations log: who sent which command where (setpoint, start/stop, mode) with value, read-back and reason, and the alarm events (raised, acknowledged with who and why, cleared). Optionally limited to the bound devices and keys; labels translate keys.": "Prevádzkový denník: kto poslal aký povel kam (nastavená hodnota, štart/stop, režim) s hodnotou, spätným čítaním a dôvodom, a udalosti alarmov (vznik, potvrdenie – kto a prečo, zánik). Voliteľne obmedzený na naviazané zariadenia a kľúče; popisy prekladajú kľúče.",
+ "commands": "povely",
+ "Keys (comma-separated, prefix*; empty = all)": "Kľúče (oddelené čiarkou, predpona*; prázdne = všetky)",
+ "Labels (one key=label per line)": "Popisy (jeden kľúč=popis na riadok)",
+ "The logbook is not available on public links.": "Prevádzkový denník nie je dostupný cez verejný odkaz.",
+ "Alarm raised": "Alarm vznikol",
+ "Alarm escalated": "Alarm eskaloval",
+ "Alarm acknowledged": "Alarm potvrdený",
+ "Alarm cleared": "Alarm zanikol",
+ "Alarm suppressed": "Alarm potlačený",
+ "Alarm unsuppressed": "Potlačenie alarmu zrušené",
+ "read back": "spätne prečítané",
+ "Where": "Kde",
+ "What": "Čo",
+ "no entries": "žiadne záznamy",
+ "Open screen as popup": "Otvoriť obraz ako okno"
 }

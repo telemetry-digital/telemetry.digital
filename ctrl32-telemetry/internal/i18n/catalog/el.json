@@ -3751,5 +3751,22 @@
  "Backup taken; installing…": "Αντίγραφο ασφαλείας έτοιμο· εγκατάσταση…",
  "Installed; waiting for the new version to answer healthy…": "Εγκαταστάθηκε· αναμονή να απαντήσει υγιώς η νέα έκδοση…",
  "Reloading in 5 s.": "Επαναφόρτωση σε 5 s.",
- "PC load": "Φόρτος"
+ "PC load": "Φόρτος",
+ "Logbook": "Ημερολόγιο λειτουργίας",
+ "Operations log: who sent which command where (setpoint, start/stop, mode) with value, read-back and reason, and the alarm events (raised, acknowledged with who and why, cleared). Optionally limited to the bound devices and keys; labels translate keys.": "Ημερολόγιο λειτουργίας: ποιος έστειλε ποια εντολή και πού (τιμή ρύθμισης, εκκίνηση/στάση, λειτουργία) με τιμή, επανανάγνωση και αιτιολογία, καθώς και τα συμβάντα συναγερμών (ενεργοποίηση, επιβεβαίωση – από ποιον και γιατί, απενεργοποίηση). Προαιρετικά περιορισμένο στις συνδεδεμένες συσκευές και κλειδιά· οι ετικέτες μεταφράζουν τα κλειδιά.",
+ "commands": "εντολές",
+ "Keys (comma-separated, prefix*; empty = all)": "Κλειδιά (χωρισμένα με κόμμα, πρόθεμα*· κενό = όλα)",
+ "Labels (one key=label per line)": "Ετικέτες (ένα κλειδί=ετικέτα ανά γραμμή)",
+ "The logbook is not available on public links.": "Το ημερολόγιο λειτουργίας δεν είναι διαθέσιμο μέσω δημόσιου συνδέσμου.",
+ "Alarm raised": "Ενεργοποίηση συναγερμού",
+ "Alarm escalated": "Κλιμάκωση συναγερμού",
+ "Alarm acknowledged": "Επιβεβαίωση συναγερμού",
+ "Alarm cleared": "Απενεργοποίηση συναγερμού",
+ "Alarm suppressed": "Καταστολή συναγερμού",
+ "Alarm unsuppressed": "Άρση καταστολής συναγερμού",
+ "read back": "επανανάγνωση",
+ "Where": "Πού",
+ "What": "Τι",
+ "no entries": "καμία εγγραφή",
+ "Open screen as popup": "Άνοιγμα οθόνης σε παράθυρο"
 }

@@ -36,7 +36,7 @@ var (
 	}
 	dynOps     = map[string]bool{">": true, ">=": true, "<": true, "<=": true, "==": true, "!=": true}
 	symStates  = map[string]bool{"run": true, "stop": true, "fault": true, "manual": true, "open": true, "closed": true, "transit": true, "off": true, "warn": true}
-	eventActs  = map[string]bool{"faceplate": true, "screen": true, "command": true, "trend": true}
+	eventActs  = map[string]bool{"faceplate": true, "screen": true, "popup": true, "command": true, "trend": true}
 	dashOpts   = map[string]bool{"": true, "dash": true, "dot": true, "dashdot": true}
 	alignOpts  = map[string]bool{"start": true, "middle": true, "end": true}
 	valignOpts = map[string]bool{"top": true, "middle": true, "bottom": true}
@@ -467,10 +467,10 @@ func elementEvents(i int, v any) ([]map[string]any, error) {
 		}
 		ev := map[string]any{"act": act}
 		switch act {
-		case "screen":
+		case "screen", "popup": // popup: the target screen opens in a dialog over the current one
 			t, _ := src["target"].(string)
 			if !dashSlugRe.MatchString(t) {
-				return nil, elemErr(i, "screen event needs the target screen's slug")
+				return nil, elemErr(i, "%s event needs the target screen's slug", act)
 			}
 			ev["target"] = t
 		case "command":

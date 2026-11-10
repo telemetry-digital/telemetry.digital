@@ -3751,5 +3751,22 @@
  "Backup taken; installing…": "Biztonsági mentés kész; telepítés…",
  "Installed; waiting for the new version to answer healthy…": "Telepítve; várakozás, hogy az új verzió egészségesen válaszoljon…",
  "Reloading in 5 s.": "Újratöltés 5 mp múlva.",
- "PC load": "Terhelés"
+ "PC load": "Terhelés",
+ "Logbook": "Üzemnapló",
+ "Operations log: who sent which command where (setpoint, start/stop, mode) with value, read-back and reason, and the alarm events (raised, acknowledged with who and why, cleared). Optionally limited to the bound devices and keys; labels translate keys.": "Üzemnapló: ki milyen parancsot küldött hova (alapjel, indítás/leállítás, üzemmód) értékkel, visszaolvasással és indoklással, valamint a riasztási események (keletkezés, nyugtázás – ki és miért, megszűnés). Opcionálisan a hozzárendelt eszközökre és kulcsokra szűkítve; a címkék lefordítják a kulcsokat.",
+ "commands": "parancsok",
+ "Keys (comma-separated, prefix*; empty = all)": "Kulcsok (vesszővel elválasztva, előtag*; üres = mind)",
+ "Labels (one key=label per line)": "Címkék (soronként egy kulcs=címke)",
+ "The logbook is not available on public links.": "Az üzemnapló nyilvános hivatkozáson nem érhető el.",
+ "Alarm raised": "Riasztás keletkezett",
+ "Alarm escalated": "Riasztás eszkalálva",
+ "Alarm acknowledged": "Riasztás nyugtázva",
+ "Alarm cleared": "Riasztás megszűnt",
+ "Alarm suppressed": "Riasztás elnyomva",
+ "Alarm unsuppressed": "Riasztás elnyomása feloldva",
+ "read back": "visszaolvasva",
+ "Where": "Hol",
+ "What": "Mit",
+ "no entries": "nincs bejegyzés",
+ "Open screen as popup": "Kép megnyitása ablakban"
 }

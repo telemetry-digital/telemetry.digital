@@ -3751,5 +3751,22 @@
  "Backup taken; installing…": "Säkerhetskopia tagen; installerar…",
  "Installed; waiting for the new version to answer healthy…": "Installerad; väntar på att den nya versionen svarar frisk…",
  "Reloading in 5 s.": "Laddar om om 5 s.",
- "PC load": "Belastning"
+ "PC load": "Belastning",
+ "Logbook": "Driftlogg",
+ "Operations log: who sent which command where (setpoint, start/stop, mode) with value, read-back and reason, and the alarm events (raised, acknowledged with who and why, cleared). Optionally limited to the bound devices and keys; labels translate keys.": "Driftlogg: vem som skickade vilket kommando vart (börvärde, start/stopp, läge) med värde, återläsning och orsak, samt larmhändelser (uppstått, kvitterat – av vem och varför, upphört). Kan begränsas till de kopplade enheterna och nycklarna; etiketter översätter nycklar.",
+ "commands": "kommandon",
+ "Keys (comma-separated, prefix*; empty = all)": "Nycklar (kommaseparerade, prefix*; tomt = alla)",
+ "Labels (one key=label per line)": "Etiketter (en nyckel=etikett per rad)",
+ "The logbook is not available on public links.": "Driftloggen är inte tillgänglig via offentliga länkar.",
+ "Alarm raised": "Larm uppstått",
+ "Alarm escalated": "Larm eskalerat",
+ "Alarm acknowledged": "Larm kvitterat",
+ "Alarm cleared": "Larm upphört",
+ "Alarm suppressed": "Larm undertryckt",
+ "Alarm unsuppressed": "Undertryckning av larm hävd",
+ "read back": "återläst",
+ "Where": "Var",
+ "What": "Vad",
+ "no entries": "inga poster",
+ "Open screen as popup": "Öppna skärmen som fönster"
 }

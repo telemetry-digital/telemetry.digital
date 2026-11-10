@@ -3751,5 +3751,22 @@
  "Backup taken; installing…": "Kopia zapasowa gotowa; instalacja…",
  "Installed; waiting for the new version to answer healthy…": "Zainstalowano; czekanie, aż nowa wersja odpowie jako sprawna…",
  "Reloading in 5 s.": "Odświeżenie za 5 s.",
- "PC load": "Obciążenie"
+ "PC load": "Obciążenie",
+ "Logbook": "Dziennik operacji",
+ "Operations log: who sent which command where (setpoint, start/stop, mode) with value, read-back and reason, and the alarm events (raised, acknowledged with who and why, cleared). Optionally limited to the bound devices and keys; labels translate keys.": "Dziennik operacji: kto wysłał jakie polecenie i dokąd (wartość zadana, start/stop, tryb) z wartością, odczytem zwrotnym i powodem, oraz zdarzenia alarmów (wystąpienie, potwierdzenie – kto i dlaczego, ustąpienie). Opcjonalnie ograniczony do powiązanych urządzeń i kluczy; etykiety tłumaczą klucze.",
+ "commands": "polecenia",
+ "Keys (comma-separated, prefix*; empty = all)": "Klucze (oddzielone przecinkami, prefiks*; puste = wszystkie)",
+ "Labels (one key=label per line)": "Etykiety (jeden klucz=etykieta w wierszu)",
+ "The logbook is not available on public links.": "Dziennik operacji nie jest dostępny przez publiczny link.",
+ "Alarm raised": "Alarm wystąpił",
+ "Alarm escalated": "Alarm eskalowany",
+ "Alarm acknowledged": "Alarm potwierdzony",
+ "Alarm cleared": "Alarm ustąpił",
+ "Alarm suppressed": "Alarm wyciszony",
+ "Alarm unsuppressed": "Wyciszenie alarmu cofnięte",
+ "read back": "odczyt zwrotny",
+ "Where": "Gdzie",
+ "What": "Co",
+ "no entries": "brak wpisów",
+ "Open screen as popup": "Otwórz ekran jako okno"
 }

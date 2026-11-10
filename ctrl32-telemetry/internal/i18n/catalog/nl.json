@@ -3751,5 +3751,22 @@
  "Backup taken; installing…": "Back-up gemaakt; installeren…",
  "Installed; waiting for the new version to answer healthy…": "Geïnstalleerd; wachten tot de nieuwe versie gezond antwoordt…",
  "Reloading in 5 s.": "Herladen over 5 s.",
- "PC load": "Belasting"
+ "PC load": "Belasting",
+ "Logbook": "Bedrijfslogboek",
+ "Operations log: who sent which command where (setpoint, start/stop, mode) with value, read-back and reason, and the alarm events (raised, acknowledged with who and why, cleared). Optionally limited to the bound devices and keys; labels translate keys.": "Bedrijfslogboek: wie welk commando waarheen stuurde (setpoint, start/stop, modus) met waarde, terugmelding en reden, en de alarmgebeurtenissen (opgetreden, bevestigd – door wie en waarom, opgeheven). Optioneel beperkt tot de gekoppelde apparaten en sleutels; labels vertalen sleutels.",
+ "commands": "commando's",
+ "Keys (comma-separated, prefix*; empty = all)": "Sleutels (kommagescheiden, prefix*; leeg = alle)",
+ "Labels (one key=label per line)": "Labels (één sleutel=label per regel)",
+ "The logbook is not available on public links.": "Het bedrijfslogboek is niet beschikbaar via een openbare link.",
+ "Alarm raised": "Alarm opgetreden",
+ "Alarm escalated": "Alarm geëscaleerd",
+ "Alarm acknowledged": "Alarm bevestigd",
+ "Alarm cleared": "Alarm opgeheven",
+ "Alarm suppressed": "Alarm onderdrukt",
+ "Alarm unsuppressed": "Onderdrukking van alarm opgeheven",
+ "read back": "teruggelezen",
+ "Where": "Waar",
+ "What": "Wat",
+ "no entries": "geen regels",
+ "Open screen as popup": "Scherm als venster openen"
 }

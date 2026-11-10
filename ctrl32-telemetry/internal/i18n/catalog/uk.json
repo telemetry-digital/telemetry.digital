@@ -3751,5 +3751,22 @@
  "Backup taken; installing…": "Резервну копію зроблено; встановлення…",
  "Installed; waiting for the new version to answer healthy…": "Встановлено; очікування, доки нова версія відповість як справна…",
  "Reloading in 5 s.": "Оновлення сторінки за 5 с.",
- "PC load": "Навантаження"
+ "PC load": "Навантаження",
+ "Logbook": "Оперативний журнал",
+ "Operations log: who sent which command where (setpoint, start/stop, mode) with value, read-back and reason, and the alarm events (raised, acknowledged with who and why, cleared). Optionally limited to the bound devices and keys; labels translate keys.": "Оперативний журнал: хто яку команду надіслав і куди (уставка, пуск/стоп, режим) зі значенням, зворотним зчитуванням і причиною, а також події тривог (виникнення, квитування – хто і чому, зникнення). За бажанням обмежений прив'язаними пристроями та ключами; підписи перекладають ключі.",
+ "commands": "команди",
+ "Keys (comma-separated, prefix*; empty = all)": "Ключі (через кому, префікс*; порожньо = всі)",
+ "Labels (one key=label per line)": "Підписи (один ключ=підпис у рядку)",
+ "The logbook is not available on public links.": "Оперативний журнал недоступний через публічне посилання.",
+ "Alarm raised": "Тривога виникла",
+ "Alarm escalated": "Тривогу ескальовано",
+ "Alarm acknowledged": "Тривогу квитовано",
+ "Alarm cleared": "Тривога зникла",
+ "Alarm suppressed": "Тривогу придушено",
+ "Alarm unsuppressed": "Придушення тривоги скасовано",
+ "read back": "зчитано назад",
+ "Where": "Де",
+ "What": "Що",
+ "no entries": "немає записів",
+ "Open screen as popup": "Відкрити екран у вікні"
 }

@@ -313,6 +313,34 @@
       try { await api('POST', '/api/v1/alarms/' + b.dataset.ack + '/ack', { reason }); if (ctrl32.toast) ctrl32.toast(ctrl32.t('alarm acknowledged'), 'ok'); await W.alarms(el, p, ctx); } catch (e) { b.disabled = false; if (ctrl32.toast) ctrl32.toast(e.message, 'bad'); }
     };
   };
+  // Logbook (0.87.0): commands (who wrote/pressed what, where, value, read-back, reason) and alarm events
+  // (raised, escalated, acknowledged with who and why, cleared), newest first; bound devices limit the scope.
+  W.logbook = async (el, p, ctx) => {
+    if (PUBLIC) { el.innerHTML = `<span class="muted">${esc(TR('The logbook is not available on public links.'))}</span>`; return; }
+    const labels = {}; String(p.labels || '').split('\n').forEach((l) => { const i = l.indexOf('='); if (i > 0) labels[l.slice(0, i).trim()] = l.slice(i + 1).trim(); });
+    const lab = (k) => (k && labels[k]) || k || '';
+    const qs = new URLSearchParams({ limit: String(Math.min(500, p.limit || 30)) });
+    const devs = (ctx.bindings && ctx.bindings.devices) || []; if (devs.length) qs.set('devices', devs.join(','));
+    if (p.keys) qs.set('keys', String(p.keys).replace(/\s+/g, ''));
+    if (p.kinds && p.kinds !== 'all') qs.set('kinds', p.kinds);
+    const r = await api('GET', '/api/v1/logbook?' + qs.toString()); const items = r.items || [];
+    const EV = { raised: TR('Alarm raised'), escalated: TR('Alarm escalated'), acknowledged: TR('Alarm acknowledged'), cleared: TR('Alarm cleared'), suppressed: TR('Alarm suppressed'), unsuppressed: TR('Alarm unsuppressed') };
+    const val = (v) => v == null ? '' : typeof v === 'number' ? (Number.isInteger(v) ? String(v) : num(v, 2)) : typeof v === 'boolean' ? (v ? TR('on') : TR('off')) : esc(typeof v === 'object' ? JSON.stringify(v) : String(v));
+    // one bound device: no Where column; today's entries show the time only (narrow popups stay readable)
+    const oneDev = devs.length === 1; const today = new Date().toDateString();
+    const when = (ts) => { const d = new Date(ts); return d.toDateString() === today ? d.toLocaleTimeString(document.documentElement.lang || undefined) : fmt(ts); };
+    const row = (e) => {
+      const where = oneDev ? null : esc(e.device || e.asset || '');
+      if (e.kind === 'command') {
+        const st = e.status === 'acked' ? '' : ` <span class="badge ${e.status === 'failed' || e.status === 'expired' ? 'bad' : 'warn'}">${esc(e.status)}</span>`;
+        const rb = e.readback != null && String(e.readback) !== String(e.value) ? ` <span class="muted">(${esc(TR('read back'))} ${val(e.readback)})</span>` : '';
+        return `<tr><td>${when(e.ts)}</td><td><b>${esc(e.user || '')}</b></td>${where == null ? '' : `<td>${where}</td>`}<td>${esc(lab(e.key) || e.event)}${e.event !== 'write' ? ` <span class="muted">${esc(e.event)}</span>` : ''}${st}</td><td style="text-align:right;font-weight:600">${val(e.value)}${rb}</td><td>${esc(e.reason || e.error || '')}</td></tr>`;
+      }
+      const sev = e.severity ? ` <span class="badge ${e.severity === 'warning' ? 'warn' : 'bad'}">${esc(e.severity)}</span>` : '';
+      return `<tr class="lb-alarm"><td>${when(e.ts)}</td><td>${esc(e.user || '')}</td>${where == null ? '' : `<td>${where}</td>`}<td>${esc(EV[e.event] || e.event)}: ${esc(lab(e.key))}${sev}</td><td style="text-align:right">${val(e.value)}</td><td>${esc(e.reason || '')}</td></tr>`;
+    };
+    el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>${esc(TR('Time'))}</th><th>${esc(TR('User'))}</th>${oneDev ? '' : `<th>${esc(TR('Where'))}</th>`}<th>${esc(TR('What'))}</th><th style="text-align:right">${esc(TR('Value'))}</th><th>${esc(TR('Reason'))}</th></tr></thead><tbody>${items.map(row).join('') || `<tr><td colspan="${oneDev ? 5 : 6}" class="muted">${esc(TR('no entries'))}</td></tr>`}</tbody></table></div>`;
+  };
   W.devices = async (el, p, ctx) => {
     const ds = devScope(await devices(ctx.bindings && ctx.bindings.devices), ctx); const lim = p.limit || 20; const rowAct = ctx.actions && ctx.actions('row').length && !ctx.edit;
     el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Device</th><th>Transport</th><th>State</th><th>Last seen</th></tr></thead><tbody>${ds.filter((d) => !d.revoked_at).slice(0, lim).map((d) => { const [s, b] = devState(d); return `<tr${rowAct ? ` class="dw-rowact" data-dev="${esc(d.id)}" data-name="${esc(d.name || d.external_id)}"` : ''}><td>${PUBLIC || rowAct ? esc(d.name || d.external_id) : '<a href="/devices/' + d.id + '">' + esc(d.name || d.external_id) + '</a>'}</td><td>${esc(d.transport)}</td><td><span class="badge ${b}">${s}</span></td><td>${d.last_seen ? fmt(d.last_seen) : '—'}</td></tr>`; }).join('') || '<tr><td colspan="4" class="muted">no devices</td></tr>'}</tbody></table></div>`;
@@ -506,7 +534,7 @@
     };
     draw(); card.querySelector('.dash-body').before(bar); if (f.includes('series') && !dsCache) datastreams().then(draw).catch(() => {});
   }
-  const ALARM_TYPES = new Set(['alarms', 'alarm_count']);
+  const ALARM_TYPES = new Set(['alarms', 'alarm_count', 'logbook']);
   function register(type, fn, o) { o = o || {}; W[type] = fn; if (o.label) LABELS[type] = o.label; if (o.needsDs) NEEDS_DS.add(type); if (o.alarms) ALARM_TYPES.add(type); }
   // Live updates (SSE): one stream per rendered dashboard; an event re-renders only the widgets bound to it, debounced.
   let ES = null, liveTimer = null;
