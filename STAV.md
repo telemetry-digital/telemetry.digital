@@ -1,4 +1,4 @@
-# Stav práce (aktualizované 10. 11. 2026, 0.87.4)
+# Stav práce (aktualizované 20. 11. 2026, 0.87.5)
 
 ## Hotové (vo vetve `main`, otestované)
 
@@ -80,6 +80,9 @@
 | 0.87.2 | Obrazovka so striedaním obrazov: po prepnutí na ďalší obraz chýbali jednotky (cache datastreamov z predchádzajúceho obrazu) | headless spárovaná obrazovka dev + portál; bez automatického testu |
 | 0.87.3 | Obrazovka so striedaním: predchádzajúci obraz sa po prepnutí prestane obnovovať (inak čítal s tokenom nového obrazu, dostával 403 a prepisoval mu živý prúd – prehľad ostal prázdny) | e2e `dashboards` 89, `displays` 102, `mimics` 41, `live` 24, `logbook` 34; headless spárovaná obrazovka dev + portál |
 | 0.87.4 | Posledné hodnoty datastreamov cez index (predtým DISTINCT ON cez 400 dní: dávka 50 id 1,5–4,5 s pri sekundových dátach, teraz ~10 ms) | e2e `dashboards` 89, `live` 24, `device_telemetry` 92, `mimics` 41 |
+| 0.87.5 | Živý obraz, ktorý 20 s stojí pri otvorenom spojení, si sám znova otvorí stream (dlaždice, stránka kamery, steny, obrazovky); reset prvku na čas 0 sa už neráta ako pohyb. Podnet: stena BB, 20. 11. stála dlaždica „Vjazd vyjazd kruháč“ do reštartu prehliadačov | headless `video_stall` 8 (nový), `wall_layout` 27, `camera_inventory` |
+
+**Incident 20. 11. 2026:** disk produkčného servera (Hetzner, 38 GB) plný od ~15. 11. → databáza portálu v slučke reštartov, portál nedostupný, MeshCentral spadol. Príčina: video portálu s limitom 15 GB + databáza 8,7 GB (Farmol simulátor mal byť vypnutý 13. 11., bežal do 20. 11.) + zálohy 4,8 GB. Opravené: žurnál a nepoužívané Docker obrazy zmazané, `[video] max_disk_gb` 15 → 8, simulátor `farmolsim` vypnutý, konektor Farmol zrušený (dáta dema ponechané); disk 79 %. BB server bežal celý čas (39/39 kamier). Otvorené: upratať staré zálohy (`/opt/backup`, `backups`), upozornenie na málo miesta na disku v produkte.
 
 **Nasadenie 0.87.1–0.87.4 (10. 11. 2026):** portál cez API so zálohou. Overené spárovanou skúšobnou obrazovkou (headless, hneď odpárovaná) v organizácii Farmol: prehľad, denník a detail mixéra v slede po 20 s, hodnoty celé hneď po každom prepnutí, denník na obrazovke funguje. Skutočné monitory velína Farmolu ešte nie sú spárované (čaká sa na kódy z ich PC: otvoriť `portal.telemetry.digital/display`).
 

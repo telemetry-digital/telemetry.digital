@@ -40,7 +40,8 @@
     let ws = null, ms = null, sb = null, queue = [], closed = false, retry = null, mode = '', lastT = null, drawing = false, pendingJpeg = null, stallTimer = null;
     // when the picture last moved on (health of a display, 0.86.0): new video time, or a new JPEG frame
     let lastMove = 0, lastTime = -1, onlineAt = 0;
-    video.addEventListener('timeupdate', () => { if (video.currentTime !== lastTime) { lastTime = video.currentTime; lastMove = performance.now(); } });
+    // the picture moved: its time went on (a reset of the element to 0 is no movement)
+    video.addEventListener('timeupdate', () => { const t = video.currentTime; if (t !== lastTime) { if (t > 0) lastMove = performance.now(); lastTime = t; } });
     // the sound (spec 020)
     let audio = null, ams = null, asb = null, aqueue = [], soundOn = false;
     function resetAudio() {
@@ -290,7 +291,20 @@
     }
     video.addEventListener('timeupdate', () => { const t = now(); if (t && opts.onTime) opts.onTime(t); });
     // a stalled live picture (e.g. the tab was in the background) jumps to the live edge
-    stallTimer = setInterval(() => { if (!document.hidden) chase(); }, 2000);
+    // a live picture that stands for 20 s while the stream is connected (a lost decoder state, a stuck buffer) opens
+    // the stream again; a camera that is offline reports so itself and keeps its own reconnecting
+    const STALL_REOPEN_MS = 20000;
+    stallTimer = setInterval(() => {
+      if (document.hidden) return;
+      chase();
+      if (!opts.live || closed || box.dataset.state !== 'online') return;
+      const t = performance.now();
+      if (t - Math.max(lastMove, onlineAt) > STALL_REOPEN_MS) {
+        stop(); lastMove = 0; box.dataset.state = '';
+        if (opts.onStall) opts.onStall();
+        connect();
+      }
+    }, 2000);
     const syncTimer = setInterval(syncAudio, 1000);
     video.addEventListener('pause', () => { if (audio && mode === 'mse') audio.pause(); });
     video.addEventListener('play', syncAudio);
