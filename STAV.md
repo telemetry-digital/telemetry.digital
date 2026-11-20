@@ -1,4 +1,4 @@
-# Stav práce (aktualizované 20. 11. 2026, 0.87.5)
+# Stav práce (aktualizované 20. 11. 2026, 0.87.6)
 
 ## Hotové (vo vetve `main`, otestované)
 
@@ -80,9 +80,12 @@
 | 0.87.2 | Obrazovka so striedaním obrazov: po prepnutí na ďalší obraz chýbali jednotky (cache datastreamov z predchádzajúceho obrazu) | headless spárovaná obrazovka dev + portál; bez automatického testu |
 | 0.87.3 | Obrazovka so striedaním: predchádzajúci obraz sa po prepnutí prestane obnovovať (inak čítal s tokenom nového obrazu, dostával 403 a prepisoval mu živý prúd – prehľad ostal prázdny) | e2e `dashboards` 89, `displays` 102, `mimics` 41, `live` 24, `logbook` 34; headless spárovaná obrazovka dev + portál |
 | 0.87.4 | Posledné hodnoty datastreamov cez index (predtým DISTINCT ON cez 400 dní: dávka 50 id 1,5–4,5 s pri sekundových dátach, teraz ~10 ms) | e2e `dashboards` 89, `live` 24, `device_telemetry` 92, `mimics` 41 |
+| 0.87.6 | Incidenty miesta na disku servera (`internal/diskwatch`): pod 15 % major, pod 5 %/1 GB critical, limit videa, ktorý by na spoločnom disku nechal < 15 %; incidenty servera (bez organizácie) vidí na stránke Incidenty každý so `system.admin`, push o nich len správcom servera. Podnet: výpadok produkcie 15.–20. 11. | unit `diskwatch` 5, e2e `incidents` 61 |
 | 0.87.5 | Živý obraz, ktorý 20 s stojí pri otvorenom spojení, si sám znova otvorí stream (dlaždice, stránka kamery, steny, obrazovky); reset prvku na čas 0 sa už neráta ako pohyb. Podnet: stena BB, 20. 11. stála dlaždica „Vjazd vyjazd kruháč“ do reštartu prehliadačov | headless `video_stall` 8 (nový), `wall_layout` 27, `camera_inventory` |
 
 **Nasadenie 0.87.5 (20. 11. 2026):** portál (API, so zálohou) aj BB (0.86.11 → 0.87.5, cez API tunelom); BB 39/39 kamier online a nahráva, stena 21/21 + 18/18 na 0.87.5. Vydanie s Go 1.27.4 (govulncheck GO-2026-6859 v 1.27.3 zastavil prvé zostavenie); `onnxruntime-linux-aarch64-1.30.0.tgz` vracia na GitHube 404 → `DETECTOR_FROM=dist/0.87.4/analytics` (súbory overené voči pinom). Na tomto PC pri zostavení dochádza pamäť → `GOFLAGS=-p=2`.
+
+**Nasadenie 0.87.6 (20. 11. 2026):** portál (API so zálohou) aj BB (API tunelom); BB 39/39 online a nahráva, stena 21/21 + 18/18 na 0.87.6 (krátko po reštarte 1–2 dlaždice *stalled*, do minúty obnovené samy). Na portáli sa ukázali predtým skryté incidenty servera: zálohy zlyhávali už od 11. 11. (kontajner PostgreSQL sa vtedy už reštartoval) → obe vyriešené s príčinou a CAPA. Zostavenie: `GOFLAGS=-p=1`, dev server zastavený (pri -p=2 zabité pre nedostatok pamäte).
 
 **Incident 20. 11. 2026:** disk produkčného servera (Hetzner, 38 GB) plný od ~15. 11. → databáza portálu v slučke reštartov, portál nedostupný, MeshCentral spadol. Príčina: video portálu s limitom 15 GB + databáza 8,7 GB (Farmol simulátor mal byť vypnutý 13. 11., bežal do 20. 11.) + zálohy 4,8 GB. Opravené: žurnál a nepoužívané Docker obrazy zmazané, `[video] max_disk_gb` 15 → 8, simulátor `farmolsim` vypnutý, konektor Farmol zrušený (dáta dema ponechané); disk 79 %. BB server bežal celý čas (39/39 kamier). Neskôr 20. 11.: staré zálohy zmazané (ponechané 3 najnovšie + pred 0.83.0), uchovávanie nočných záloh 14/4/12 → 3 denné / 2 týždenné / 1 mesačná (záloha má ~1,1 GB); disk 72 %, voľných 11 GB. Nočné zálohy 11.–19. 11. zlyhali. Otvorené: upozornenie na málo miesta na disku v produkte.
 
