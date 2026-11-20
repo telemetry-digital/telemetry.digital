@@ -8,7 +8,8 @@
 #   deploy/publish.sh 0.76.0 root@2.29.5.17 [-i ~/.ssh/key]
 # The release signing key never enters the repository: it is read from CTRL32_RELEASE_KEY (default
 # ~/.ctrl32-release/release-signing.key, created with `go run ./tools/relsign keygen`); without it nothing is
-# published. NO_DETECTOR=1 leaves the detector parts out (smaller offline package).
+# published. NO_DETECTOR=1 leaves the detector parts out (smaller offline package); DETECTOR_FROM=dist/<older>/analytics
+# reuses the parts of an earlier release (still checked against the pins).
 # SHA256SUMS stays published for servers before 0.76.0, whose agent checks only it; from 0.76.0 on the agent installs
 # only releases whose manifest carries a valid signature of a trusted key.
 # The host directory /var/www/ctrl32 is served read-only by the Caddy container that install.sh configures.
@@ -54,7 +55,12 @@ cp deploy/install.ps1 "$OUT/install.ps1"
 cp deploy/install-relay.sh deploy/install-relay.ps1 deploy/install-wg-modem.sh "$OUT/"
 printf '%s\n' "$VERSION" > "$OUT/VERSION"
 # the detector parts for servers without the Internet (pinned, unmodified, with their licences)
-if [[ "${NO_DETECTOR:-}" != 1 ]]; then go run ./tools/relsign fetch-detector -out "$OUT/analytics"; fi
+# DETECTOR_FROM=dist/<older>/analytics seeds them from an earlier release when an upstream download is gone; relsign
+# keeps a file only when its SHA-256 matches the pin and downloads the rest
+if [[ "${NO_DETECTOR:-}" != 1 ]]; then
+  if [[ -n "${DETECTOR_FROM:-}" ]]; then mkdir -p "$OUT/analytics"; cp "$DETECTOR_FROM"/* "$OUT/analytics/"; fi
+  go run ./tools/relsign fetch-detector -out "$OUT/analytics"
+fi
 # the signed manifest over every file, then the offline package, then a check of both with the keys of this source
 go run ./tools/relsign sign -dir "$OUT" -version "$VERSION" -released "$RELEASED" -key "$KEY"
 PKG=ctrl32-telemetry-$VERSION-offline.zip
