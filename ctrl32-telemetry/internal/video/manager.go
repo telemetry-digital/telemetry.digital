@@ -97,6 +97,13 @@ func (m *Manager) MaxBytes() int64 {
 	return m.maxBytes
 }
 
+// UsedBytes is what the recordings take now (their index).
+func (m *Manager) UsedBytes(ctx context.Context) (int64, error) {
+	var total int64
+	err := m.pool.QueryRow(ctx, `SELECT COALESCE(sum(bytes), 0) FROM core.video_segment`).Scan(&total)
+	return total, err
+}
+
 // SealPassword encrypts a camera password for the database.
 func (m *Manager) SealPassword(pw string) (string, error) {
 	if pw == "" {

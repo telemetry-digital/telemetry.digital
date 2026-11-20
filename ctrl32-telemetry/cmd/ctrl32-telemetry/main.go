@@ -45,6 +45,7 @@ import (
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/config"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/console"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/db"
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/diskwatch"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/escalate"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/gap"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/httpapi"
@@ -272,6 +273,10 @@ func runServer(ctx context.Context, cfg *config.Config, cfgPath string, logger *
 		hub.Publish(live.Event{Type: "camera", Org: e.OrgID, State: e.Phase, At: e.At,
 			Detail: map[string]any{"camera_id": e.CameraID, "camera": e.Camera, "kind": e.Kind, "source": e.Source, "label": e.Label, "phase": e.Phase, "event_id": e.ID}})
 	}
+	// the server's disk: a full one stops the database and the whole server (incident log, e-mail and push to admins)
+	disks := &diskwatch.Watcher{Paths: diskwatch.DefaultPaths(filepath.Dir(cfg.Report.StorageDir), agent.BackupDir),
+		VideoDir: cfg.Video.StorageDir, VideoLimit: vids.MaxBytes, VideoUsed: vids.UsedBytes, Inc: inc, Log: logger.With("component", "diskwatch")}
+	go disks.Run(ctx)
 	if cfg.Video.PushListen != "" {
 		if ps, err := vids.StartPush(video.PushConfig{Listen: cfg.Video.PushListen, TLSCert: cfg.Video.PushTLSCert, TLSKey: cfg.Video.PushTLSKey}); err != nil {
 			logger.Error("camera push listener not started", "err", err)

@@ -309,16 +309,18 @@ func scan(row interface{ Scan(...any) error }) (*Incident, error) {
 	return &in, nil
 }
 
-// List returns incidents of one organization (org != "") or, for system administrators (org == ""), of every
-// organization plus the instance-level ones. status: "open" (open + investigating), "all", or one status.
-func (m *Manager) List(ctx context.Context, org, status string, limit int) ([]Incident, error) {
+// List returns incidents of one organization (org != "") or, without an organization (org == ""), of every
+// organization plus the instance-level ones; instance adds the instance-level ones (a disk of the server running low,
+// a failed backup) to one organization's, for server administrators. status: "open" (open + investigating), "all",
+// or one status.
+func (m *Manager) List(ctx context.Context, org, status string, limit int, instance bool) ([]Incident, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 200
 	}
 	rows, err := m.pool.Query(ctx, `SELECT `+cols+` FROM core.incident i LEFT JOIN core.organization o ON o.id = i.org_id
-		WHERE ($1 = '' OR i.org_id = $1::uuid)
+		WHERE ($1 = '' OR i.org_id = $1::uuid OR ($4 AND i.org_id IS NULL))
 		  AND ($2 = 'all' OR ($2 = 'open' AND i.status IN ('open', 'investigating')) OR i.status = $2)
-		ORDER BY (i.status IN ('open', 'investigating')) DESC, i.opened_at DESC LIMIT $3`, org, status, limit)
+		ORDER BY (i.status IN ('open', 'investigating')) DESC, i.opened_at DESC LIMIT $3`, org, status, limit, instance)
 	if err != nil {
 		return nil, err
 	}
@@ -337,7 +339,7 @@ func (m *Manager) List(ctx context.Context, org, status string, limit int) ([]In
 // Get returns one incident with its events; org scoping as in List (instance-level rows only when instance is true).
 func (m *Manager) Get(ctx context.Context, org, id string, instance bool) (*Incident, []Event, error) {
 	in, err := scan(m.pool.QueryRow(ctx, `SELECT `+cols+` FROM core.incident i LEFT JOIN core.organization o ON o.id = i.org_id
-		WHERE i.id = $1::uuid AND ($2 = '' OR i.org_id = $2::uuid) AND ($3 OR i.org_id IS NOT NULL)`, id, org, instance))
+		WHERE i.id = $1::uuid AND ($2 = '' OR i.org_id = $2::uuid OR ($3 AND i.org_id IS NULL)) AND ($3 OR i.org_id IS NOT NULL)`, id, org, instance))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -441,7 +443,8 @@ func (m *Manager) OpenCount(ctx context.Context, org string) int64 {
 }
 
 // notifyAdmins tells the administrators: e-mail to the server's global recipients and Web Push to users holding
-// alarm.ack or system.admin (of the incident's organization, or of every organization for instance-level ones).
+// alarm.ack or system.admin of the incident's organization; an instance-level incident (the server's disk, backups)
+// goes only to server administrators (system.admin), not to the operators of every organization on the server.
 func (m *Manager) notifyAdmins(ctx context.Context, in Incident) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -461,8 +464,9 @@ func (m *Manager) notifyAdmins(ctx context.Context, in Incident) {
 		rows, err := m.pool.Query(ctx, `WITH cur AS (
 			SELECT DISTINCT ON (user_id, role_id, scope_site_id) user_id, role_id, event FROM core.user_role_history ORDER BY user_id, role_id, scope_site_id, ts DESC)
 			SELECT DISTINCT u.org_id::text, u.username FROM cur JOIN core.role r ON r.id = cur.role_id JOIN core.user_account u ON u.id = cur.user_id
-			WHERE cur.event = 'granted' AND u.disabled_at IS NULL AND (r.is_admin OR 'alarm.ack' = ANY(r.permissions) OR 'system.admin' = ANY(r.permissions))
-			  AND ($1 = '' OR u.org_id = $1::uuid)`, in.OrgID)
+			WHERE cur.event = 'granted' AND u.disabled_at IS NULL
+			  AND (($1 = '' AND 'system.admin' = ANY(r.permissions))
+			    OR ($1 <> '' AND u.org_id = $1::uuid AND (r.is_admin OR 'alarm.ack' = ANY(r.permissions) OR 'system.admin' = ANY(r.permissions))))`, in.OrgID)
 		if err == nil {
 			byOrg := map[string][]string{}
 			for rows.Next() {

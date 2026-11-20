@@ -164,7 +164,7 @@ start_server() { # [config]
   echo "server did not start, see test-results/server.log" >&2; exit 2
 }
 : > "$LOGS/server.log"
-export BASE USER=admin PASS=admin1234 MQTT=127.0.0.1:1883 BIN CONFIG CONFIG_VPN REPORTS_DIR=$WORK/reports RELSIGN RELKEY
+export BASE USER=admin PASS=admin1234 MQTT=127.0.0.1:1883 BIN CONFIG CONFIG_VPN REPORTS_DIR=$WORK/reports RELSIGN RELKEY DB_ADMIN
 
 # ------------------------------------------------------------------------------------------------ e2e
 if has e2e; then

@@ -5,12 +5,13 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/iam"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/incident"
 )
 
 // Incident log (URS C-07, I-09): system-opened incidents (undelivered alarm, broken audit chain) and manual ones,
 // each with impact, cause and CAPA and a small workflow. Organization users see their organization's incidents;
-// system administrators see every organization and the instance-level ones.
+// server administrators (system.admin) also the instance-level ones (the server's disk, backups, the audit chain).
 
 func (s *Server) listIncidents(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFrom(r.Context())
@@ -22,7 +23,7 @@ func (s *Server) listIncidents(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "status must be open, all, open, investigating, resolved or closed")
 		return
 	}
-	list, err := s.incidents.List(r.Context(), orgOf(p), status, 0)
+	list, err := s.incidents.List(r.Context(), orgOf(p), status, 0, p.Has(iam.ServerPermission))
 	if err != nil {
 		writeErr(w, 500, "query failed")
 		return
@@ -32,7 +33,7 @@ func (s *Server) listIncidents(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getIncident(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFrom(r.Context())
-	in, events, err := s.incidents.Get(r.Context(), orgOf(p), r.PathValue("id"), orgOf(p) == "")
+	in, events, err := s.incidents.Get(r.Context(), orgOf(p), r.PathValue("id"), orgOf(p) == "" || p.Has(iam.ServerPermission))
 	if err != nil {
 		writeErr(w, 404, "incident not found")
 		return
@@ -85,7 +86,7 @@ func (s *Server) createIncident(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) updateIncident(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFrom(r.Context())
-	inc, _, err := s.incidents.Get(r.Context(), orgOf(p), r.PathValue("id"), orgOf(p) == "")
+	inc, _, err := s.incidents.Get(r.Context(), orgOf(p), r.PathValue("id"), orgOf(p) == "" || p.Has(iam.ServerPermission))
 	if err != nil {
 		writeErr(w, 404, "incident not found")
 		return

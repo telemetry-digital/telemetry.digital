@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Check of the incident log (URS C-07, I-09): manual incidents with impact/cause/CAPA and the workflow (closing needs
 # a cause and a CAPA), history events, audit trail, filters; an alarm whose escalation step cannot be delivered
-# (webhook to a closed port) opens an incident automatically; /metrics counts open incidents. Needs Go (tools/devfill).
-#   BASE=http://127.0.0.1:8080 USER=admin PASS=admin1234 bash tests/e2e/incidents.sh
+# (webhook to a closed port) opens an incident automatically; /metrics counts open incidents; an instance-level
+# incident (the server's disk) is seen by server administrators only (needs DB_ADMIN, the database URL psql uses, to
+# open one; tests/run-all.sh exports it). Needs Go (tools/devfill).
+#   BASE=http://127.0.0.1:8080 USER=admin PASS=admin1234 [DB_ADMIN=postgres://…] bash tests/e2e/incidents.sh
 set -u
 BASE=${BASE:-http://127.0.0.1:8080}
 MQTT=${MQTT:-127.0.0.1:1883}
@@ -84,6 +86,32 @@ check "detail alarm object matches" "$(jx "$TMP/b" 'j.incident.detail.alarm.id =
 req GET /api/v1/alarms >/dev/null; check "that alarm is active" "$(jx "$TMP/b" "j.some(a=>a.id==='$ALARM' && !a.cleared_at)")" true
 sleep 1; req GET "/api/v1/incidents/$INC" >/dev/null; check "notified event recorded" "$(jx "$TMP/b" 'j.events.some(e=>e.event==="notified")')" true
 req GET "/api/v1/notifications?limit=20" >/dev/null; check "delivery log: failed" "$(jx "$TMP/b" "j.some(n=>n.status==='failed' && n.alarm_id==='$ALARM')")" true
+
+echo "== instance-level incidents: server administrators only"
+if [[ -n "${DB_ADMIN:-}" ]] && command -v psql >/dev/null 2>&1; then
+  KEY="host:disk:/e2e-$SUF:low"
+  HID=$(psql -Atq "$DB_ADMIN" -c "INSERT INTO core.incident (kind, severity, title, impact, detail, dedup_key, opened_by)
+    VALUES ('storage', 'major', 'Server disk is running low', 'e2e', '{}', '$KEY', 'system') RETURNING id" | head -1)
+  [[ -n "$HID" ]] && ok "instance-level incident opened" || bad "insert"
+  req GET /api/v1/incidents >/dev/null; check "a server administrator sees it" "$(jx "$TMP/b" "j.some(i=>i.id==='$HID')")" true
+  req GET "/api/v1/incidents/$HID" >/dev/null; check "and its detail" "$(st)" 200
+  J2="$TMP/jar2"
+  req POST /api/v1/users "{\"username\":\"incop_$SUF\",\"full_name\":\"Operator\",\"email\":\"incop$SUF@example.com\",\"roles\":[\"operator\"],\"reason\":\"e2e\"}" >/dev/null; check "operator created" "$(st)" 201
+  OPW=$(jx "$TMP/b" 'j.initial_password')
+  c2() { curl -s -b "$J2" -c "$J2" -H "Content-Type: application/json" -H "X-CSRF-Token: ${C2:-}" -o "$TMP/b2" -w '%{http_code}' "$@"; }
+  c2 -X POST --data-binary "{\"username\":\"incop_$SUF\",\"password\":\"$OPW\"}" "$BASE/api/v1/auth/login" >/dev/null
+  c2 "$BASE/api/v1/auth/me" >/dev/null; C2=$(jget csrf_token < "$TMP/b2")
+  NPW="Incident-Passw0rd-$SUF"; c2 -X POST --data-binary "{\"current\":\"$OPW\",\"new\":\"$NPW\"}" "$BASE/api/v1/auth/password" >/dev/null
+  c2 -X POST --data-binary "{\"username\":\"incop_$SUF\",\"password\":\"$NPW\"}" "$BASE/api/v1/auth/login" >/dev/null
+  c2 "$BASE/api/v1/auth/me" >/dev/null; C2=$(jget csrf_token < "$TMP/b2")
+  check "an operator lists incidents" "$(c2 "$BASE/api/v1/incidents")" 200
+  check "but not the server's" "$(jx "$TMP/b2" "j.some(i=>i.id==='$HID')")" false
+  check "nor its detail" "$(c2 "$BASE/api/v1/incidents/$HID")" 404
+  check "nor can change it" "$(c2 -X PATCH --data-binary '{"note":"x","reason":"e2e"}' "$BASE/api/v1/incidents/$HID")" 404
+  req PATCH "/api/v1/incidents/$HID" '{"cause":"e2e","capa":"e2e","status":"closed","reason":"e2e cleanup"}' >/dev/null; check "the administrator closes it" "$(st)" 200
+else
+  echo "  skip (DB_ADMIN or psql missing)"
+fi
 
 echo "== metrics"
 curl -s -o "$TMP/b" "$BASE/metrics"; grep -q "^ctrl32_incidents_open " "$TMP/b" && ok "ctrl32_incidents_open exposed" || bad "metric missing"
