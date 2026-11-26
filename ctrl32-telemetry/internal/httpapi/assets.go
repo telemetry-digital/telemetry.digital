@@ -581,7 +581,7 @@ func (s *Server) getDatastream(w http.ResponseWriter, r *http.Request) {
 // ---- alarm rules --------------------------------------------------------------------------------
 
 func (s *Server) alarmRulesFor(r *http.Request, org, dsID, assetID string) []map[string]any {
-	rows, err := s.pool.Query(r.Context(), `SELECT ar.id::text, ar.datastream_id::text, d.key, a.name, a.id::text, ar.type, ar.warning::float8, ar.action::float8, EXTRACT(EPOCH FROM ar.delay)::float8, ar.hysteresis::float8, ar.enabled, ar.version, ar.valid_from, ar.reason, ar.escalation_policy_id::text
+	rows, err := s.pool.Query(r.Context(), `SELECT ar.id::text, ar.datastream_id::text, d.key, a.name, a.id::text, ar.type, ar.warning::float8, ar.action::float8, EXTRACT(EPOCH FROM ar.delay)::float8, ar.hysteresis::float8, ar.enabled, ar.version, ar.valid_from, ar.reason, ar.escalation_policy_id::text, ar.class_id::text
 		FROM core.alarm_rule ar JOIN core.datastream d ON d.id = ar.datastream_id JOIN core.asset a ON a.id = d.asset_id
 		WHERE ar.valid_to IS NULL AND ($1 = '' OR ar.org_id = $1::uuid) AND ($2 = '' OR ar.datastream_id = $2::uuid)
 		  AND ($3 = '' OR d.asset_id = $3::uuid) ORDER BY a.name, d.key, ar.type`, org, dsID, assetID)
@@ -597,11 +597,11 @@ func (s *Server) alarmRulesFor(r *http.Request, org, dsID, assetID string) []map
 		var enabled bool
 		var version int
 		var from time.Time
-		var policyID *string
-		if err := rows.Scan(&id, &ds, &key, &asset, &assetID, &typ, &warning, &action, &delay, &hyst, &enabled, &version, &from, &reason, &policyID); err != nil {
+		var policyID, classID *string
+		if err := rows.Scan(&id, &ds, &key, &asset, &assetID, &typ, &warning, &action, &delay, &hyst, &enabled, &version, &from, &reason, &policyID, &classID); err != nil {
 			continue
 		}
-		out = append(out, map[string]any{"id": id, "datastream_id": ds, "key": key, "asset": asset, "asset_id": assetID, "type": typ, "warning": warning, "action": action, "delay_seconds": delay, "hysteresis": hyst, "enabled": enabled, "version": version, "valid_from": from, "reason": reason, "escalation_policy_id": policyID})
+		out = append(out, map[string]any{"id": id, "datastream_id": ds, "key": key, "asset": asset, "asset_id": assetID, "type": typ, "warning": warning, "action": action, "delay_seconds": delay, "hysteresis": hyst, "enabled": enabled, "version": version, "valid_from": from, "reason": reason, "escalation_policy_id": policyID, "class_id": classID})
 	}
 	return out
 }
@@ -676,6 +676,7 @@ func (s *Server) createAlarmRule(w http.ResponseWriter, r *http.Request) {
 		DelaySeconds float64  `json:"delay_seconds"`
 		Hysteresis   float64  `json:"hysteresis"`
 		PolicyID     string   `json:"escalation_policy_id"`
+		ClassID      string   `json:"class_id"` // alarm class (spec 035); empty: the built-in class of the severity
 		Reason       string   `json:"reason"`
 	}
 	if err := decodeJSON(r, &in, 4096); err != nil {
@@ -701,6 +702,19 @@ func (s *Server) createAlarmRule(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		policyID = &in.PolicyID
+	}
+	var classID *string
+	if in.ClassID != "" {
+		var ok bool
+		if !uuidRe.MatchString(strings.ToLower(in.ClassID)) {
+			writeErr(w, 400, "unknown alarm class")
+			return
+		}
+		if err := s.pool.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM core.alarm_class WHERE id = $1::uuid AND org_id = $2::uuid)`, in.ClassID, org).Scan(&ok); err != nil || !ok {
+			writeErr(w, 400, "unknown alarm class")
+			return
+		}
+		classID = &in.ClassID
 	}
 	tx, err := s.pool.Begin(r.Context())
 	if err != nil {
@@ -728,9 +742,9 @@ func (s *Server) createAlarmRule(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var id string
-	err = tx.QueryRow(r.Context(), `INSERT INTO core.alarm_rule (org_id, datastream_id, type, warning, action, delay, hysteresis, version, changed_by, reason, escalation_policy_id)
-		VALUES ($1::uuid, $2::uuid, $3, $4, $5, make_interval(secs => $6), $7, $8, NULLIF($9,'')::uuid, $10, $11::uuid) RETURNING id::text`,
-		org, in.DatastreamID, in.Type, in.Warning, in.Action, in.DelaySeconds, in.Hysteresis, version+1, p.UserID, in.Reason, policyID).Scan(&id)
+	err = tx.QueryRow(r.Context(), `INSERT INTO core.alarm_rule (org_id, datastream_id, type, warning, action, delay, hysteresis, version, changed_by, reason, escalation_policy_id, class_id)
+		VALUES ($1::uuid, $2::uuid, $3, $4, $5, make_interval(secs => $6), $7, $8, NULLIF($9,'')::uuid, $10, $11::uuid, $12::uuid) RETURNING id::text`,
+		org, in.DatastreamID, in.Type, in.Warning, in.Action, in.DelaySeconds, in.Hysteresis, version+1, p.UserID, in.Reason, policyID, classID).Scan(&id)
 	if err != nil {
 		s.log.Error("insert alarm rule", "err", err)
 		writeErr(w, 500, "insert failed")

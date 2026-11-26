@@ -251,6 +251,16 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("PATCH /api/v1/incidents/{id}", s.require("alarm.ack", s.updateIncident))
 	mux.Handle("GET /api/v1/audit/verify", s.require("data.read", s.auditVerify))
 	mux.Handle("POST /api/v1/alarms/{id}/ack", s.require("alarm.ack", s.ackAlarm))
+	// alarm management after ISA-18.2 (spec 035): bulk acknowledgement, shelving, the alarm bar, statistics, classes
+	mux.Handle("POST /api/v1/alarms/ack", s.require("alarm.ack", s.ackAlarmsBulk))
+	mux.Handle("POST /api/v1/alarms/{id}/shelve", s.require("alarm.ack", s.shelveAlarm))
+	mux.Handle("POST /api/v1/alarms/{id}/unshelve", s.require("alarm.ack", s.unshelveAlarm))
+	mux.Handle("GET /api/v1/alarms/summary", s.require("data.read", s.alarmSummary))
+	mux.Handle("GET /api/v1/alarms/stats", s.require("data.read", s.alarmStats))
+	mux.Handle("GET /api/v1/alarm-classes", s.require("data.read", s.listAlarmClasses))
+	mux.Handle("POST /api/v1/alarm-classes", s.require("config.write", s.createAlarmClass))
+	mux.Handle("PUT /api/v1/alarm-classes/{id}", s.require("config.write", s.updateAlarmClass))
+	mux.Handle("DELETE /api/v1/alarm-classes/{id}", s.require("config.write", s.deleteAlarmClass))
 
 	// devices
 	mux.Handle("POST /api/v1/devices", s.require("device.manage", s.createDevice))
@@ -968,34 +978,6 @@ func decodeCursor(c string) (*time.Time, string, error) {
 		return nil, "", errors.New("invalid cursor")
 	}
 	return &t, id, nil
-}
-
-func (s *Server) alarms(w http.ResponseWriter, r *http.Request) {
-	dsID := r.URL.Query().Get("datastream_id")
-	p := PrincipalFrom(r.Context())
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT a.id::text, a.raised_at, a.cleared_at, a.state, a.severity, a.retrospective, a.value::float8, a.detail->>'key', a.datastream_id::text
-		FROM core.alarm a WHERE ($1 = '' OR a.datastream_id = NULLIF($1,'')::uuid) AND ($2 = '' OR a.org_id = $2::uuid) ORDER BY a.raised_at DESC LIMIT 200`, dsID, orgOf(p))
-	if err != nil {
-		writeErr(w, 500, "query failed")
-		return
-	}
-	defer rows.Close()
-	out := []map[string]any{}
-	for rows.Next() {
-		var id, state, sev string
-		var key, ds *string
-		var raised time.Time
-		var cleared *time.Time
-		var retro bool
-		var val *float64
-		if err := rows.Scan(&id, &raised, &cleared, &state, &sev, &retro, &val, &key, &ds); err != nil {
-			writeErr(w, 500, "scan failed")
-			return
-		}
-		out = append(out, map[string]any{"id": id, "raised_at": raised, "cleared_at": cleared, "state": state, "severity": sev, "retrospective": retro, "value": val, "key": key, "datastream_id": ds})
-	}
-	writeJSON(w, 200, out)
 }
 
 func (s *Server) auditVerify(w http.ResponseWriter, r *http.Request) {

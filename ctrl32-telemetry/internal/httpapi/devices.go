@@ -215,29 +215,3 @@ func (s *Server) provision(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/v1/alarms/{id}/ack {reason}
-func (s *Server) ackAlarm(w http.ResponseWriter, r *http.Request) {
-	p := PrincipalFrom(r.Context())
-	id := r.PathValue("id")
-	var in struct{ Reason string }
-	if err := decodeJSON(r, &in, 2048); err != nil || len(strings.TrimSpace(in.Reason)) < 3 {
-		writeErr(w, 400, "reason required")
-		return
-	}
-	var dsID, sev string
-	var value *float64
-	if err := s.pool.QueryRow(r.Context(), `UPDATE core.alarm SET state = 'acknowledged' WHERE id = $1::uuid AND org_id = $2::uuid AND state = 'active'
-		RETURNING coalesce(datastream_id::text, ''), severity, value::float8`, id, p.OrgID).Scan(&dsID, &sev, &value); err != nil {
-		writeErr(w, 404, "active alarm not found")
-		return
-	}
-	if _, err := s.pool.Exec(r.Context(), `INSERT INTO core.alarm_event (alarm_id, event, actor_id, actor_name, reason) VALUES ($1::uuid, 'acknowledged', $2::uuid, $3, $4)`, id, p.UserID, p.Username, in.Reason); err != nil {
-		writeErr(w, 500, "alarm log write failed")
-		return
-	}
-	s.audit(r, "alarm.acknowledge", "alarm", id, map[string]any{"state": "active"}, map[string]any{"state": "acknowledged"}, in.Reason)
-	// live pages and the flows' Alarm trigger ("acknowledged") learn about it at once
-	if s.live != nil {
-		s.live.Alarm(p.OrgID, id, dsID, "acknowledged", sev, value)
-	}
-	writeJSON(w, 200, map[string]any{"ok": true})
-}
