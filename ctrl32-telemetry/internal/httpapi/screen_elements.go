@@ -473,6 +473,20 @@ func elementEvents(i int, v any) ([]map[string]any, error) {
 				return nil, elemErr(i, "%s event needs the target screen's slug", act)
 			}
 			ev["target"] = t
+			if act == "popup" { // a faceplate type opened for another asset and/or key prefix (operator.go)
+				if a, _ := src["asset"].(string); a != "" {
+					if !uuidRe.MatchString(a) {
+						return nil, elemErr(i, "popup asset must be an asset id")
+					}
+					ev["asset"] = a
+				}
+				if p, _ := src["prefix"].(string); p != "" {
+					if !fpPrefixRe.MatchString(p) {
+						return nil, elemErr(i, "popup prefix must be the beginning of datastream keys")
+					}
+					ev["prefix"] = p
+				}
+			}
 		case "command":
 			k, _ := src["key"].(string)
 			if !cmdKeyRe.MatchString(k) {

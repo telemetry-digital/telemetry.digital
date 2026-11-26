@@ -566,7 +566,7 @@
   function place(card, g) { card.style.gridColumn = `${g.x + 1} / span ${g.w}`; card.style.gridRow = `${g.y + 1} / span ${g.h}`; }
   // Canvas (mimic) layout: widgets sit at absolute pixel positions on a fixed-size canvas that is scaled to the container width.
   function placeCanvas(card, g) { card.style.left = g.x + 'px'; card.style.top = g.y + 'px'; card.style.width = g.w + 'px'; card.style.height = g.h + 'px'; }
-  function fitMimic(container) { const wrap = container.querySelector('.mimic-wrap'), m = container.querySelector('.mimic'); if (!wrap || !m) return 1; const W0 = +m.dataset.w || 1600, H0 = +m.dataset.h || 900; const s = Math.max(0.1, Math.min(1.5, (wrap.clientWidth || W0) / W0)); m.style.transform = `scale(${s})`; wrap.style.height = Math.round(H0 * s) + 'px'; return s; }
+  function fitMimic(container) { const wrap = container.querySelector('.mimic-wrap'), m = container.querySelector('.mimic'); if (!wrap || !m) return 1; const W0 = +m.dataset.w || 1600, H0 = +m.dataset.h || 900; let s = Math.max(0.1, Math.min(1.5, (wrap.clientWidth || W0) / W0)); const both = container.dataset.fit === 'both' && container.clientHeight; if (both) s = Math.max(0.1, Math.min(4, (wrap.clientWidth || W0) / W0, container.clientHeight / H0)); m.style.marginLeft = both ? Math.max(0, Math.round(((wrap.clientWidth || W0) - W0 * s) / 2)) + 'px' : ''; m.style.transform = `scale(${s})`; wrap.style.height = Math.round(H0 * s) + 'px'; return s; }
   // the state a widget belongs to (absent = the root state, the first of spec.states)
   const stateOf = (spec, w) => (w.state || (((spec.states || [])[0] || {}).id) || '');
   const inState = (spec, w, st) => !(spec.states || []).length || stateOf(spec, w) === (st || spec.states[0].id);

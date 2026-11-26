@@ -124,7 +124,7 @@
     const takenIds = () => new Set(spec.elements.map((e) => e.id).concat(spec.widgets.map((w) => w.id)));
 
     // ---- history -------------------------------------------------------------------------------------------------
-    const snapshot = () => JSON.stringify({ e: spec.elements, w: spec.widgets, l: spec.layout, s: spec.scheme || '' });
+    const snapshot = () => JSON.stringify({ e: spec.elements, w: spec.widgets, l: spec.layout, s: spec.scheme || '', n: spec.nav || null, f: spec.faceplate || null });
     function commit(initial) {
       const s = snapshot(); if (hist.stack[hist.idx] === s) return;
       hist.stack = hist.stack.slice(0, hist.idx + 1); hist.stack.push(s); if (hist.stack.length > 101) hist.stack.shift(); hist.idx = hist.stack.length - 1;
@@ -132,7 +132,7 @@
     }
     async function restore(s) {
       const d = JSON.parse(s); const widgetsChanged = JSON.stringify(spec.widgets) !== JSON.stringify(d.w) || JSON.stringify(spec.layout) !== JSON.stringify(d.l);
-      spec.elements = d.e; spec.widgets = d.w; spec.layout = d.l; if (d.s) spec.scheme = d.s; else delete spec.scheme;
+      spec.elements = d.e; spec.widgets = d.w; spec.layout = d.l; if (d.s) spec.scheme = d.s; else delete spec.scheme; if (d.n) spec.nav = d.n; else delete spec.nav; if (d.f) spec.faceplate = d.f; else delete spec.faceplate;
       SEL = SEL.filter((k) => (k[0] === 'e' ? !!el(k.slice(2)) : +k.slice(2) < spec.widgets.length));
       if (widgetsChanged) await render(); else { drawLayer(); drawOverlay(); renderLayers(); }
       renderProps(); toolbarState(); o.onDirty && o.onDirty();
@@ -512,8 +512,33 @@
         <div class="row">${num('#width', l.width || 1600, 'Width px', 'min="600" max="4000" step="10"')}${num('#height', l.height || 900, 'Height px', 'min="300" max="3000" step="10"')}</div>
         <label>Background ${colorIn('#bg', l.bg, true)}</label>
         <div class="row">${num('#grid', l.grid || 10, 'Grid px', 'min="1" max="100" step="1"')}${sel('#scheme', spec.scheme || '', 'State colours', [['', 'classic (WinCC-like)'], ['isa101', 'ISA-101 high performance']])}</div>
-        <div class="muted" style="font-size:12px">${spec.elements.length} objects · ${spec.widgets.length} widgets</div>`;
+        <div class="muted" style="font-size:12px">${spec.elements.length} objects · ${spec.widgets.length} widgets</div>${operatorProps()}`;
       wireProps([]);
+    }
+    // operator view (spec 036): the place of the picture in the picture tree, and the faceplate type
+    function assetsOf() { const m = new Map(); for (const d of o.datastreams || []) if (d.asset_id && !m.has(d.asset_id)) m.set(d.asset_id, d.asset || d.asset_id); return [...m].sort((a, b) => String(a[1]).localeCompare(String(b[1]))); }
+    function operatorProps() {
+      const n = spec.nav, f = spec.faceplate, opt = (v, l, cur) => `<option value="${esc(v)}"${v === (cur || '') ? ' selected' : ''}>${esc(l)}</option>`;
+      return `<details open class="se-op"><summary>Operator view</summary>
+        <label class="inline"><input type="checkbox" data-nv="on" ${n ? 'checked' : ''}><span>In the picture tree</span></label>
+        ${n ? `<label>Parent picture <select data-nv="parent" class="notranslate"><option value="">(top level)</option>${(o.screens || []).map((s) => opt(s.slug, s.name, n.parent)).join('')}</select></label>
+        <div class="row"><label>Order <input type="number" data-nv="order" min="0" max="9999" step="1" value="${n.order || 0}"></label><label>Button label <input data-nv="label" maxlength="24" value="${esc(n.label || '')}" placeholder="(name of the picture)"></label></div>` : '<div class="muted" style="font-size:12px">Pictures in the tree get a button in the operator view; the button shows the alarms of the tags drawn in the picture and in the pictures below it.</div>'}
+      </details>
+      <details ${f ? 'open' : ''} class="se-op"><summary>Faceplate type</summary>
+        <label>Drawn for the asset <select data-fp="asset" class="notranslate"><option value="">(not a faceplate type)</option>${assetsOf().map(([id, name]) => opt(id, name, f && f.asset)).join('')}</select></label>
+        ${f ? `<label>Key prefix <input data-fp="prefix" maxlength="32" pattern="[a-z0-9_]*" value="${esc(f.prefix || '')}" placeholder="e.g. m1_ (empty: all keys of the asset)"></label>` : ''}
+        <div class="muted" style="font-size:12px">Opened as a popup for another asset or key prefix, the tags of this asset are re-bound by datastream key.</div>
+      </details>`;
+    }
+    function operatorChange(t) {
+      const nv = t.dataset.nv, fp = t.dataset.fp;
+      if (nv === 'on') { if (t.checked) spec.nav = { order: 0 }; else delete spec.nav; }
+      else if (nv === 'parent') { if (t.value) spec.nav.parent = t.value; else delete spec.nav.parent; }
+      else if (nv === 'order') spec.nav.order = Math.max(0, Math.min(9999, Math.round(+t.value || 0)));
+      else if (nv === 'label') { const v = t.value.trim(); if (v) spec.nav.label = v; else delete spec.nav.label; }
+      else if (fp === 'asset') { if (t.value) spec.faceplate = Object.assign(spec.faceplate || {}, { asset: t.value }); else delete spec.faceplate; }
+      else if (fp === 'prefix') { const v = t.value.trim().toLowerCase(); if (!/^[a-z0-9_]{0,32}$/.test(v)) { t.setCustomValidity('a-z, 0-9, _'); t.reportValidity(); return; } t.setCustomValidity(''); if (v) spec.faceplate.prefix = v; else delete spec.faceplate.prefix; }
+      commit(); if (nv === 'on' || fp === 'asset') renderPictureProps();
     }
     function dynEditor(e) {
       const rows = (e.dyn || []).map((d, i) => {
@@ -530,6 +555,7 @@
       const acts = [['faceplate', 'Open faceplate'], ['trend', 'Open trend'], ['screen', 'Go to screen'], ['popup', 'Open screen as popup'], ['command', 'Send command']];
       const rows = (e.on || []).map((a, i) => `<div class="se-dyn"><div class="row" style="align-items:center"><select data-ea="${i}.act">${acts.map(([v, l]) => `<option value="${v}"${v === a.act ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select><span class="grow"></span><button type="button" class="btn small ghost" data-edel="${i}" title="Remove">✕</button></div>
         ${a.act === 'screen' || a.act === 'popup' ? `<label>Screen <select data-ea="${i}.target">${(o.screens || []).map((s) => `<option value="${esc(s.slug)}"${s.slug === a.target ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>` : ''}
+        ${a.act === 'popup' ? `<div class="row"><label>Asset <select data-ea="${i}.asset" class="notranslate"><option value="">(asset of the object's tag)</option>${assetsOf().map(([id, name]) => `<option value="${esc(id)}"${id === a.asset ? ' selected' : ''}>${esc(name)}</option>`).join('')}</select></label><label>Key prefix <input data-ea="${i}.prefix" value="${esc(a.prefix || '')}" maxlength="32" placeholder="(of the type)"></label></div><div class="muted" style="font-size:11px">Asset and prefix apply when the screen is a faceplate type.</div>` : ''}
         ${a.act === 'command' ? `<div class="row"><label>Key <input data-ea="${i}.key" value="${esc(a.key || '')}" maxlength="64"></label><label>Value <input data-ea="${i}.value" value="${esc(a.value ?? '')}" maxlength="64" placeholder="true / false / number / text"></label><label>Method <input data-ea="${i}.method" value="${esc(a.method || 'write')}" maxlength="32"></label></div><label class="inline"><input type="checkbox" data-ea="${i}.confirm" ${a.confirm !== false ? 'checked' : ''}><span>Ask for confirmation</span></label><div class="muted" style="font-size:11px">Needs the device in Binding; a reason is always asked.</div>` : ''}</div>`).join('');
       return `<details open><summary>Click actions (${(e.on || []).length}/4)</summary>${rows || '<div class="muted" style="font-size:12px">None — with a tag bound, a click opens the faceplate.</div>'}${(e.on || []).length < 4 ? '<button type="button" class="btn small" data-eadd>+ Add action</button>' : ''}</details>`;
     }
@@ -539,6 +565,7 @@
       const flt = props.querySelector('.se-dsfilter'); if (flt) flt.oninput = () => { const q = flt.value.toLowerCase(); for (const op of flt.nextElementSibling.options) op.hidden = q && op.value && !op.textContent.toLowerCase().includes(q); };
       props.querySelectorAll('[data-colpick]').forEach((c) => c.oninput = () => { const t = props.querySelector(`[data-f="${c.dataset.colpick}"]`); t.value = c.value; c.classList.remove('se-unset'); t.dispatchEvent(new Event('change', { bubbles: true })); });
       props.onchange = async (ev) => {
+        if (ev.target.dataset.nv !== undefined || ev.target.dataset.fp !== undefined) { operatorChange(ev.target); return; }
         const f = ev.target.closest('[data-f]');
         if (f) {
           const path = f.dataset.f, kind = f.dataset.kind; let v = kind === 'bool' ? f.checked : kind === 'number' ? (f.value === '' ? undefined : parseFloat(f.value)) : f.value.trim();
@@ -561,7 +588,7 @@
         else if (ds.dc !== undefined) { const [i, k] = ds.dc.split('.'); e.dyn[+i][k] = k === 'op' || k === 'color' ? t.value : parseFloat(t.value); }
         else if (ds.dl !== undefined) { const [i, k] = ds.dl.split('.').map(Number); e.dyn[i].lin[k] = parseFloat(t.value) || 0; }
         else if (ds.dm !== undefined) { const [i, j, k] = ds.dm.split('.'); e.dyn[+i].map[+j][k] = k === 'v' ? parseFloat(t.value) || 0 : t.value; }
-        else if (ds.ea !== undefined) { const [i, k] = ds.ea.split('.'); const a = e.on[+i]; if (k === 'confirm') a.confirm = t.checked; else if (k === 'value') { const s = t.value.trim(); a.value = s === 'true' ? true : s === 'false' ? false : s !== '' && !isNaN(+s) ? +s : s; } else a[k] = t.value; if (k === 'act') { for (const x of ['target', 'key', 'value', 'method', 'confirm']) delete a[x]; if (t.value === 'screen') a.target = ((o.screens || [])[0] || {}).slug || ''; if (t.value === 'command') { a.key = e.key || ''; a.value = true; } } }
+        else if (ds.ea !== undefined) { const [i, k] = ds.ea.split('.'); const a = e.on[+i]; if (k === 'confirm') a.confirm = t.checked; else if (k === 'value') { const s = t.value.trim(); a.value = s === 'true' ? true : s === 'false' ? false : s !== '' && !isNaN(+s) ? +s : s; } else if ((k === 'asset' || k === 'prefix') && !t.value.trim()) delete a[k]; else a[k] = k === 'prefix' ? t.value.trim().toLowerCase() : t.value; if (k === 'act') { for (const x of ['target', 'key', 'value', 'method', 'confirm', 'asset', 'prefix']) delete a[x]; if (t.value === 'screen' || t.value === 'popup') a.target = ((o.screens || [])[0] || {}).slug || ''; if (t.value === 'command') { a.key = e.key || ''; a.value = true; } } }
         else return;
         if (!e.dyn.length) delete e.dyn; if (!e.on.length) delete e.on;
         changed(!!(ds.dt !== undefined)); if (ds.dp !== undefined || ds.ea !== undefined && ds.ea.endsWith('.act')) renderProps();

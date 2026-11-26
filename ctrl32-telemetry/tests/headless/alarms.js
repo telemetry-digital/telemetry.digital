@@ -33,7 +33,7 @@ const check = (name, got, want) => { if (String(got) === String(want)) { pass++;
   const go = async (path, ms) => { await send("Page.navigate", { url: base + path }); await sleep(ms || 3000); };
   await go("/login", 1500);
   check("login", await ev(`fetch('/api/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({username:'admin',password:'admin1234'})}).then(r=>r.status)`), 200);
-  if (lang) await ev(`localStorage.setItem('ctrl32.locale', ${JSON.stringify(lang)})`);
+  await ev(lang ? `localStorage.setItem('ctrl32.locale', ${JSON.stringify(lang)})` : `localStorage.removeItem('ctrl32.locale')`); // the browser profile is kept between runs
 
   console.log("== current");
   await go("/alarms");

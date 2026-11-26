@@ -89,7 +89,7 @@ var (
 // pwaSectionPaths are the pages of a section (and their sub-pages) that a locked app may open; app.js keeps the same
 // list (APP_PATHS).
 var pwaSectionPaths = map[string][]string{
-	"dashboards": {"/", "/dashboards"}, "home": {"/home", "/smarthome"}, "energy": {"/energy"}, "counting": {"/counting"}, "cameras": {"/video"},
+	"dashboards": {"/", "/dashboards", "/operator"}, "home": {"/home", "/smarthome"}, "energy": {"/energy"}, "counting": {"/counting"}, "cameras": {"/video"},
 	"displays": {"/displays"}, "flows": {"/flows", "/automation"}, "devices": {"/devices"}, "incidents": {"/incidents"}, "assets": {"/assets"}, "alarms": {"/alarms"},
 	"firmware": {"/fota"}, "users": {"/users"}, "audit": {"/audit", "/reports/signatures"}, "settings": {"/settings", "/vpn"}, "system": {"/organizations", "/server", "/landing/edit"},
 	"reports": {"/reports"},

@@ -469,12 +469,16 @@ export type Dashboard = {
 
 export type DashboardSpec = {
   aliases?: (Record<string, unknown>)[];
+  /** faceplate type: {asset (the asset it was drawn for), prefix (beginning of its datastream keys)}; see GET /dashboards/{slug}/instance */
+  faceplate?: Record<string, unknown>;
   filters?: (Record<string, unknown>)[];
   /** screen-v1 */
   format?: string;
   key_filters?: (Record<string, unknown>)[];
   /** {type: grid, columns: 12, row_height} */
   layout?: Record<string, unknown>;
+  /** place in the picture tree of the operator view: {parent (slug), order 0..9999, label up to 24 characters}; absent = not in the tree */
+  nav?: Record<string, unknown>;
   /** viewers of a public link and displays see the annotations of the charts (default false) */
   public_annotations?: boolean;
   states?: (Record<string, unknown>)[];
@@ -4008,6 +4012,45 @@ export class Ctrl32Client {
     /** true on success */
     ok?: boolean;
   }>('DELETE', `/api/v1/dashboards/${encodeURIComponent(slug)}`, query, undefined, false);
+  }
+
+  /** Faceplate type bound to an instance
+   *
+   * A screen whose spec names `faceplate {asset, prefix}` is a faceplate type drawn for one asset. This returns its spec bound to another asset and/or key prefix: every tag of the example asset whose key starts with the type's prefix becomes the datastream of the instance asset with the key `prefix + rest`; a tag without a counterpart is unbound; devices and command keys follow, and an example device without a counterpart loses its commands. Without `asset` the asset of `tag` is used, without both the example itself; without `prefix` the type's prefix. 400 when the screen is not a faceplate type.
+   * 
+   * Requires permission `data.read`. */
+  getDashboardsSlugInstance(slug: string, query?: { asset?: string; /** asset of the instance */ tag?: string; /** a datastream of the instance asset (used when asset is not given) */ prefix?: string; /** key prefix of the instance (a-z, 0-9, _) */ }): Promise<{
+    instance?: {
+      /** asset id */
+      asset?: string;
+      /** how many of them have a counterpart */
+      bound?: number;
+      /** asset name */
+      name?: string;
+      prefix?: string;
+      /** tags of the example in the type */
+      tags?: number;
+    };
+    name?: string;
+    slug?: string;
+    spec?: DashboardSpec;
+  }> {
+    return this.request<{
+    instance?: {
+      /** asset id */
+      asset?: string;
+      /** how many of them have a counterpart */
+      bound?: number;
+      /** asset name */
+      name?: string;
+      prefix?: string;
+      /** tags of the example in the type */
+      tags?: number;
+    };
+    name?: string;
+    slug?: string;
+    spec?: DashboardSpec;
+  }>('GET', `/api/v1/dashboards/${encodeURIComponent(slug)}/instance`, query, undefined, false);
   }
 
   /** Public share of a dashboard
@@ -8801,6 +8844,61 @@ export class Ctrl32Client {
     recipients?: number;
     status?: "sent" | "partial" | "failed";
   }>('POST', `/api/v1/scheduled-reports/${encodeURIComponent(id)}/send`, undefined, undefined, false);
+  }
+
+  /** Picture tree of the operator view with group alarms
+   *
+   * The screens that name their place in `spec.nav {parent, order, label}`, depth-first (siblings by order, then name). Each node carries the alarms needing attention (not shelved) on the datastreams its picture uses and on those of every picture below it: `unack` wait for an acknowledgement, `active` have their condition active, `color` and `priority` are those of the most important one (an unacknowledged alarm first, then the class priority). `home` is the default screen when it is in the tree, else the first top-level picture.
+   * 
+   * Requires permission `data.read`. */
+  getScreensTree(): Promise<{
+    /** slug of the start picture, empty when the tree is empty */
+    home?: string;
+    nodes?: ({
+      active?: number;
+      children?: number;
+      /** class colour of the most important alarm, empty when none */
+      color?: string;
+      /** 1 = top level */
+      depth?: number;
+      /** dashboard | mimic */
+      kind?: string;
+      /** button label */
+      label?: string;
+      name?: string;
+      order?: number;
+      /** slug of the parent, empty at the top level */
+      parent?: string;
+      /** class priority of the most important alarm, 0 when none */
+      priority?: number;
+      slug?: string;
+      unack?: number;
+    })[];
+  }> {
+    return this.request<{
+    /** slug of the start picture, empty when the tree is empty */
+    home?: string;
+    nodes?: ({
+      active?: number;
+      children?: number;
+      /** class colour of the most important alarm, empty when none */
+      color?: string;
+      /** 1 = top level */
+      depth?: number;
+      /** dashboard | mimic */
+      kind?: string;
+      /** button label */
+      label?: string;
+      name?: string;
+      order?: number;
+      /** slug of the parent, empty at the top level */
+      parent?: string;
+      /** class priority of the most important alarm, 0 when none */
+      priority?: number;
+      slug?: string;
+      unack?: number;
+    })[];
+  }>('GET', `/api/v1/screens/tree`, undefined, undefined, false);
   }
 
   /** Search everything by name

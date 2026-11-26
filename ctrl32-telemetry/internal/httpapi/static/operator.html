@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Operator view</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  /* operator view (spec 036): a fixed frame for a control-room monitor — header, alarm line, picture, button bar */
+  html, body.op { height: 100%; margin: 0; overflow: hidden; }
+  body.op { background: var(--bg2); }
+  #op { display: flex; flex-direction: column; height: 100dvh; max-width: none; margin: 0; padding: 0; }
+  .op-head { display: flex; align-items: center; gap: 14px; padding: 6px 12px; background: var(--card); border-bottom: 1px solid var(--line); min-height: 44px; }
+  .op-head img { height: 26px; max-width: 160px; }
+  .op-title { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+  .op-title b { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .op-title span { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .op-clock { font-variant-numeric: tabular-nums; text-align: right; line-height: 1.15; }
+  .op-clock b { font-size: 17px; display: block; }
+  .op-clock span { font-size: 11px; color: var(--muted); }
+  .op-user { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .op-alarm { --c: var(--muted); display: flex; align-items: center; gap: 10px; padding: 5px 12px; min-height: 38px; background: var(--card); border-bottom: 2px solid var(--c); font-size: 14px; }
+  .op-alarm.unack { background: color-mix(in srgb, var(--c) 14%, var(--card)); }
+  .op-alarm .op-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c); flex: none; }
+  .op-alarm.unack .op-dot { animation: op-blink 1s steps(2, start) infinite; }
+  .op-alarm .op-what { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .op-alarm .op-what .t { font-variant-numeric: tabular-nums; color: var(--muted); margin: 0 6px; }
+  .op-alarm .op-count { white-space: nowrap; color: var(--muted); text-decoration: none; }
+  .op-alarm .op-count b { color: var(--fg); }
+  .op-alarm .btn.on { color: var(--c); border-color: var(--c); }
+  .op-alarm .btn svg { width: 16px; height: 16px; vertical-align: -3px; }
+  .op-work { flex: 1; min-height: 0; overflow: hidden; }
+  .op-work.scroll { overflow: auto; }
+  .op-work .mimic-wrap { overflow: hidden; }
+  .op-work .op-empty { max-width: 640px; margin: 40px auto; }
+  .op-nav { display: flex; align-items: stretch; gap: 6px; padding: 6px 12px; background: var(--card); border-top: 1px solid var(--line); min-height: 52px; overflow-x: auto; }
+  .op-btn { --c: transparent; position: relative; display: inline-flex; align-items: center; gap: 8px; min-width: 96px; max-width: 220px; padding: 6px 14px; border: 1px solid var(--line); border-bottom: 5px solid var(--c); border-radius: 6px; background: var(--bg2); color: var(--fg); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .op-btn:hover:not(:disabled) { background: var(--bg); }
+  .op-btn:disabled { opacity: .4; cursor: default; }
+  .op-btn.cur { outline: 2px solid var(--accent, #e30613); outline-offset: -2px; }
+  .op-btn.sys { min-width: 0; font-weight: 500; }
+  .op-btn.active { border-bottom-color: var(--c); }
+  .op-btn.unack { border-color: var(--c); animation: op-btn-blink 1s steps(2, start) infinite; }
+  .op-btn .op-n { margin-left: auto; min-width: 20px; padding: 0 6px; border-radius: 10px; background: var(--c); color: #fff; font-size: 12px; line-height: 20px; text-align: center; }
+  .op-btn .op-kids { color: var(--muted); font-weight: 400; }
+  .op-sep { width: 1px; background: var(--line); margin: 4px 4px; flex: none; }
+  @keyframes op-blink { to { visibility: hidden; } }
+  @keyframes op-btn-blink { 50% { background: var(--c); color: #fff; } }
+  @media (prefers-reduced-motion: reduce) { .op-btn.unack { animation: none; background: color-mix(in srgb, var(--c) 30%, var(--bg2)); } .op-alarm.unack .op-dot { animation: none; } }
+  @media (max-width: 700px) { .op-user, .op-clock span, .op-head .hide-s { display: none; } }
+</style>
+</head>
+<body class="op">
+<main id="op">
+  <div class="op-head">
+    <img id="opLogo" alt="">
+    <div class="op-title"><b id="opTitle" class="notranslate"></b><span id="opPath" class="notranslate"></span></div>
+    <span class="grow"></span>
+    <span class="op-user notranslate" id="opUser"></span>
+    <div class="op-clock notranslate"><b id="opTime"></b><span id="opDate"></span></div>
+    <button class="btn ghost small" type="button" id="opFs">Full screen</button>
+    <a class="btn ghost small hide-s" id="opExit" href="/dashboards">Application</a>
+  </div>
+  <div class="op-alarm" id="opAlarm"></div>
+  <div class="op-work" id="opWork" data-fit="both"></div>
+  <div class="op-nav" id="opNav"></div>
+</main>
+<dialog id="opAck">
+  <form method="dialog" id="opAckForm" class="form">
+    <h3>Acknowledge alarm</h3>
+    <p class="muted notranslate" id="opAckWhat"></p>
+    <label>Reason (audit trail)<input name="reason" required minlength="3" maxlength="200" autocomplete="off"></label>
+    <p class="muted" id="opAckErr" hidden></p>
+    <div class="row"><span class="grow"></span><button class="btn ghost" type="button" id="opAckCancel">Cancel</button><button class="btn" type="submit">Acknowledge</button></div>
+  </form>
+</dialog>
+<script src="/app.js"></script>
+<script src="/scada.js"></script>
+<script src="/vendor/tabler-icons.js"></script>
+<script src="/widgets.js"></script>
+<script src="/widgets-more.js"></script>
+<script src="/widgets-counting.js"></script>
+<script src="/dashfilters.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, api = ctrl32.api, t = ctrl32.t, WG = window.ctrl32Widgets;
+const enc = encodeURIComponent, lang = () => document.documentElement.lang || undefined;
+let TREE = {home: '', nodes: []}, CUR = '', NAME = '', DEPTH = 0, refreshFn = null, timer = null, seq = 0, SUM = null;
+const slugOf = () => decodeURIComponent(location.pathname.split('/')[2] || '');
+const node = (slug) => TREE.nodes.find(n => n.slug === slug);
+
+function clock(){ const d = new Date(); $('#opTime').textContent = d.toLocaleTimeString(lang()); $('#opDate').textContent = d.toLocaleDateString(lang(), {weekday: 'short', day: 'numeric', month: 'numeric', year: 'numeric'}); }
+
+// ---- the picture -------------------------------------------------------------------------------------
+// show(slug, how): how = 'push' (a button or a screen action), 'replace' (the first picture) or 'pop' (browser Back)
+async function show(slug, how){
+  if(!slug || slug === CUR) return;
+  const my = ++seq; let d;
+  try { d = await api('GET', '/api/v1/dashboards/' + enc(slug)); } catch(e) { if(CUR) ctrl32.toast(e.message, 'bad'); else empty(e.message); return; }
+  if(my !== seq) return;
+  window.ctrl32Scada.closePopups();
+  if(how === 'push'){ DEPTH++; history.pushState({slug, n: DEPTH}, '', '/operator/' + enc(slug)); }
+  else if(how === 'replace') history.replaceState({slug, n: DEPTH}, '', '/operator/' + enc(slug));
+  CUR = slug; NAME = d.name; document.title = d.name + ' — ' + t('Operator view');
+  const spec = d.spec || {}, work = $('#opWork');
+  work.classList.toggle('scroll', !WG.isCanvas(spec));
+  clearInterval(timer); work.innerHTML = '';
+  refreshFn = await WG.render(work, spec, {range: spec.range}); // states of grid dashboards stay on the dashboard page
+  if(my !== seq) return;
+  WG.fitMimic(work);
+  timer = setInterval(() => refreshFn && refreshFn(), (spec.refresh_s || 30) * 1000);
+  drawNav();
+}
+function empty(msg){
+  $('#opTitle').textContent = t('Operator view'); $('#opPath').textContent = '';
+  api('GET', '/api/v1/dashboards').then(list => {
+    $('#opWork').classList.add('scroll');
+    $('#opWork').innerHTML = `<div class="card op-empty"><h3>${esc(t('No picture is placed in the operator view yet'))}</h3>
+      <p class="muted">${esc(msg || t('Open a screen in the editor and set its place in the operator view in the screen properties: the parent picture, the order and the label of its button.'))}</p>
+      <div class="notranslate">${(list || []).map(x => `<p><a href="/operator/${esc(enc(x.slug))}" data-go="${esc(x.slug)}">${esc(x.name)}</a></p>`).join('')}</div></div>`;
+  }).catch(() => {});
+}
+
+// ---- button bar: Home, Back, Up and the pictures below (or beside) the current one -------------------------
+function pathOf(n){ const p = []; for(let x = n, i = 0; x && i < 8; x = node(x.parent), i++) p.unshift(x.label); return p; }
+function drawNav(){
+  const cur = node(CUR), bar = $('#opNav');
+  $('#opTitle').textContent = NAME || (cur && cur.name) || '';
+  $('#opPath').textContent = cur ? pathOf(cur).join(' › ') : '';
+  const kids = (slug) => TREE.nodes.filter(n => n.parent === slug);
+  let list = cur ? kids(cur.slug) : kids('');
+  if(cur && !list.length) list = kids(cur.parent);
+  const btn = (n) => { const st = n.unack ? ' unack' : n.active ? ' active' : ''; const c = n.color ? ` style="--c:${esc(n.color)}"` : '';
+    return `<button type="button" class="op-btn notranslate${st}${n.slug === CUR ? ' cur' : ''}" data-go="${esc(n.slug)}"${c} title="${esc(n.name)}"><span>${esc(n.label)}</span>${n.children && n.slug !== CUR ? '<span class="op-kids">›</span>' : ''}${n.unack || n.active ? `<span class="op-n">${n.unack || n.active}</span>` : ''}</button>`; };
+  const st = history.state || {};
+  bar.innerHTML = `<button type="button" class="op-btn sys" id="opHome" ${TREE.home && TREE.home !== CUR ? '' : 'disabled'}>${esc(t('Overview'))}</button>
+    <button type="button" class="op-btn sys" id="opBack" ${(st.n || 0) > 0 ? '' : 'disabled'}>${esc(t('Back'))}</button>
+    <button type="button" class="op-btn sys" id="opUp" ${cur && cur.parent ? '' : 'disabled'}>${esc(t('Up'))}</button>
+    <span class="op-sep"></span>${list.map(btn).join('')}`;
+  $('#opHome').onclick = () => show(TREE.home, 'push');
+  $('#opBack').onclick = () => history.back();
+  $('#opUp').onclick = () => cur && show(cur.parent, 'push');
+}
+document.addEventListener('click', (ev) => { const b = ev.target.closest('[data-go]'); if(!b) return; ev.preventDefault(); show(b.dataset.go, 'push'); });
+window.addEventListener('popstate', (ev) => { const s = (ev.state && ev.state.slug) || slugOf(); DEPTH = (ev.state && ev.state.n) || 0; if(s) show(s, 'pop'); });
+
+// ---- alarm line ----------------------------------------------------------------------------------------
+const store = (k, v) => { try { if(v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch(e) { /* private mode */ } return null; };
+function drawAlarm(){
+  const s = SUM || {unack: 0, active: 0, top: null}, top = s.top, bar = $('#opAlarm'), on = store('ctrl32.alarmSound') === '1';
+  const hm = (x) => new Date(x).toLocaleTimeString(lang(), {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+  bar.className = 'op-alarm' + (top ? ' unack' : ''); bar.style.setProperty('--c', top ? top.class.color : s.active ? 'var(--muted)' : 'var(--line)');
+  const what = top ? `<b>${esc(top.class.name)}</b><span class="t">${hm(top.raised_at)}</span><span class="notranslate">${esc([top.source.asset, top.source.rule || top.key].filter(Boolean).join(' · '))}${top.value !== null && top.value !== undefined ? ' = ' + esc(String(Math.round(top.value * 1000) / 1000)) + (top.source.unit ? ' ' + esc(top.source.unit) : '') : ''}</span>${top.cleared_at ? ` <span class="muted">${esc(t('returned to normal'))}</span>` : ''}`
+    : `<span class="muted">${esc(t('No alarm waits for an acknowledgement'))}</span>`;
+  bar.innerHTML = `<span class="op-dot"></span><span class="op-what">${what}</span>
+    <a class="op-count" href="/alarms"><b>${s.unack}</b> ${esc(t('unacknowledged'))} · <b>${s.active}</b> ${esc(t('active'))}</a>
+    ${top && ctrl32.can('alarm.ack') ? `<button class="btn small" type="button" id="opAckBtn">${esc(t('Acknowledge'))}</button>` : ''}
+    <button class="btn ghost small${on ? ' on' : ''}" type="button" id="opSound" title="${esc(t(on ? 'Alarm sound is on in this browser' : 'Switch the alarm sound on in this browser'))}">${ctrl32.ICON.bell}</button>
+    <a class="btn ghost small" href="/alarms">${esc(t('Alarms'))}</a>`;
+  $('#opSound').onclick = () => { const now = on ? '0' : '1'; store('ctrl32.alarmSound', now); if(now === '1' && ctrl32.alarmSound) ctrl32.alarmSound(top && top.class.sound !== 'none' ? top.class.sound : 'beep'); drawAlarm(); };
+  const ack = $('#opAckBtn');
+  if(ack) ack.onclick = () => { const f = $('#opAckForm'); f.reset(); f.dataset.id = top.id; $('#opAckErr').hidden = true; $('#opAckWhat').textContent = [top.class.name, top.source.asset, top.source.rule || top.key].filter(Boolean).join(' · '); $('#opAck').showModal(); f.reason.focus(); };
+}
+$('#opAckCancel').onclick = () => $('#opAck').close();
+$('#opAckForm').addEventListener('submit', async (ev) => {
+  ev.preventDefault(); const f = ev.target;
+  try { await api('POST', `/api/v1/alarms/${f.dataset.id}/ack`, {reason: f.reason.value.trim()}); $('#opAck').close(); await tick(); }
+  catch(e) { const o = $('#opAckErr'); o.textContent = e.message; o.hidden = false; }
+});
+async function tick(){
+  if(document.hidden) return;
+  try { const [tree, sum] = await Promise.all([api('GET', '/api/v1/screens/tree'), api('GET', '/api/v1/alarms/summary')]); TREE = tree; SUM = sum; } catch(e) { return; }
+  if(!$('#opAck').open) drawAlarm();
+  drawNav();
+  if(SUM.top && store('ctrl32.alarmSound') === '1' && ctrl32.alarmSound) ctrl32.alarmSound(SUM.top.class.sound);
+}
+
+ctrl32.ready({requireAuth: true, requirePerm: 'data.read'}).then(async () => {
+  $('#opLogo').src = ctrl32.logo; $('#opUser').textContent = (ctrl32.me && (ctrl32.me.name || ctrl32.me.username)) || '';
+  $('#opFs').onclick = () => ctrl32.fullscreen(document.documentElement);
+  clock(); setInterval(clock, 1000);
+  window.ctrl32Scada.navigate = (slug) => show(slug, 'push');
+  drawAlarm(); await tick();
+  const first = slugOf() || TREE.home;
+  if(first) await show(first, 'replace'); else empty();
+  setInterval(tick, 5000);
+  document.addEventListener('visibilitychange', () => { if(!document.hidden) tick(); });
+  window.addEventListener('resize', () => WG.fitMimic($('#opWork')));
+});
+</script>
+</body>
+</html>
