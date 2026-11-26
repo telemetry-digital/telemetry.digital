@@ -95,6 +95,8 @@
 
 **Nasadenie 0.88.0 (26. 11. 2026):** portál (API so zálohou; disk potom 81 %, 6,9 GB voľných – 5 záloh) aj BB (API tunelom, 39/39 online a nahráva). Prvé zostavenie zastavil govulncheck (GO-2026-6278, gorilla/websocket 1.5.3) → aktualizácia na commit s opravou (v1.5.4-0.20240701034025-d67f41855da4). Prevod overený na BB: kamera Vchod (H.265 3840×2160), 60 s → H.264 1920×1080, 25 MB (originál 31 MB); výber formátu na stránke kamery odfotený. e2e `video.sh` lokálne nedobehol (zastavený pre nedostatok pamäte PC).
 
+**Nasadenie 0.91.0 (26. 11. 2026):** portál (API so zálohou; disk potom 87 %, 4,8 GB voľných, 7 záloh po 1,1 GB — dnes pribudli štyri pred aktualizáciami) aj BB (API tunelom, 39/39 online a nahráva). Na portáli overené: `healthz` 0.91.0, stránka konektorov obsahuje import, endpoint importu bez prihlásenia vracia 401.
+
 **Nasadenie 0.90.1 a 0.90.2 (26. 11. 2026):** obe na portáli (API so zálohou; po 0.90.2 disk 84 %, 5,9 GB voľných, 6 záloh) aj na BB (API tunelom, 39/39 online a nahráva). Na portáli overené: `healthz` 0.90.2, API token admina platí, editor obsahuje režim celého okna. Zostavenie: binárky predkompilované po častiach v popredí, potom `publish.sh` v popredí (na pozadí ho systém pre pamäť zastavuje).
 
 **Nasadenie 0.90.0 (26. 11. 2026):** portál (API so zálohou; disk potom 87 %, 4,8 GB voľných — zálohy aktualizácií zaberajú 7,2 GB) aj BB (API tunelom, 39/39 online a nahráva); `/operator` a `/api/v1/screens/tree` odpovedajú na oboch (strom je zatiaľ prázdny, žiadny obraz doň nie je zaradený). Zverejnenie trikrát zastavil systém pre nedostatok pamäte PC; prešlo po predkompilovaní binárok po častiach v popredí. Neoverené naživo: ťahanie okien myšou/dotykom, celá obrazovka, zvuk alarmu.
