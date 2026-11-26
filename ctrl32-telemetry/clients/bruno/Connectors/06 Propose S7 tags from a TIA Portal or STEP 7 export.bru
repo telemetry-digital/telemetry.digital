@@ -1,0 +1,27 @@
+meta {
+  name: Propose S7 tags from a TIA Portal or STEP 7 export
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/connectors/s7/import
+  body: multipartForm
+  auth: inherit
+}
+
+body:multipart-form {
+  db: 
+  encoding: 
+  existing: 
+  file: @file()
+  prefix: 
+}
+
+docs {
+  Propose S7 tags from a TIA Portal or STEP 7 export
+  
+  multipart/form-data. Reads a PLC tag table of TIA Portal (.xlsx, .xml), a symbol table of STEP 7 (.sdf, .asc, .seq), a data block as source (.db, .awl, with its data types in the same file) or as Openness XML, or a table with name, address, type and comment (.csv), at most 8 MB. Variables become tags with a key made from the symbol, the absolute address and the data type; addresses of data blocks are calculated by the layout rules of blocks with standard access, optimized blocks are refused. Nothing is stored and no tag is writable: the answer is a proposal for the connector's tag list.
+  
+  Requires permission `config.write`.
+}

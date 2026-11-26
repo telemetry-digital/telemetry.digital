@@ -462,6 +462,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("GET /api/v1/connectors/opcua/certificate", s.require("config.write", s.opcuaCertificate))
 	mux.Handle("POST /api/v1/connectors/opcua/endpoints", s.require("config.write", s.opcuaEndpoints))
 	mux.Handle("POST /api/v1/connectors/opcua/browse", s.require("config.write", s.opcuaBrowse))
+	mux.Handle("POST /api/v1/connectors/s7/import", s.require("config.write", s.s7ImportTags))
 	mux.Handle("GET /api/v1/register-profiles", s.require("config.write", s.listProfiles))
 	mux.Handle("POST /api/v1/register-profiles", s.require("config.write", s.createProfile))
 	mux.Handle("GET /api/v1/register-profiles/{id}", s.require("config.write", s.getProfile))

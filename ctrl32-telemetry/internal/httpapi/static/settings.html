@@ -186,6 +186,31 @@
     <div class="actions"><button class="btn primary" type="button" id="brAdd">Add selected nodes</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
   </div>
 </dialog>
+<dialog id="impDlg" style="max-width:1040px;width:96vw">
+  <div class="form">
+    <h2 style="margin-top:0">Import tags from TIA Portal or STEP 7</h2>
+    <p class="muted" style="font-size:12px;margin:0">TIA Portal: PLC tag table (.xlsx, .xml), data block as source (.db) or XML · STEP 7: symbol table (.sdf, .asc, .seq), data block source (.awl) · any table with name, address, type, comment (.csv). Data blocks must have standard access, not optimized. Nothing is read from the PLC; the tags are stored when you save the connector.</p>
+    <div class="row" style="align-items:flex-end">
+      <label style="flex:2 1 240px">File <input type="file" id="impFile" accept=".xlsx,.xml,.sdf,.asc,.seq,.db,.awl,.scl,.udt,.csv,.txt"></label>
+      <label style="flex:0 1 150px">Data block number <input id="impDB" type="number" min="1" max="65535" placeholder="from the file"></label>
+      <label style="flex:0 1 120px">Key prefix <input id="impPrefix" maxlength="16" placeholder="m1_"></label>
+      <label style="flex:0 1 190px">Text encoding <select id="impEnc"><option value="windows-1252">Western Europe (1252)</option><option value="windows-1250">Central Europe (1250)</option><option value="windows-1251">Cyrillic (1251)</option><option value="windows-1253">Greek (1253)</option><option value="windows-1257">Baltic (1257)</option></select></label>
+      <button class="btn" type="button" id="impRead">Read file</button>
+    </div>
+    <div id="impInfo" style="font-size:13px"></div>
+    <ul id="impWarn" class="muted" style="font-size:12px;margin:0;padding-left:18px"></ul>
+    <div class="row" style="align-items:flex-end" id="impFilterRow" hidden>
+      <label style="flex:1 1 200px">Filter <input id="impFilter" type="search" placeholder="symbol, address, comment"></label>
+      <label style="flex:0 1 160px">Area <select id="impArea"><option value="">all areas</option><option value="i">inputs (I)</option><option value="q">outputs (Q)</option><option value="m">bit memory (M)</option><option value="db">data blocks (DB)</option></select></label>
+      <button class="btn small" type="button" id="impAll">Select shown</button><button class="btn small" type="button" id="impNone">Clear selection</button>
+    </div>
+    <div class="table-wrap" style="max-height:42vh;overflow:auto" id="impWrap" hidden><table id="impTable"><thead><tr><th style="width:28px"></th><th>Key</th><th>Symbol</th><th>Address</th><th>Type</th><th>Comment</th></tr></thead><tbody></tbody></table></div>
+    <div class="muted" id="impMore" style="font-size:12px"></div>
+    <details id="impSkipped" hidden><summary style="cursor:pointer;font-size:13px"></summary><div class="table-wrap" style="max-height:24vh;overflow:auto"><table><thead><tr><th>Symbol</th><th>Address</th><th>Type</th><th>Reason</th></tr></thead><tbody></tbody></table></div></details>
+    <div class="err" id="impErr"></div>
+    <div class="actions"><span class="muted" id="impCount" style="font-size:12px"></span><span class="grow"></span><button class="btn primary" type="button" id="impAdd" disabled>Add selected tags</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </div>
+</dialog>
 <dialog id="profDlg">
   <form id="profForm" class="form" method="dialog">
     <h2 style="margin-top:0" id="profTitle">New register profile</h2>
@@ -228,6 +253,7 @@
       <div class="row"><label>Host <input name="s7_host" placeholder="192.168.0.1"></label><label>Port <input name="s7_port" type="number" min="1" max="65535" value="102"></label><label>PLC <select name="plc"><option value="s7-1200">S7-1200</option><option value="s7-1500">S7-1500</option><option value="s7-300">S7-300</option><option value="s7-400">S7-400</option><option value="et200sp">ET 200SP CPU</option><option value="logo">LOGO! 0BA8 and newer</option><option value="other">other (rack/slot as entered)</option></select></label></div>
       <div class="row"><label>Rack <input name="rack" type="number" min="0" max="7" placeholder="from PLC"></label><label>Slot <input name="slot" type="number" min="0" max="31" placeholder="from PLC"></label><label>Connection type <select name="conn_type"><option value="pg">PG</option><option value="op">OP</option><option value="s7basic">S7 basic</option></select></label><label>Local TSAP <input name="local_tsap" placeholder="01.00"></label><label>Remote TSAP <input name="remote_tsap" placeholder="from rack/slot"></label></div>
       <div class="row"><label>Polling interval (s) <input name="s7_interval_s" type="number" min="1" max="3600" value="10"></label><label>Timeout (ms) <input name="s7_timeout_ms" type="number" min="100" max="30000" value="3000"></label><label>Virtual device id <input name="s7_device_external_id" placeholder="s7-<name>"></label></div>
+      <div class="row" style="align-items:center"><button class="btn" type="button" id="s7Import">Import tags from TIA Portal / STEP 7</button><span class="muted" style="font-size:12px">tag table, symbol table or data block source — you choose which variables become tags</span></div>
       <label>Tags — one per line: <code>key | address | type | scale | offset | rw | min | max | device</code> <textarea name="tags" rows="7" placeholder="temp | DB1.DBD0&#10;counter | DB1.DBW4&#10;pump | DB1.DBX6.0 | | | | rw&#10;setpoint | DB1.DBD8 | real | | | rw | 0 | 100&#10;level | MW10 | int | 0.1" style="font-family:var(--mono);font-size:12px"></textarea></label>
       <div class="muted" style="font-size:12px">addresses: DB1.DBX0.0 (bool), DB1.DBB2 (byte), DB1.DBW4 (int), DB1.DBD6 (real), DB1.DBS10.20 (string, max 20), M10.0, MB10, MW10, MD10, I0.0/E0.0, IW64, Q0.0/A0.0, QW, LOGO! V10.3, VW100 · nodes7 style DB1,REAL4 DB1,INT2 DB1,X0.1 DB1,LREAL8 · type overrides the default of the size (W: int, uint, word · D: real, dint, udint, dword · B: byte, char, sint, usint) · rw marks a writable tag (not inputs), min/max limit the written value · device sends the value to another virtual device</div>
       <div class="row"><button class="btn" type="button" id="s7Test">Test connection</button></div>
@@ -611,6 +637,37 @@ $('#connTest').onclick = async () => { const f = $('#newConn'); $('#connErr').te
 $('#mbTest').onclick = async () => { const f = $('#newConn'); $('#connErr').textContent=''; $('#mbTestOut').textContent = 'connecting…';
   try{ const r = await api('POST','/api/v1/connectors/test',{kind: 'modbus_tcp', settings: mbSettings(f)}); $('#mbTestOut').textContent = 'OK (' + r.addr + ':' + r.port + ' unit ' + r.unit_id + ')\n' + Object.entries(r.values).map(([k, v]) => k + ' = ' + v).join('\n') + (r.bad_nodes && r.bad_nodes.length ? '\nnot readable: ' + r.bad_nodes.join('; ') : ''); }
   catch(x){ $('#mbTestOut').textContent = 'failed: ' + x.message; } };
+// ---- S7: import tags from a TIA Portal / STEP 7 export (0.91.0) ----
+let IMP = null; const IMP_SHOW = 400;
+function impShown(){ if(!IMP) return []; const q = $('#impFilter').value.trim().toLowerCase(), ar = $('#impArea').value; return IMP.tags.map((t, i) => i).filter(i => { const t = IMP.tags[i]; return (!ar || t.area === ar) && (!q || (t.name + ' ' + t.address + ' ' + (t.comment || '') + ' ' + t.key + ' ' + (t.block || '')).toLowerCase().includes(q)); }); }
+function impRender(){ const sh = impShown(), body = $('#impTable tbody');
+  body.innerHTML = sh.slice(0, IMP_SHOW).map(i => { const t = IMP.tags[i]; return `<tr><td><input type="checkbox" data-i="${i}"${IMP.sel.has(i) ? ' checked' : ''}></td><td><code>${esc(t.key)}</code></td><td>${esc(t.name)}${t.block ? ` <span class="muted" style="font-size:11px">${esc(t.block)}</span>` : ''}</td><td><code>${esc(t.address)}</code></td><td>${esc(t.type)}${t.plc_type && t.plc_type.toLowerCase() !== t.type ? ` <span class="muted" style="font-size:11px">${esc(t.plc_type)}</span>` : ''}</td><td class="muted" style="font-size:12px">${esc(t.comment || '')}</td></tr>`; }).join('') || `<tr><td colspan="6" class="muted">${esc(ctrl32.t('no variable matches the filter'))}</td></tr>`;
+  $('#impMore').textContent = sh.length > IMP_SHOW ? ctrl32.t('the first {n} of {m} are shown — narrow the filter; "Select shown" selects all {m}').replace('{n}', IMP_SHOW).replaceAll('{m}', sh.length) : '';
+  $('#impCount').textContent = ctrl32.t('{n} of {m} selected').replace('{n}', IMP.sel.size).replace('{m}', IMP.tags.length); $('#impAdd').disabled = !IMP.sel.size; }
+$('#s7Import').onclick = () => { IMP = null; $('#impFile').value = ''; $('#impErr').textContent = ''; $('#impInfo').textContent = ''; $('#impWarn').innerHTML = ''; $('#impMore').textContent = ''; $('#impCount').textContent = ''; $('#impFilter').value = ''; $('#impArea').value = ''; $('#impFilterRow').hidden = true; $('#impWrap').hidden = true; $('#impSkipped').hidden = true; $('#impAdd').disabled = true;
+  const l = (document.documentElement.lang || 'en').slice(0, 2); $('#impEnc').value = ['sk', 'cs', 'pl', 'hu', 'ro'].includes(l) ? 'windows-1250' : ['bg', 'uk'].includes(l) ? 'windows-1251' : l === 'el' ? 'windows-1253' : l === 'et' ? 'windows-1257' : 'windows-1252'; $('#impDlg').showModal(); };
+$('#impRead').onclick = async () => { const file = $('#impFile').files[0]; $('#impErr').textContent = ''; if(!file){ $('#impErr').textContent = ctrl32.t('choose a file first'); return; }
+  const f = $('#newConn'); const fd = new FormData(); fd.append('file', file); fd.append('encoding', $('#impEnc').value); if($('#impDB').value) fd.append('db', $('#impDB').value); if($('#impPrefix').value.trim()) fd.append('prefix', $('#impPrefix').value.trim());
+  fd.append('existing', parseTags(f.tags.value).filter(t => !t.device).map(t => t.key).join('\n'));
+  try{ const r = await fetch('/api/v1/connectors/s7/import', {method: 'POST', body: fd, headers: {'X-CSRF-Token': ctrl32.csrf}, credentials: 'same-origin'}); const j = await r.json(); if(!r.ok) throw new Error(j.error || r.status);
+    IMP = {tags: j.tags || [], skipped: j.skipped || [], max: j.max_tags || 2000, sel: new Set()};
+    $('#impInfo').textContent = j.format + ' · ' + ctrl32.t('{n} variables can become tags, {m} left out').replace('{n}', IMP.tags.length).replace('{m}', IMP.skipped.length) + ((j.blocks || []).length ? ' · ' + j.blocks.map(b => b.name + (b.number ? ' = DB' + b.number : '') + ' (' + b.tags + ')').join(', ') : '');
+    $('#impWarn').innerHTML = (j.warnings || []).map(w => `<li>${esc(w)}</li>`).join('');
+    $('#impFilterRow').hidden = $('#impWrap').hidden = !IMP.tags.length;
+    $('#impSkipped').hidden = !IMP.skipped.length; $('#impSkipped summary').textContent = ctrl32.t('Left out') + ' (' + IMP.skipped.length + ')';
+    $('#impSkipped tbody').innerHTML = IMP.skipped.slice(0, 1000).map(k => `<tr><td>${esc(k.name)}</td><td><code>${esc(k.address || '')}</code></td><td>${esc(k.plc_type || '')}</td><td>${esc(k.reason)}</td></tr>`).join('');
+    impRender(); }
+  catch(x){ IMP = null; $('#impFilterRow').hidden = $('#impWrap').hidden = true; $('#impSkipped').hidden = true; $('#impInfo').textContent = ''; $('#impWarn').innerHTML = ''; $('#impErr').textContent = x.message; } };
+$('#impFilter').oninput = () => IMP && impRender(); $('#impArea').onchange = () => IMP && impRender();
+$('#impTable').onchange = e => { const i = e.target.dataset.i; if(i === undefined || !IMP) return; if(e.target.checked) IMP.sel.add(+i); else IMP.sel.delete(+i); impRender(); };
+$('#impAll').onclick = () => { if(!IMP) return; for(const i of impShown()) IMP.sel.add(i); impRender(); };
+$('#impNone').onclick = () => { if(!IMP) return; IMP.sel.clear(); impRender(); };
+$('#impAdd').onclick = () => { if(!IMP) return; const f = $('#newConn'); $('#impErr').textContent = ''; const cur = parseTags(f.tags.value); const have = new Set(cur.filter(t => !t.device).map(t => (t.address || '').toUpperCase().replace(/\s+/g, '')));
+  const picked = [...IMP.sel].sort((a, b) => a - b).map(i => IMP.tags[i]);
+  if(picked.some(t => t.needs_db)){ $('#impErr').textContent = ctrl32.t('enter the data block number and read the file again: its source does not carry the number'); return; }
+  const add = picked.filter(t => !have.has(t.address.toUpperCase())).map(t => ({key: t.key, address: t.address, type: t.type}));
+  if(cur.length + add.length > IMP.max){ $('#impErr').textContent = ctrl32.t('a connector reads at most {n} tags; {m} would be too many').replace('{n}', IMP.max).replace('{m}', cur.length + add.length); return; }
+  f.tags.value = tagsText([...cur, ...add]); $('#impDlg').close(); ctrl32.toast(ctrl32.t('{n} tag(s) added, read-only — mark writable ones with rw').replace('{n}', add.length) + (picked.length > add.length ? ' · ' + ctrl32.t('{n} already in the list').replace('{n}', picked.length - add.length) : ''), 'ok'); };
 $('#s7Test').onclick = async () => { const f = $('#newConn'); $('#connErr').textContent=''; $('#s7TestOut').textContent = 'connecting…';
   try{ const r = await api('POST','/api/v1/connectors/test',{kind: 's7', settings: s7Settings(f)}); const cpu = r.cpu ? [r.cpu.module_type, r.cpu.order_code, r.cpu.plc_name].filter(Boolean).join(' · ') : '';
     $('#s7TestOut').textContent = 'OK (' + r.addr + ':' + r.port + ' rack ' + r.rack + ' slot ' + r.slot + ', PDU ' + r.pdu + ')' + (cpu ? '\n' + cpu : '') + '\n' + Object.entries(r.values).map(([k, v]) => k + ' = ' + v).join('\n') + (r.bad_nodes && r.bad_nodes.length ? '\nnot readable: ' + r.bad_nodes.join('; ') : ''); }

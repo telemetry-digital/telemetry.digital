@@ -1,19 +1,22 @@
 meta {
-  name: Test connector settings without saving
+  name: Update connector settings (OPC UA Modbus S7)
   type: http
-  seq: 6
+  seq: 8
 }
 
-post {
-  url: {{baseUrl}}/api/v1/connectors/test
+put {
+  url: {{baseUrl}}/api/v1/connectors/:id
   body: json
   auth: inherit
 }
 
+params:path {
+  id: 
+}
+
 body:json {
   {
-    "id": "string",
-    "kind": "opcua",
+    "reason": "string",
     "settings": {
       "auth": "string",
       "byte_order": "big",
@@ -75,9 +78,7 @@ body:json {
 }
 
 docs {
-  Test connector settings without saving
-  
-  Connects once and reads the configured nodes/registers/tags (S7: also identifies the CPU).
+  Update connector settings (OPC UA, Modbus, S7)
   
   Requires permission `config.write`.
 }
