@@ -26,7 +26,7 @@
     fwd: I('<path d="M12 5v14M7 10l5-5 5 5"/>'), bwd: I('<path d="M12 5v14M7 14l5 5 5-5"/>'), group: I('<rect x="3" y="3" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/><path d="M11 7h4v4M13 17H9v-4"/>'), ungroup: I('<rect x="3" y="3" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/>'),
     lock: I('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/>'), eye: I('<circle cx="12" cy="12" r="2"/><path d="M22 12c-2.7 4.7-6 7-10 7s-7.3-2.3-10-7c2.7-4.7 6-7 10-7s7.3 2.3 10 7"/>'),
     grid: I('<path d="M4 4h16v16H4zM4 12h16M12 4v16"/>'), snap: I('<path d="M4 4h4M4 4v4M20 4h-4M20 4v4M4 20h4M4 20v-4M20 20h-4M20 20v-4"/><circle cx="12" cy="12" r="2"/>'),
-    zin: I('<circle cx="10" cy="10" r="7"/><path d="M21 21l-6-6M7 10h6M10 7v6"/>'), zout: I('<circle cx="10" cy="10" r="7"/><path d="M21 21l-6-6M7 10h6"/>'), fit: I('<path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/>'),
+    zin: I('<circle cx="10" cy="10" r="7"/><path d="M21 21l-6-6M7 10h6M10 7v6"/>'), zout: I('<circle cx="10" cy="10" r="7"/><path d="M21 21l-6-6M7 10h6"/>'), fit: I('<path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/>'), plib: I('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>'), pside: I('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>'),
   };
   const DYN = [
     ['fill', 'Fill colour', 'color'], ['stroke', 'Line colour', 'color'], ['color', 'Text colour', 'color'], ['state', 'State', 'state'], ['text', 'Text', 'text'],
@@ -50,11 +50,12 @@
         ${btn('front', 'Bring to front')}${btn('fwd', 'Bring forward')}${btn('bwd', 'Send backward')}${btn('back', 'Send to back')}<span class="se-sep"></span>
         ${btn('group', 'Group (Ctrl+G)')}${btn('ungroup', 'Ungroup (Ctrl+Shift+G)')}${btn('lock', 'Lock / unlock')}${btn('eye', 'Hide in operation / show')}<span class="se-sep"></span>
         ${btn('grid', 'Show grid', true)}${btn('snap', 'Snap to grid', true)}<span class="se-sep"></span>
-        ${btn('zout', 'Zoom out (-)')}<span class="se-zoom" title="Zoom">100%</span>${btn('zin', 'Zoom in (+)')}${btn('fit', 'Fit (0)')}
+        ${btn('zout', 'Zoom out (-)')}<span class="se-zoom" title="Zoom">100%</span>${btn('zin', 'Zoom in (+)')}${btn('fit', 'Fit (0)')}<span class="se-sep"></span>
+        ${btn('plib', 'Symbol library panel (Tab hides both panels)', true)}${btn('pside', 'Properties panel (Tab hides both panels)', true)}
       </div>
       <div class="se-main">
+        <div class="se-tools">${['select', 'rect', 'ellipse', 'line', 'polyline', 'polygon', 'pipe', 'text'].map((t) => `<button type="button" class="se-tool${t === 'select' ? ' on' : ''}" data-tool="${t}" title="${esc({ select: 'Select (V)', rect: 'Rectangle (R)', ellipse: 'Ellipse (E)', line: 'Line (L)', polyline: 'Polyline (P)', polygon: 'Polygon (G)', pipe: 'Pipe (I)', text: 'Text (T)' }[t])}">${ICON[t]}</button>`).join('')}</div>
         <aside class="se-lib">
-          <div class="se-tools">${['select', 'rect', 'ellipse', 'line', 'polyline', 'polygon', 'pipe', 'text'].map((t) => `<button type="button" class="se-tool${t === 'select' ? ' on' : ''}" data-tool="${t}" title="${esc({ select: 'Select (V)', rect: 'Rectangle (R)', ellipse: 'Ellipse (E)', line: 'Line (L)', polyline: 'Polyline (P)', polygon: 'Polygon (G)', pipe: 'Pipe (I)', text: 'Text (T)' }[t])}">${ICON[t]}</button>`).join('')}</div>
           <details class="se-orglib" open><summary>Organization library</summary>
             <div class="row" style="gap:4px;margin:2px 0 6px"><button type="button" class="btn small" data-lib="import" title="Import an SVG graphic (logo, special machine); it is sanitised on the server">Import SVG</button><button type="button" class="btn small" data-lib="save" title="Store the selected objects as a reusable composite; bound tags become placeholders">Save selection</button></div>
             <input type="file" class="se-file" accept=".svg,image/svg+xml" hidden>
@@ -94,12 +95,14 @@
       const g = ov && ov.querySelector('.se-gridrect'); if (g) { g.style.display = showGrid ? '' : 'none'; ov.querySelector('#se-grid path').setAttribute('stroke-width', String(1 / Z)); }
       drawOverlay();
     }
-    function zoomTo(z, keepCenter) {
-      const cx = (view.scrollLeft + view.clientWidth / 2) / Z, cy = (view.scrollTop + view.clientHeight / 2) / Z;
-      Z = Math.max(0.25, Math.min(4, z)); applyZoom();
-      if (keepCenter !== false) { view.scrollLeft = cx * Z - view.clientWidth / 2; view.scrollTop = cy * Z - view.clientHeight / 2; }
+    let autoFit = true;
+    function zoomTo(z, keepCenter, at) {
+      const r = view.getBoundingClientRect(), ax = at ? at.x - r.left : view.clientWidth / 2, ay = at ? at.y - r.top : view.clientHeight / 2;
+      const m = mimic ? mimic.getBoundingClientRect() : r, px = (r.left + ax - m.left) / Z, py = (r.top + ay - m.top) / Z;
+      Z = Math.max(0.1, Math.min(4, z)); applyZoom();
+      if (keepCenter !== false) { autoFit = false; const n = mimic.getBoundingClientRect(); view.scrollLeft += n.left + px * Z - (r.left + ax); view.scrollTop += n.top + py * Z - (r.top + ay); }
     }
-    const fit = () => zoomTo(Math.min((view.clientWidth - 24) / W(), (view.clientHeight - 24) / H()), false);
+    const fit = () => { zoomTo(Math.min((view.clientWidth - 24) / W(), (view.clientHeight - 24) / H()), false); autoFit = true; };
     function drawLayer() { if (layer) { layer.setElements(spec.elements); layer.setSpec(spec); layer.draw(); } }
     let refreshTimer = null;
     const refreshValues = () => { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => layer && layer.refresh(), 300); };
@@ -358,12 +361,33 @@
     const CMD = { undo, redo, copy, paste, dup, del, al: () => align('al'), ac: () => align('ac'), ar: () => align('ar'), at: () => align('at'), am: () => align('am'), ab: () => align('ab'), dh: () => distribute('h'), dv: () => distribute('v'), size: sameSize,
       front: () => zorder('front'), back: () => zorder('back'), fwd: () => zorder('fwd'), bwd: () => zorder('bwd'), group: () => group(true), ungroup: () => group(false), lock: () => toggle('locked'), eye: () => toggle('hidden'),
       grid: () => { showGrid = !showGrid; $('[data-cmd=grid]').classList.toggle('on', showGrid); applyZoom(); }, snap: () => { snapOn = !snapOn; $('[data-cmd=snap]').classList.toggle('on', snapOn); },
-      zin: () => zoomTo(Z * 1.25), zout: () => zoomTo(Z / 1.25), fit };
+      zin: () => zoomTo(Z * 1.25), zout: () => zoomTo(Z / 1.25), fit, plib: () => togglePanel('lib'), pside: () => togglePanel('side') };
     // Toolbar buttons hand the keyboard back to the canvas, so Enter/Delete/arrows act on the picture, not on a button.
     const refocus = () => host.focus({ preventScroll: true });
     host.querySelector('.se-top').addEventListener('click', (ev) => { const b = ev.target.closest('[data-cmd]'); if (b && !b.disabled) { CMD[b.dataset.cmd](); refocus(); } });
     host.querySelector('.se-tools').addEventListener('click', (ev) => { const b = ev.target.closest('[data-tool]'); if (b) { setTool(b.dataset.tool); refocus(); } });
-    view.addEventListener('wheel', (ev) => { if (!ev.ctrlKey) return; ev.preventDefault(); zoomTo(ev.deltaY < 0 ? Z * 1.1 : Z / 1.1); }, { passive: false });
+    view.addEventListener('wheel', (ev) => { if (!ev.ctrlKey) return; ev.preventDefault(); zoomTo(ev.deltaY < 0 ? Z * 1.1 : Z / 1.1, true, { x: ev.clientX, y: ev.clientY }); }, { passive: false });
+    // Panning: hold Space and drag, or drag with the middle mouse button.
+    let spaceDown = false, pan = null;
+    view.addEventListener('pointerdown', (ev) => { if (ev.button !== 1 && !(spaceDown && ev.button === 0)) return; ev.preventDefault(); ev.stopPropagation(); pan = { x: ev.clientX, y: ev.clientY, l: view.scrollLeft, t: view.scrollTop }; view.setPointerCapture(ev.pointerId); view.classList.add('panning'); }, true);
+    view.addEventListener('pointermove', (ev) => { if (!pan) return; ev.stopPropagation(); view.scrollLeft = pan.l - (ev.clientX - pan.x); view.scrollTop = pan.t - (ev.clientY - pan.y); }, true);
+    const panEnd = (ev) => { if (!pan) return; ev.stopPropagation(); pan = null; view.classList.remove('panning'); };
+    view.addEventListener('pointerup', panEnd, true); view.addEventListener('pointercancel', panEnd, true);
+    view.addEventListener('auxclick', (ev) => { if (ev.button === 1) ev.preventDefault(); });
+    function onKeyUp(ev) { if (ev.key === ' ') { spaceDown = false; view.classList.remove('pan'); } }
+    document.addEventListener('keyup', onKeyUp);
+    // Panels: the library and the properties can be hidden to give the picture the whole window; remembered per browser.
+    const PKEY = 'ctrl32.scada.panels';
+    let panels = { lib: window.innerWidth >= 1200, side: window.innerWidth >= 900 };
+    try { const p = JSON.parse(localStorage.getItem(PKEY) || 'null'); if (p && window.innerWidth >= 900) panels = { lib: !!p.lib, side: !!p.side }; } catch (_) { /* storage unavailable */ }
+    function applyPanels(save) {
+      const se = host.querySelector('.se'); se.classList.toggle('nolib', !panels.lib); se.classList.toggle('noside', !panels.side);
+      host.querySelector('[data-cmd=plib]').classList.toggle('on', panels.lib); host.querySelector('[data-cmd=pside]').classList.toggle('on', panels.side);
+      if (save) try { localStorage.setItem(PKEY, JSON.stringify(panels)); } catch (_) { /* storage unavailable */ }
+    }
+    function togglePanel(which) { if (which === 'both') { const on = !(panels.lib || panels.side); panels = { lib: on, side: on }; } else panels[which] = !panels[which]; applyPanels(true); }
+    applyPanels(false);
+    if (window.ResizeObserver) new ResizeObserver(() => { if (autoFit && mimic && !drag && !drawing) fit(); }).observe(view);
     host.tabIndex = -1;
     function onKey(ev) {
       if (!host.isConnected || host.closest('[hidden]')) return;
@@ -381,6 +405,8 @@
       if (k === 'Delete' || k === 'Backspace') return run(del);
       if (k === 'Escape') return run(() => { if (drawing) cancelDraw(); else if (tool !== 'select') setTool('select'); else select([]); });
       if (k === 'Enter' && drawing && drawing.poly) return run(finishPoly);
+      if (k === ' ') { ev.preventDefault(); if (!spaceDown) { spaceDown = true; view.classList.add('pan'); } return; }
+      if (k === 'Tab' && !mod && !ev.altKey) return run(() => togglePanel('both'));
       const step = ev.shiftKey ? GRID() : 1;
       if (k === 'ArrowLeft') return run(() => nudge(-step, 0)); if (k === 'ArrowRight') return run(() => nudge(step, 0)); if (k === 'ArrowUp') return run(() => nudge(0, -step)); if (k === 'ArrowDown') return run(() => nudge(0, step));
       if (mod) return;
@@ -609,6 +635,7 @@
     }
 
     // ---- lifecycle -------------------------------------------------------------------------------------------------
+    document.body.classList.add('se-full');
     renderLibrary(); loadLibrary(); setTool('select');
     const ready = render().then(() => { commit(true); fit(); renderProps(); toolbarState(); });
     return {
@@ -616,8 +643,8 @@
       reload: async () => { await render(); renderProps(); },
       commit: () => commit(), select: (keys) => select(keys), selection: () => SEL.slice(),
       showError(msg) { const m = /^element (\d+):/.exec(msg || ''); if (m) { const e = spec.elements[+m[1] - 1]; if (e) { select(['e:' + e.id]); } } },
-      destroy() { document.removeEventListener('keydown', onKey); host.innerHTML = ''; },
-      _debug: { loadLibrary, placeLibrary, get LIB() { return LIB; }, get Z() { return Z; }, get tool() { return tool; }, get drawing() { return drawing; }, get drag() { return drag; }, setTool, placeSymbol, undo, redo, align, copy, paste, del, commit, hist },
+      destroy() { document.removeEventListener('keydown', onKey); document.removeEventListener('keyup', onKeyUp); document.body.classList.remove('se-full'); host.innerHTML = ''; },
+      _debug: { loadLibrary, placeLibrary, get LIB() { return LIB; }, get Z() { return Z; }, get panels() { return panels; }, togglePanel, fit, get tool() { return tool; }, get drawing() { return drawing; }, get drag() { return drag; }, setTool, placeSymbol, undo, redo, align, copy, paste, del, commit, hist },
     };
   }
   window.ctrl32ScadaEditor = { create };

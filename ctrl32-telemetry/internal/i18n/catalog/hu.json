@@ -3865,5 +3865,7 @@
  "Opened as a popup for another asset or key prefix, the tags of this asset are re-bound by datastream key.": "Ha másik objektumhoz vagy kulcselőtaghoz nyílik meg ablakban, ennek az objektumnak a címkéi az adatfolyam kulcsa alapján kötődnek újra.",
  "(asset of the object's tag)": "(a rajzelem címkéjének objektuma)",
  "(of the type)": "(a típus szerint)",
- "Asset and prefix apply when the screen is a faceplate type.": "Az objektum és az előtag akkor érvényes, ha a képernyő kezelőpanel-típus."
+ "Asset and prefix apply when the screen is a faceplate type.": "Az objektum és az előtag akkor érvényes, ha a képernyő kezelőpanel-típus.",
+ "Symbol library panel (Tab hides both panels)": "Szimbólumkönyvtár panel (a Tab mindkét panelt elrejti)",
+ "Properties panel (Tab hides both panels)": "Tulajdonságok panel (a Tab mindkét panelt elrejti)"
 }

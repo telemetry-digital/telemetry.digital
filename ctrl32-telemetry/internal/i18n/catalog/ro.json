@@ -3865,5 +3865,7 @@
  "Opened as a popup for another asset or key prefix, the tags of this asset are re-bound by datastream key.": "La deschiderea într-o fereastră pentru alt activ sau alt prefix de cheie, etichetele acestui activ sunt legate din nou după cheia fluxului de date.",
  "(asset of the object's tag)": "(activul etichetei obiectului)",
  "(of the type)": "(al tipului)",
- "Asset and prefix apply when the screen is a faceplate type.": "Activul și prefixul se aplică atunci când ecranul este un tip de faceplate."
+ "Asset and prefix apply when the screen is a faceplate type.": "Activul și prefixul se aplică atunci când ecranul este un tip de faceplate.",
+ "Symbol library panel (Tab hides both panels)": "Panoul bibliotecii de simboluri (Tab ascunde ambele panouri)",
+ "Properties panel (Tab hides both panels)": "Panoul de proprietăți (Tab ascunde ambele panouri)"
 }

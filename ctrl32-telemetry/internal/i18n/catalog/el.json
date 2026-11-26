@@ -3865,5 +3865,7 @@
  "Opened as a popup for another asset or key prefix, the tags of this asset are re-bound by datastream key.": "Όταν ανοίγει σε παράθυρο για άλλο πάγιο ή άλλο πρόθεμα κλειδιού, οι ετικέτες αυτού του παγίου δεσμεύονται εκ νέου βάσει του κλειδιού ροής δεδομένων.",
  "(asset of the object's tag)": "(πάγιο της ετικέτας του αντικειμένου)",
  "(of the type)": "(του τύπου)",
- "Asset and prefix apply when the screen is a faceplate type.": "Το πάγιο και το πρόθεμα ισχύουν όταν η οθόνη είναι τύπος faceplate."
+ "Asset and prefix apply when the screen is a faceplate type.": "Το πάγιο και το πρόθεμα ισχύουν όταν η οθόνη είναι τύπος faceplate.",
+ "Symbol library panel (Tab hides both panels)": "Πίνακας βιβλιοθήκης συμβόλων (το Tab κρύβει και τους δύο πίνακες)",
+ "Properties panel (Tab hides both panels)": "Πίνακας ιδιοτήτων (το Tab κρύβει και τους δύο πίνακες)"
 }

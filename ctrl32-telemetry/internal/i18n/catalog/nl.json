@@ -3865,5 +3865,7 @@
  "Opened as a popup for another asset or key prefix, the tags of this asset are re-bound by datastream key.": "Bij openen als venster voor een ander object of een ander sleutelprefix worden de tags van dit object opnieuw gekoppeld op basis van de datastroomsleutel.",
  "(asset of the object's tag)": "(object van de tag van het getekende element)",
  "(of the type)": "(van het type)",
- "Asset and prefix apply when the screen is a faceplate type.": "Object en prefix gelden wanneer het scherm een faceplatetype is."
+ "Asset and prefix apply when the screen is a faceplate type.": "Object en prefix gelden wanneer het scherm een faceplatetype is.",
+ "Symbol library panel (Tab hides both panels)": "Paneel symbolenbibliotheek (Tab verbergt beide panelen)",
+ "Properties panel (Tab hides both panels)": "Paneel eigenschappen (Tab verbergt beide panelen)"
 }

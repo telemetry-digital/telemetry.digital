@@ -332,10 +332,22 @@ dialog.sc-dlg:has(.sc-pop) { width: fit-content; max-width: calc(100vw - 32px); 
 .se-btn.on, .se-tool.on { background: color-mix(in srgb, var(--primary) 14%, transparent); border-color: var(--primary); color: var(--primary); }
 .se-sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
 .se-zoom { min-width: 48px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
-.se-main { display: grid; grid-template-columns: 210px minmax(0, 1fr) 320px; gap: 8px; align-items: start; }
-.se-lib, .se-side { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); padding: 8px; max-height: calc(100vh - 170px); overflow: auto; position: sticky; top: 90px; }
-.se-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 8px; }
-.se-tool { width: 100%; }
+.se-main { flex: 1; min-height: 0; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr); gap: 6px; position: relative; }
+.se-lib, .se-side { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); padding: 8px; overflow: auto; }
+.se-lib { width: clamp(170px, 15vw, 220px); } .se-side { width: clamp(264px, 23vw, 340px); }
+.se.nolib .se-lib, .se.noside .se-side { display: none; }
+.se-main > .se-tools { grid-column: 1; } .se-main > .se-lib { grid-column: 2; } .se-main > .se-view { grid-column: 3; } .se-main > .se-side { grid-column: 4; }
+.se-tools .se-tool { flex: none; }
+.se-tools { display: flex; flex-direction: column; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); overflow: auto; }
+/* The picture editor takes the whole window: the application menu and the page frame are covered while editing. */
+body.se-full { overflow: hidden; }
+body.se-full #edit { position: fixed; inset: 0; z-index: 45; background: var(--bg); display: flex; flex-direction: column; gap: 6px; padding: 6px 8px; padding-top: max(6px, env(safe-area-inset-top)); }
+body.se-full #edit > .page-head { margin: 0; gap: 6px; flex-wrap: nowrap; min-height: 32px; }
+body.se-full #edit > .page-head h1 { font-size: 16px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.se-full #edit > .page-head .btn { padding: 4px 10px; font-size: 13px; white-space: nowrap; }
+body.se-full #scadaEd { flex: 1; min-height: 0; display: flex; }
+body.se-full #scadaEd > .se { flex: 1; min-width: 0; min-height: 0; }
+body.se-full .se-top { position: static; }
 .se-search { width: 100%; margin-bottom: 6px; }
 .se-lib details summary, .se-side details summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin: 6px 0 4px; }
 .se-symgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
@@ -343,7 +355,9 @@ dialog.sc-dlg:has(.sc-pop) { width: fit-content; max-width: calc(100vw - 32px); 
 .se-sym svg { width: 40px !important; height: 40px !important; flex: none; }
 .se-sym span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .se-sym:hover, .se-sym.on { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
-.se-view { overflow: auto; max-height: calc(100vh - 170px); min-height: 420px; border: 1px solid var(--line); border-radius: var(--radius); background: repeating-conic-gradient(color-mix(in srgb, var(--fg) 4%, var(--bg)) 0 25%, var(--bg) 0 50%) 0 0 / 16px 16px; padding: 12px; }
+.se-view.pan { cursor: grab; } .se-view.pan .mimic, .se-view.panning .mimic { pointer-events: none; } .se-view.panning { cursor: grabbing; }
+.se-stage { display: flex; min-width: 100%; min-height: 100%; width: max-content; } .se-stage > .mimic-wrap { margin: auto; flex: none; }
+.se-view { overflow: auto; min-height: 0; border: 1px solid var(--line); border-radius: var(--radius); background: repeating-conic-gradient(color-mix(in srgb, var(--fg) 4%, var(--bg)) 0 25%, var(--bg) 0 50%) 0 0 / 16px 16px; padding: 12px; }
 .se-stage .mimic-wrap { border-radius: 0; box-shadow: 0 2px 10px rgba(0,0,0,.18); }
 .se-stage .mimic-widget.editing { cursor: move; }
 .se-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
@@ -353,7 +367,8 @@ dialog.sc-dlg:has(.sc-pop) { width: fit-content; max-width: calc(100vw - 32px); 
 .se-side label.inline { flex-direction: row; align-items: center; gap: 6px; }
 .se-side .row { gap: 6px; flex-wrap: wrap; } .se-side .row > label { flex: 1 1 60px; }
 .se-side input, .se-side select, .se-side textarea { min-width: 0; font-size: 12px; }
-.se-geo label { flex: 1 1 calc(50% - 6px) !important; }
+.se-geo label { flex: 1 1 calc(25% - 6px) !important; }
+.se-side input:not([type=checkbox]):not([type=color]):not([type=range]), .se-side select { padding: 3px 6px; min-height: 28px; height: 28px; } .se-side textarea { padding: 4px 6px; }
 .se-col { display: flex; gap: 4px; align-items: center; } .se-col input[type=color] { width: 34px; height: 28px; padding: 1px; flex: none; } .se-col input[type=color].se-unset { opacity: .35; } .se-col input:not([type=color]) { flex: 1; font-family: var(--mono); }
 .se-dyn { border: 1px solid var(--line); border-radius: 6px; padding: 6px; margin: 6px 0; background: var(--bg2); }
 .se-mrow { align-items: center; margin: 3px 0; flex-wrap: nowrap !important; } .se-mrow select { width: 56px; } .se-mrow input[type=color] { width: 34px; height: 26px; padding: 1px; }
@@ -364,7 +379,7 @@ dialog.sc-dlg:has(.sc-pop) { width: fit-content; max-width: calc(100vw - 32px); 
 .se-lname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .se-lb { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 0; opacity: .35; } .se-lb.on { opacity: 1; color: var(--primary); } .se-lb svg { width: 14px; height: 14px; }
 .se-status { display: flex; gap: 14px; font-size: 12px; padding: 2px 6px; font-variant-numeric: tabular-nums; }
-@media (max-width: 1100px) { .se-main { grid-template-columns: 1fr; } .se-lib, .se-side { position: static; max-height: none; } }
+@media (max-width: 899px) { .se-main { grid-template-columns: auto minmax(0, 1fr); } .se-main > .se-view { grid-column: 2; } .se-lib, .se-side { position: absolute; top: 0; bottom: 0; z-index: 7; box-shadow: 0 4px 18px rgba(0,0,0,.3); } .se-lib { left: 46px; width: min(240px, 70vw); } .se-side { right: 0; width: min(320px, 86vw); } body.se-full #edit > .page-head { flex-wrap: wrap; } }
 
 /* ---- widget appearance, full screen and click actions (spec 002) ---- */
 .dash-widget .dw-fs { padding: 2px 4px; line-height: 1; opacity: .55; }

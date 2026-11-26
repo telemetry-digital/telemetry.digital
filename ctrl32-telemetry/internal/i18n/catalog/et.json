@@ -3865,5 +3865,7 @@
  "Opened as a popup for another asset or key prefix, the tags of this asset are re-bound by datastream key.": "Kui see avatakse aknana teise vara või teise võtme eesliite jaoks, seotakse selle vara tähised andmevoo võtme järgi ümber.",
  "(asset of the object's tag)": "(objekti tähise vara)",
  "(of the type)": "(tüübi järgi)",
- "Asset and prefix apply when the screen is a faceplate type.": "Vara ja eesliide kehtivad, kui ekraan on juhtpaneeli tüüp."
+ "Asset and prefix apply when the screen is a faceplate type.": "Vara ja eesliide kehtivad, kui ekraan on juhtpaneeli tüüp.",
+ "Symbol library panel (Tab hides both panels)": "Sümboliteegi paneel (Tab peidab mõlemad paneelid)",
+ "Properties panel (Tab hides both panels)": "Omaduste paneel (Tab peidab mõlemad paneelid)"
 }

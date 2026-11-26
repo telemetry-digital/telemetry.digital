@@ -3865,5 +3865,7 @@
  "Opened as a popup for another asset or key prefix, the tags of this asset are re-bound by datastream key.": "При отваряне като прозорец за друг актив или друг префикс на ключа таговете на този актив се свързват наново по ключа на потока от данни.",
  "(asset of the object's tag)": "(активът на тага на обекта)",
  "(of the type)": "(от типа)",
- "Asset and prefix apply when the screen is a faceplate type.": "Активът и префиксът важат, когато екранът е тип фейсплейт."
+ "Asset and prefix apply when the screen is a faceplate type.": "Активът и префиксът важат, когато екранът е тип фейсплейт.",
+ "Symbol library panel (Tab hides both panels)": "Панел с библиотека от символи (Tab скрива двата панела)",
+ "Properties panel (Tab hides both panels)": "Панел със свойства (Tab скрива двата панела)"
 }
