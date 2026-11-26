@@ -127,7 +127,7 @@
   // page, and always its start page. Anything else opens the start page instead. This confines the user interface only;
   // permissions stay the security boundary (the API answers what the role allows, whatever window asks).
   const APP_PATHS = {
-    dashboards: ['/', '/dashboards'], home: ['/home', '/smarthome'], energy: ['/energy'], counting: ['/counting'], cameras: ['/video'],
+    dashboards: ['/', '/dashboards', '/operator'], home: ['/home', '/smarthome'], energy: ['/energy'], counting: ['/counting'], cameras: ['/video'],
     displays: ['/displays'], flows: ['/flows', '/automation'], devices: ['/devices'], incidents: ['/incidents'], assets: ['/assets'], alarms: ['/alarms'],
     firmware: ['/fota'], users: ['/users'], audit: ['/audit', '/reports/signatures'], settings: ['/settings', '/vpn'], system: ['/organizations', '/server', '/landing/edit'],
     reports: ['/reports'],
@@ -235,6 +235,8 @@
     return [
       { href: '/', label: 'Overview', icon: ICON.dashboard, show: !!me, sec: 'dashboards' },
       { href: '/dashboards', label: 'Dashboards', icon: ICON.dashboard, show: can('data.read'), sec: 'dashboards' },
+      // operator view (spec 036): pictures in a fixed frame with the alarm line and the picture tree
+      { href: '/operator', label: 'Operator view', icon: ICON.display, show: can('data.read'), sec: 'dashboards' },
       { head: 'Monitoring' },
       { href: '/home', label: 'Home', icon: ICON.home, show: can('data.read'), sec: 'home' },
       { href: '/energy', label: 'Energy', icon: ICON.bolt, show: can('data.read'), sec: 'energy' },
@@ -594,7 +596,7 @@
 
   // a newer version for system administrators (update mode notify or automatic, ADR-0024); hidden per version
   function updateBanner() {
-    if (!can('system.admin') || app || location.pathname.startsWith('/server/updates')) return;
+    if (!can('system.admin') || app || location.pathname.startsWith('/server/updates') || document.body.classList.contains('op')) return; // not on the operator view
     api('GET', '/api/v1/server/updates/notice').then((n) => {
       if (!n || !n.version) return;
       try { if (localStorage.getItem('ctrl32.updateDismissed') === n.version) return; } catch (e) { /* storage blocked */ }
@@ -645,7 +647,7 @@
   }
   if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyMode);
   applyMode();
-  window.ctrl32 = { ready, loadBranding, loadMe, api, logout, toggleMode, can, esc, section, t, appAllows, fullscreen, isFullscreen: () => !!fsCur(), ask, confirm: confirmAsk, setLocale, get locale() { return locale; }, get langs() { return langs; }, get brand() { return brand; }, get me() { return me; }, get csrf() { return csrf; }, get app() { return app; }, home, enterApp, ICON,
+  window.ctrl32 = { ready, loadBranding, loadMe, api, logout, toggleMode, can, esc, section, t, appAllows, fullscreen, isFullscreen: () => !!fsCur(), ask, confirm: confirmAsk, setLocale, get locale() { return locale; }, get langs() { return langs; }, get brand() { return brand; }, get logo() { return logoURL(); }, get me() { return me; }, get csrf() { return csrf; }, get app() { return app; }, home, enterApp, ICON,
     fmt: (t) => (t ? new Date(t).toLocaleString(document.documentElement.lang || undefined) : '—'), toast, openSearch, alarmSound, alarmBarRefresh: () => abTick && abTick() };
   // Alarm bar (spec 035): on every page with the menu, for people who read data: the most important alarm waiting for
   // its acknowledgement (class colour, blinking), the numbers of unacknowledged and active alarms, and the class sound,

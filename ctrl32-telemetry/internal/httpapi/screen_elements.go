@@ -480,7 +480,7 @@ func elementEvents(i int, v any) ([]map[string]any, error) {
 					}
 					ev["asset"] = a
 				}
-				if p, ok := src["prefix"].(string); ok {
+				if p, _ := src["prefix"].(string); p != "" {
 					if !fpPrefixRe.MatchString(p) {
 						return nil, elemErr(i, "popup prefix must be the beginning of datastream keys")
 					}

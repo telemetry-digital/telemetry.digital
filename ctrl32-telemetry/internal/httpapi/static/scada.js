@@ -320,8 +320,9 @@
   function act(e, live) {
     const list = e.on && e.on.length ? e.on : [{ act: 'faceplate' }];
     const ev = list[0];
-    if (ev.act === 'screen') { if (!isPublic()) location.href = '/dashboards/' + encodeURIComponent(ev.target); return; }
-    if (ev.act === 'popup') { if (!isPublic()) popupScreen(ev.target, e.name); return; }
+    // a page that shows pictures in its own frame (the operator view) changes the picture without a reload
+    if (ev.act === 'screen') { if (!isPublic()) { const go = window.ctrl32Scada.navigate; if (go) go(ev.target); else location.href = '/dashboards/' + encodeURIComponent(ev.target); } return; }
+    if (ev.act === 'popup') { if (!isPublic()) popupScreen(ev, e); return; }
     if (ev.act === 'command') { commandDialog(e, ev); return; }
     faceplate(e, live, ev.act === 'trend');
   }
@@ -330,26 +331,53 @@
     if (!d) { d = document.createElement('dialog'); d.className = 'sc-dlg'; document.body.appendChild(d); d.addEventListener('click', (ev) => { if (ev.target === d) d.close(); }); }
     return d;
   }
-  // popupScreen (0.87.0): another screen (a faceplate made as a small picture: values, trend, mode switch, logbook)
-  // in a dialog over the current one; it refreshes every 3 s while open (the page keeps its own live stream).
-  async function popupScreen(slug, name) {
-    const d = dialog(); const WG = window.ctrl32Widgets;
-    d.innerHTML = `<div class="sc-pop"><div class="sc-fp-head"><b class="sc-pop-title">${esc(name || slug)}</b><span class="grow"></span><button class="btn small ghost" type="button" data-close title="Close">✕</button></div><div class="sc-pop-body"><span class="muted">loading…</span></div></div>`;
-    let timer = null;
-    const close = () => { if (timer) clearInterval(timer); timer = null; };
-    for (const b of d.querySelectorAll('[data-close]')) b.onclick = () => d.close();
-    d.addEventListener('close', close, { once: true });
-    d.showModal();
+  // popupScreen (0.87.0, windows 0.90.0): another screen (a faceplate made as a small picture: values, trend, mode
+  // switch, logbook) in a window over the current one. The window can be dragged, up to four stay open, and each
+  // refreshes every 3 s (the page keeps its own live stream). A faceplate type (spec.faceplate) opens bound to an
+  // instance: the asset and key prefix of the action, else the asset of the clicked element's tag (spec 036).
+  const wins = []; let winZ = 900;
+  const front = (w) => { w.style.zIndex = ++winZ; };
+  function closeWin(w) { const i = wins.indexOf(w); if (i < 0) return; wins.splice(i, 1); clearInterval(w._timer); w.remove(); }
+  document.addEventListener('keydown', (ev) => { if (ev.key !== 'Escape' || !wins.length || document.querySelector('dialog[open]')) return; closeWin(wins.slice().sort((x, y) => (+y.style.zIndex || 0) - (+x.style.zIndex || 0))[0]); });
+  async function popupScreen(ev, e) {
+    const WG = window.ctrl32Widgets; const slug = ev.target; e = e || {};
+    const key = [slug, ev.asset || '', ev.prefix === undefined ? '~' : ev.prefix, ev.asset ? '' : e.tag || ''].join('|');
+    const old = wins.find((x) => x.dataset.key === key); if (old) { front(old); return; }
+    while (wins.length >= 4) closeWin(wins[0]);
+    const w = document.createElement('div'); w.className = 'sc-win card'; w.dataset.key = key; w.dataset.slug = slug;
+    w.innerHTML = `<div class="sc-fp-head"><b class="sc-pop-title">${esc(e.name || slug)}</b><span class="grow"></span><button class="btn small ghost" type="button" data-close title="Close">✕</button></div><div class="sc-pop-body"><span class="muted">loading…</span></div>`;
+    const n = wins.length; w.style.left = (48 + n * 30) + 'px'; w.style.top = (64 + n * 30) + 'px'; front(w);
+    document.body.appendChild(w); wins.push(w);
+    w.querySelector('[data-close]').onclick = () => closeWin(w);
+    w.addEventListener('pointerdown', () => front(w));
+    const head = w.querySelector('.sc-fp-head');
+    head.addEventListener('pointerdown', (p) => {
+      if (p.target.closest('button')) return;
+      const r = w.getBoundingClientRect(), dx = p.clientX - r.left, dy = p.clientY - r.top; head.setPointerCapture(p.pointerId);
+      const move = (m) => { w.style.left = Math.max(-r.width + 80, Math.min(innerWidth - 80, m.clientX - dx)) + 'px'; w.style.top = Math.max(0, Math.min(innerHeight - 40, m.clientY - dy)) + 'px'; };
+      const up = () => { head.removeEventListener('pointermove', move); head.removeEventListener('pointerup', up); head.removeEventListener('pointercancel', up); };
+      head.addEventListener('pointermove', move); head.addEventListener('pointerup', up); head.addEventListener('pointercancel', up);
+    });
+    const box = w.querySelector('.sc-pop-body');
     try {
-      const r = await ctrl32.api('GET', '/api/v1/dashboards/' + encodeURIComponent(slug));
-      const spec = r.spec || {}; const box = d.querySelector('.sc-pop-body');
-      const w0 = (spec.layout && spec.layout.width) || 900;
+      const base = '/api/v1/dashboards/' + encodeURIComponent(slug);
+      let r = await ctrl32.api('GET', base), title = r.name || slug;
+      if (r.spec && r.spec.faceplate) {
+        const q = new URLSearchParams();
+        if (ev.asset) q.set('asset', ev.asset); else if (e.tag) q.set('tag', e.tag);
+        if (ev.prefix !== undefined) q.set('prefix', ev.prefix);
+        const inst = await ctrl32.api('GET', base + '/instance' + (q.toString() ? '?' + q : ''));
+        r = inst; title = `${inst.name} — ${inst.instance.name}${ev.prefix ? ' · ' + ev.prefix.replace(/_+$/, '').toUpperCase() : ''}`;
+        w.dataset.asset = inst.instance.asset;
+      }
+      if (!wins.includes(w)) return;
+      const spec = r.spec || {}; const w0 = (spec.layout && spec.layout.width) || 900;
       box.style.width = `min(${w0}px, 92vw)`;
-      if (r.name) d.querySelector('.sc-pop-title').textContent = r.name;
+      w.querySelector('.sc-pop-title').textContent = title;
       const refresh = await WG.render(box, spec, { range: spec.range || '6h', live: false });
       if (WG.fitMimic) WG.fitMimic(box);
-      timer = setInterval(() => { if (d.open) refresh(); else close(); }, 3000);
-    } catch (x) { d.querySelector('.sc-pop-body').innerHTML = `<span class="muted">${esc(x.message)}</span>`; }
+      w._timer = setInterval(() => { if (w.isConnected) refresh(); else closeWin(w); }, 3000);
+    } catch (x) { box.innerHTML = `<span class="muted">${esc(x.message)}</span>`; }
   }
   async function sendCommand(out, device, method, key, value, reason) {
     out.innerHTML = '<span class="muted">sending…</span>';
@@ -401,5 +429,5 @@
     const d = all.find((x) => x.id === tag); faceplate({ tag, name: o.name, device: o.device, key: o.key, decimals: o.decimals, type: 'widget' }, { ds: d ? { [tag]: d } : {}, values: lv }, !!o.trendOnly);
   }
 
-  window.ctrl32Scada = { openTag, mount, renderEl, bbox, symbolSVG, symbols: S, SYMBOL_IDS, CATS, SCHEMES, STATES, tagsOf, evalDyn, fmtVal, clickable, DEF };
+  window.ctrl32Scada = { navigate: null, popup: popupScreen, closePopups() { for (const w of wins.slice()) closeWin(w); }, openTag, mount, renderEl, bbox, symbolSVG, symbols: S, SYMBOL_IDS, CATS, SCHEMES, STATES, tagsOf, evalDyn, fmtVal, clickable, DEF };
 })();

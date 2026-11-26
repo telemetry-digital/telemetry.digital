@@ -1,0 +1,29 @@
+meta {
+  name: Faceplate type bound to an instance
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/dashboards/:slug/instance
+  body: none
+  auth: inherit
+}
+
+params:path {
+  slug: 
+}
+
+params:query {
+  ~asset: 
+  ~tag: 
+  ~prefix: 
+}
+
+docs {
+  Faceplate type bound to an instance
+  
+  A screen whose spec names `faceplate {asset, prefix}` is a faceplate type drawn for one asset. This returns its spec bound to another asset and/or key prefix: every tag of the example asset whose key starts with the type's prefix becomes the datastream of the instance asset with the key `prefix + rest`; a tag without a counterpart is unbound; devices and command keys follow, and an example device without a counterpart loses its commands. Without `asset` the asset of `tag` is used, without both the example itself; without `prefix` the type's prefix. 400 when the screen is not a faceplate type.
+  
+  Requires permission `data.read`.
+}

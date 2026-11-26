@@ -1,0 +1,19 @@
+meta {
+  name: Picture tree of the operator view with group alarms
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/v1/screens/tree
+  body: none
+  auth: inherit
+}
+
+docs {
+  Picture tree of the operator view with group alarms
+  
+  The screens that name their place in `spec.nav {parent, order, label}`, depth-first (siblings by order, then name). Each node carries the alarms needing attention (not shelved) on the datastreams its picture uses and on those of every picture below it: `unack` wait for an acknowledgement, `active` have their condition active, `color` and `priority` are those of the most important one (an unacknowledged alarm first, then the class priority). `home` is the default screen when it is in the tree, else the first top-level picture.
+  
+  Requires permission `data.read`.
+}

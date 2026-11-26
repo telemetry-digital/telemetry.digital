@@ -313,6 +313,11 @@ dialog.sc-dlg { width: min(720px, calc(100vw - 32px)); }
 dialog.sc-dlg:has(.sc-pop) { width: fit-content; max-width: calc(100vw - 32px); }
 .sc-pop .sc-pop-body { max-width: 100%; }
 .sc-pop .sc-pop-body .mimic-wrap { overflow: hidden; }
+/* popup windows of process pictures (0.90.0): draggable, several at once */
+.sc-win { position: fixed; z-index: 900; margin: 0; padding: 10px 12px 12px; max-width: 96vw; max-height: 92vh; overflow: auto; box-shadow: 0 12px 40px rgba(0, 0, 0, .35); border: 1px solid var(--line); }
+.sc-win .sc-fp-head { cursor: move; user-select: none; touch-action: none; }
+.sc-win .sc-pop-body { max-width: 100%; }
+.sc-win .sc-pop-body .mimic-wrap { overflow: hidden; }
 .sc-fp-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .sc-fp-val { margin: 4px 0 8px; } .sc-fp-big { font-size: 2em; font-weight: 700; }
 .sc-fp-range { gap: 4px; margin-bottom: 6px; }
