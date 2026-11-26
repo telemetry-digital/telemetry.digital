@@ -110,7 +110,8 @@ func (s *Server) cameraJSON(r *http.Request, c cameraRow) map[string]any {
 	out := map[string]any{"id": c.id, "name": c.name, "location": c.location, "record": c.record, "retention_days": c.retention,
 		"sort": c.sort, "enabled": c.enabled, "has_sub": c.subURL != "" || c.source == "push", "source": c.source,
 		"onvif": c.onvifURL != "", "event_pre_s": c.eventPre, "event_post_s": c.eventPost, "event_kinds": c.eventKinds, "group": c.group, "privacy_masks": json.RawMessage(orEmpty(c.masks)),
-		"motion_detect": c.motion, "motion_sensitivity": c.motionSens, "motion_zones": json.RawMessage(orEmpty(c.zones)), "audio": c.audio, "audio_record": c.audioRecord}
+		"motion_detect": c.motion, "motion_sensitivity": c.motionSens, "motion_zones": json.RawMessage(orEmpty(c.zones)), "audio": c.audio, "audio_record": c.audioRecord,
+		"export_h264": s.compatFFmpeg() != ""}
 	if p := PrincipalFrom(r.Context()); p.Has("video.manage") {
 		out["snapshot_url"] = c.snapshotURL
 		out["url"], out["sub_url"], out["username"], out["transport"], out["has_password"] = c.url, c.subURL, c.username, c.transport, c.sealed != ""
@@ -1096,6 +1097,12 @@ func (s *Server) cameraExport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, msg)
 		return
 	}
+	// format=h264: a compatible copy of an H.265 recording (video_compat.go); H.264 recordings are sent as they are
+	format := r.URL.Query().Get("format")
+	if format != "" && format != "original" && format != "h264" {
+		writeErr(w, 400, "format must be original or h264")
+		return
+	}
 	pb := s.video.Playback(c.id, from, to)
 	defer pb.Close()
 	first, err := pb.Next(r.Context())
@@ -1103,13 +1110,46 @@ func (s *Server) cameraExport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "no recording in this range")
 		return
 	}
-	s.audit(r, "video.export", "camera", c.id, nil, map[string]any{"camera": c.name, "from": from, "to": to}, "recording exported")
+	convert := format == "h264" && first.Track.Codec != video.H264
+	ff := ""
+	if convert {
+		if to.Sub(from) > CompatMaxRange {
+			writeErr(w, 400, "the compatible format covers at most one hour")
+			return
+		}
+		if ff = s.compatFFmpeg(); ff == "" {
+			writeErr(w, 503, "the server has no ffmpeg to convert recordings (install it with the object counting parts)")
+			return
+		}
+		if !compatSlot.TryLock() {
+			writeErr(w, 409, "another recording is being converted; try again in a few minutes")
+			return
+		}
+		defer compatSlot.Unlock()
+	}
+	detail := map[string]any{"camera": c.name, "from": from, "to": to}
+	if convert {
+		detail["format"] = "h264"
+	}
+	s.audit(r, "video.export", "camera", c.id, nil, detail, "recording exported")
 	rc := http.NewResponseController(w)
 	_ = rc.SetWriteDeadline(time.Time{})
-	name := fmt.Sprintf("%s-%s.mp4", safeFileName(c.name), from.UTC().Format("20060102-150405"))
+	suffix := ""
+	if convert {
+		suffix = "-h264"
+	}
+	name := fmt.Sprintf("%s-%s%s.mp4", safeFileName(c.name), from.UTC().Format("20060102-150405"), suffix)
 	w.Header().Set("Content-Type", "video/mp4")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
-	_ = writeMP4(r.Context(), pb, first, w, s.exportsSound(r, c))
+	sound := s.exportsSound(r, c)
+	if !convert {
+		_ = writeMP4(r.Context(), pb, first, w, sound)
+		return
+	}
+	src := func(out io.Writer) error { return writeMP4(r.Context(), pb, first, out, sound) }
+	if err := transcodeH264(r.Context(), ff, src, w, sound); err != nil && r.Context().Err() == nil {
+		s.log.Warn("video conversion to H.264 failed", "camera", c.name, "err", err)
+	}
 }
 
 // exportsSound: the recorded sound goes into an export only for people who may hear it.

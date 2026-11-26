@@ -3768,5 +3768,9 @@
  "Where": "Къде",
  "What": "Какво",
  "no entries": "няма записи",
- "Open screen as popup": "Отвори екрана като прозорец"
+ "Open screen as popup": "Отвори екрана като прозорец",
+ "Original (H.265)": "Оригинал (H.265)",
+ "Compatible (H.264)": "Съвместим (H.264)",
+ "Compatible format: at most one hour": "Съвместим формат: най-много един час",
+ "H.265 plays on Windows only with the HEVC extension or in VLC; the compatible copy is converted on the server (at most one hour)": "H.265 се възпроизвежда в Windows само с разширението HEVC или във VLC; съвместимото копие се преобразува на сървъра (най-много един час)"
 }

@@ -3768,5 +3768,9 @@
  "Where": "Missä",
  "What": "Mitä",
  "no entries": "ei merkintöjä",
- "Open screen as popup": "Avaa näkymä ikkunana"
+ "Open screen as popup": "Avaa näkymä ikkunana",
+ "Original (H.265)": "Alkuperäinen (H.265)",
+ "Compatible (H.264)": "Yhteensopiva (H.264)",
+ "Compatible format: at most one hour": "Yhteensopiva muoto: enintään tunti",
+ "H.265 plays on Windows only with the HEVC extension or in VLC; the compatible copy is converted on the server (at most one hour)": "H.265 toistuu Windowsissa vain HEVC-laajennuksella tai VLC:llä; yhteensopivan kopion muuntaa palvelin (enintään tunti)"
 }

@@ -3768,5 +3768,9 @@
  "Where": "Hvor",
  "What": "Hva",
  "no entries": "ingen oppføringer",
- "Open screen as popup": "Åpne skjermen som vindu"
+ "Open screen as popup": "Åpne skjermen som vindu",
+ "Original (H.265)": "Original (H.265)",
+ "Compatible (H.264)": "Kompatibel (H.264)",
+ "Compatible format: at most one hour": "Kompatibelt format: høyst én time",
+ "H.265 plays on Windows only with the HEVC extension or in VLC; the compatible copy is converted on the server (at most one hour)": "H.265 spilles i Windows bare med HEVC-utvidelsen eller i VLC; den kompatible kopien konverteres på serveren (høyst én time)"
 }

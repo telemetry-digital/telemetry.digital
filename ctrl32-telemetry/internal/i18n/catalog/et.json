@@ -3768,5 +3768,9 @@
  "Where": "Kus",
  "What": "Mis",
  "no entries": "kirjeid pole",
- "Open screen as popup": "Ava kuva aknana"
+ "Open screen as popup": "Ava kuva aknana",
+ "Original (H.265)": "Algne (H.265)",
+ "Compatible (H.264)": "Ühilduv (H.264)",
+ "Compatible format: at most one hour": "Ühilduv vorming: kõige rohkem üks tund",
+ "H.265 plays on Windows only with the HEVC extension or in VLC; the compatible copy is converted on the server (at most one hour)": "H.265 mängib Windowsis ainult HEVC laiendusega või VLC-s; ühilduva koopia teisendab server (kõige rohkem üks tund)"
 }

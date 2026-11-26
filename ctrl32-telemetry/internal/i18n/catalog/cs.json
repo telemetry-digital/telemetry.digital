@@ -3768,5 +3768,9 @@
  "Where": "Kde",
  "What": "Co",
  "no entries": "žádné záznamy",
- "Open screen as popup": "Otevřít obraz jako okno"
+ "Open screen as popup": "Otevřít obraz jako okno",
+ "Original (H.265)": "Původní (H.265)",
+ "Compatible (H.264)": "Kompatibilní (H.264)",
+ "Compatible format: at most one hour": "Kompatibilní formát: nejvýše jedna hodina",
+ "H.265 plays on Windows only with the HEVC extension or in VLC; the compatible copy is converted on the server (at most one hour)": "H.265 se ve Windows přehraje jen s rozšířením HEVC nebo ve VLC; kompatibilní kopii překóduje server (nejvýše jedna hodina)"
 }

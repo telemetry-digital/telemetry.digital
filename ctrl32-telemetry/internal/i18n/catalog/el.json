@@ -3768,5 +3768,9 @@
  "Where": "Πού",
  "What": "Τι",
  "no entries": "καμία εγγραφή",
- "Open screen as popup": "Άνοιγμα οθόνης σε παράθυρο"
+ "Open screen as popup": "Άνοιγμα οθόνης σε παράθυρο",
+ "Original (H.265)": "Πρωτότυπο (H.265)",
+ "Compatible (H.264)": "Συμβατό (H.264)",
+ "Compatible format: at most one hour": "Συμβατή μορφή: έως μία ώρα",
+ "H.265 plays on Windows only with the HEVC extension or in VLC; the compatible copy is converted on the server (at most one hour)": "Το H.265 αναπαράγεται στα Windows μόνο με την επέκταση HEVC ή στο VLC· το συμβατό αντίγραφο μετατρέπεται στον διακομιστή (έως μία ώρα)"
 }

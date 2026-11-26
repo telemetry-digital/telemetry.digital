@@ -61,7 +61,8 @@
     <div class="tl-ax" id="ax2"></div>
     <div class="row" style="margin-top:8px"><label class="inline">From <input type="datetime-local" step="1" id="selFrom"></label><label class="inline">To <input type="datetime-local" step="1" id="selTo"></label></div>
     <div class="row" style="margin-top:8px"><span class="muted" style="font-size:12px" id="evLegend"></span><span class="grow"></span>
-      <span class="muted" id="selInfo"></span><button class="btn small" type="button" id="export" disabled>Download selection (MP4)</button>
+      <span class="muted" id="selInfo"></span><select id="exportFmt" hidden title="H.265 plays on Windows only with the HEVC extension or in VLC; the compatible copy is converted on the server (at most one hour)"><option value="original">Original (H.265)</option><option value="h264">Compatible (H.264)</option></select>
+      <button class="btn small" type="button" id="export" disabled>Download selection (MP4)</button>
       <button class="btn small" type="button" id="hold" disabled hidden title="Recordings held as evidence are never deleted until released">Hold as evidence</button>
       <button class="btn small" type="button" id="evidence" disabled hidden title="ZIP with the video, SHA-256 fingerprints and the server's signature">Evidence package (ZIP)</button></div>
     <div id="holdList" class="hold-list"></div>
@@ -402,7 +403,9 @@ $('#evidence').onclick = () => {
 };
 $('#export').onclick = () => {
   const a = document.createElement('a');
-  a.href = `/api/v1/video/cameras/${ID}/export?from=${new Date(Math.min(...SEL)).toISOString()}&to=${new Date(Math.max(...SEL)).toISOString()}`;
+  const h264 = !$('#exportFmt').hidden && $('#exportFmt').value === 'h264';
+  if (h264 && Math.abs(SEL[1] - SEL[0]) > HOURMS) { ctrl32.toast(t('Compatible format: at most one hour'), 'bad'); return; }
+  a.href = `/api/v1/video/cameras/${ID}/export?from=${new Date(Math.min(...SEL)).toISOString()}&to=${new Date(Math.max(...SEL)).toISOString()}${h264 ? '&format=h264' : ''}`;
   a.click();
 };
 $('#dPrev').onclick = () => { DAY = new Date(dayStart(DAY).getTime() - 1); HOUR = null; SEL = null; updateSel(); loadRecordings(); };
@@ -416,6 +419,7 @@ ctrl32.ready({requireAuth: true, requirePerm: 'video.view'}).then(async ({me}) =
   $('#speedGroup').innerHTML = SPEEDS.map(s => `<button type="button" data-s="${s}">${s}×</button>`).join('');
   for (const b of document.querySelectorAll('#speedGroup button')) b.onclick = () => { SPEED = +b.dataset.s; if (MODE === 'rec' && !PAUSED && CUR) playFrom(CUR); else ui(); };
   try { CAM = await api('GET', '/api/v1/video/cameras/' + ID); } catch (x) { $('main').innerHTML = `<div class="card">${esc(x.message)}</div>`; return; }
+  $('#exportFmt').hidden = !(CAM.export_h264 && CAM.status && CAM.status.codec === 'h265');
   $('#name').textContent = CAM.name; $('#loc').textContent = CAM.location; document.title = CAM.name;
   if (!CAM.enabled) $('#info').textContent = t('The camera is disabled.');
   $('#bSend').hidden = !can('display.control');

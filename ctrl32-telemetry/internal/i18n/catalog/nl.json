@@ -3768,5 +3768,9 @@
  "Where": "Waar",
  "What": "Wat",
  "no entries": "geen regels",
- "Open screen as popup": "Scherm als venster openen"
+ "Open screen as popup": "Scherm als venster openen",
+ "Original (H.265)": "Origineel (H.265)",
+ "Compatible (H.264)": "Compatibel (H.264)",
+ "Compatible format: at most one hour": "Compatibel formaat: hoogstens één uur",
+ "H.265 plays on Windows only with the HEVC extension or in VLC; the compatible copy is converted on the server (at most one hour)": "H.265 speelt in Windows alleen af met de HEVC-extensie of in VLC; de compatibele kopie wordt op de server geconverteerd (hoogstens één uur)"
 }

@@ -3768,5 +3768,9 @@
  "Where": "Dove",
  "What": "Cosa",
  "no entries": "nessuna voce",
- "Open screen as popup": "Apri la schermata in una finestra"
+ "Open screen as popup": "Apri la schermata in una finestra",
+ "Original (H.265)": "Originale (H.265)",
+ "Compatible (H.264)": "Compatibile (H.264)",
+ "Compatible format: at most one hour": "Formato compatibile: al massimo un'ora",
+ "H.265 plays on Windows only with the HEVC extension or in VLC; the compatible copy is converted on the server (at most one hour)": "H.265 si riproduce su Windows solo con l'estensione HEVC o in VLC; la copia compatibile viene convertita sul server (al massimo un'ora)"
 }

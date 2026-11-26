@@ -449,3 +449,7 @@ func (l *limitWriter) Write(p []byte) (int, error) {
 	}
 	return len(p), nil
 }
+
+// FFmpegPath resolves the configured ffmpeg (empty: next to the binary, else on PATH); also used to convert video
+// downloads to H.264.
+func FFmpegPath(configured string) string { return ffmpegPath(configured) }

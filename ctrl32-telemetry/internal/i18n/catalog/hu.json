@@ -3768,5 +3768,9 @@
  "Where": "Hol",
  "What": "Mit",
  "no entries": "nincs bejegyzés",
- "Open screen as popup": "Kép megnyitása ablakban"
+ "Open screen as popup": "Kép megnyitása ablakban",
+ "Original (H.265)": "Eredeti (H.265)",
+ "Compatible (H.264)": "Kompatibilis (H.264)",
+ "Compatible format: at most one hour": "Kompatibilis formátum: legfeljebb egy óra",
+ "H.265 plays on Windows only with the HEVC extension or in VLC; the compatible copy is converted on the server (at most one hour)": "A H.265 Windowson csak a HEVC-bővítménnyel vagy VLC-ben játszható le; a kompatibilis másolatot a szerver alakítja át (legfeljebb egy óra)"
 }

@@ -17,12 +17,13 @@ params:path {
 params:query {
   ~from: 
   ~to: 
+  ~format: 
 }
 
 docs {
   Download recorded video
   
-  One MP4 file (fragmented) of at most 24 hours; a change of resolution or codec ends it early. The recorded sound is the second track only for people with video.audio. Written to the audit trail (video.export).
+  One MP4 file (fragmented) of at most 24 hours; a change of resolution or codec ends it early. The recorded sound is the second track only for people with video.audio. format=h264 converts an H.265 recording to H.264 + AAC (at most 1080 lines, at most one hour, one conversion at a time per server: 409 while another runs, 503 without ffmpeg); H.264 recordings are sent unchanged. Only the original is the unchanged recording. Written to the audit trail (video.export).
   
   Requires permission `video.playback`.
 }

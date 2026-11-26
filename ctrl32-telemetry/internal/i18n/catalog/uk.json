@@ -3768,5 +3768,9 @@
  "Where": "Де",
  "What": "Що",
  "no entries": "немає записів",
- "Open screen as popup": "Відкрити екран у вікні"
+ "Open screen as popup": "Відкрити екран у вікні",
+ "Original (H.265)": "Оригінал (H.265)",
+ "Compatible (H.264)": "Сумісний (H.264)",
+ "Compatible format: at most one hour": "Сумісний формат: щонайбільше одна година",
+ "H.265 plays on Windows only with the HEVC extension or in VLC; the compatible copy is converted on the server (at most one hour)": "H.265 у Windows відтворюється лише з розширенням HEVC або у VLC; сумісну копію перекодовує сервер (щонайбільше одна година)"
 }

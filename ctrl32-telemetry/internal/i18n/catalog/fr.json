@@ -3768,5 +3768,9 @@
  "Where": "Où",
  "What": "Quoi",
  "no entries": "aucune entrée",
- "Open screen as popup": "Ouvrir l'écran dans une fenêtre"
+ "Open screen as popup": "Ouvrir l'écran dans une fenêtre",
+ "Original (H.265)": "Original (H.265)",
+ "Compatible (H.264)": "Compatible (H.264)",
+ "Compatible format: at most one hour": "Format compatible : une heure au maximum",
+ "H.265 plays on Windows only with the HEVC extension or in VLC; the compatible copy is converted on the server (at most one hour)": "Le H.265 ne se lit sous Windows qu'avec l'extension HEVC ou dans VLC ; la copie compatible est convertie sur le serveur (une heure au maximum)"
 }

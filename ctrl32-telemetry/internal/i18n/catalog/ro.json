@@ -3768,5 +3768,9 @@
  "Where": "Unde",
  "What": "Ce",
  "no entries": "nicio înregistrare",
- "Open screen as popup": "Deschide ecranul într-o fereastră"
+ "Open screen as popup": "Deschide ecranul într-o fereastră",
+ "Original (H.265)": "Original (H.265)",
+ "Compatible (H.264)": "Compatibil (H.264)",
+ "Compatible format: at most one hour": "Format compatibil: cel mult o oră",
+ "H.265 plays on Windows only with the HEVC extension or in VLC; the compatible copy is converted on the server (at most one hour)": "H.265 se redă în Windows doar cu extensia HEVC sau în VLC; copia compatibilă este convertită pe server (cel mult o oră)"
 }
