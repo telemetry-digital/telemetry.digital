@@ -1,0 +1,30 @@
+meta {
+  name: Import records from CSV
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/v1/recipes/:id/import
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "csv": "string",
+    "reason": "string"
+  }
+}
+
+docs {
+  Import records from CSV
+  
+  The table of the export (comma or semicolon; with semicolons a decimal comma is accepted). A record with an existing number is changed, a new number is added; every line is checked like a saved record and one bad line refuses the whole import.
+  
+  Requires permission `recipe.edit`.
+}

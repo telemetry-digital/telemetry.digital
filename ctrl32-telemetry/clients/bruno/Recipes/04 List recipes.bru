@@ -1,0 +1,19 @@
+meta {
+  name: List recipes
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/recipes
+  body: none
+  auth: inherit
+}
+
+docs {
+  List recipes
+  
+  With the number of elements, units and records and the time of the last finished load.
+  
+  Requires permission `data.read`.
+}

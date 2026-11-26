@@ -1,0 +1,34 @@
+meta {
+  name: Change a data record
+  type: http
+  seq: 13
+}
+
+put {
+  url: {{baseUrl}}/api/v1/recipes/:id/records/:rid
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+  rid: 
+}
+
+body:json {
+  {
+    "name": "string",
+    "note": "string",
+    "number": 1,
+    "reason": "string",
+    "values": {}
+  }
+}
+
+docs {
+  Change a data record
+  
+  The old and the new values go to the audit trail; the version of the record grows by one.
+  
+  Requires permission `recipe.edit`.
+}

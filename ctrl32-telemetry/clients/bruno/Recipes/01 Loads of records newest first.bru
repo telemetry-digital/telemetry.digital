@@ -1,0 +1,24 @@
+meta {
+  name: Loads of records newest first
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/recipe-downloads
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~recipe: 
+  ~limit: 
+}
+
+docs {
+  Loads of records, newest first
+  
+  Who loaded which record (name, number, version and the values as written) into which unit, the answer of the controller for every value, and for four eyes who approved or rejected it. A load nobody decided within 24 hours expires.
+  
+  Requires permission `data.read`.
+}

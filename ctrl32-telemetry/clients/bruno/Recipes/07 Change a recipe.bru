@@ -1,0 +1,48 @@
+meta {
+  name: Change a recipe
+  type: http
+  seq: 7
+}
+
+put {
+  url: {{baseUrl}}/api/v1/recipes/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "description": "string",
+    "elements": [
+      {
+        "decimals": 1,
+        "key": "string",
+        "label": "string",
+        "max": 21.5,
+        "min": 21.5,
+        "type": "number",
+        "unit": "string"
+      }
+    ],
+    "name": "string",
+    "reason": "string",
+    "targets": [
+      {
+        "device_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+        "id": "string",
+        "name": "string",
+        "prefix": "string"
+      }
+    ]
+  }
+}
+
+docs {
+  Change a recipe
+  
+  Requires permission `config.write`.
+}

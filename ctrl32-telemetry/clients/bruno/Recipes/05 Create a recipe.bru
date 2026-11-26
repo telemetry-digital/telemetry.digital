@@ -1,0 +1,46 @@
+meta {
+  name: Create a recipe
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/recipes
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "description": "string",
+    "elements": [
+      {
+        "decimals": 1,
+        "key": "string",
+        "label": "string",
+        "max": 21.5,
+        "min": 21.5,
+        "type": "number",
+        "unit": "string"
+      }
+    ],
+    "name": "string",
+    "reason": "string",
+    "targets": [
+      {
+        "device_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+        "id": "string",
+        "name": "string",
+        "prefix": "string"
+      }
+    ]
+  }
+}
+
+docs {
+  Create a recipe
+  
+  The elements are written in their order. A unit is a device of an S7, OPC UA or Modbus connector and an optional key prefix. 409 when the name is used.
+  
+  Requires permission `config.write`.
+}

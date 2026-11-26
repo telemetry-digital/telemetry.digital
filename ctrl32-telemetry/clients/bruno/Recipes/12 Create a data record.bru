@@ -1,0 +1,31 @@
+meta {
+  name: Create a data record
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/v1/recipes/:id/records
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "name": "string",
+    "note": "string",
+    "number": 1,
+    "reason": "string",
+    "values": {}
+  }
+}
+
+docs {
+  Create a data record
+  
+  Requires permission `recipe.edit`.
+}
