@@ -1,0 +1,27 @@
+meta {
+  name: Delete an alarm class
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/alarm-classes/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Delete an alarm class
+  
+  409 for a built-in class and for a class used by alarm rules.
+  
+  Requires permission `config.write`.
+}

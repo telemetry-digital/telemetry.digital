@@ -15,6 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/alarmmgmt"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/escalate"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/ingest"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/live"
@@ -665,8 +666,14 @@ func (e *Engine) raiseAlarm(ctx context.Context, r *rule, a actionC, vals map[st
 	detail := map[string]any{"key": key, "rule": r.Name, "automation_rule_id": r.ID, "inputs": vals, "policy_id": a.PolicyID}
 	d, _ := json.Marshal(detail)
 	var alarmID string
-	err := e.pool.QueryRow(ctx, `INSERT INTO core.alarm (org_id, automation_rule_id, datastream_id, severity, value, detail) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5::numeric, $6::jsonb) RETURNING id::text`,
-		r.OrgID, r.ID, dsID, a.Severity, value, string(d)).Scan(&alarmID)
+	// a shelved rule (spec 035): the alarm is recorded, but not annunciated
+	shelved := alarmmgmt.ShelvedUntil(ctx, e.pool, "", r.ID)
+	state := "active"
+	if shelved != nil {
+		state = "suppressed"
+	}
+	err := e.pool.QueryRow(ctx, `INSERT INTO core.alarm (org_id, automation_rule_id, datastream_id, severity, value, detail, state, shelved_until) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5::numeric, $6::jsonb, $7, $8) RETURNING id::text`,
+		r.OrgID, r.ID, dsID, a.Severity, value, string(d), state, shelved).Scan(&alarmID)
 	if err != nil {
 		res["status"], res["detail"] = "failed", err.Error()
 		e.log.Error("rule alarm insert", "rule", r.Name, "err", err)
@@ -680,7 +687,11 @@ func (e *Engine) raiseAlarm(ctx context.Context, r *rule, a actionC, vals map[st
 		ds = *dsID
 	}
 	if e.live != nil {
-		e.live.Alarm(r.OrgID, alarmID, ds, "active", a.Severity, value)
+		e.live.Alarm(r.OrgID, alarmID, ds, state, a.Severity, value)
+	}
+	if shelved != nil {
+		res["detail"] = res["detail"].(string) + " (shelved)"
+		return res
 	}
 	v := 0.0
 	if value != nil {

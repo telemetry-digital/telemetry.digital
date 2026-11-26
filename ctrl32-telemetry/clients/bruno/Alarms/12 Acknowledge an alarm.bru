@@ -1,0 +1,29 @@
+meta {
+  name: Acknowledge an alarm
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/v1/alarms/:id/ack
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Acknowledge an alarm
+  
+  An active alarm or one that returned to normal unacknowledged. Stops the escalation ladder; recorded in the alarm log with the actor and reason. 404 when the alarm is already acknowledged.
+  
+  Requires permission `alarm.ack`.
+}

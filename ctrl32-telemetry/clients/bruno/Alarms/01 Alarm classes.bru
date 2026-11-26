@@ -1,0 +1,19 @@
+meta {
+  name: Alarm classes
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/alarm-classes
+  body: none
+  auth: inherit
+}
+
+docs {
+  Alarm classes
+  
+  The classes of the organization: the built-in Alarm (priority 1), Warning (2) and Message (4, no acknowledgement) and its own. The class decides the colour, the order, the sound and whether an alarm waits for an acknowledgement.
+  
+  Requires permission `data.read`.
+}

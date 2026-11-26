@@ -1,0 +1,30 @@
+meta {
+  name: Shelve an alarm
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/api/v1/alarms/:id/shelve
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "minutes": 1,
+    "reason": "string"
+  }
+}
+
+docs {
+  Shelve an alarm
+  
+  Shelves the rule of the alarm for 15 minutes to 24 hours: its alarms that have not returned to normal, and every new one until then, are recorded (state `suppressed`, `isa_state` `shelved`) but not annunciated — no alarm bar, no notification, no escalation. The shelf ends by itself. 409 when already shelved.
+  
+  Requires permission `alarm.ack`.
+}

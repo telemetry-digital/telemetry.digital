@@ -1,0 +1,29 @@
+meta {
+  name: Create an alarm class
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/alarm-classes
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "ack_required": true,
+    "code": "string",
+    "color": "string",
+    "name": "string",
+    "priority": 1,
+    "reason": "string",
+    "sound": "none"
+  }
+}
+
+docs {
+  Create an alarm class
+  
+  Requires permission `config.write`.
+}

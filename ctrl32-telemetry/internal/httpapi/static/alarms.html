@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Alarms</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  /* alarm management after ISA-18.2 (spec 035) */
+  table.al td, table.al th { vertical-align: middle; }
+  table.al tr td:first-child { border-left: 5px solid var(--c, transparent); }
+  table.al tr.rtn td { color: var(--muted); }
+  table.al .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .al-chip { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .al-chip i { width: 12px; height: 12px; border-radius: 3px; background: var(--c); display: inline-block; }
+  .al-state { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid var(--c); }
+  .al-state.unack_active { background: var(--c); color: #fff; }
+  .al-state.ack_active { background: color-mix(in srgb, var(--c) 18%, transparent); }
+  .al-state.unack_rtn { border-style: dashed; }
+  .al-state.normal, .al-state.shelved { border-color: var(--line); color: var(--muted); }
+  .al-kpis { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-bottom: 16px; }
+  .al-kpi { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; background: var(--card); }
+  .al-kpi b { display: block; font-size: 26px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .al-kpi span { color: var(--muted); font-size: 13px; }
+  .al-kpi.ok b { color: var(--ok); } .al-kpi.warn b { color: var(--warn); } .al-kpi.bad b { color: var(--bad); }
+  .al-days { display: flex; align-items: flex-end; gap: 3px; height: 120px; padding-top: 8px; }
+  .al-days div { flex: 1 1 0; min-width: 4px; background: var(--primary); border-radius: 3px 3px 0 0; position: relative; }
+  .al-days div.zero { background: var(--line); }
+  .al-days-ax { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .al-share { display: inline-block; height: 8px; border-radius: 4px; background: var(--primary); vertical-align: middle; margin-right: 6px; }
+  .al-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .al-empty { padding: 18px 4px; color: var(--muted); }
+  dialog .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<div class="page-head"><h1>Alarms</h1></div>
+<nav class="subnav">
+  <a href="/alarms" data-section="current">Current</a>
+  <a href="/alarms/shelved" data-section="shelved">Shelved</a>
+  <a href="/alarms/history" data-section="history">History</a>
+  <a href="/alarms/statistics" data-section="statistics">Statistics</a>
+  <a href="/alarms/classes" data-section="classes">Alarm classes</a>
+</nav>
+
+<section data-section="current">
+  <div class="card">
+    <p class="muted">Everything that needs attention: active alarms and alarms that returned to normal before anyone acknowledged them. The most important class first, unacknowledged before acknowledged.</p>
+    <div class="al-tools"><span id="curCount" class="muted"></span><span class="grow"></span>
+      <button class="btn small" type="button" id="ackSel" disabled>Acknowledge selected</button>
+      <button class="btn small primary" type="button" id="ackAll" disabled>Acknowledge all shown</button></div>
+    <div class="table-wrap"><table class="al" id="cur"><thead><tr><th><input type="checkbox" id="selAll" title="Select all"></th><th>Time</th><th>Class</th><th>Source</th><th>Value</th><th>Limit</th><th>State</th><th>Lasts</th><th></th></tr></thead><tbody></tbody></table></div>
+    <div class="al-empty" id="curEmpty" hidden>No alarm needs attention.</div>
+  </div>
+</section>
+
+<section data-section="shelved">
+  <div class="card">
+    <p class="muted">Shelved alarms are recorded but not announced: no bar, no sound, no notification. A shelf ends by itself; alarms still active then return to the current list.</p>
+    <div class="table-wrap"><table class="al" id="shv"><thead><tr><th>Time</th><th>Class</th><th>Source</th><th>Value</th><th>Shelved until</th><th>By</th><th>Reason</th><th></th></tr></thead><tbody></tbody></table></div>
+    <div class="al-empty" id="shvEmpty" hidden>No alarm is shelved.</div>
+  </div>
+</section>
+
+<section data-section="history">
+  <div class="card">
+    <div class="al-tools">
+      <label class="inline">From <input type="datetime-local" id="hFrom"></label>
+      <label class="inline">To <input type="datetime-local" id="hTo"></label>
+      <select id="hClass"><option value="">All classes</option></select>
+      <input type="search" id="hQ" placeholder="Search source" maxlength="80">
+      <button class="btn small primary" type="button" id="hGo">Show</button><span class="grow"></span>
+      <span id="hCount" class="muted"></span><button class="btn small" type="button" id="hCsv">Download CSV</button></div>
+    <div class="table-wrap"><table class="al" id="his"><thead><tr><th>Raised</th><th>Class</th><th>Source</th><th>Value</th><th>Limit</th><th>Returned to normal</th><th>Acknowledged</th><th>By</th><th>State</th></tr></thead><tbody></tbody></table></div>
+    <div class="al-empty" id="hisEmpty" hidden>No alarms in this range.</div>
+  </div>
+</section>
+
+<section data-section="statistics">
+  <div class="al-tools"><div class="seg" id="sRange"><button type="button" data-h="24">24 hours</button><button type="button" data-h="168" class="on">7 days</button><button type="button" data-h="720">30 days</button></div>
+    <span class="muted">Performance of the alarm system after ISA-18.2: an operator handles about 6 alarms an hour well; more than 12 is a flood.</span></div>
+  <div class="al-kpis" id="kpis"></div>
+  <div class="grid">
+    <div class="card"><h3 style="margin-top:0">Alarms per day</h3><div class="al-days" id="days"></div><div class="al-days-ax" id="daysAx"></div></div>
+    <div class="card"><h3 style="margin-top:0">By class</h3><div class="table-wrap"><table id="byClass"><tbody></tbody></table></div></div>
+  </div>
+  <div class="card"><h3 style="margin-top:0">Most frequent alarms</h3><p class="muted">A few alarms usually make most of the load: fix their limits, delays or sensors first.</p>
+    <div class="table-wrap"><table id="top"><thead><tr><th>Source</th><th>Alarms</th><th>Share</th></tr></thead><tbody></tbody></table></div><div class="al-empty" id="topEmpty" hidden>No alarms in this range.</div></div>
+  <div class="grid">
+    <div class="card"><h3 style="margin-top:0">Chattering alarms</h3><p class="muted">Three or more alarms of one source within a minute: add hysteresis or a delay.</p>
+      <div class="table-wrap"><table id="chat"><thead><tr><th>Source</th><th>Times</th></tr></thead><tbody></tbody></table></div><div class="al-empty" id="chatEmpty" hidden>None.</div></div>
+    <div class="card"><h3 style="margin-top:0">Standing alarms</h3><p class="muted">Active for longer than 24 hours now: an alarm nobody acts on is not an alarm.</p>
+      <div class="table-wrap"><table id="stand"><thead><tr><th>Source</th><th>Hours</th></tr></thead><tbody></tbody></table></div><div class="al-empty" id="standEmpty" hidden>None.</div></div>
+  </div>
+</section>
+
+<section data-section="classes">
+  <div class="card">
+    <p class="muted">The class of an alarm decides its colour, its place in the list, its sound and whether it waits for an acknowledgement. An alarm rule names its class; without one the severity decides (Alarm or Warning).</p>
+    <div class="al-tools"><span class="grow"></span><button class="btn primary" type="button" id="newClass" hidden>New class</button></div>
+    <div class="table-wrap"><table class="al" id="cls"><thead><tr><th>Class</th><th>Code</th><th>Priority</th><th>Acknowledgement</th><th>Sound</th><th>Rules</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+</section>
+
+<dialog id="ackDlg">
+  <form class="form" method="dialog" id="ackForm">
+    <h2 style="margin-top:0">Acknowledge</h2>
+    <p class="muted" id="ackWhat"></p>
+    <label>Reason (alarm log and audit trail) <input name="reason" required minlength="3" maxlength="200" list="ackReasons"></label>
+    <datalist id="ackReasons"><option value="Seen, no action needed"><option value="Seen, action taken"><option value="Maintenance in progress"></datalist>
+    <div class="err" id="ackErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Acknowledge</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button></div>
+  </form>
+</dialog>
+
+<dialog id="shDlg">
+  <form class="form" method="dialog" id="shForm">
+    <h2 style="margin-top:0">Shelve the alarm</h2>
+    <p class="muted" id="shWhat"></p>
+    <label>For how long <select name="minutes"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60" selected>1 hour</option><option value="120">2 hours</option><option value="240">4 hours</option><option value="480">8 hours</option><option value="720">12 hours</option><option value="1440">24 hours</option></select></label>
+    <label>Reason (alarm log and audit trail) <input name="reason" required minlength="3" maxlength="200"></label>
+    <p class="muted">Until then this alarm, and every new one of the same source, is recorded but not announced.</p>
+    <div class="err" id="shErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Shelve</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button></div>
+  </form>
+</dialog>
+
+<dialog id="clsDlg">
+  <form class="form" method="dialog" id="clsForm">
+    <h2 style="margin-top:0" id="clsTitle">Alarm class</h2>
+    <div class="row2"><label>Name <input name="name" required maxlength="60"></label><label>Code <input name="code" required pattern="[a-z][a-z0-9_]{1,30}" maxlength="31" title="lower-case letters, digits and _"></label></div>
+    <div class="row2"><label>Priority <select name="priority"><option value="1">1 – highest</option><option value="2">2</option><option value="3">3</option><option value="4">4 – lowest</option></select></label>
+      <label>Colour <input name="color" type="color" value="#d63939"></label></div>
+    <div class="row2"><label>Sound <select name="sound"><option value="none">none</option><option value="beep">beep</option><option value="siren">siren</option></select></label>
+      <label>&nbsp;<button class="btn" type="button" id="clsTry">Play the sound</button></label></div>
+    <label class="check"><input type="checkbox" name="ack"> <span>Waits for an acknowledgement</span></label>
+    <label>Reason for the change (audit trail) <input name="reason" required minlength="3" maxlength="200"></label>
+    <div class="err" id="clsErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button></div>
+  </form>
+</dialog>
+</main>
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api, t = ctrl32.t;
+const STATE = { unack_active: 'Active, unacknowledged', ack_active: 'Active, acknowledged', unack_rtn: 'Returned to normal, unacknowledged', normal: 'Normal', shelved: 'Shelved' };
+let SEC = 'current', CUR = [], SEL = new Set(), CLASSES = [], ACK_IDS = [], SH_ID = null, CLS_ID = null, HIS = [], HOURS = 168;
+const canAck = () => ctrl32.can('alarm.ack'), canCfg = () => ctrl32.can('config.write');
+const num = v => v === null || v === undefined ? '—' : String(Math.round(v * 1000) / 1000);
+const src = a => esc([a.source.asset, a.source.rule || a.key].filter(Boolean).join(' · ') || '—');
+const val = a => num(a.value) + (a.value !== null && a.value !== undefined && a.source.unit ? ' ' + esc(a.source.unit) : '');
+const chip = c => `<span class="al-chip" style="--c:${esc(c.color)}"><i></i>${esc(c.name || '—')}</span>`;
+const state = a => `<span class="al-state ${a.isa_state}${a.isa_state === 'unack_active' || a.isa_state === 'unack_rtn' ? ' al-blink' : ''}" style="--c:${esc(a.class.color)}">${esc(t(a.isa_state === 'ack_active' && !a.class.ack_required ? 'Active' : STATE[a.isa_state] || a.isa_state))}</span>`;
+function lasts(a) { const s = Math.max(0, ((a.cleared_at ? new Date(a.cleared_at) : new Date()) - new Date(a.raised_at)) / 1000);
+  return s < 90 ? Math.round(s) + ' s' : s < 5400 ? Math.round(s / 60) + ' min' : s < 172800 ? (s / 3600).toFixed(1) + ' h' : Math.round(s / 86400) + ' d'; }
+function busy() { return !!document.querySelector('dialog[open]'); }
+
+async function loadCurrent() {
+  try { CUR = await api('GET', '/api/v1/alarms?view=current'); } catch (x) { ctrl32.toast(x.message, 'bad'); return; }
+  const ids = new Set(CUR.map(a => a.id)); for (const id of [...SEL]) if (!ids.has(id)) SEL.delete(id);
+  const ack = canAck();
+  $('#cur tbody').innerHTML = CUR.map(a => { const needs = a.isa_state === 'unack_active' || a.isa_state === 'unack_rtn';
+    return `<tr class="${a.cleared_at ? 'rtn' : ''}" style="--c:${esc(a.class.color)}"><td>${needs && ack ? `<input type="checkbox" data-sel="${a.id}"${SEL.has(a.id) ? ' checked' : ''}>` : ''}</td>
+      <td class="num">${fmt(a.raised_at)}</td><td>${chip(a.class)}</td><td>${src(a)}</td><td class="num">${val(a)}</td><td class="num">${num(a.limit)}</td><td>${state(a)}</td><td class="num">${lasts(a)}</td>
+      <td style="white-space:nowrap">${needs && ack ? `<button class="btn small primary" type="button" data-ack="${a.id}">Acknowledge</button> ` : ''}${!a.cleared_at && ack ? `<button class="btn small" type="button" data-shelve="${a.id}">Shelve</button>` : ''}</td></tr>`; }).join('');
+  const waiting = CUR.filter(a => a.isa_state === 'unack_active' || a.isa_state === 'unack_rtn');
+  $('#curEmpty').hidden = CUR.length > 0; $('#cur').hidden = !CUR.length;
+  $('#curCount').textContent = CUR.length ? `${waiting.length} / ${CUR.length}` : '';
+  $('#curCount').title = t('unacknowledged / shown');
+  $('#ackAll').disabled = !ack || !waiting.length; $('#ackSel').disabled = !ack || !SEL.size;
+  $('#selAll').checked = waiting.length > 0 && waiting.every(a => SEL.has(a.id));
+  for (const c of document.querySelectorAll('#cur [data-sel]')) c.onchange = () => { c.checked ? SEL.add(c.dataset.sel) : SEL.delete(c.dataset.sel); $('#ackSel').disabled = !SEL.size; };
+  for (const b of document.querySelectorAll('#cur [data-ack]')) b.onclick = () => askAck([b.dataset.ack]);
+  for (const b of document.querySelectorAll('#cur [data-shelve]')) b.onclick = () => askShelve(b.dataset.shelve);
+}
+function askAck(ids) { if (!ids.length) return; ACK_IDS = ids; const f = $('#ackForm'); f.reset(); $('#ackErr').textContent = '';
+  const one = ids.length === 1 ? CUR.find(a => a.id === ids[0]) : null;
+  $('#ackWhat').innerHTML = one ? `${chip(one.class)} · ${src(one)} · ${fmt(one.raised_at)}` : `<b>${ids.length}</b> <span>${esc(t('alarms'))}</span>`;
+  $('#ackDlg').showModal(); f.reason.focus(); }
+$('#ackForm').onsubmit = async e => { e.preventDefault(); const reason = e.target.reason.value.trim();
+  try { if (ACK_IDS.length === 1) await api('POST', `/api/v1/alarms/${ACK_IDS[0]}/ack`, { reason }); else await api('POST', '/api/v1/alarms/ack', { ids: ACK_IDS, reason });
+    $('#ackDlg').close(); SEL.clear(); ctrl32.toast('acknowledged', 'ok'); await loadCurrent(); ctrl32.alarmBarRefresh(); } catch (x) { $('#ackErr').textContent = x.message; } };
+$('#ackAll').onclick = () => askAck(CUR.filter(a => a.isa_state === 'unack_active' || a.isa_state === 'unack_rtn').map(a => a.id).slice(0, 500));
+$('#ackSel').onclick = () => askAck([...SEL]);
+$('#selAll').onchange = e => { SEL = new Set(e.target.checked ? CUR.filter(a => a.isa_state === 'unack_active' || a.isa_state === 'unack_rtn').map(a => a.id) : []); loadCurrent(); };
+function askShelve(id) { SH_ID = id; const a = CUR.find(x => x.id === id); const f = $('#shForm'); f.reset(); $('#shErr').textContent = '';
+  $('#shWhat').innerHTML = a ? `${chip(a.class)} · ${src(a)}` : ''; $('#shDlg').showModal(); f.reason.focus(); }
+$('#shForm').onsubmit = async e => { e.preventDefault(); const f = e.target;
+  try { await api('POST', `/api/v1/alarms/${SH_ID}/shelve`, { minutes: +f.minutes.value, reason: f.reason.value.trim() }); $('#shDlg').close(); ctrl32.toast('shelved', 'ok'); await loadCurrent(); ctrl32.alarmBarRefresh(); }
+  catch (x) { $('#shErr').textContent = x.message; } };
+
+async function loadShelved() {
+  let l; try { l = await api('GET', '/api/v1/alarms?view=shelved'); } catch (x) { ctrl32.toast(x.message, 'bad'); return; }
+  $('#shv tbody').innerHTML = l.map(a => `<tr class="${a.cleared_at ? 'rtn' : ''}" style="--c:${esc(a.class.color)}"><td class="num">${fmt(a.raised_at)}</td><td>${chip(a.class)}</td><td>${src(a)}</td><td class="num">${val(a)}</td>
+    <td class="num">${fmt(a.shelved_until)}</td><td>${esc((a.shelf || {}).by || '')}</td><td>${esc((a.shelf || {}).reason || '')}</td>
+    <td>${canAck() ? `<button class="btn small" type="button" data-unshelve="${a.id}">Unshelve</button>` : ''}</td></tr>`).join('');
+  $('#shvEmpty').hidden = l.length > 0; $('#shv').hidden = !l.length;
+  for (const b of document.querySelectorAll('#shv [data-unshelve]')) b.onclick = async () => { const reason = ctrl32.ask('Reason for ending the shelf (alarm log and audit trail)'); if (!reason) return;
+    try { await api('POST', `/api/v1/alarms/${b.dataset.unshelve}/unshelve`, { reason }); ctrl32.toast('unshelved', 'ok'); await loadShelved(); ctrl32.alarmBarRefresh(); } catch (x) { ctrl32.toast(x.message, 'bad'); } };
+}
+
+const localField = d => { const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
+async function loadHistory() {
+  const q = new URLSearchParams({ view: 'history', from: new Date($('#hFrom').value).toISOString(), to: new Date($('#hTo').value).toISOString(), class: $('#hClass').value, q: $('#hQ').value.trim() });
+  try { HIS = await api('GET', '/api/v1/alarms?' + q); } catch (x) { ctrl32.toast(x.message, 'bad'); return; }
+  $('#his tbody').innerHTML = HIS.map(a => `<tr class="${a.cleared_at ? 'rtn' : ''}" style="--c:${esc(a.class.color)}"><td class="num">${fmt(a.raised_at)}</td><td>${chip(a.class)}</td><td>${src(a)}</td><td class="num">${val(a)}</td><td class="num">${num(a.limit)}</td>
+    <td class="num">${a.cleared_at ? fmt(a.cleared_at) : '—'}</td><td class="num">${a.acked_at && a.acked_by ? fmt(a.acked_at) : '—'}</td><td>${esc(a.acked_by || '')}</td><td>${state(a)}</td></tr>`).join('');
+  $('#hisEmpty').hidden = HIS.length > 0; $('#his').hidden = !HIS.length; $('#hCount').textContent = HIS.length ? String(HIS.length) + (HIS.length >= 1000 ? '+' : '') : '';
+}
+$('#hGo').onclick = loadHistory; $('#hQ').onkeydown = e => { if (e.key === 'Enter') loadHistory(); };
+$('#hCsv').onclick = () => { const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const rows = [['raised_at', 'class', 'asset', 'key', 'value', 'unit', 'limit', 'cleared_at', 'acked_at', 'acked_by', 'state']].concat(HIS.map(a => [a.raised_at, a.class.code, a.source.asset, a.source.rule || a.key, a.value, a.source.unit, a.limit, a.cleared_at, a.acked_by ? a.acked_at : '', a.acked_by, a.isa_state]));
+  const el = document.createElement('a'); el.href = URL.createObjectURL(new Blob(['﻿' + rows.map(r => r.map(q).join(',')).join('\r\n')], { type: 'text/csv' })); el.download = 'alarms.csv'; el.click(); setTimeout(() => URL.revokeObjectURL(el.href), 1000); };
+
+const named = r => esc([r.asset, r.rule || r.key].filter(Boolean).join(' · ') || '—');
+async function loadStats() {
+  const to = new Date(), from = new Date(to - HOURS * 3600e3); let s;
+  try { s = await api('GET', `/api/v1/alarms/stats?from=${from.toISOString()}&to=${to.toISOString()}&tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')}`); } catch (x) { ctrl32.toast(x.message, 'bad'); return; }
+  const rate = s.per_hour, rc = rate <= 6 ? 'ok' : rate <= 12 ? 'warn' : 'bad', pc = s.peak_hour <= 6 ? 'ok' : s.peak_hour <= 12 ? 'warn' : 'bad';
+  const ack = s.mean_ack_s === null || s.mean_ack_s === undefined ? '—' : s.mean_ack_s < 90 ? Math.round(s.mean_ack_s) + ' s' : s.mean_ack_s < 5400 ? Math.round(s.mean_ack_s / 60) + ' min' : (s.mean_ack_s / 3600).toFixed(1) + ' h';
+  const kpi = (v, label, cls) => `<div class="al-kpi ${cls || ''}"><b>${v}</b><span>${esc(t(label))}</span></div>`;
+  $('#kpis').innerHTML = kpi(s.total, 'Alarms') + kpi((Math.round(rate * 10) / 10).toLocaleString(), 'Per hour on average', rc) + kpi(s.peak_hour, 'In the busiest hour', pc) + kpi(ack, 'Mean time to acknowledge')
+    + kpi(s.chattering.length, 'Chattering alarms', s.chattering.length ? 'warn' : 'ok') + kpi(s.standing.length, 'Standing alarms', s.standing.length ? 'warn' : 'ok');
+  // every day of the range, also the ones without alarms
+  const by = Object.fromEntries(s.days.map(d => [d.day, d.count])), days = []; const p = n => String(n).padStart(2, '0');
+  for (let d = new Date(from.getFullYear(), from.getMonth(), from.getDate()); d <= to; d.setDate(d.getDate() + 1)) { const k = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; days.push({ day: k, count: by[k] || 0 }); }
+  const max = Math.max(1, ...days.map(d => d.count));
+  $('#days').innerHTML = days.map(d => `<div class="${d.count ? '' : 'zero'}" style="height:${d.count ? Math.max(4, d.count / max * 100) : 2}%" title="${d.day}: ${d.count}"></div>`).join('');
+  $('#daysAx').innerHTML = `<span>${days[0].day}</span><span>max ${max}</span><span>${days[days.length - 1].day}</span>`;
+  $('#byClass tbody').innerHTML = s.classes.map(c => `<tr><td>${chip(c)}</td><td class="num">${c.count}</td></tr>`).join('') || `<tr><td class="muted">—</td></tr>`;
+  $('#top tbody').innerHTML = s.top.map(r => `<tr><td>${named(r)}</td><td>${r.count}</td><td><span class="al-share" style="width:${Math.round((r.share || 0) * 160)}px"></span>${Math.round((r.share || 0) * 100)} %</td></tr>`).join('');
+  $('#topEmpty').hidden = s.top.length > 0; $('#top').hidden = !s.top.length;
+  $('#chat tbody').innerHTML = s.chattering.map(r => `<tr><td>${named(r)}</td><td>${r.count}</td></tr>`).join(''); $('#chatEmpty').hidden = s.chattering.length > 0; $('#chat').hidden = !s.chattering.length;
+  $('#stand tbody').innerHTML = s.standing.map(r => `<tr><td>${named(r)}</td><td>${r.hours}</td></tr>`).join(''); $('#standEmpty').hidden = s.standing.length > 0; $('#stand').hidden = !s.standing.length;
+}
+for (const b of document.querySelectorAll('#sRange button')) b.onclick = () => { HOURS = +b.dataset.h; for (const o of document.querySelectorAll('#sRange button')) o.classList.toggle('on', o === b); loadStats(); };
+
+async function loadClasses() {
+  try { CLASSES = await api('GET', '/api/v1/alarm-classes'); } catch (x) { ctrl32.toast(x.message, 'bad'); return; }
+  $('#hClass').innerHTML = `<option value="">${esc(t('All classes'))}</option>` + CLASSES.map(c => `<option value="${esc(c.code)}">${esc(c.name)}</option>`).join('');
+  $('#newClass').hidden = !canCfg();
+  $('#cls tbody').innerHTML = CLASSES.map(c => `<tr style="--c:${esc(c.color)}"><td>${chip(c)}</td><td><code>${esc(c.code)}</code></td><td>${c.priority}</td><td><span>${c.ack_required ? 'required' : 'not required'}</span></td><td><span>${esc(c.sound)}</span></td><td>${c.rules}</td>
+    <td style="white-space:nowrap">${canCfg() ? `<button class="btn small" type="button" data-edit="${c.id}">Edit</button>${c.builtin ? '' : ` <button class="btn small" type="button" data-del="${c.id}">Delete</button>`}` : ''}</td></tr>`).join('');
+  for (const b of document.querySelectorAll('#cls [data-edit]')) b.onclick = () => editClass(CLASSES.find(c => c.id === b.dataset.edit));
+  for (const b of document.querySelectorAll('#cls [data-del]')) b.onclick = async () => { const reason = ctrl32.ask('Reason for deleting the class (audit trail)'); if (!reason) return;
+    try { await api('DELETE', `/api/v1/alarm-classes/${b.dataset.del}?reason=${encodeURIComponent(reason)}`); loadClasses(); } catch (x) { ctrl32.toast(x.message, 'bad'); } };
+}
+function editClass(c) { CLS_ID = c ? c.id : null; const f = $('#clsForm'); f.reset(); $('#clsErr').textContent = '';
+  $('#clsTitle').textContent = t(c ? 'Change the alarm class' : 'New alarm class'); f.code.disabled = !!c;
+  if (c) { f.name.value = c.name; f.code.value = c.code; f.priority.value = c.priority; f.color.value = c.color; f.sound.value = c.sound; f.ack.checked = c.ack_required; } else { f.ack.checked = true; f.priority.value = 3; }
+  $('#clsDlg').showModal(); }
+$('#newClass').onclick = () => editClass(null);
+$('#clsTry').onclick = () => ctrl32.alarmSound($('#clsForm').sound.value);
+$('#clsForm').onsubmit = async e => { e.preventDefault(); const f = e.target;
+  const body = { name: f.name.value.trim(), code: f.code.value.trim(), priority: +f.priority.value, color: f.color.value, sound: f.sound.value, ack_required: f.ack.checked, reason: f.reason.value.trim() };
+  try { if (CLS_ID) await api('PUT', '/api/v1/alarm-classes/' + CLS_ID, body); else await api('POST', '/api/v1/alarm-classes', body); $('#clsDlg').close(); ctrl32.toast('saved', 'ok'); loadClasses(); } catch (x) { $('#clsErr').textContent = x.message; } };
+
+ctrl32.ready({ requireAuth: true, requirePerm: 'data.read' }).then(async () => {
+  SEC = ctrl32.section('current', ['current', 'shelved', 'history', 'statistics', 'classes']);
+  const now = new Date(); $('#hTo').value = localField(new Date(now.getTime() + 60000)); $('#hFrom').value = localField(new Date(now - 24 * 3600e3));
+  await loadClasses();
+  if (SEC === 'current') { await loadCurrent(); setInterval(() => { if (!document.hidden && !busy()) loadCurrent(); }, 5000); }
+  if (SEC === 'shelved') { await loadShelved(); setInterval(() => { if (!document.hidden && !busy()) loadShelved(); }, 15000); }
+  if (SEC === 'history') await loadHistory();
+  if (SEC === 'statistics') await loadStats();
+});
+</script>
+</body>
+</html>

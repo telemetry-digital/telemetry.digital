@@ -15,6 +15,7 @@
     menu: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>',
     close: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>',
     chevL: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6l6 6"/></svg>',
+    bell: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3h-16a4 4 0 0 0 2 -3v-3a7 7 0 0 1 4 -6"/><path d="M9 17v1a3 3 0 0 0 6 0v-1"/></svg>',
     alert: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z"/><path d="M12 16h.01"/></svg>',
     dashboard: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>',
     users: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0 -3 -3.85"/></svg>',
@@ -127,7 +128,7 @@
   // permissions stay the security boundary (the API answers what the role allows, whatever window asks).
   const APP_PATHS = {
     dashboards: ['/', '/dashboards'], home: ['/home', '/smarthome'], energy: ['/energy'], counting: ['/counting'], cameras: ['/video'],
-    displays: ['/displays'], flows: ['/flows', '/automation'], devices: ['/devices'], incidents: ['/incidents'], assets: ['/assets'],
+    displays: ['/displays'], flows: ['/flows', '/automation'], devices: ['/devices'], incidents: ['/incidents'], assets: ['/assets'], alarms: ['/alarms'],
     firmware: ['/fota'], users: ['/users'], audit: ['/audit', '/reports/signatures'], settings: ['/settings', '/vpn'], system: ['/organizations', '/server', '/landing/edit'],
     reports: ['/reports'],
   };
@@ -246,6 +247,10 @@
         { href: '/video/evidence', label: 'Evidence', show: can('video.playback') }, { href: '/video/settings', label: 'Settings', show: can('video.manage') },
         { href: '/counting/cameras', label: 'Object counting', show: can('data.read') }] },
       { href: '/displays', label: 'Displays', icon: ICON.display, show: can('display.control'), sec: 'displays' },
+      // alarm management after ISA-18.2 (spec 035)
+      { href: '/alarms', label: 'Alarms', icon: ICON.bell, show: can('data.read'), sec: 'alarms', children: [
+        { href: '/alarms', label: 'Current' }, { href: '/alarms/shelved', label: 'Shelved' }, { href: '/alarms/history', label: 'History' },
+        { href: '/alarms/statistics', label: 'Statistics' }, { href: '/alarms/classes', label: 'Alarm classes' }] },
       { href: '/incidents', label: 'Incidents', icon: ICON.alert, show: can('data.read'), sec: 'incidents' },
       // every report page in one place (0.75.0); the old addresses under Settings and Audit redirect here
       { href: cw ? '/reports/templates' : '/reports/signatures', base: '/reports', label: 'Reports', icon: ICON.report, show: cw || can('audit.read') || can('report.sign'), sec: 'reports', children: [
@@ -608,7 +613,7 @@
   let readyPromise = null;
   function ready(opts) {
     opts = opts || {};
-    if (!readyPromise) readyPromise = Promise.all([loadBranding(), loadMe(), loadApp()]).then(loadI18n).then(() => { renderShell(); footer(); wireLang(); translateNode(document.body); if (document.title && catalog[document.title]) document.title = catalog[document.title]; observeI18n(); applyWhiteLabel(); updateBanner(); return { me, brand, app }; });
+    if (!readyPromise) readyPromise = Promise.all([loadBranding(), loadMe(), loadApp()]).then(loadI18n).then(() => { renderShell(); footer(); wireLang(); alarmBar(); translateNode(document.body); if (document.title && catalog[document.title]) document.title = catalog[document.title]; observeI18n(); applyWhiteLabel(); updateBanner(); return { me, brand, app }; });
     return readyPromise.then((r) => {
       if (opts.requireAuth && !me) { location.href = '/login'; return new Promise(() => {}); }
       if (opts.requirePerm && !can(opts.requirePerm)) { const m = $('main'); if (m) m.innerHTML = '<div class="card">Your role has no <code>' + esc(opts.requirePerm) + '</code> permission.</div>'; return new Promise(() => {}); }
@@ -641,7 +646,49 @@
   if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyMode);
   applyMode();
   window.ctrl32 = { ready, loadBranding, loadMe, api, logout, toggleMode, can, esc, section, t, appAllows, fullscreen, isFullscreen: () => !!fsCur(), ask, confirm: confirmAsk, setLocale, get locale() { return locale; }, get langs() { return langs; }, get brand() { return brand; }, get me() { return me; }, get csrf() { return csrf; }, get app() { return app; }, home, enterApp, ICON,
-    fmt: (t) => (t ? new Date(t).toLocaleString(document.documentElement.lang || undefined) : '—'), toast, openSearch };
+    fmt: (t) => (t ? new Date(t).toLocaleString(document.documentElement.lang || undefined) : '—'), toast, openSearch, alarmSound, alarmBarRefresh: () => abTick && abTick() };
+  // Alarm bar (spec 035): on every page with the menu, for people who read data: the most important alarm waiting for
+  // its acknowledgement (class colour, blinking), the numbers of unacknowledged and active alarms, and the class sound,
+  // repeated until someone acknowledges. Sound is per browser and off until switched on (browsers refuse it before a
+  // gesture). Hidden with × until another alarm becomes the most important one.
+  let abTick = null, abCtx = null;
+  function alarmSound(kind) {
+    if (kind !== 'beep' && kind !== 'siren') return;
+    try {
+      abCtx = abCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (abCtx.state === 'suspended') abCtx.resume();
+      const o = abCtx.createOscillator(), g = abCtx.createGain(), now = abCtx.currentTime;
+      o.connect(g); g.connect(abCtx.destination); g.gain.setValueAtTime(0.0001, now);
+      if (kind === 'beep') { o.frequency.setValueAtTime(880, now); g.gain.exponentialRampToValueAtTime(0.25, now + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.3); o.start(now); o.stop(now + 0.32); }
+      else { o.type = 'sawtooth'; for (let k = 0; k < 2; k++) { o.frequency.setValueAtTime(620, now + k * 0.6); o.frequency.linearRampToValueAtTime(1150, now + k * 0.6 + 0.5); } g.gain.exponentialRampToValueAtTime(0.2, now + 0.03); g.gain.setValueAtTime(0.2, now + 1.1); g.gain.exponentialRampToValueAtTime(0.0001, now + 1.2); o.start(now); o.stop(now + 1.22); }
+    } catch (e) { /* no sound in this browser */ }
+  }
+  function alarmBar() {
+    const main = $('main');
+    if (!me || !can('data.read') || !$('header.topbar') || !main || $('#alarmBar') || !appAllows('/alarms')) return;
+    const bar = document.createElement('div'); bar.id = 'alarmBar'; bar.hidden = true; main.prepend(bar);
+    const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } return null; };
+    const SND = 'ctrl32.alarmSound', hm = (x) => new Date(x).toLocaleTimeString(document.documentElement.lang || undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    let dismissed = null; try { dismissed = sessionStorage.getItem('ctrl32.alarmBarHidden'); } catch (e) { /* private mode */ }
+    const draw = (s) => {
+      const top = s.top;
+      if ((!s.unack && !s.active) || (dismissed && top && dismissed === top.id) || (dismissed === 'none' && !top)) { bar.hidden = true; return; }
+      const on = store(SND) === '1', c = top ? top.class.color : 'var(--muted)';
+      const what = top ? `<b>${esc(top.class.name)}</b> <span class="ab-t">${hm(top.raised_at)}</span> ${esc([top.source.asset, top.source.rule || top.key].filter(Boolean).join(' · '))}${top.value !== null && top.value !== undefined ? ' = ' + esc(String(Math.round(top.value * 1000) / 1000)) + (top.source.unit ? ' ' + esc(top.source.unit) : '') : ''}${top.cleared_at ? ` <span class="ab-rtn">${esc(t('returned to normal'))}</span>` : ''}`
+        : `<span>${esc(t('No alarm waits for an acknowledgement'))}</span>`;
+      bar.className = top ? 'unack' : ''; bar.style.setProperty('--ab', c); bar.hidden = false;
+      bar.innerHTML = `<a class="ab-main" href="/alarms"><span class="ab-dot"></span><span class="ab-what">${what}</span></a>
+        <a class="ab-count" href="/alarms"><b>${s.unack}</b> <span>${esc(t('unacknowledged'))}</span> · <b>${s.active}</b> <span>${esc(t('active'))}</span></a>
+        <button type="button" class="ab-btn${on ? ' on' : ''}" id="abSound" title="${esc(t(on ? 'Alarm sound is on in this browser' : 'Switch the alarm sound on in this browser'))}">${ICON.bell}</button>
+        <button type="button" class="ab-btn" id="abHide" title="${esc(t('Hide until another alarm comes'))}">×</button>`;
+      $('#abSound').onclick = () => { const now = store(SND) === '1' ? '0' : '1'; store(SND, now); if (now === '1') alarmSound(top && top.class.sound !== 'none' ? top.class.sound : 'beep'); draw(s); };
+      $('#abHide').onclick = () => { dismissed = top ? top.id : 'none'; try { sessionStorage.setItem('ctrl32.alarmBarHidden', dismissed); } catch (e) { /* private mode */ } bar.hidden = true; };
+      if (on && top) alarmSound(top.class.sound);
+    };
+    abTick = async () => { if (document.hidden) return; try { draw(await api('GET', '/api/v1/alarms/summary')); } catch (e) { /* signed out or offline: the next round tries again */ } };
+    abTick(); setInterval(abTick, 5000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) abTick(); });
+  }
   function toast(msg, kind) {
     let t = $('#toast');
     if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }

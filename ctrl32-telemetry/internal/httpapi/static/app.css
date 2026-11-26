@@ -939,3 +939,23 @@ dialog.gs-dlg { width: min(640px, calc(100vw - 32px)); padding: 0; border: 1px s
 /* update banner for system administrators (app.js updateBanner) */
 .update-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; border-left: 3px solid var(--primary, #e30613); }
 .update-banner .grow { flex: 1; }
+
+/* Alarm bar on every page (spec 035) */
+#alarmBar { display: flex; align-items: center; gap: 10px; padding: 6px 10px; margin: 0 0 12px; border: 1px solid var(--line); border-left: 6px solid var(--ab, var(--bad)); border-radius: var(--radius); background: var(--card); font-size: 14px; min-height: 40px; }
+#alarmBar[hidden] { display: none; }
+body.has-sidebar #alarmBar { position: sticky; top: 8px; z-index: 15; box-shadow: 0 2px 8px rgba(0, 0, 0, .12); }
+#alarmBar a { color: inherit; text-decoration: none; }
+#alarmBar .ab-main { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; }
+#alarmBar .ab-what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#alarmBar .ab-t { font-variant-numeric: tabular-nums; color: var(--muted); }
+#alarmBar .ab-rtn { color: var(--muted); font-style: italic; }
+#alarmBar .ab-dot { flex: 0 0 auto; width: 14px; height: 14px; border-radius: 50%; background: var(--ab, var(--bad)); }
+#alarmBar.unack .ab-dot, .al-blink { animation: alBlink 1s steps(2, start) infinite; }
+#alarmBar .ab-count { flex: 0 0 auto; white-space: nowrap; color: var(--muted); }
+#alarmBar .ab-count b { color: var(--fg); }
+#alarmBar .ab-btn { flex: 0 0 auto; border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 8px; width: 32px; height: 32px; padding: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 18px; line-height: 1; }
+#alarmBar .ab-btn svg { width: 18px; height: 18px; }
+#alarmBar .ab-btn.on { color: var(--primary); border-color: var(--primary); }
+@keyframes alBlink { 50% { opacity: .2; } }
+@media (prefers-reduced-motion: reduce) { #alarmBar.unack .ab-dot, .al-blink { animation: none; } }
+@media (max-width: 700px) { #alarmBar .ab-count span { display: none; } }

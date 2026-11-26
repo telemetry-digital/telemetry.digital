@@ -41,6 +41,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/telemetry-digital/ctrl32-telemetry/internal/alarmmgmt"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/escalate"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/ingest"
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/metrics"
@@ -339,19 +340,40 @@ func worse(a, b string) string {
 func (e *Engine) Run(ctx context.Context) {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
-	var lastComm time.Time
+	var lastComm, lastShelf time.Time
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case now := <-t.C:
 			e.raiseDue(ctx, now)
+			if now.Sub(lastShelf) >= 5*time.Second {
+				lastShelf = now
+				e.releaseShelves(ctx)
+			}
 			if now.Sub(lastComm) >= 5*time.Second {
 				lastComm = now
 				if err := e.checkCommLoss(ctx, now); err != nil && ctx.Err() == nil {
 					e.log.Error("comm_loss check failed", "err", err)
 				}
 			}
+		}
+	}
+}
+
+// releaseShelves returns the alarms whose shelf ran out to the list (spec 035).
+func (e *Engine) releaseShelves(ctx context.Context) {
+	ch, err := alarmmgmt.ReleaseExpired(ctx, e.pool)
+	if err != nil {
+		if ctx.Err() == nil {
+			e.log.Error("shelf release failed", "err", err)
+		}
+		return
+	}
+	for _, c := range ch {
+		e.log.Info("alarm back from the shelf", "alarm", c.AlarmID, "state", c.State)
+		if e.Live != nil {
+			e.Live.Alarm(c.OrgID, c.AlarmID, c.DatastreamID, c.State, c.Severity, c.Value)
 		}
 	}
 }
@@ -453,16 +475,22 @@ func (e *Engine) checkCommLoss(ctx context.Context, now time.Time) error {
 }
 
 func (e *Engine) raise(ctx context.Context, o ingest.Observation, r rule, sev string, v float64) error {
+	// a shelved rule (spec 035): the alarm is recorded, but not annunciated — no notification, no escalation
+	shelved := alarmmgmt.ShelvedUntil(ctx, e.pool, r.ID, "")
+	state := "active"
+	if shelved != nil {
+		state = "suppressed"
+	}
 	var alarmID string
 	err := e.pool.QueryRow(ctx, `
-		INSERT INTO core.alarm (org_id, rule_id, datastream_id, severity, retrospective, value, detail)
-		VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6::numeric, jsonb_build_object('key', $7::text, 'measured_at', $8::timestamptz, 'type', $9::text))
-		RETURNING id::text`, o.OrgID, r.ID, o.DatastreamID, sev, o.Backfilled, fmtNum(v), o.Key, o.MeasuredAt, r.Type).Scan(&alarmID)
+		INSERT INTO core.alarm (org_id, rule_id, datastream_id, severity, retrospective, value, detail, state, shelved_until)
+		VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6::numeric, jsonb_build_object('key', $7::text, 'measured_at', $8::timestamptz, 'type', $9::text), $10, $11)
+		RETURNING id::text`, o.OrgID, r.ID, o.DatastreamID, sev, o.Backfilled, fmtNum(v), o.Key, o.MeasuredAt, r.Type, state, shelved).Scan(&alarmID)
 	if err != nil {
 		return err
 	}
-	if _, err := e.pool.Exec(ctx, `INSERT INTO core.alarm_event (alarm_id, event, detail) VALUES ($1::uuid, 'raised', jsonb_build_object('severity',$2::text,'value',$3::numeric,'type',$4::text,'delay_s',$5::float8))`,
-		alarmID, sev, fmtNum(v), r.Type, r.Delay.Seconds()); err != nil {
+	if _, err := e.pool.Exec(ctx, `INSERT INTO core.alarm_event (alarm_id, event, detail) VALUES ($1::uuid, 'raised', jsonb_build_object('severity',$2::text,'value',$3::numeric,'type',$4::text,'delay_s',$5::float8,'shelved',$6::boolean))`,
+		alarmID, sev, fmtNum(v), r.Type, r.Delay.Seconds(), shelved != nil); err != nil {
 		return err
 	}
 	if o.Backfilled {
@@ -476,7 +504,10 @@ func (e *Engine) raise(ctx context.Context, o ingest.Observation, r rule, sev st
 		metrics.AlarmLatency.Observe(time.Since(o.ReceivedAt).Seconds())
 	}
 	if e.Live != nil {
-		e.Live.Alarm(o.OrgID, alarmID, o.DatastreamID, "active", sev, &v)
+		e.Live.Alarm(o.OrgID, alarmID, o.DatastreamID, state, sev, &v)
+	}
+	if shelved != nil {
+		return nil
 	}
 
 	if e.Escalate != nil && e.Escalate.OnAlarm(ctx, escalate.Alarm{OrgID: o.OrgID, ID: alarmID, RuleID: r.ID, DatastreamID: o.DatastreamID, Key: o.Key, Severity: sev, Value: v, Event: "raised", MeasuredAt: o.MeasuredAt, Retrospective: o.Backfilled}) {
