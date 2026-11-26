@@ -3865,5 +3865,7 @@
  "Opened as a popup for another asset or key prefix, the tags of this asset are re-bound by datastream key.": "Při otevření jako okno pro jiné aktivum nebo jinou předponu klíče se tagy tohoto aktiva navážou znovu podle klíče datastreamu.",
  "(asset of the object's tag)": "(aktivum tagu objektu)",
  "(of the type)": "(z typu)",
- "Asset and prefix apply when the screen is a faceplate type.": "Aktivum a předpona platí, když je obrazovka typem faceplatu."
+ "Asset and prefix apply when the screen is a faceplate type.": "Aktivum a předpona platí, když je obrazovka typem faceplatu.",
+ "Symbol library panel (Tab hides both panels)": "Panel knihovny symbolů (Tab skryje oba panely)",
+ "Properties panel (Tab hides both panels)": "Panel vlastností (Tab skryje oba panely)"
 }

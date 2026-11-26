@@ -3865,5 +3865,7 @@
  "Opened as a popup for another asset or key prefix, the tags of this asset are re-bound by datastream key.": "Przy otwarciu jako okno dla innego zasobu lub innego prefiksu klucza tagi tego zasobu są wiązane ponownie według klucza strumienia danych.",
  "(asset of the object's tag)": "(zasób tagu obiektu)",
  "(of the type)": "(z typu)",
- "Asset and prefix apply when the screen is a faceplate type.": "Zasób i prefiks obowiązują, gdy ekran jest typem faceplate."
+ "Asset and prefix apply when the screen is a faceplate type.": "Zasób i prefiks obowiązują, gdy ekran jest typem faceplate.",
+ "Symbol library panel (Tab hides both panels)": "Panel biblioteki symboli (Tab ukrywa oba panele)",
+ "Properties panel (Tab hides both panels)": "Panel właściwości (Tab ukrywa oba panele)"
 }

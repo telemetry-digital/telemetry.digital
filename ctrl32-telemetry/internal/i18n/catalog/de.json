@@ -3865,5 +3865,7 @@
  "Opened as a popup for another asset or key prefix, the tags of this asset are re-bound by datastream key.": "Beim Öffnen als Fenster für eine andere Anlage oder ein anderes Schlüsselpräfix werden die Tags dieser Anlage anhand des Datenstrom-Schlüssels neu gebunden.",
  "(asset of the object's tag)": "(Anlage des Objekt-Tags)",
  "(of the type)": "(vom Typ)",
- "Asset and prefix apply when the screen is a faceplate type.": "Anlage und Präfix gelten, wenn das Bild ein Faceplate-Typ ist."
+ "Asset and prefix apply when the screen is a faceplate type.": "Anlage und Präfix gelten, wenn das Bild ein Faceplate-Typ ist.",
+ "Symbol library panel (Tab hides both panels)": "Bereich Symbolbibliothek (Tab blendet beide Bereiche aus)",
+ "Properties panel (Tab hides both panels)": "Bereich Eigenschaften (Tab blendet beide Bereiche aus)"
 }

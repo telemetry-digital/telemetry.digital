@@ -3865,5 +3865,7 @@
  "Opened as a popup for another asset or key prefix, the tags of this asset are re-bound by datastream key.": "Kun näkymä avataan ikkunana toiselle kohteelle tai avaimen etuliitteelle, tämän kohteen tunnukset sidotaan uudelleen tietovirran avaimen mukaan.",
  "(asset of the object's tag)": "(objektin tunnuksen kohde)",
  "(of the type)": "(tyypin mukainen)",
- "Asset and prefix apply when the screen is a faceplate type.": "Kohde ja etuliite ovat voimassa, kun näkymä on ohjausikkunatyyppi."
+ "Asset and prefix apply when the screen is a faceplate type.": "Kohde ja etuliite ovat voimassa, kun näkymä on ohjausikkunatyyppi.",
+ "Symbol library panel (Tab hides both panels)": "Symbolikirjaston paneeli (Tab piilottaa molemmat paneelit)",
+ "Properties panel (Tab hides both panels)": "Ominaisuuspaneeli (Tab piilottaa molemmat paneelit)"
 }

@@ -3865,5 +3865,7 @@
  "Opened as a popup for another asset or key prefix, the tags of this asset are re-bound by datastream key.": "À l'ouverture dans une fenêtre pour un autre équipement ou un autre préfixe de clé, les repères de cet équipement sont reliés de nouveau selon la clé du flux de données.",
  "(asset of the object's tag)": "(équipement du repère de l'objet)",
  "(of the type)": "(du type)",
- "Asset and prefix apply when the screen is a faceplate type.": "L'équipement et le préfixe s'appliquent lorsque l'écran est un type de fenêtre de commande."
+ "Asset and prefix apply when the screen is a faceplate type.": "L'équipement et le préfixe s'appliquent lorsque l'écran est un type de fenêtre de commande.",
+ "Symbol library panel (Tab hides both panels)": "Panneau de la bibliothèque de symboles (Tab masque les deux panneaux)",
+ "Properties panel (Tab hides both panels)": "Panneau des propriétés (Tab masque les deux panneaux)"
 }

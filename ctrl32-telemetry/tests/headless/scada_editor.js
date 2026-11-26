@@ -60,9 +60,9 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await key("Enter", "Enter", 0, 13);
   expect("pipe drawn orthogonally", await ev(`JSON.stringify((SPEC.elements.find(e => e.type === 'pipe') || {}).points)`), "[[370,330],[560,330],[560,430]]");
 
-  // Rubber band around everything except the title, then align top, undo, redo.
+  // Rubber band around everything except the title, then align top, undo, redo (the band stays clear of the tank's edge at y = 200, whatever the zoom).
   [x, y] = await at(5, 5); await click(x, y); // deselect (empty area)
-  const [bx0, by0] = await at(200, 200), [bx1, by1] = await at(1000, 600); await dragTo(bx0, by0, bx1, by1);
+  const [bx0, by0] = await at(190, 190), [bx1, by1] = await at(1000, 610); await dragTo(bx0, by0, bx1, by1);
   expect("rubber band selects 3", await ev(`window.__scadaEditor.selection().length`), 3);
   [x, y] = await center('#scadaEd [data-cmd="at"]'); await click(x, y);
   const tops = () => ev(`[...new Set(window.__scadaEditor.selection().map(k => Math.round(ctrl32Scada.bbox(SPEC.elements.find(e => 'e:' + e.id === k)).y)))].length`);

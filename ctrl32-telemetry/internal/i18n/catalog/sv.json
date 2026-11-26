@@ -3865,5 +3865,7 @@
  "Opened as a popup for another asset or key prefix, the tags of this asset are re-bound by datastream key.": "När den öppnas som fönster för en annan tillgång eller ett annat nyckelprefix binds den här tillgångens taggar om efter dataströmsnyckel.",
  "(asset of the object's tag)": "(tillgången för objektets tagg)",
  "(of the type)": "(från typen)",
- "Asset and prefix apply when the screen is a faceplate type.": "Tillgång och prefix gäller när skärmen är en faceplate-typ."
+ "Asset and prefix apply when the screen is a faceplate type.": "Tillgång och prefix gäller när skärmen är en faceplate-typ.",
+ "Symbol library panel (Tab hides both panels)": "Panel för symbolbibliotek (Tab döljer båda panelerna)",
+ "Properties panel (Tab hides both panels)": "Panel för egenskaper (Tab döljer båda panelerna)"
 }

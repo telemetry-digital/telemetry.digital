@@ -3865,5 +3865,7 @@
  "Opened as a popup for another asset or key prefix, the tags of this asset are re-bound by datastream key.": "Opened as a popup for another asset or key prefix, the tags of this asset are re-bound by datastream key.",
  "(asset of the object's tag)": "(asset of the object's tag)",
  "(of the type)": "(of the type)",
- "Asset and prefix apply when the screen is a faceplate type.": "Asset and prefix apply when the screen is a faceplate type."
+ "Asset and prefix apply when the screen is a faceplate type.": "Asset and prefix apply when the screen is a faceplate type.",
+ "Symbol library panel (Tab hides both panels)": "Symbol library panel (Tab hides both panels)",
+ "Properties panel (Tab hides both panels)": "Properties panel (Tab hides both panels)"
 }
