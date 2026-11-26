@@ -12,7 +12,7 @@ require (
 	github.com/ebitengine/purego v0.11.1
 	github.com/eclipse/paho.golang v0.23.0
 	github.com/gopcua/opcua v0.9.1
-	github.com/gorilla/websocket v1.5.3
+	github.com/gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/kardianos/service v1.3.0
 	github.com/mochi-mqtt/server/v2 v2.7.9
