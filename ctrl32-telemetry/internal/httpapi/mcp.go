@@ -45,7 +45,7 @@ const mcpPath = "/mcp"
 // excluded by mcpExcluded).
 var mcpAreas = map[string]string{
 	tagAccount: "account", tagUsers: "users", tagOrgs: "organizations", tagSites: "sites", tagData: "data",
-	tagDevices: "devices", tagCommands: "commands", tagConsole: "device_console", tagFota: "firmware", tagAlarms: "alarms",
+	tagDevices: "devices", tagCommands: "commands", tagConsole: "device_console", tagFota: "firmware", tagAlarms: "alarms", tagRecipes: "recipes",
 	tagNotify: "notifications", tagRules: "rules", tagDash: "dashboards", tagHMI: "hmi_library", tagRepl: "replication",
 	tagFlows: "flows", tagPublic: "public_dashboards", tagConn: "connectors", tagReports: "reports", tagExports: "exports",
 	tagBrand: "branding", tagApps: "apps", tagServer: "server", tagProv: "provisioning", tagSmart: "smart_home",

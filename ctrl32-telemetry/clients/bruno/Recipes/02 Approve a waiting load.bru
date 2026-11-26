@@ -1,0 +1,29 @@
+meta {
+  name: Approve a waiting load
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/recipe-downloads/:id/approve
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Approve a waiting load
+  
+  A different user than the one who asked (403). Everything is checked against the connector again, then written.
+  
+  Requires permission `device.command`.
+}

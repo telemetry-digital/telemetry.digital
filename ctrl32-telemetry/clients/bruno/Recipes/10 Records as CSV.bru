@@ -1,0 +1,23 @@
+meta {
+  name: Records as CSV
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/v1/recipes/:id/export
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  Records as CSV
+  
+  Columns: number, name, note and one per element (its key). UTF-8 with a byte order mark.
+  
+  Requires permission `data.export`.
+}

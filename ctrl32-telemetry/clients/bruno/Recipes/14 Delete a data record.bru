@@ -1,0 +1,26 @@
+meta {
+  name: Delete a data record
+  type: http
+  seq: 14
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/recipes/:id/records/:rid
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+  rid: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Delete a data record
+  
+  Requires permission `recipe.edit`.
+}

@@ -1,0 +1,23 @@
+meta {
+  name: A recipe with its records
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/recipes/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  A recipe with its records
+  
+  A record with `complete: false` does not fit the elements any more (`problem` says why) and cannot be loaded until it is saved again.
+  
+  Requires permission `data.read`.
+}

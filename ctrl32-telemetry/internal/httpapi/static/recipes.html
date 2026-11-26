@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Recipes</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  /* recipes (spec 038) */
+  .rc-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .rc-tools select { min-width: 220px; max-width: 100%; }
+  .rc-grid { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .rc-list { display: flex; flex-direction: column; gap: 4px; max-height: 70vh; overflow: auto; }
+  .rc-list button { display: flex; gap: 8px; align-items: baseline; text-align: left; width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--card); color: inherit; cursor: pointer; font: inherit; }
+  .rc-list button.on { border-color: var(--primary); box-shadow: inset 3px 0 0 var(--primary); }
+  .rc-list button b { font-variant-numeric: tabular-nums; min-width: 2.2em; }
+  .rc-list button span { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rc-list button i { font-style: normal; color: var(--bad); }
+  .rc-head { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 10px; }
+  table.rc td, table.rc th { vertical-align: middle; }
+  table.rc input[type=number], table.rc input[type=text] { width: 100%; min-width: 90px; }
+  table.rc td.cur { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.rc td.cur.diff { color: var(--warn); font-weight: 600; }
+  table.rc td.lim { color: var(--muted); white-space: nowrap; font-size: 13px; }
+  .rc-st { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid var(--line); }
+  .rc-st.done, .rc-st.written { border-color: var(--ok); color: var(--ok); }
+  .rc-st.failed, .rc-st.rejected { border-color: var(--bad); color: var(--bad); }
+  .rc-st.pending, .rc-st.running { border-color: var(--warn); color: var(--warn); }
+  .rc-st.not_written, .rc-st.expired { color: var(--muted); }
+  .rc-empty { padding: 18px 4px; color: var(--muted); }
+  .rc-warn { border: 1px solid var(--warn); border-radius: var(--radius); padding: 8px 10px; margin: 8px 0; }
+  .rc-bad { border: 1px solid var(--bad); border-radius: var(--radius); padding: 8px 10px; margin: 8px 0; }
+  dialog.wide { width: min(980px, 96vw); }
+  dialog .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  table.rc-edit input, table.rc-edit select { width: 100%; min-width: 70px; }
+  table.rc-edit td { padding: 3px 4px; }
+  table.rc-edit td.ty { min-width: 118px; } .rc-add { align-self: flex-start; width: auto; }
+  table.rc-edit td.n { width: 84px; } table.rc-edit td.b { white-space: nowrap; width: 1%; }
+  @media (max-width: 900px) { .rc-grid { grid-template-columns: minmax(0, 1fr); } .rc-list { max-height: 30vh; } .rc-head { grid-template-columns: 1fr; } dialog .row2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<div class="page-head"><h1>Recipes</h1></div>
+<nav class="subnav">
+  <a href="/recipes" data-section="records">Recipes</a>
+  <a href="/recipes/loads" data-section="loads">Loads</a>
+</nav>
+
+<section data-section="records">
+  <div class="card">
+    <div class="rc-tools">
+      <select id="rcSel" class="notranslate" title="Recipe"></select>
+      <button class="btn small" type="button" id="rcEdit" hidden>Edit recipe</button>
+      <button class="btn small" type="button" id="rcDel" hidden>Delete recipe</button>
+      <span class="grow"></span>
+      <button class="btn small" type="button" id="rcCsvOut" hidden>Download CSV</button>
+      <button class="btn small" type="button" id="rcCsvIn" hidden>Import CSV</button>
+      <input type="file" id="rcCsvFile" accept=".csv,.txt,text/csv" hidden>
+      <button class="btn small primary" type="button" id="rcNew" hidden>New recipe</button>
+    </div>
+    <p class="muted notranslate" id="rcDesc" style="margin-top:0"></p>
+    <div class="rc-empty" id="rcNone" hidden>No recipe yet. A recipe names the values of a product (its elements), the units it can be loaded into and its data records.</div>
+    <div class="rc-grid" id="rcBody" hidden>
+      <div>
+        <div class="rc-tools"><b>Data records</b><span class="grow"></span><button class="btn small" type="button" id="recNew" hidden>New record</button></div>
+        <div class="rc-list" id="recList"></div>
+        <div class="rc-empty" id="recNone" hidden>No data record yet.</div>
+      </div>
+      <form id="recForm" class="form" hidden>
+        <div class="rc-head">
+          <label>Number <input name="number" type="number" min="1" max="99999" step="1"></label>
+          <label>Name <input name="name" required maxlength="80"></label>
+        </div>
+        <label>Note <input name="note" maxlength="500"></label>
+        <div class="rc-bad" id="recProblem" hidden></div>
+        <div class="rc-tools" style="margin-top:10px">
+          <label class="inline">Unit <select id="unitSel" class="notranslate"></select></label>
+          <span class="muted notranslate" id="unitInfo"></span><span class="grow"></span>
+          <button class="btn small" type="button" id="takeBtn" hidden title="Fill the form with the values the connector last read from the unit">Take the values from the unit</button>
+        </div>
+        <div class="table-wrap"><table class="rc" id="valTable"><thead><tr><th>Element</th><th>Value</th><th>Unit of measure</th><th>Limits</th><th>In the unit now</th></tr></thead><tbody></tbody></table></div>
+        <div class="err" id="recErr"></div>
+        <div class="actions">
+          <button class="btn primary" type="button" id="loadBtn" hidden>Load into the unit</button>
+          <button class="btn" type="submit" id="recSave" hidden>Save</button>
+          <button class="btn" type="button" id="recCopy" hidden>Save as a new record</button>
+          <button class="btn" type="button" id="recDel" hidden>Delete</button>
+          <span class="grow"></span><span class="muted" id="recMeta"></span>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section data-section="loads">
+  <div class="card">
+    <p class="muted">Every load of a data record into a unit: who asked for it, what was written and what the controller answered. With four eyes a load waits here for a second user.</p>
+    <div class="rc-tools"><select id="ldRecipe" class="notranslate"><option value="">All recipes</option></select><span class="grow"></span><span class="muted" id="ldCount"></span></div>
+    <div class="table-wrap"><table class="rc" id="ldTable"><thead><tr><th>Time</th><th>Recipe</th><th>Record</th><th>Unit</th><th>Asked by</th><th>Reason</th><th>State</th><th></th></tr></thead><tbody></tbody></table></div>
+    <div class="rc-empty" id="ldNone" hidden>No record has been loaded yet.</div>
+  </div>
+</section>
+
+<dialog id="rcDlg" class="wide">
+  <form class="form" method="dialog" id="rcForm">
+    <h2 style="margin-top:0" id="rcTitle">Recipe</h2>
+    <div class="row2"><label>Name <input name="name" required maxlength="80"></label><label>Description <input name="description" maxlength="500"></label></div>
+    <h3>Elements</h3>
+    <p class="muted" style="margin-top:0">One writable key of the device each. They are written in this order; put the bit that tells the controller to take over the values last.</p>
+    <div class="table-wrap"><table class="rc-edit" id="elTable"><thead><tr><th>Key</th><th>Name</th><th>Unit of measure</th><th>Type</th><th>Min</th><th>Max</th><th>Decimals</th><th></th></tr></thead><tbody></tbody></table></div>
+    <datalist id="elKeys"></datalist>
+    <button class="btn small rc-add" type="button" id="elAdd">Add element</button>
+    <h3>Units</h3>
+    <p class="muted" style="margin-top:0">Where the recipe can be loaded: a device of an S7, OPC UA or Modbus connector. Several units behind one controller differ by the key prefix (m1_, m2_).</p>
+    <div class="table-wrap"><table class="rc-edit" id="tgTable"><thead><tr><th>Name</th><th>Device</th><th>Key prefix</th><th></th></tr></thead><tbody></tbody></table></div>
+    <button class="btn small rc-add" type="button" id="tgAdd">Add unit</button>
+    <label style="margin-top:12px">Reason for the change (audit trail) <input name="reason" required minlength="3" maxlength="200"></label>
+    <div class="err" id="rcErr"></div>
+    <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button></div>
+  </form>
+</dialog>
+
+<dialog id="ldDlg" class="wide">
+  <form class="form" method="dialog" id="ldForm">
+    <h2 style="margin-top:0">Load into the unit</h2>
+    <p id="ldWhat" class="notranslate"></p>
+    <div class="rc-bad" id="ldProblems" hidden></div>
+    <div class="rc-warn" id="ldFour" hidden>Four eyes is on: the load waits until another user approves it. The values are written as they are now.</div>
+    <div class="table-wrap"><table class="rc" id="ldValues"><thead><tr><th>Element</th><th>In the unit now</th><th>Will be written</th><th>Result</th></tr></thead><tbody></tbody></table></div>
+    <label id="ldReasonRow">Reason (command log and audit trail) <input name="reason" required minlength="3" maxlength="200"></label>
+    <div class="err" id="ldErr"></div>
+    <div class="actions"><button class="btn primary" type="submit" id="ldGo">Load into the unit</button><button class="btn" type="button" id="ldClose" onclick="this.closest('dialog').close()">Cancel</button></div>
+  </form>
+</dialog>
+
+<dialog id="dtDlg" class="wide">
+  <div class="form">
+    <h2 style="margin-top:0">Load</h2>
+    <p id="dtWhat" class="notranslate"></p>
+    <div class="table-wrap"><table class="rc" id="dtValues"><thead><tr><th>Element</th><th>Key</th><th>Written value</th><th>Read back</th><th>Result</th></tr></thead><tbody></tbody></table></div>
+    <div class="actions"><button class="btn" type="button" onclick="this.closest('dialog').close()">Close</button></div>
+  </div>
+</dialog>
+</main>
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api, t = ctrl32.t;
+let SEC = 'records', LIST = [], RC = null, REC = null, CUR = null, DEVS = [], LOADS = [], DIRTY = false, LOADING = null;
+const canCfg = () => ctrl32.can('config.write'), canEdit = () => ctrl32.can('recipe.edit'), canLoad = () => ctrl32.can('device.command');
+const ST = { done: 'Loaded', failed: 'Failed', pending: 'Waits for approval', running: 'Running', rejected: 'Rejected', expired: 'Expired', written: 'written', not_written: 'not written' };
+const badge = s => `<span class="rc-st ${esc(s)}">${esc(t(ST[s] || s))}</span>`;
+const show = (e, v) => v === undefined || v === null ? '—' : v === '' ? '""' : e.type === 'bool' || typeof v === 'boolean' ? t(v ? 'on' : 'off') : typeof v === 'number' ? (e.type === 'number' ? v.toFixed(Math.min(6, e.decimals || 0)) : String(v)) : String(v);
+const limits = e => e.type !== 'number' ? '' : e.min !== undefined && e.max !== undefined ? `${e.min} … ${e.max}` : e.min !== undefined ? `≥ ${e.min}` : e.max !== undefined ? `≤ ${e.max}` : '';
+function busy() { return !!document.querySelector('dialog[open]'); }
+function setQuery() { const u = new URL(location.href); RC ? u.searchParams.set('r', RC.id) : u.searchParams.delete('r'); REC && REC.id ? u.searchParams.set('rec', REC.id) : u.searchParams.delete('rec'); history.replaceState(null, '', u.pathname + u.search); }
+
+// ---- recipes and records -------------------------------------------------------------------------
+async function loadList(pick) {
+  try { LIST = await api('GET', '/api/v1/recipes'); } catch (x) { ctrl32.toast(x.message, 'bad'); return; }
+  $('#rcSel').innerHTML = LIST.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('');
+  $('#rcSel').hidden = !LIST.length; $('#rcNone').hidden = LIST.length > 0; $('#rcNew').hidden = !canCfg();
+  const id = pick || new URL(location.href).searchParams.get('r') || (RC && RC.id);
+  const want = LIST.find(r => r.id === id) || LIST[0];
+  if (!want) { RC = null; REC = null; $('#rcBody').hidden = true; $('#rcDesc').textContent = ''; for (const b of ['#rcEdit', '#rcDel', '#rcCsvOut', '#rcCsvIn']) $(b).hidden = true; return; }
+  $('#rcSel').value = want.id; await openRecipe(want.id, new URL(location.href).searchParams.get('rec'));
+}
+async function openRecipe(id, recID) {
+  try { RC = await api('GET', '/api/v1/recipes/' + id); } catch (x) { ctrl32.toast(x.message, 'bad'); return; }
+  $('#rcDesc').textContent = RC.description || ''; $('#rcBody').hidden = false;
+  $('#rcEdit').hidden = $('#rcDel').hidden = !canCfg(); $('#rcCsvOut').hidden = !ctrl32.can('data.export') || !RC.records.length; $('#rcCsvIn').hidden = !canEdit(); $('#recNew').hidden = !canEdit();
+  const keep = $('#unitSel').value;
+  $('#unitSel').innerHTML = RC.targets.map(u => `<option value="${esc(u.id)}">${esc(u.name)}</option>`).join('');
+  if (RC.targets.some(u => u.id === keep)) $('#unitSel').value = keep;
+  const rec = RC.records.find(r => r.id === recID) || (REC && RC.records.find(r => r.id === REC.id)) || RC.records[0] || null;
+  renderList(); selectRecord(rec);
+}
+function renderList() {
+  $('#recList').innerHTML = RC.records.map(r => `<button type="button" data-rec="${r.id}" class="${REC && REC.id === r.id ? 'on' : ''}"><b>${r.number}</b><span class="notranslate">${esc(r.name)}</span>${r.complete ? '' : `<i title="${esc(t('The record does not fit the recipe any more'))}">!</i>`}</button>`).join('');
+  $('#recNone').hidden = RC.records.length > 0;
+  for (const b of document.querySelectorAll('#recList [data-rec]')) b.onclick = () => { if (DIRTY && !confirm(t('Discard the changes of this record?'))) return; selectRecord(RC.records.find(r => r.id === b.dataset.rec)); };
+}
+function selectRecord(rec, blank) {
+  REC = rec || (blank ? { id: '', number: '', name: '', note: '', values: {}, complete: true } : null); DIRTY = false; CUR = null;
+  const f = $('#recForm'); f.hidden = !REC; $('#recErr').textContent = '';
+  for (const b of document.querySelectorAll('#recList [data-rec]')) b.classList.toggle('on', !!REC && b.dataset.rec === REC.id);
+  if (!REC) { setQuery(); return; }
+  f.number.value = REC.number; f.name.value = REC.name; f.note.value = REC.note || '';
+  const ro = !canEdit(); f.number.disabled = f.name.disabled = f.note.disabled = ro;
+  $('#recProblem').hidden = REC.complete !== false; $('#recProblem').textContent = REC.complete === false ? t('This record does not fit the recipe any more and cannot be loaded:') + ' ' + t(REC.problem || '') : '';
+  $('#valTable tbody').innerHTML = RC.elements.map(e => { const v = REC.values[e.key];
+    const inp = e.type === 'bool' ? `<label class="check"><input type="checkbox" data-el="${esc(e.key)}"${v === true ? ' checked' : ''}${ro ? ' disabled' : ''}> <span>${esc(t('on'))}</span></label>`
+      : e.type === 'text' ? `<input type="text" data-el="${esc(e.key)}" maxlength="254" value="${esc(v === undefined ? '' : v)}"${ro ? ' disabled' : ''}>`
+      : `<input type="number" data-el="${esc(e.key)}" step="${e.decimals ? Math.pow(10, -e.decimals).toFixed(e.decimals) : 1}"${e.min !== undefined ? ` min="${e.min}"` : ''}${e.max !== undefined ? ` max="${e.max}"` : ''} value="${v === undefined ? '' : v}" required${ro ? ' disabled' : ''}>`;
+    return `<tr><td class="notranslate">${esc(e.label)}</td><td>${inp}</td><td class="notranslate">${esc(e.unit || '')}</td><td class="lim">${esc(limits(e))}</td><td class="cur notranslate" data-cur="${esc(e.key)}">—</td></tr>`; }).join('');
+  for (const i of f.querySelectorAll('input')) i.oninput = () => { DIRTY = true; buttons(); paintCurrent(); };
+  $('#recMeta').textContent = REC.id ? `${t('version')} ${REC.version} · ${REC.updated_by} · ${fmt(REC.updated_at)}` : '';
+  buttons(); setQuery(); loadCurrent();
+}
+function buttons() {
+  const unit = RC && RC.targets.length > 0;
+  $('#recSave').hidden = !canEdit(); $('#recCopy').hidden = !canEdit() || !REC || !REC.id; $('#recDel').hidden = !canEdit() || !REC || !REC.id;
+  $('#loadBtn').hidden = !canLoad() || !REC || !REC.id || !unit; $('#loadBtn').disabled = DIRTY || (REC && REC.complete === false);
+  $('#loadBtn').title = DIRTY ? t('Save the record first') : '';
+  $('#takeBtn').hidden = !canEdit() || !unit || !CUR || !CUR.items.some(i => i.current !== undefined);
+  $('#unitSel').closest('label').hidden = !unit;
+  if (!unit) $('#unitInfo').textContent = t('The recipe has no unit yet: add one in Edit recipe.');
+}
+function formValues() { const v = {};
+  for (const e of RC.elements) { const i = $(`#valTable [data-el="${CSS.escape(e.key)}"]`); if (!i) continue;
+    v[e.key] = e.type === 'bool' ? i.checked : e.type === 'text' ? i.value : (i.value === '' ? null : Number(i.value)); }
+  return v; }
+async function loadCurrent() {
+  if (!RC || !RC.targets.length || !$('#unitSel').value) { CUR = null; return; }
+  const rid = RC.id, unit = $('#unitSel').value;
+  try { const c = await api('GET', `/api/v1/recipes/${rid}/compare?target=${encodeURIComponent(unit)}`); if (!RC || RC.id !== rid || $('#unitSel').value !== unit) return; CUR = c; } catch (x) { CUR = null; }
+  paintCurrent(); buttons();
+}
+function same(e, want, cur) { if (cur === undefined) return true;
+  if (e.type === 'bool') return (cur === true || (typeof cur === 'number' && cur !== 0)) === (want === true);
+  if (e.type === 'text') return cur === want;
+  return typeof cur === 'number' && want !== null && Math.abs(cur - want) <= 0.5 * Math.pow(10, -(e.decimals || 0)) + 1e-9 * Math.max(1, Math.abs(want)); }
+function paintCurrent() {
+  const u = RC && RC.targets.find(x => x.id === $('#unitSel').value);
+  if (u) $('#unitInfo').textContent = !u.available ? t('The device of this unit does not exist any more.') : CUR && !CUR.connected ? t('No running connector reads this device.') : CUR && CUR.read_at ? `${u.device} · ${t('read')} ${fmt(CUR.read_at)}` : u.device;
+  if (!CUR || !REC) return; const vals = formValues();
+  for (const it of CUR.items) { const td = $(`#valTable [data-cur="${CSS.escape(it.key)}"]`); if (!td) continue; const e = RC.elements.find(x => x.key === it.key);
+    td.textContent = show(e, it.current) + (it.current !== undefined && e.unit ? ' ' + e.unit : ''); td.classList.toggle('diff', !same(e, vals[it.key], it.current)); }
+}
+$('#rcSel').onchange = () => { if (DIRTY && !confirm(t('Discard the changes of this record?'))) { $('#rcSel').value = RC.id; return; } REC = null; openRecipe($('#rcSel').value); };
+$('#unitSel').onchange = () => { CUR = null; for (const td of document.querySelectorAll('#valTable [data-cur]')) { td.textContent = '—'; td.classList.remove('diff'); } loadCurrent(); };
+$('#recNew').onclick = () => { if (DIRTY && !confirm(t('Discard the changes of this record?'))) return; selectRecord(null, true); $('#recForm').name.focus(); };
+$('#takeBtn').onclick = () => { if (!CUR) return; let n = 0;
+  for (const it of CUR.items) { if (it.current === undefined) continue; const e = RC.elements.find(x => x.key === it.key), i = $(`#valTable [data-el="${CSS.escape(it.key)}"]`); if (!i) continue;
+    if (e.type === 'bool') i.checked = it.current === true || (typeof it.current === 'number' && it.current !== 0); else if (e.type === 'text') i.value = String(it.current); else i.value = typeof it.current === 'number' ? Number(it.current.toFixed(e.decimals || 0)) : '';
+    n++; }
+  DIRTY = true; buttons(); paintCurrent(); ctrl32.toast(`${n} ${t('values taken from the unit; save the record to keep them')}`, 'ok'); };
+async function saveRecord(asNew) {
+  const f = $('#recForm'); $('#recErr').textContent = '';
+  if (!f.reportValidity()) return;
+  const reason = ctrl32.ask(asNew || !REC.id ? 'Reason for the new record (audit trail)' : 'Reason for changing the record (audit trail)'); if (!reason) return;
+  const body = { number: asNew ? 0 : (+f.number.value || 0), name: f.name.value.trim(), note: f.note.value.trim(), values: formValues(), reason };
+  try { const r = asNew || !REC.id ? await api('POST', `/api/v1/recipes/${RC.id}/records`, body) : await api('PUT', `/api/v1/recipes/${RC.id}/records/${REC.id}`, body);
+    DIRTY = false; ctrl32.toast('saved', 'ok'); await openRecipe(RC.id, r.id); } catch (x) { $('#recErr').textContent = t(x.message); }
+}
+$('#recForm').onsubmit = e => { e.preventDefault(); saveRecord(false); };
+$('#recCopy').onclick = () => { const f = $('#recForm'); if (REC && f.name.value.trim() === REC.name) f.name.value = REC.name + ' 2'; saveRecord(true); };
+$('#recDel').onclick = async () => { const reason = ctrl32.ask('Reason for deleting the record (audit trail)'); if (!reason) return;
+  try { await api('DELETE', `/api/v1/recipes/${RC.id}/records/${REC.id}?reason=${encodeURIComponent(reason)}`); REC = null; DIRTY = false; await openRecipe(RC.id); } catch (x) { ctrl32.toast(x.message, 'bad'); } };
+$('#rcDel').onclick = async () => { const reason = ctrl32.ask('Reason for deleting the recipe (audit trail)'); if (!reason) return;
+  try { await api('DELETE', `/api/v1/recipes/${RC.id}?reason=${encodeURIComponent(reason)}`); RC = null; REC = null; DIRTY = false; const u = new URL(location.href); u.search = ''; history.replaceState(null, '', u.pathname); await loadList(); } catch (x) { ctrl32.toast(x.message, 'bad'); } };
+
+// ---- CSV -----------------------------------------------------------------------------------------
+$('#rcCsvOut').onclick = async () => { try { const b = await api('GET', `/api/v1/recipes/${RC.id}/export`); const a = document.createElement('a'); a.href = URL.createObjectURL(b);
+  a.download = RC.name.replace(/[^\p{L}\p{N}_-]+/gu, '_') + '.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); } catch (x) { ctrl32.toast(x.message, 'bad'); } };
+$('#rcCsvIn').onclick = () => { $('#rcCsvFile').value = ''; $('#rcCsvFile').click(); };
+$('#rcCsvFile').onchange = async e => { const file = e.target.files[0]; if (!file) return;
+  if (file.size > 1 << 20) { ctrl32.toast('The file is larger than 1 MB', 'bad'); return; }
+  const csv = await file.text(); const reason = ctrl32.ask('Reason for importing the records (audit trail)'); if (!reason) return;
+  try { const r = await api('POST', `/api/v1/recipes/${RC.id}/import`, { csv, reason }); ctrl32.toast(`${t('records added')}: ${r.created}, ${t('changed')}: ${r.updated}`, 'ok'); await openRecipe(RC.id); }
+  catch (x) { ctrl32.toast(x.message, 'bad'); } };
+
+// ---- the structure of a recipe ---------------------------------------------------------------------
+let EDIT_ID = null;
+const elRow = e => `<tr><td><input data-f="key" list="elKeys" required pattern="[a-z][a-z0-9_]{0,31}" maxlength="32" value="${esc(e.key || '')}" title="${esc(t('lower-case letters, digits and _'))}"></td>
+  <td><input data-f="label" maxlength="80" value="${esc(e.label || '')}"></td><td><input data-f="unit" maxlength="16" value="${esc(e.unit || '')}"></td>
+  <td class="ty"><select data-f="type"><option value="number">${esc(t('number'))}</option><option value="bool"${e.type === 'bool' ? ' selected' : ''}>${esc(t('on / off'))}</option><option value="text"${e.type === 'text' ? ' selected' : ''}>${esc(t('text'))}</option></select></td>
+  <td class="n"><input data-f="min" type="number" step="any" value="${e.min === undefined ? '' : e.min}"></td><td class="n"><input data-f="max" type="number" step="any" value="${e.max === undefined ? '' : e.max}"></td>
+  <td class="n"><input data-f="decimals" type="number" min="0" max="6" step="1" value="${e.decimals || 0}"></td>
+  <td class="b"><button class="btn small" type="button" data-up title="${esc(t('Move up'))}">↑</button> <button class="btn small" type="button" data-down title="${esc(t('Move down'))}">↓</button> <button class="btn small" type="button" data-rm title="${esc(t('Remove'))}">✕</button></td></tr>`;
+const tgRow = u => `<tr data-id="${esc(u.id || '')}"><td><input data-f="name" required maxlength="60" value="${esc(u.name || '')}"></td>
+  <td><select data-f="device_id" required><option value=""></option>${DEVS.map(d => `<option value="${d.id}"${d.id === u.device_id ? ' selected' : ''}>${esc(d.name || d.external_id)}</option>`).join('')}</select></td>
+  <td><input data-f="prefix" pattern="[a-z][a-z0-9_]{0,15}" maxlength="16" value="${esc(u.prefix || '')}" title="${esc(t('lower-case letters, digits and _'))}"></td>
+  <td class="b"><button class="btn small" type="button" data-rm title="${esc(t('Remove'))}">✕</button></td></tr>`;
+function wireRows() {
+  for (const r of document.querySelectorAll('#elTable tbody tr, #tgTable tbody tr')) {
+    const rm = r.querySelector('[data-rm]'), up = r.querySelector('[data-up]'), down = r.querySelector('[data-down]');
+    rm.onclick = () => r.remove();
+    if (up) up.onclick = () => { if (r.previousElementSibling) r.parentNode.insertBefore(r, r.previousElementSibling); };
+    if (down) down.onclick = () => { if (r.nextElementSibling) r.parentNode.insertBefore(r.nextElementSibling, r); };
+    const ty = r.querySelector('[data-f=type]');
+    if (ty) { const set = () => { for (const k of ['min', 'max', 'decimals']) r.querySelector(`[data-f=${k}]`).disabled = ty.value !== 'number'; }; ty.onchange = set; set(); }
+  }
+}
+async function editRecipe(rc) {
+  EDIT_ID = rc ? rc.id : null; const f = $('#rcForm'); f.reset(); $('#rcErr').textContent = '';
+  $('#rcTitle').textContent = t(rc ? 'Change the recipe' : 'New recipe');
+  try { DEVS = (await api('GET', '/api/v1/devices')).filter(d => ['s7', 'opcua', 'modbus'].includes(d.transport) && !d.revoked_at); } catch (x) { DEVS = []; }
+  // the writable keys of the connectors as suggestions (with the prefix of the first unit removed)
+  try { const keys = new Set(); const pre = rc && rc.targets[0] ? rc.targets[0].prefix : '';
+    for (const c of await api('GET', '/api/v1/connectors')) for (const x of [...((c.settings || {}).tags || []), ...((c.settings || {}).nodes || []), ...((c.settings || {}).registers || [])]) if (x.writable && x.key) keys.add(pre && x.key.startsWith(pre) ? x.key.slice(pre.length) : x.key);
+    $('#elKeys').innerHTML = [...keys].sort().map(k => `<option value="${esc(k)}">`).join(''); } catch (x) { $('#elKeys').innerHTML = ''; }
+  f.name.value = rc ? rc.name : ''; f.description.value = rc ? rc.description : '';
+  $('#elTable tbody').innerHTML = (rc ? rc.elements : [{}]).map(elRow).join(''); $('#tgTable tbody').innerHTML = (rc ? rc.targets : [{}]).map(tgRow).join('');
+  wireRows(); $('#rcDlg').showModal(); f.name.focus();
+}
+$('#elAdd').onclick = () => { $('#elTable tbody').insertAdjacentHTML('beforeend', elRow({})); wireRows(); };
+$('#tgAdd').onclick = () => { $('#tgTable tbody').insertAdjacentHTML('beforeend', tgRow({})); wireRows(); };
+$('#rcNew').onclick = () => editRecipe(null);
+$('#rcEdit').onclick = () => editRecipe(RC);
+$('#rcForm').onsubmit = async e => { e.preventDefault(); const f = e.target; const g = (r, k) => r.querySelector(`[data-f=${k}]`).value.trim();
+  const elements = [...document.querySelectorAll('#elTable tbody tr')].map(r => { const el = { key: g(r, 'key'), label: g(r, 'label'), unit: g(r, 'unit'), type: g(r, 'type') };
+    if (el.type === 'number') { if (g(r, 'min') !== '') el.min = Number(g(r, 'min')); if (g(r, 'max') !== '') el.max = Number(g(r, 'max')); el.decimals = +g(r, 'decimals') || 0; } return el; });
+  const targets = [...document.querySelectorAll('#tgTable tbody tr')].map(r => ({ id: r.dataset.id || '', name: g(r, 'name'), device_id: g(r, 'device_id'), prefix: g(r, 'prefix') }));
+  const body = { name: f.name.value.trim(), description: f.description.value.trim(), elements, targets, reason: f.reason.value.trim() };
+  try { const r = EDIT_ID ? await api('PUT', '/api/v1/recipes/' + EDIT_ID, body) : await api('POST', '/api/v1/recipes', body); $('#rcDlg').close(); ctrl32.toast('saved', 'ok'); REC = EDIT_ID ? REC : null; await loadList(r.id); }
+  catch (x) { $('#rcErr').textContent = t(x.message); } };
+
+// ---- loading -------------------------------------------------------------------------------------
+async function askLoad() {
+  const unit = RC.targets.find(u => u.id === $('#unitSel').value); if (!unit || !REC || !REC.id) return;
+  LOADING = { recipe: RC.id, record: REC.id, target: unit.id, done: false }; const f = $('#ldForm'); f.reset(); $('#ldErr').textContent = '';
+  $('#ldWhat').innerHTML = `<b>${esc(RC.name)}</b> · ${esc(t('record'))} <b>${REC.number} ${esc(REC.name)}</b> → <b>${esc(unit.name)}</b> <span class="muted">(${esc(unit.device || '')}${unit.prefix ? ', ' + esc(unit.prefix) : ''})</span>`;
+  $('#ldGo').hidden = false; $('#ldGo').disabled = true; $('#ldReasonRow').hidden = false; f.reason.required = true; $('#ldClose').textContent = t('Cancel'); $('#ldProblems').hidden = true; $('#ldFour').hidden = true;
+  $('#ldValues tbody').innerHTML = RC.elements.map(e => `<tr data-k="${esc(e.key)}"><td class="notranslate">${esc(e.label)}</td><td class="cur notranslate">—</td><td class="cur notranslate"><b>${esc(show(e, REC.values[e.key]))}</b>${e.unit ? ' ' + esc(e.unit) : ''}</td><td data-res></td></tr>`).join('');
+  $('#ldDlg').showModal();
+  try { const [chk, cmp] = await Promise.all([api('POST', `/api/v1/recipes/${RC.id}/records/${REC.id}/download`, { target: unit.id, dry_run: true }), api('GET', `/api/v1/recipes/${RC.id}/compare?target=${encodeURIComponent(unit.id)}&record=${REC.id}`).catch(() => null)]);
+    if (cmp) for (const it of cmp.items) { const tr = $(`#ldValues [data-k="${CSS.escape(it.key)}"]`); if (!tr) continue; const e = RC.elements.find(x => x.key === it.key);
+      tr.children[1].textContent = show(e, it.current) + (it.current !== undefined && e.unit ? ' ' + e.unit : ''); tr.children[1].classList.toggle('diff', it.current !== undefined && !it.same); }
+    $('#ldFour').hidden = !chk.four_eyes;
+    if (!chk.ok) { $('#ldProblems').hidden = false; $('#ldProblems').innerHTML = `<b>${esc(t('This record cannot be loaded into the unit. Nothing will be written.'))}</b><ul>${chk.problems.map(p => `<li class="notranslate">${esc(p.label)}: ${esc(t(p.error))}</li>`).join('')}</ul>`;
+      for (const p of chk.problems) { const td = $(`#ldValues [data-k="${CSS.escape(p.key)}"] [data-res]`); if (td) td.innerHTML = badge('failed'); } }
+    $('#ldGo').disabled = !chk.ok; if (chk.ok) f.reason.focus();
+  } catch (x) { $('#ldErr').textContent = t(x.message); }
+}
+$('#loadBtn').onclick = askLoad;
+$('#ldForm').onsubmit = async e => { e.preventDefault(); if (!LOADING || LOADING.done) return; const f = e.target; $('#ldErr').textContent = ''; $('#ldGo').disabled = true;
+  try { const r = await api('POST', `/api/v1/recipes/${LOADING.recipe}/records/${LOADING.record}/download`, { target: LOADING.target, reason: f.reason.value.trim() });
+    LOADING.done = true; $('#ldGo').hidden = true; $('#ldReasonRow').hidden = true; f.reason.required = false; $('#ldClose').textContent = t('Close');
+    if (r.status === 'pending') { $('#ldFour').hidden = false; ctrl32.toast('The load waits for approval by another user', 'ok'); }
+    for (const x of r.results || []) { const tr = $(`#ldValues [data-k="${CSS.escape(x.key)}"]`); if (!tr) continue; const el = RC.elements.find(q => q.key === x.key);
+      tr.querySelector('[data-res]').innerHTML = badge(x.status) + (x.status === 'written' && x.readback !== undefined ? ` <span class="muted">${esc(t('read back'))} ${esc(show(el, x.readback))}</span>` : '') + (x.error ? ` <span class="muted">${esc(t(x.error))}</span>` : ''); }
+    if (r.status === 'done') ctrl32.toast('The record is loaded into the unit', 'ok');
+    if (r.status === 'failed') $('#ldErr').textContent = t('The load stopped: the values after the failed one were not written.') + ' ' + t(r.error || '');
+    loadCurrent();
+  } catch (x) { $('#ldErr').textContent = t(x.message); $('#ldGo').disabled = false; } };
+
+// ---- the load log ----------------------------------------------------------------------------------
+async function loadLoads() {
+  const rc = $('#ldRecipe').value;
+  try { LOADS = await api('GET', '/api/v1/recipe-downloads?limit=200' + (rc ? '&recipe=' + rc : '')); } catch (x) { ctrl32.toast(x.message, 'bad'); return; }
+  $('#ldNone').hidden = LOADS.length > 0; $('#ldTable').hidden = !LOADS.length; $('#ldCount').textContent = LOADS.length ? String(LOADS.length) : '';
+  $('#ldTable tbody').innerHTML = LOADS.map(d => `<tr><td style="white-space:nowrap">${fmt(d.requested_at)}</td><td class="notranslate">${esc(d.recipe)}</td><td class="notranslate">${d.number} ${esc(d.record)} <span class="muted">v${d.version}</span></td><td class="notranslate">${esc(d.unit)}</td><td class="notranslate">${esc(d.requested_by)}</td>
+    <td class="notranslate">${esc(d.reason)}</td><td>${badge(d.status)}${d.decided_by ? ` <span class="muted">${esc(d.decided_by)}</span>` : ''}</td>
+    <td style="white-space:nowrap"><button class="btn small" type="button" data-detail="${d.id}">Detail</button>${d.status === 'pending' && canLoad() ? ` <button class="btn small primary" type="button" data-approve="${d.id}">Approve</button> <button class="btn small" type="button" data-reject="${d.id}">Reject</button>` : ''}</td></tr>`).join('');
+  for (const b of document.querySelectorAll('#ldTable [data-detail]')) b.onclick = () => detail(LOADS.find(d => d.id === b.dataset.detail));
+  for (const b of document.querySelectorAll('#ldTable [data-approve], #ldTable [data-reject]')) b.onclick = async () => { const ok = !!b.dataset.approve, id = b.dataset.approve || b.dataset.reject;
+    const reason = ctrl32.ask(ok ? 'Reason for approving the load (audit trail)' : 'Reason for rejecting the load (audit trail)'); if (!reason) return; b.disabled = true;
+    try { const r = await api('POST', `/api/v1/recipe-downloads/${id}/${ok ? 'approve' : 'reject'}`, { reason }); ctrl32.toast(r.status === 'done' ? 'The record is loaded into the unit' : r.status === 'failed' ? 'The load failed' : 'rejected', r.status === 'failed' ? 'bad' : 'ok'); }
+    catch (x) { ctrl32.toast(x.message, 'bad'); }
+    await loadLoads(); const d = LOADS.find(x => x.id === id); if (ok && d && d.status !== 'pending') detail(d); };
+}
+function detail(d) { if (!d) return; const res = Object.fromEntries((d.results || []).map(r => [r.key, r]));
+  $('#dtWhat').innerHTML = `<b>${esc(d.recipe)}</b> · ${esc(t('record'))} <b>${d.number} ${esc(d.record)}</b> (${esc(t('version'))} ${d.version}) → <b>${esc(d.unit)}</b> · ${badge(d.status)}<br>
+    <span class="muted">${esc(d.requested_by)} · ${fmt(d.requested_at)} · ${esc(d.reason)}${d.decided_by ? `<br>${esc(t(d.status === 'rejected' ? 'Rejected by' : 'Approved by'))} ${esc(d.decided_by)} · ${fmt(d.decided_at)} · ${esc(d.decide_reason || '')}` : ''}${d.error ? `<br>${esc(t(d.error))}` : ''}</span>`;
+  $('#dtValues tbody').innerHTML = (d.items || []).map(i => { const r = res[i.key] || {}, e = { type: typeof i.value === 'boolean' ? 'bool' : typeof i.value === 'string' ? 'text' : 'x' };
+    return `<tr><td class="notranslate">${esc(i.label)}</td><td><code>${esc(d.prefix + i.key)}</code></td><td class="cur">${esc(show(e, i.value))}${i.unit ? ' ' + esc(i.unit) : ''}</td><td class="cur">${r.readback === undefined ? '—' : esc(show(e, r.readback))}</td><td>${r.status ? badge(r.status) : ''}${r.error ? ` <span class="muted">${esc(t(r.error))}</span>` : ''}</td></tr>`; }).join('');
+  $('#dtDlg').showModal(); }
+$('#ldRecipe').onchange = loadLoads;
+
+window.addEventListener('beforeunload', e => { if (DIRTY) { e.preventDefault(); e.returnValue = ''; } });
+ctrl32.ready({ requireAuth: true, requirePerm: 'data.read' }).then(async () => {
+  SEC = ctrl32.section('records', ['records', 'loads']);
+  if (SEC === 'records') { await loadList(); setInterval(() => { if (!document.hidden && !busy()) loadCurrent(); }, 5000); }
+  if (SEC === 'loads') { try { $('#ldRecipe').innerHTML = `<option value="">${esc(t('All recipes'))}</option>` + (await api('GET', '/api/v1/recipes')).map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join(''); } catch (x) { /* the log still shows */ }
+    await loadLoads(); setInterval(() => { if (!document.hidden && !busy()) loadLoads(); }, 10000); }
+});
+</script>
+</body>
+</html>

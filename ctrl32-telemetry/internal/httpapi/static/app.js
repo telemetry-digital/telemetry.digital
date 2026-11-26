@@ -127,7 +127,7 @@
   // page, and always its start page. Anything else opens the start page instead. This confines the user interface only;
   // permissions stay the security boundary (the API answers what the role allows, whatever window asks).
   const APP_PATHS = {
-    dashboards: ['/', '/dashboards', '/operator'], home: ['/home', '/smarthome'], energy: ['/energy'], counting: ['/counting'], cameras: ['/video'],
+    dashboards: ['/', '/dashboards', '/operator', '/recipes'], home: ['/home', '/smarthome'], energy: ['/energy'], counting: ['/counting'], cameras: ['/video'],
     displays: ['/displays'], flows: ['/flows', '/automation'], devices: ['/devices'], incidents: ['/incidents'], assets: ['/assets'], alarms: ['/alarms'],
     firmware: ['/fota'], users: ['/users'], audit: ['/audit', '/reports/signatures'], settings: ['/settings', '/vpn'], system: ['/organizations', '/server', '/landing/edit'],
     reports: ['/reports'],
@@ -237,6 +237,9 @@
       { href: '/dashboards', label: 'Dashboards', icon: ICON.dashboard, show: can('data.read'), sec: 'dashboards' },
       // operator view (spec 036): pictures in a fixed frame with the alarm line and the picture tree
       { href: '/operator', label: 'Operator view', icon: ICON.display, show: can('data.read'), sec: 'dashboards' },
+      // recipes (spec 038): data records loaded into the units of a plant
+      { href: '/recipes', label: 'Recipes', icon: ICON.file, show: can('data.read'), sec: 'dashboards', children: [
+        { href: '/recipes', label: 'Recipes' }, { href: '/recipes/loads', label: 'Loads' }] },
       { head: 'Monitoring' },
       { href: '/home', label: 'Home', icon: ICON.home, show: can('data.read'), sec: 'home' },
       { href: '/energy', label: 'Energy', icon: ICON.bolt, show: can('data.read'), sec: 'energy' },

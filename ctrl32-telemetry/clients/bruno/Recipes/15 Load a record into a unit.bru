@@ -1,0 +1,32 @@
+meta {
+  name: Load a record into a unit
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{baseUrl}}/api/v1/recipes/:id/records/:rid/download
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+  rid: 
+}
+
+body:json {
+  {
+    "dry_run": true,
+    "reason": "string",
+    "target": "string"
+  }
+}
+
+docs {
+  Load a record into a unit
+  
+  Every value is first checked against the connector (the key exists, is writable, the type and its limits fit): one refusal and nothing is written (409 with `problems`). Then the values are written in the order of the elements, each as a command in the command log; the load stops at the first value the controller refuses and the rest is reported as `not_written`. With the policy four_eyes_commands the load waits for another user (202, status `pending`) and writes the values as they were when it was asked for. `dry_run` only checks. One load at a time per device (409).
+  
+  Requires permission `device.command`.
+}

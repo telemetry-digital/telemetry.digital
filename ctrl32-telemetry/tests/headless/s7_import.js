@@ -141,6 +141,7 @@ const expect = (label, cond, detail) => { console.log((cond ? "  ok   " : "  FAI
   if (conn) { const csrf = await ev(`fetch('/api/v1/auth/me',{credentials:'same-origin'}).then(r=>r.json()).then(j=>j.csrf_token)`);
     expect("cleanup: connector revoked", (await ev(`fetch('/api/v1/connectors/${conn.id}?reason=headless+probe',{method:'DELETE',credentials:'same-origin',headers:{'X-CSRF-Token':'${csrf}'}}).then(r=>r.status)`)) < 300); }
   expect("no script errors", problems.length === 0, problems);
+  console.log("problems: " + (problems.length ? JSON.stringify(problems) : "none"));
   console.log(failed ? `FAILED: ${failed}` : "ALL OK");
   stop(); process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); stop(); process.exit(1); });

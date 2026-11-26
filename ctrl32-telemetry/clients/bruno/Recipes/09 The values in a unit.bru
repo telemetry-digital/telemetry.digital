@@ -1,0 +1,28 @@
+meta {
+  name: The values in a unit
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/recipes/:id/compare
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  target: 
+  ~record: 
+}
+
+docs {
+  The values in a unit
+  
+  The value of every element as the connector last read it from the unit (its poll, not a read on demand; `read_at`). With `record`, each item says whether it equals the record (`same`; numbers within half of the last decimal of the element). `missing` counts elements the connector does not read.
+  
+  Requires permission `data.read`.
+}

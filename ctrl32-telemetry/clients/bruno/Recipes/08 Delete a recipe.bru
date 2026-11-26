@@ -1,0 +1,27 @@
+meta {
+  name: Delete a recipe
+  type: http
+  seq: 8
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/recipes/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  reason: 
+}
+
+docs {
+  Delete a recipe
+  
+  The loads of the recipe stay in the log. 409 while a load waits or runs.
+  
+  Requires permission `config.write`.
+}

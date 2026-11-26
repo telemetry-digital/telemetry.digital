@@ -7849,6 +7849,359 @@ export class Ctrl32Client {
   }>('GET', `/api/v1/pwa-apps/${encodeURIComponent(slug)}/launch`, undefined, undefined, false);
   }
 
+  /** Loads of records, newest first
+   *
+   * Who loaded which record (name, number, version and the values as written) into which unit, the answer of the controller for every value, and for four eyes who approved or rejected it. A load nobody decided within 24 hours expires.
+   * 
+   * Requires permission `data.read`. */
+  getRecipeDownloads(query?: { recipe?: string; /** only loads of this recipe */ limit?: number; /** 1..500, default 50 */ }): Promise<(Record<string, unknown>)[]> {
+    return this.request<(Record<string, unknown>)[]>('GET', `/api/v1/recipe-downloads`, query, undefined, false);
+  }
+
+  /** Approve a waiting load
+   *
+   * A different user than the one who asked (403). Everything is checked against the connector again, then written.
+   * 
+   * Requires permission `device.command`. */
+  postRecipeDownloadsIdApprove(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** the first failure */
+    error?: string;
+    /** the load */
+    id?: string;
+    results?: ({
+      /** the command in the command log */
+      command_id?: string;
+      error?: string;
+      key?: string;
+      /** the value read back from the controller */
+      readback?: Record<string, unknown>;
+      status?: "written" | "failed" | "not_written";
+    })[];
+    status?: "done" | "failed" | "pending";
+  }> {
+    return this.request<{
+    /** the first failure */
+    error?: string;
+    /** the load */
+    id?: string;
+    results?: ({
+      /** the command in the command log */
+      command_id?: string;
+      error?: string;
+      key?: string;
+      /** the value read back from the controller */
+      readback?: Record<string, unknown>;
+      status?: "written" | "failed" | "not_written";
+    })[];
+    status?: "done" | "failed" | "pending";
+  }>('POST', `/api/v1/recipe-downloads/${encodeURIComponent(id)}/approve`, undefined, body, false);
+  }
+
+  /** Reject a waiting load
+   *
+   * Requires permission `device.command`. */
+  postRecipeDownloadsIdReject(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    id?: string;
+    /** rejected */
+    status?: string;
+  }> {
+    return this.request<{
+    id?: string;
+    /** rejected */
+    status?: string;
+  }>('POST', `/api/v1/recipe-downloads/${encodeURIComponent(id)}/reject`, undefined, body, false);
+  }
+
+  /** List recipes
+   *
+   * With the number of elements, units and records and the time of the last finished load.
+   * 
+   * Requires permission `data.read`. */
+  getRecipes(): Promise<(Record<string, unknown>)[]> {
+    return this.request<(Record<string, unknown>)[]>('GET', `/api/v1/recipes`, undefined, undefined, false);
+  }
+
+  /** Create a recipe
+   *
+   * The elements are written in their order. A unit is a device of an S7, OPC UA or Modbus connector and an optional key prefix. 409 when the name is used.
+   * 
+   * Requires permission `config.write`. */
+  postRecipes(body: {
+    description?: string;
+    elements: ({
+      /** 0–6, number only */
+      decimals?: number;
+      /** writable key of the device, ^[a-z][a-z0-9_]{0,31}$ */
+      key: string;
+      /** shown name, default the key */
+      label?: string;
+      /** number only */
+      max?: number;
+      /** number only */
+      min?: number;
+      /** default number */
+      type?: "number" | "bool" | "text";
+      unit?: string;
+    })[];
+    /** 1–80 characters, unique */
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    targets?: ({
+      /** a device of an S7, OPC UA or Modbus connector */
+      device_id: string;
+      /** kept across changes; left out for a new unit */
+      id?: string;
+      name: string;
+      /** put before every key, for several units behind one controller, e.g. m1_ */
+      prefix?: string;
+    })[];
+  }): Promise<{
+    id?: string;
+  }> {
+    return this.request<{
+    id?: string;
+  }>('POST', `/api/v1/recipes`, undefined, body, false);
+  }
+
+  /** A recipe with its records
+   *
+   * A record with `complete: false` does not fit the elements any more (`problem` says why) and cannot be loaded until it is saved again.
+   * 
+   * Requires permission `data.read`. */
+  getRecipesId(id: string): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('GET', `/api/v1/recipes/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Change a recipe
+   *
+   * Requires permission `config.write`. */
+  putRecipesId(id: string, body: {
+    description?: string;
+    elements: ({
+      /** 0–6, number only */
+      decimals?: number;
+      /** writable key of the device, ^[a-z][a-z0-9_]{0,31}$ */
+      key: string;
+      /** shown name, default the key */
+      label?: string;
+      /** number only */
+      max?: number;
+      /** number only */
+      min?: number;
+      /** default number */
+      type?: "number" | "bool" | "text";
+      unit?: string;
+    })[];
+    /** 1–80 characters, unique */
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    targets?: ({
+      /** a device of an S7, OPC UA or Modbus connector */
+      device_id: string;
+      /** kept across changes; left out for a new unit */
+      id?: string;
+      name: string;
+      /** put before every key, for several units behind one controller, e.g. m1_ */
+      prefix?: string;
+    })[];
+  }): Promise<{
+    id?: string;
+  }> {
+    return this.request<{
+    id?: string;
+  }>('PUT', `/api/v1/recipes/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Delete a recipe
+   *
+   * The loads of the recipe stay in the log. 409 while a load waits or runs.
+   * 
+   * Requires permission `config.write`. */
+  deleteRecipesId(id: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/recipes/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** The values in a unit
+   *
+   * The value of every element as the connector last read it from the unit (its poll, not a read on demand; `read_at`). With `record`, each item says whether it equals the record (`same`; numbers within half of the last decimal of the element). `missing` counts elements the connector does not read.
+   * 
+   * Requires permission `data.read`. */
+  getRecipesIdCompare(id: string, query: { target: string; /** unit id */ record?: string; /** record id */ }): Promise<{
+    /** a running connector owns the device */
+    connected?: boolean;
+    /** elements that differ from the record */
+    differ?: number;
+    items?: (Record<string, unknown>)[];
+    /** elements the connector does not read */
+    missing?: number;
+    /** time of the poll */
+    read_at?: string;
+    target?: string;
+  }> {
+    return this.request<{
+    /** a running connector owns the device */
+    connected?: boolean;
+    /** elements that differ from the record */
+    differ?: number;
+    items?: (Record<string, unknown>)[];
+    /** elements the connector does not read */
+    missing?: number;
+    /** time of the poll */
+    read_at?: string;
+    target?: string;
+  }>('GET', `/api/v1/recipes/${encodeURIComponent(id)}/compare`, query, undefined, false);
+  }
+
+  /** Records as CSV
+   *
+   * Columns: number, name, note and one per element (its key). UTF-8 with a byte order mark.
+   * 
+   * Requires permission `data.export`. */
+  getRecipesIdExport(id: string): Promise<string> {
+    return this.request<string>('GET', `/api/v1/recipes/${encodeURIComponent(id)}/export`, undefined, undefined, false);
+  }
+
+  /** Import records from CSV
+   *
+   * The table of the export (comma or semicolon; with semicolons a decimal comma is accepted). A record with an existing number is changed, a new number is added; every line is checked like a saved record and one bad line refuses the whole import.
+   * 
+   * Requires permission `recipe.edit`. */
+  postRecipesIdImport(id: string, body: {
+    /** the table */
+    csv: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    created?: number;
+    updated?: number;
+  }> {
+    return this.request<{
+    created?: number;
+    updated?: number;
+  }>('POST', `/api/v1/recipes/${encodeURIComponent(id)}/import`, undefined, body, false);
+  }
+
+  /** Create a data record
+   *
+   * Requires permission `recipe.edit`. */
+  postRecipesIdRecords(id: string, body: {
+    /** 1–80 characters */
+    name: string;
+    note?: string;
+    /** 1–99999; 0 or left out = the next free number (new) or unchanged */
+    number?: number;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** {element key: value} — a value for every element, of its type and within its limits */
+    values: Record<string, unknown>;
+  }): Promise<{
+    id?: string;
+    number?: number;
+  }> {
+    return this.request<{
+    id?: string;
+    number?: number;
+  }>('POST', `/api/v1/recipes/${encodeURIComponent(id)}/records`, undefined, body, false);
+  }
+
+  /** Change a data record
+   *
+   * The old and the new values go to the audit trail; the version of the record grows by one.
+   * 
+   * Requires permission `recipe.edit`. */
+  putRecipesIdRecordsRid(id: string, rid: string, body: {
+    /** 1–80 characters */
+    name: string;
+    note?: string;
+    /** 1–99999; 0 or left out = the next free number (new) or unchanged */
+    number?: number;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** {element key: value} — a value for every element, of its type and within its limits */
+    values: Record<string, unknown>;
+  }): Promise<{
+    id?: string;
+    number?: number;
+  }> {
+    return this.request<{
+    id?: string;
+    number?: number;
+  }>('PUT', `/api/v1/recipes/${encodeURIComponent(id)}/records/${encodeURIComponent(rid)}`, undefined, body, false);
+  }
+
+  /** Delete a data record
+   *
+   * Requires permission `recipe.edit`. */
+  deleteRecipesIdRecordsRid(id: string, rid: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/recipes/${encodeURIComponent(id)}/records/${encodeURIComponent(rid)}`, query, undefined, false);
+  }
+
+  /** Load a record into a unit
+   *
+   * Every value is first checked against the connector (the key exists, is writable, the type and its limits fit): one refusal and nothing is written (409 with `problems`). Then the values are written in the order of the elements, each as a command in the command log; the load stops at the first value the controller refuses and the rest is reported as `not_written`. With the policy four_eyes_commands the load waits for another user (202, status `pending`) and writes the values as they were when it was asked for. `dry_run` only checks. One load at a time per device (409).
+   * 
+   * Requires permission `device.command`. */
+  postRecipesIdRecordsRidDownload(id: string, rid: string, body: {
+    /** check only, nothing is written or recorded */
+    dry_run?: boolean;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason?: string;
+    /** unit id */
+    target: string;
+  }): Promise<{
+    /** the first failure */
+    error?: string;
+    /** the load */
+    id?: string;
+    results?: ({
+      /** the command in the command log */
+      command_id?: string;
+      error?: string;
+      key?: string;
+      /** the value read back from the controller */
+      readback?: Record<string, unknown>;
+      status?: "written" | "failed" | "not_written";
+    })[];
+    status?: "done" | "failed" | "pending";
+  }> {
+    return this.request<{
+    /** the first failure */
+    error?: string;
+    /** the load */
+    id?: string;
+    results?: ({
+      /** the command in the command log */
+      command_id?: string;
+      error?: string;
+      key?: string;
+      /** the value read back from the controller */
+      readback?: Record<string, unknown>;
+      status?: "written" | "failed" | "not_written";
+    })[];
+    status?: "done" | "failed" | "pending";
+  }>('POST', `/api/v1/recipes/${encodeURIComponent(id)}/records/${encodeURIComponent(rid)}/download`, undefined, body, false);
+  }
+
   /** Register profiles (current versions)
    *
    * Versioned Modbus register maps shared by connectors of the same device type, with the number of connectors using any version and how many are on an older version.
