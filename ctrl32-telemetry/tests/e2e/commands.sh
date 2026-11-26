@@ -97,6 +97,21 @@ req GET "/api/v1/export/audit?format=csv" >/dev/null
 for a in device.command device.attributes connector.create connector.revoke export.organization; do grep -q "$a" "$TMP/b" && ok "audit $a" || bad "audit $a missing"; done
 
 echo "== cleanup"
+echo "== commands over the device HTTP API are handed out once"
+HDEV=$(req POST /api/v1/devices "{\"external_id\":\"cmdhttp-$SUF\",\"name\":\"cmd http\",\"transport\":\"http\",\"reason\":\"e2e\"}" | jget id)
+HTOK=$(req POST "/api/v1/devices/$HDEV/token" '{"reason":"e2e"}' | jget token); [[ -n "$HTOK" ]] && ok "http device with token" || bad "http device"
+for i in 1 2 3 4 5 6; do req POST "/api/v1/devices/$HDEV/commands" "{\"method\":\"step_$i\",\"args\":{\"n\":$i},\"ttl_seconds\":120,\"reason\":\"e2e\"}" >/dev/null; done
+req GET "/api/v1/devices/$HDEV/commands" >/dev/null; check "six commands queued" "$(grep -o '"status":"queued"' "$TMP/b" | wc -l | tr -d ' ')" 6
+for i in $(seq 12); do curl -s -H "Authorization: Bearer $HTOK" "$BASE/api/v1/d/cmd" > "$TMP/poll$i" & done; wait
+cat "$TMP"/poll* | grep -o '"id":"[^"]*"' > "$TMP/handed"
+check "twelve polls at once hand out six commands in total" "$(wc -l < "$TMP/handed" | tr -d ' ')" 6
+check "no command is handed out twice" "$(sort -u "$TMP/handed" | wc -l | tr -d ' ')" 6
+FIRST=$(for i in $(seq 12); do [[ $(grep -o '"id"' "$TMP/poll$i" | wc -l) -gt 1 ]] && { grep -o '"m":"[^"]*"' "$TMP/poll$i" | tr -d '\n'; break; }; done)
+[[ -z "$FIRST" || "$FIRST" == $(echo "$FIRST" | grep -o '"m":"[^"]*"' | sort | tr -d '\n') ]] && ok "one poll gets its commands in the order they were issued" || bad "order: $FIRST"
+check "nothing is left for the next poll" "$(curl -s -H "Authorization: Bearer $HTOK" "$BASE/api/v1/d/cmd")" "[]"
+req GET "/api/v1/devices/$HDEV/commands" >/dev/null; check "all six are marked sent" "$(grep -o '"status":"sent"' "$TMP/b" | wc -l | tr -d ' ')" 6
+req POST "/api/v1/devices/$HDEV/revoke" '{"reason":"e2e cleanup"}' >/dev/null
+
 req POST "/api/v1/devices/$DEV/revoke" '{"reason":"e2e cleanup"}' >/dev/null; check "revoke test device" "$(st)" 200
 req POST "/api/v1/devices/$LDEV/revoke" '{"reason":"e2e cleanup"}' >/dev/null; check "revoke lorawan device" "$(st)" 200
 

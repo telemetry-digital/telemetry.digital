@@ -79,11 +79,16 @@ check "approval pending" "$(jx j.status):$(jx j.approvalPending)" "SUCCESS:true"
 "$TMP/mqttsim" tb -addr "$MQTT" -token "$TOK3" -name "appr-$SUF" -wait 8 > "$TMP/appr.log" 2>&1 &
 sleep 1.5
 grep -q 'EVENT connect_refused' "$TMP/appr.log" && ok "token refused until approved" || bad "pending device connected: $(head -2 "$TMP/appr.log")"
+# the device HTTP API applies the same rule as MQTT: nothing in, nothing out until the device is approved
+dhttp() { curl -s -o /dev/null -w '%{http_code}' -X "$1" -H "Authorization: Bearer $TOK3" -H 'Content-Type: application/json' ${3:+-d "$3"} "$BASE$2"; }
+check "pending device: HTTP telemetry refused" "$(dhttp POST /api/v1/d/telemetry '{"v":{"t":1}}')" 401
+check "pending device: HTTP command poll refused" "$(dhttp GET /api/v1/d/cmd)" 401
 req GET /api/v1/device-approvals; ADEV=$(jx "(j.find(d => d.external_id === 'appr-$SUF') || {}).id")
 [[ -n "$ADEV" && "$ADEV" != null ]] && ok "device in the approval list" || bad "approval list"
 req POST "/api/v1/devices/$ADEV/approve" '{"reason":"e2e approve"}'; check "approved" "$(jx j.approval)" approved
 for i in $(seq 20); do grep -q 'EVENT connected' "$TMP/appr.log" && break; sleep 0.5; done
 grep -q 'EVENT connected' "$TMP/appr.log" && ok "approved device connects" || bad "approved device: $(tail -2 "$TMP/appr.log")"
+check "approved device: HTTP command poll accepted" "$(dhttp GET /api/v1/d/cmd)" 200
 prov "{\"deviceName\":\"appr2-$SUF\",\"provisionDeviceKey\":\"$KEY3\",\"provisionDeviceSecret\":\"$SEC3\"}"; check "device limit of the profile" "$(jx j.status)" FAILURE
 
 req POST "/api/v1/provision-profiles/$PID/rotate" '{"reason":"e2e rotate"}'; NEW=$(jx j.secret)

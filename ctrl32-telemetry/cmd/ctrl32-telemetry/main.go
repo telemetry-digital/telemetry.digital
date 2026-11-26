@@ -299,6 +299,9 @@ func runServer(ctx context.Context, cfg *config.Config, cfgPath string, logger *
 	detector := gap.New(pool, logger, cfg.Gap.CheckInterval)
 	con := console.New(pool, br, logger)
 	ing.SetConsole(con)
+	if sb, err := iam.NewSecretBox(cfg.Security.SecretKey); err == nil {
+		opcua.SetSecretBox(sb)
+	}
 	opc := opcua.New(pool, ing, logger, filepath.Join(filepath.Dir(cfg.Report.StorageDir), "opcua"))
 	opc.Start(ctx)
 	mbm := modbus.New(pool, ing, logger)

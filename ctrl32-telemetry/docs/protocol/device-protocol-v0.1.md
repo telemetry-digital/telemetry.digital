@@ -106,6 +106,9 @@ Aktivácia: shared atribút `console.enabled: true` (server ho nastaví pri otvo
 2. Zariadenie overí `hw` a `min_ver`, stiahne binár cez HTTPS s `Authorization: Bearer <token>` a `Range` (obnoviteľné), alebo požiada o bloky cez `fota/chunk/req` `{"fw_id": "…", "off": 0, "len": 4096}` → `fota/chunk` (binárny payload s hlavičkou `off`).
 3. Počas sťahovania priebežne zapisuje do druhého slotu; po dokončení overí **SHA-256 a Ed25519 podpis** vstavaným verejným kľúčom (`kid` vyberá kľúč; dva kľúče vo firmvéri pre rotáciu).
 4. `fota/status`: `{"fw_id": "…", "st": "downloading", "pct": 42}` → `verifying` → `applying` → reštart → nová verzia pošle `{"st": "updated", "ver": "1.5.0"}`; pri zlyhaní `{"st": "failed", "err": "sig_invalid"}`; pri rollbacku `{"st": "rolled_back", "ver": "1.4.2"}`.
+   > **Stav implementácie (26. 11. 2026):** knižnica `ctrl32-telemetry-c` (porty ESP-IDF a Arduino) overuje zatiaľ len SHA-256;
+   > polia `sig` a `kid` neparsuje a podpis neoveruje. Server posiela `sig` ako 128 hexadecimálnych znakov a `kid` neposiela.
+   > Do zosúladenia nepoužívať automatickú FOTA tam, kde serveru alebo ceste k nemu nemožno plne dôverovať.
 5. Rollback: nová verzia sa musí do `confirm_s` (predvolene 120 s) ohlásiť serveru heartbeatom, inak bootloader/rollback logika vráti predchádzajúci slot (ESP-IDF app rollback; STM32 referenčný bootloader).
 
 ### 3.7 Provisioning

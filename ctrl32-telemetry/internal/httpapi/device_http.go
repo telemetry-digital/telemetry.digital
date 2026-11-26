@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -27,7 +28,8 @@ func (s *Server) deviceFromBearer(w http.ResponseWriter, r *http.Request) (*brok
 	var d broker.Device
 	err := s.pool.QueryRow(r.Context(), `SELECT d.id::text, d.org_id::text, d.external_id, d.transport
 		FROM core.device d JOIN core.organization o ON o.id = d.org_id JOIN core.device_credential c ON c.device_id = d.id
-		WHERE d.revoked_at IS NULL AND o.disabled_at IS NULL AND c.kind = 'token' AND c.secret_hash = $1 AND c.revoked_at IS NULL
+		WHERE d.revoked_at IS NULL AND o.disabled_at IS NULL AND (d.approval IS NULL OR d.approval = 'approved')
+		  AND c.kind = 'token' AND c.secret_hash = $1 AND c.revoked_at IS NULL
 		  AND (c.valid_to IS NULL OR c.valid_to > now()) LIMIT 1`, broker.TokenHash(token)).Scan(&d.ID, &d.OrgID, &d.ExternalID, &d.Transport)
 	if err != nil {
 		s.log.Warn("device token rejected", "security", true, "remote", clientIP(r), "path", r.URL.Path)
@@ -154,28 +156,47 @@ func (s *Server) devCommands(w http.ResponseWriter, r *http.Request) {
 		Exp int64           `json:"exp"`
 	}
 	for {
-		rows, err := s.pool.Query(r.Context(), `SELECT id::text, method, COALESCE(args, '{}'::jsonb), expires_at FROM core.device_command
-			WHERE device_id = $1::uuid AND status = 'queued' AND (expires_at IS NULL OR expires_at > now()) ORDER BY issued_at LIMIT 20`, dev.ID)
+		// Claim and mark in one statement: two polls at the same moment (a retry, two connections of one device) must
+		// never both receive a command. Rows another poll is claiming are skipped, not waited for.
+		rows, err := s.pool.Query(r.Context(), `WITH picked AS (
+				SELECT id FROM core.device_command
+				WHERE device_id = $1::uuid AND status = 'queued' AND (expires_at IS NULL OR expires_at > now())
+				ORDER BY issued_at LIMIT 20 FOR UPDATE SKIP LOCKED)
+			UPDATE core.device_command c SET status = 'sent', sent_at = now() FROM picked
+			WHERE c.id = picked.id AND c.status = 'queued'
+			RETURNING c.id::text, c.method, COALESCE(c.args, '{}'::jsonb), c.expires_at, c.issued_at`, dev.ID)
 		if err != nil {
 			writeErr(w, 500, "query failed")
 			return
 		}
-		list := []cmd{}
-		ids := []string{}
+		type claimed struct {
+			cmd
+			issued time.Time
+		}
+		var got []claimed
 		for rows.Next() {
-			var c cmd
+			var c claimed
 			var exp *time.Time
-			if rows.Scan(&c.ID, &c.M, &c.A, &exp) == nil {
-				if exp != nil {
-					c.Exp = exp.Unix()
-				}
-				list = append(list, c)
-				ids = append(ids, c.ID)
+			if err := rows.Scan(&c.ID, &c.M, &c.A, &exp, &c.issued); err != nil {
+				continue
 			}
+			if exp != nil {
+				c.Exp = exp.Unix()
+			}
+			got = append(got, c)
 		}
 		rows.Close()
+		if err := rows.Err(); err != nil { // the claim did not commit: nothing may be handed out
+			s.log.Error("device commands: claim failed", "device", dev.ID, "err", err)
+			writeErr(w, 500, "query failed")
+			return
+		}
+		sort.SliceStable(got, func(i, j int) bool { return got[i].issued.Before(got[j].issued) })
+		list := []cmd{}
+		for _, c := range got {
+			list = append(list, c.cmd)
+		}
 		if len(list) > 0 {
-			_, _ = s.pool.Exec(r.Context(), `UPDATE core.device_command SET status = 'sent', sent_at = now() WHERE id = ANY($1::uuid[]) AND status = 'queued'`, ids)
 			if s.live != nil {
 				for _, c := range list {
 					s.live.Command(dev.OrgID, dev.ID, c.ID, c.M, "sent", nil)

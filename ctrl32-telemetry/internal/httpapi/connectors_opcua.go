@@ -24,7 +24,11 @@ func (s *Server) createOPCUAConnector(w http.ResponseWriter, r *http.Request, or
 		writeErr(w, 400, err.Error())
 		return
 	}
-	settings, _ := json.Marshal(st)
+	settings, err := opcua.SealStored(st)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
 	secret, err := iam.RandomToken(32) // the schema requires one; OPC UA connectors are outbound and never use it
 	if err != nil {
 		writeErr(w, 500, "secret generation failed")
@@ -89,11 +93,15 @@ func (s *Server) updateConnector(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var old opcua.Settings
-	_ = json.Unmarshal([]byte(oldRaw), &old)
+	_ = json.Unmarshal(opcua.OpenStored([]byte(oldRaw)), &old)
 	if st.Auth == "username" && st.Password == "" {
 		st.Password = old.Password // blank keeps the stored password
 	}
-	settings, _ := json.Marshal(st)
+	settings, err := opcua.SealStored(st)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
 	if _, err := s.pool.Exec(r.Context(), `UPDATE core.connector SET settings = $3::jsonb WHERE id = $1::uuid AND org_id = $2::uuid`, id, org, string(settings)); err != nil {
 		writeErr(w, 500, "update failed")
 		return
@@ -151,7 +159,7 @@ func (s *Server) storedOPCUAPassword(r *http.Request, st *opcua.Settings, id str
 	var oldRaw string
 	if s.pool.QueryRow(r.Context(), `SELECT settings::text FROM core.connector WHERE id = $1::uuid AND org_id = $2::uuid AND kind = 'opcua'`, id, org).Scan(&oldRaw) == nil {
 		var old opcua.Settings
-		_ = json.Unmarshal([]byte(oldRaw), &old)
+		_ = json.Unmarshal(opcua.OpenStored([]byte(oldRaw)), &old)
 		st.Password = old.Password
 	}
 }

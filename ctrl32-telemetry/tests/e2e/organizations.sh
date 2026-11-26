@@ -63,6 +63,8 @@ else
   grep -q '^\[\]$' "$TMP/b" && ok "no sites leak from the demo organization" || bad "sites leaked: $(head -c 80 "$TMP/b")"
   req2 GET /api/v1/devices >/dev/null; grep -q '^\[\]$' "$TMP/b" && ok "no devices leak" || bad "devices leaked"
   req2 GET /api/v1/users >/dev/null; grep -q "\"username\":\"$USER\"" "$TMP/b" && bad "demo users visible to the tenant" || ok "users isolated"
+  TTOK=$(req2 POST /api/v1/tokens '{"name":"e2e tenant token","scopes":[]}' | grep -o '"token":"[^"]*"' | head -1 | cut -d'"' -f4)
+  [[ -n "$TTOK" ]] && ok "tenant API token" || bad "tenant API token: $(head -c 120 "$TMP/b")"
 fi
 
 echo "== edit and disable"
@@ -71,9 +73,12 @@ grep -q '"name":"Acme renamed"' "$TMP/b" && ok "renamed" || bad "renamed"
 req PATCH /api/v1/organizations/$MYORG '{"disabled":true,"reason":"e2e"}' >/dev/null; check "own organization cannot be disabled" "$(st)" 400
 req PATCH /api/v1/organizations/$OID '{"disabled":true,"reason":"e2e closed"}' >/dev/null; check "disable" "$(st)" 200
 req2 GET /api/v1/auth/me >/dev/null; check "tenant sessions revoked" "$(st)" 401
+tok() { curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TTOK" "$BASE/api/v1/sites"; }
+[[ -n "${TTOK:-}" ]] && check "tenant API token refused while disabled" "$(tok)" 401
 req2 POST /api/v1/auth/login "{\"username\":\"$AUSER\",\"password\":\"Acme-Strong-Passw0rd-$SUF\"}" >/dev/null; check "tenant login refused while disabled" "$(st)" 401
 req GET /api/v1/organizations >/dev/null; grep -o "{[^{}]*\"slug\":\"$SLUG\"[^{}]*}" "$TMP/b" | grep -q '"disabled_reason":"e2e closed"' && ok "disabled with reason" || bad "disabled_reason"
 req PATCH /api/v1/organizations/$OID '{"disabled":false,"reason":"e2e"}' >/dev/null; check "enable" "$(st)" 200
+[[ -n "${TTOK:-}" ]] && check "tenant API token works again" "$(tok)" 200
 req2 POST /api/v1/auth/login "{\"username\":\"$AUSER\",\"password\":\"Acme-Strong-Passw0rd-$SUF\"}" >/dev/null; check "tenant login works again" "$(st)" 200
 
 echo "== reset administrator"

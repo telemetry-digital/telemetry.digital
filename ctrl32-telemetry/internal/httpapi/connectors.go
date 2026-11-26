@@ -50,8 +50,10 @@ func (s *Server) listConnectors(w http.ResponseWriter, r *http.Request) {
 		if kind == "opcua" {
 			row["url"] = ""
 			var st opcua.Settings
-			if json.Unmarshal(settings, &st) == nil {
+			if json.Unmarshal(opcua.OpenStored(settings), &st) == nil {
 				row["settings"] = redact(st)
+			} else {
+				row["settings"] = json.RawMessage(`{}`) // never the stored form
 			}
 			if s.opc != nil {
 				row["status"] = s.opc.Status(id)

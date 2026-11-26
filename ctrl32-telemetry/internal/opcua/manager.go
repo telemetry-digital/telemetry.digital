@@ -247,6 +247,11 @@ func New(pool *pgxpool.Pool, ing *ingest.Ingest, log *slog.Logger, dir string) *
 // Start loads the connectors and keeps the set of workers in sync with the database.
 func (m *Manager) Start(ctx context.Context) {
 	go func() {
+		if n, err := m.MigrateStored(ctx); err != nil {
+			m.log.Error("stored passwords could not be encrypted", "security", true, "err", err)
+		} else if n > 0 {
+			m.log.Info("stored passwords encrypted", "security", true, "connectors", n)
+		}
 		m.sync(ctx)
 		t := time.NewTicker(30 * time.Second)
 		defer t.Stop()
@@ -307,7 +312,7 @@ func (m *Manager) sync(ctx context.Context) {
 		if err := rows.Scan(&r.ID, &r.OrgID, &r.Name, &raw); err != nil {
 			continue
 		}
-		st, err := ValidateSettings(json.RawMessage(raw))
+		st, err := ValidateSettings(OpenStored([]byte(raw)))
 		if err != nil {
 			m.log.Warn("connector settings invalid, not started", "connector", r.Name, "err", err)
 			continue
