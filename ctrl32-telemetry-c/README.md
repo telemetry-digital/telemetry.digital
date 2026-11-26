@@ -4,6 +4,10 @@ Device-side implementation of the ctrl32 telemetry protocol v0.1: telemetry with
 status heartbeat, client and shared attributes, commands with acknowledgement, remote console and FOTA with
 SHA-256 verification. Free of charge, forever (see LICENSE).
 
+> **Firmware signatures are not verified yet.** The library compares the SHA-256 of a downloaded image with the campaign
+> and does not check the Ed25519 signature the protocol describes (`sig`, `kid`). Use over-the-air updates only with a
+> server you trust and control until signature verification is added.
+
 | Part | What it is | Dependencies |
 |---|---|---|
 | `src/` | portable C99 core: JSON building/parsing, topics, ring buffer. No allocation, no libc beyond `<stdio.h>`/`<string.h>`. | none |

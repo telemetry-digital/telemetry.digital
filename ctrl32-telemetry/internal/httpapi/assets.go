@@ -541,6 +541,7 @@ func (s *Server) getDatastream(w http.ResponseWriter, r *http.Request) {
 	var devID, devExt, devName string
 	var since time.Time
 	if err := s.pool.QueryRow(r.Context(), `SELECT dv.id::text, dv.external_id, dv.name, a.valid_from FROM core.assignment a JOIN core.device dv ON dv.id = a.from_id
+		JOIN core.datastream ds ON ds.id = a.to_id AND ds.org_id = dv.org_id -- a device of another organization is never shown
 		WHERE a.kind = 'device_datastream' AND a.to_id = $1::uuid AND a.valid_to IS NULL ORDER BY a.valid_from DESC LIMIT 1`, id).Scan(&devID, &devExt, &devName, &since); err == nil {
 		device = map[string]any{"id": devID, "external_id": devExt, "name": devName, "since": since}
 	}

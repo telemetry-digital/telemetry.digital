@@ -613,7 +613,7 @@ func (s *Service) Authenticate(ctx context.Context, sessionToken string) (*Princ
 		       s.remember, s.created_at
 		FROM core.session s JOIN core.user_account u ON u.id = s.user_id JOIN core.organization o ON o.id = u.org_id
 		WHERE s.id = $1 AND s.revoked_at IS NULL AND NOT s.mfa_pending AND s.expires_at > now()
-		  AND (s.absolute_expires_at IS NULL OR s.absolute_expires_at > now()) AND u.disabled_at IS NULL`, h).
+		  AND (s.absolute_expires_at IS NULL OR s.absolute_expires_at > now()) AND u.disabled_at IS NULL AND o.disabled_at IS NULL`, h).
 		Scan(&p.UserID, &p.OrgID, &p.CustomerID, &p.Username, &p.FullName, &p.MustChange, &p.MFAEnabled, &p.MFAVerified, &p.CSRFSecret, &orgSettings, &p.CameraLimited, &p.CameraGroups,
 			&remember, &created)
 	if err != nil {
@@ -741,10 +741,10 @@ func (s *Service) AuthenticateToken(ctx context.Context, raw string) (*Principal
 		SELECT t.id::text, t.scopes, t.expires_at, u.id::text, u.org_id::text, COALESCE(u.customer_id::text,''), u.username, u.full_name,
 		       u.camera_groups IS NOT NULL, COALESCE(u.camera_groups, '{}'),
 		       COALESCE(g.id::text, ''), COALESCE(c.name, ''), COALESCE(g.read_only, false)
-		FROM core.api_token t JOIN core.user_account u ON u.id = t.user_id
+		FROM core.api_token t JOIN core.user_account u ON u.id = t.user_id JOIN core.organization o ON o.id = u.org_id
 		LEFT JOIN core.oauth_grant g ON g.id = t.grant_id
 		LEFT JOIN core.oauth_client c ON c.id = g.client_id
-		WHERE t.token_hash = $1 AND t.revoked_at IS NULL AND u.disabled_at IS NULL
+		WHERE t.token_hash = $1 AND t.revoked_at IS NULL AND u.disabled_at IS NULL AND o.disabled_at IS NULL
 		  AND (t.grant_id IS NULL OR g.revoked_at IS NULL)`, HashToken(raw)).
 		Scan(&p.TokenID, &scopes, &expires, &p.UserID, &p.OrgID, &p.CustomerID, &p.Username, &p.FullName, &p.CameraLimited, &p.CameraGroups,
 			&p.GrantID, &p.ClientName, &p.ReadOnly)

@@ -22,7 +22,11 @@ func Connect(ctx context.Context, url string) (*pgxpool.Pool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("db: parse url: %w", err)
 	}
-	cfg.MaxConns = 8
+	// Eight connections by default; a larger installation sets pool_max_conns in the database URL
+	// (…?pool_max_conns=24) after measuring PostgreSQL — every connection costs memory on the database server.
+	if !strings.Contains(url, "pool_max_conns=") {
+		cfg.MaxConns = 8
+	}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("db: connect: %w", err)
