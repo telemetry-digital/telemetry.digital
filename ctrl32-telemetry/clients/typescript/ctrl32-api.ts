@@ -3010,6 +3010,85 @@ export class Ctrl32Client {
   }>('POST', `/api/v1/connectors/opcua/endpoints`, undefined, body, false);
   }
 
+  /** Propose S7 tags from a TIA Portal or STEP 7 export
+   *
+   * multipart/form-data. Reads a PLC tag table of TIA Portal (.xlsx, .xml), a symbol table of STEP 7 (.sdf, .asc, .seq), a data block as source (.db, .awl, with its data types in the same file) or as Openness XML, or a table with name, address, type and comment (.csv), at most 8 MB. Variables become tags with a key made from the symbol, the absolute address and the data type; addresses of data blocks are calculated by the layout rules of blocks with standard access, optimized blocks are refused. Nothing is stored and no tag is writable: the answer is a proposal for the connector's tag list.
+   * 
+   * Requires permission `config.write`. */
+  postConnectorsS7Import(body: FormData): Promise<{
+    blocks?: ({
+      name?: string;
+      note?: string;
+      number?: number;
+      /** bytes */
+      size?: number;
+      skipped?: number;
+      tags?: number;
+    })[];
+    file?: string;
+    format?: string;
+    /** tags one connector may read */
+    max_tags?: number;
+    skipped?: ({
+      address?: string;
+      name?: string;
+      plc_type?: string;
+      reason?: string;
+    })[];
+    tags?: ({
+      /** DB5.DBD12, MW10 …; DB{db}.… when the block number is not known */
+      address?: string;
+      area?: "i" | "q" | "m" | "db";
+      block?: string;
+      comment?: string;
+      key?: string;
+      /** symbol in the project */
+      name?: string;
+      needs_db?: boolean;
+      plc_type?: string;
+      /** data type of the connector */
+      type?: string;
+    })[];
+    warnings?: string[];
+  }> {
+    return this.request<{
+    blocks?: ({
+      name?: string;
+      note?: string;
+      number?: number;
+      /** bytes */
+      size?: number;
+      skipped?: number;
+      tags?: number;
+    })[];
+    file?: string;
+    format?: string;
+    /** tags one connector may read */
+    max_tags?: number;
+    skipped?: ({
+      address?: string;
+      name?: string;
+      plc_type?: string;
+      reason?: string;
+    })[];
+    tags?: ({
+      /** DB5.DBD12, MW10 …; DB{db}.… when the block number is not known */
+      address?: string;
+      area?: "i" | "q" | "m" | "db";
+      block?: string;
+      comment?: string;
+      key?: string;
+      /** symbol in the project */
+      name?: string;
+      needs_db?: boolean;
+      plc_type?: string;
+      /** data type of the connector */
+      type?: string;
+    })[];
+    warnings?: string[];
+  }>('POST', `/api/v1/connectors/s7/import`, undefined, body, false);
+  }
+
   /** Test connector settings without saving
    *
    * Connects once and reads the configured nodes/registers/tags (S7: also identifies the CPU).
