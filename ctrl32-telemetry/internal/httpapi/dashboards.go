@@ -159,6 +159,9 @@ type screenSpec struct {
 	// PublicAnnotations lets viewers of a public link (and displays) see the annotations of the charts; off by default
 	// because annotation texts are internal notes (0.72.0).
 	PublicAnnotations bool `json:"public_annotations"`
+	// place in the picture tree of the operator view and faceplate type (operator.go, spec 036)
+	Nav       map[string]any `json:"nav"`
+	Faceplate map[string]any `json:"faceplate"`
 }
 
 // validateScreenSpec normalizes a screen (dashboard) spec and returns the canonical document.
@@ -358,6 +361,20 @@ func validateScreenSpecW(raw json.RawMessage) (map[string]any, []string, error) 
 	out := map[string]any{"version": 1, "kind": sp.Kind, "layout": layout, "range": sp.Range, "refresh_s": sp.RefreshS, "widgets": widgets}
 	if sp.PublicAnnotations {
 		out["public_annotations"] = true
+	}
+	if sp.Nav != nil {
+		nav, err := validateNav(sp.Nav)
+		if err != nil {
+			return nil, nil, err
+		}
+		out["nav"] = nav
+	}
+	if sp.Faceplate != nil {
+		fp, err := validateFaceplate(sp.Faceplate)
+		if err != nil {
+			return nil, nil, err
+		}
+		out["faceplate"] = fp
 	}
 	if len(sp.Filters) > 0 {
 		fs, err := validateFilters(sp.Filters)
@@ -639,6 +656,21 @@ func (s *Server) saveDashboard(w http.ResponseWriter, r *http.Request, org, slug
 	if err != nil {
 		writeErr(w, 400, err.Error())
 		return
+	}
+	if nav, _ := spec["nav"].(map[string]any); nav != nil {
+		if parent, _ := nav["parent"].(string); parent != "" {
+			if err := s.checkNavParent(r.Context(), org, slug, parent); err != nil {
+				writeErr(w, 400, err.Error())
+				return
+			}
+		}
+	}
+	if fp, _ := spec["faceplate"].(map[string]any); fp != nil {
+		var n int
+		if err := s.pool.QueryRow(r.Context(), `SELECT count(*) FROM core.asset WHERE id = $1::uuid AND org_id = $2::uuid`, fp["asset"], org).Scan(&n); err != nil || n == 0 {
+			writeErr(w, 400, "faceplate.asset: no such asset")
+			return
+		}
 	}
 	if msg := s.camerasVisible(r.Context(), org, specCameras(spec)); msg != "" {
 		writeErr(w, 403, msg)

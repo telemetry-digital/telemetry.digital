@@ -66,43 +66,47 @@ view*. Fixed frame, top to bottom:
 
 ### 4. Faceplate types
 
-A picture becomes a **faceplate type** by naming what it was drawn for:
+Datastreams belong to an asset and have a key unique in it (`speed`, `current`, `m1_run`). A picture becomes a
+**faceplate type** by naming the asset it was drawn for:
 
 ```json
-"faceplate": {"device": "<uuid>", "prefix": "M1."}
+"faceplate": {"asset": "<uuid>", "prefix": "m1_"}
 ```
 
 It is drawn against one real example (WYSIWYG, live values in the editor). Opened for another instance, every
 reference to the example is re-bound **by datastream key**:
 
-- a tag of the example device whose key starts with the type's prefix → the datastream of the instance device with
-  the key `instance prefix + rest`;
-- `device`/`key` of elements and of `command` actions the same way;
-- a tag that has no counterpart is unbound (shows "—", its dynamics rest); tags outside the example device or prefix
-  stay as drawn (shared values such as a supply voltage).
+- a tag of the example asset whose key starts with the type's prefix → the datastream of the instance asset with the
+  key `instance prefix + rest` (element tags, dynamics' tags, widget datastream bindings);
+- the `device` of an element (the target of its commands) → the device assigned to the re-bound datastream; a command
+  key that starts with the type's prefix gets the instance prefix;
+- a tag that has no counterpart is unbound (shows "—", its dynamics are dropped); tags of other assets or outside the
+  prefix stay as drawn (shared values such as a supply voltage).
 
-Both common layouts are covered: one device per motor (prefix empty, the device changes) and one PLC with all tags
-(`M1.run`, `M2.run`: the device stays, the prefix changes).
+Both common layouts are covered: one asset per motor (prefix empty, the asset changes) and one asset with all tags of
+a PLC (`m1_run`, `m2_run`: the asset stays, the prefix changes).
 
-The `popup` action gains optional `device` and `prefix`:
+The `popup` action gains optional `asset` and `prefix`:
 
 ```json
-{"act": "popup", "target": "motor", "device": "<uuid>", "prefix": "M2."}
+{"act": "popup", "target": "motor", "prefix": "m2_"}
 ```
 
-Without them a popup of a faceplate type takes the clicked element's own `device` and the type's prefix; a popup of
-an ordinary picture behaves as before. The window title is the type's name and the instance (`Motor — M2`). Windows
-can be dragged; up to four stay open at once, the fifth closes the oldest.
+Without `asset` a popup of a faceplate type takes the asset of the clicked element's own tag; without `prefix` the
+type's prefix. So a motor symbol bound to any tag of its motor needs only "popup: motor". A popup of an ordinary
+picture behaves as before. The window title is the type's name and the instance (`Motor — Pump P2`). Windows can be
+dragged; up to four stay open at once, the fifth closes the oldest.
 
-The server does the re-binding: `GET /api/v1/dashboards/{slug}/instance?device=&prefix=` returns the spec bound to the
-instance (permission `data.read`; the device must belong to the organization), so the browser never guesses UUIDs.
+The server does the re-binding: `GET /api/v1/dashboards/{slug}/instance?asset=&tag=&prefix=` returns the spec bound to
+the instance (permission `data.read`; asset and tag must belong to the organization), so the browser never guesses
+UUIDs.
 
 ## API
 
 | Method and path | Permission | |
 |---|---|---|
 | `GET /api/v1/screens/tree` | `data.read` | nodes `{slug, name, label, kind, parent, order, unack, active, color, priority}` in tree order, plus `home` |
-| `GET /api/v1/dashboards/{slug}/instance?device=&prefix=` | `data.read` | faceplate type bound to an instance; 400 when the screen is no faceplate type |
+| `GET /api/v1/dashboards/{slug}/instance?asset=&tag=&prefix=` | `data.read` | faceplate type bound to an instance; 400 when the screen is no faceplate type |
 | `GET /operator`, `GET /operator/{slug}` | session | the page |
 
 `PUT /api/v1/dashboards/{slug}` validates `nav` and `faceplate`.
@@ -116,7 +120,7 @@ instance (permission `data.read`; the device must belong to the organization), s
 
 ## Tests
 
-- Unit: tree building (order, cycle, missing parent, depth), group state aggregation, re-binding by key (device
+- Unit: tree building (order, cycle, missing parent, depth), group state aggregation, re-binding by key (asset
   change, prefix change, missing counterpart, foreign tags untouched, command actions).
 - e2e `tests/e2e/operator.sh`: nav validation, tree with group states following raise / acknowledge / clear / shelve,
   instance endpoint, permissions.
