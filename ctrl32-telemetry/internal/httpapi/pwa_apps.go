@@ -66,7 +66,7 @@ type pwaSection struct {
 var pwaSections = []pwaSection{
 	{"dashboards", "Dashboards", "/dashboards"}, {"home", "Home", "/home"}, {"energy", "Energy", "/energy"},
 	{"counting", "Object counting", "/counting"}, {"cameras", "Cameras", "/video"}, {"displays", "Displays", "/displays"},
-	{"incidents", "Incidents", "/incidents"}, {"reports", "Reports", "/reports"}, {"devices", "Devices", "/devices"}, {"assets", "Assets", "/assets"}, {"flows", "Automation", "/flows"},
+	{"alarms", "Alarms", "/alarms"}, {"incidents", "Incidents", "/incidents"}, {"reports", "Reports", "/reports"}, {"devices", "Devices", "/devices"}, {"assets", "Assets", "/assets"}, {"flows", "Automation", "/flows"},
 	{"firmware", "Firmware", "/fota"}, {"users", "Users", "/users"}, {"audit", "Audit", "/audit"}, {"settings", "Settings", "/settings"},
 	{"system", "System", "/organizations"},
 }
@@ -90,7 +90,7 @@ var (
 // list (APP_PATHS).
 var pwaSectionPaths = map[string][]string{
 	"dashboards": {"/", "/dashboards"}, "home": {"/home", "/smarthome"}, "energy": {"/energy"}, "counting": {"/counting"}, "cameras": {"/video"},
-	"displays": {"/displays"}, "flows": {"/flows", "/automation"}, "devices": {"/devices"}, "incidents": {"/incidents"}, "assets": {"/assets"},
+	"displays": {"/displays"}, "flows": {"/flows", "/automation"}, "devices": {"/devices"}, "incidents": {"/incidents"}, "assets": {"/assets"}, "alarms": {"/alarms"},
 	"firmware": {"/fota"}, "users": {"/users"}, "audit": {"/audit", "/reports/signatures"}, "settings": {"/settings", "/vpn"}, "system": {"/organizations", "/server", "/landing/edit"},
 	"reports": {"/reports"},
 }
@@ -320,6 +320,7 @@ func (s *Server) pwaAppOptions(w http.ResponseWriter, r *http.Request) {
 		{"group": "Pages", "label": "Video walls", "url": "/video/walls"},
 		{"group": "Pages", "label": "Home", "url": "/home"},
 		{"group": "Pages", "label": "Energy", "url": "/energy"},
+		{"group": "Pages", "label": "Alarms", "url": "/alarms"},
 		{"group": "Pages", "label": "Incidents", "url": "/incidents"},
 		{"group": "Pages", "label": "Displays", "url": "/displays"},
 		{"group": "Pages", "label": "Devices", "url": "/devices"},

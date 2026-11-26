@@ -1,0 +1,29 @@
+meta {
+  name: End the shelf of an alarm
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{baseUrl}}/api/v1/alarms/:id/unshelve
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  End the shelf of an alarm
+  
+  Alarms still active return to the current list (unacknowledged ones are annunciated again). 409 when the alarm is not shelved.
+  
+  Requires permission `alarm.ack`.
+}

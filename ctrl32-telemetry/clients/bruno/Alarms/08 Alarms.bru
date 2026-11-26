@@ -1,0 +1,28 @@
+meta {
+  name: Alarms
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/alarms
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~datastream_id: 
+  ~view: 
+  ~from: 
+  ~to: 
+  ~class: 
+  ~q: 
+}
+
+docs {
+  Alarms
+  
+  Without `view` the newest 200 alarms. `view=current`: everything that needs attention — active alarms and alarms that returned to normal unacknowledged — the most important class first, unacknowledged before acknowledged (at most 500). `view=shelved`: shelved alarms. `view=history`: the alarms raised between `from` and `to` (default the last 24 hours, at most 1000), by class code and text. Every alarm carries its ISA-18.2 state (`isa_state`), class and source.
+  
+  Requires permission `data.read`.
+}

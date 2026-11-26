@@ -1,0 +1,25 @@
+meta {
+  name: Alarm performance (ISA-182)
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/v1/alarms/stats
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~from: 
+  ~to: 
+  ~tz: 
+}
+
+docs {
+  Alarm performance (ISA-18.2)
+  
+  Numbers of a range (default the last 7 days, at most 92): alarms in total, per hour and per day on average, the busiest hour, the mean time to acknowledge by a person, alarms per day (in the time zone `tz`), the ten most frequent alarms with their share, chattering alarms (three or more of one source within a minute), standing alarms (active for longer than 24 hours now) and the counts by class. Shelved alarms are left out of the load numbers.
+  
+  Requires permission `data.read`.
+}

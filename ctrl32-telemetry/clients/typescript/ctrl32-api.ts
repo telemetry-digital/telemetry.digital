@@ -34,17 +34,76 @@ export type ActiveAlarm = {
 };
 
 export type Alarm = {
+  acked_at?: string | null;
+  acked_by?: string | null;
+  class?: {
+    ack_required?: boolean;
+    code?: string;
+    /** #rrggbb */
+    color?: string;
+    name?: string;
+    /** 1 (highest) to 4 */
+    priority?: number;
+    sound?: "none" | "beep" | "siren";
+  };
   cleared_at?: string | null;
   datastream_id?: string | null;
   id?: string;
+  /** ISA-18.2 state */
+  isa_state?: "unack_active" | "ack_active" | "unack_rtn" | "normal" | "shelved";
   /** datastream key, or input name for rule alarms */
   key?: string;
+  /** the limit crossed */
+  limit?: number | null;
   raised_at?: string;
   /** raised on backfilled data */
   retrospective?: boolean;
   severity?: "warning" | "action" | "critical";
+  shelf?: {
+    by?: string;
+    reason?: string;
+  };
+  shelved_until?: string | null;
+  source?: {
+    /** asset name */
+    asset?: string;
+    /** automation rule name */
+    rule?: string;
+    /** rule type */
+    type?: string;
+    unit?: string;
+  };
   state?: "active" | "acknowledged" | "suppressed" | "cleared";
   value?: number | null;
+};
+
+export type AlarmClass = {
+  ack_required?: boolean;
+  builtin?: boolean;
+  code?: string;
+  /** #rrggbb */
+  color?: string;
+  id?: string;
+  name?: string;
+  /** 1 (highest) to 4 */
+  priority?: number;
+  /** current alarm rules of the class */
+  rules?: number;
+  sound?: "none" | "beep" | "siren";
+};
+
+export type AlarmClassInput = {
+  /** default true */
+  ack_required?: boolean;
+  /** 2 to 31 lower-case letters, digits or _ (create only) */
+  code?: string;
+  /** #rrggbb */
+  color: string;
+  name: string;
+  /** 1 (highest) to 4 */
+  priority: number;
+  reason: string;
+  sound?: "none" | "beep" | "siren";
 };
 
 export type AlarmRule = {
@@ -62,6 +121,16 @@ export type AlarmRule = {
   valid_from?: string;
   version?: number;
   warning?: number | null;
+};
+
+export type AlarmSourceCount = {
+  asset?: string;
+  count?: number;
+  datastream_id?: string | null;
+  key?: string;
+  rule?: string;
+  /** of all alarms in the range, 0..1 */
+  share?: number;
 };
 
 export type AlarmSummary = {
@@ -1831,6 +1900,56 @@ export class Ctrl32Client {
   }>('POST', `/api/v1/account-requests/${encodeURIComponent(id)}/dismiss`, undefined, body, false);
   }
 
+  /** Alarm classes
+   *
+   * The classes of the organization: the built-in Alarm (priority 1), Warning (2) and Message (4, no acknowledgement) and its own. The class decides the colour, the order, the sound and whether an alarm waits for an acknowledgement.
+   * 
+   * Requires permission `data.read`. */
+  getAlarmClasses(): Promise<AlarmClass[]> {
+    return this.request<AlarmClass[]>('GET', `/api/v1/alarm-classes`, undefined, undefined, false);
+  }
+
+  /** Create an alarm class
+   *
+   * Requires permission `config.write`. */
+  postAlarmClasses(body: AlarmClassInput): Promise<{
+    id?: string;
+  }> {
+    return this.request<{
+    id?: string;
+  }>('POST', `/api/v1/alarm-classes`, undefined, body, false);
+  }
+
+  /** Change an alarm class
+   *
+   * The code stays; `ack_required` left out keeps its value.
+   * 
+   * Requires permission `config.write`. */
+  putAlarmClassesId(id: string, body: AlarmClassInput): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('PUT', `/api/v1/alarm-classes/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Delete an alarm class
+   *
+   * 409 for a built-in class and for a class used by alarm rules.
+   * 
+   * Requires permission `config.write`. */
+  deleteAlarmClassesId(id: string, query: { reason: string; }): Promise<{
+    /** true on success */
+    ok?: boolean;
+  }> {
+    return this.request<{
+    /** true on success */
+    ok?: boolean;
+  }>('DELETE', `/api/v1/alarm-classes/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
   /** Current alarm rules
    *
    * Requires permission `data.read`. */
@@ -1874,16 +1993,127 @@ export class Ctrl32Client {
   }>('DELETE', `/api/v1/alarm-rules/${encodeURIComponent(id)}`, query, undefined, false);
   }
 
-  /** Alarms, newest first (200)
+  /** Alarms
    *
+   * Without `view` the newest 200 alarms. `view=current`: everything that needs attention — active alarms and alarms that returned to normal unacknowledged — the most important class first, unacknowledged before acknowledged (at most 500). `view=shelved`: shelved alarms. `view=history`: the alarms raised between `from` and `to` (default the last 24 hours, at most 1000), by class code and text. Every alarm carries its ISA-18.2 state (`isa_state`), class and source.
+   * 
    * Requires permission `data.read`. */
-  getAlarms(query?: { datastream_id?: string; }): Promise<Alarm[]> {
+  getAlarms(query?: { datastream_id?: string; view?: string; /** current, shelved or history */ from?: string; /** RFC 3339 (history) */ to?: string; /** RFC 3339 (history) */ class?: string; /** class code (history) */ q?: string; /** text in the source: asset, key or rule name (history) */ }): Promise<Alarm[]> {
     return this.request<Alarm[]>('GET', `/api/v1/alarms`, query, undefined, false);
   }
 
-  /** Acknowledge an active alarm
+  /** Acknowledge several alarms
    *
-   * Stops the escalation ladder; recorded in the alarm log with the actor and reason.
+   * Up to 500 alarms with one reason; alarms already acknowledged or of another organization are skipped. Each acknowledgement is written to the alarm log and the audit trail.
+   * 
+   * Requires permission `alarm.ack`. */
+  postAlarmsAck(body: {
+    ids: string[];
+    /** at least 3 characters */
+    reason: string;
+  }): Promise<{
+    /** how many were acknowledged now */
+    acknowledged?: number;
+  }> {
+    return this.request<{
+    /** how many were acknowledged now */
+    acknowledged?: number;
+  }>('POST', `/api/v1/alarms/ack`, undefined, body, false);
+  }
+
+  /** Alarm performance (ISA-18.2)
+   *
+   * Numbers of a range (default the last 7 days, at most 92): alarms in total, per hour and per day on average, the busiest hour, the mean time to acknowledge by a person, alarms per day (in the time zone `tz`), the ten most frequent alarms with their share, chattering alarms (three or more of one source within a minute), standing alarms (active for longer than 24 hours now) and the counts by class. Shelved alarms are left out of the load numbers.
+   * 
+   * Requires permission `data.read`. */
+  getAlarmsStats(query?: { from?: string; /** RFC 3339 */ to?: string; /** RFC 3339 */ tz?: string; /** IANA time zone of the days, default UTC */ }): Promise<{
+    chattering?: AlarmSourceCount[];
+    classes?: ({
+      code?: string;
+      color?: string;
+      count?: number;
+      name?: string;
+    })[];
+    days?: ({
+      count?: number;
+      /** YYYY-MM-DD */
+      day?: string;
+    })[];
+    from?: string;
+    /** seconds */
+    mean_ack_s?: number | null;
+    peak_hour?: number;
+    per_day?: number;
+    per_hour?: number;
+    standing?: ({
+      asset?: string;
+      datastream_id?: string | null;
+      hours?: number;
+      key?: string;
+      rule?: string;
+    })[];
+    /** 6 */
+    target_per_hour?: number;
+    to?: string;
+    top?: AlarmSourceCount[];
+    total?: number;
+  }> {
+    return this.request<{
+    chattering?: AlarmSourceCount[];
+    classes?: ({
+      code?: string;
+      color?: string;
+      count?: number;
+      name?: string;
+    })[];
+    days?: ({
+      count?: number;
+      /** YYYY-MM-DD */
+      day?: string;
+    })[];
+    from?: string;
+    /** seconds */
+    mean_ack_s?: number | null;
+    peak_hour?: number;
+    per_day?: number;
+    per_hour?: number;
+    standing?: ({
+      asset?: string;
+      datastream_id?: string | null;
+      hours?: number;
+      key?: string;
+      rule?: string;
+    })[];
+    /** 6 */
+    target_per_hour?: number;
+    to?: string;
+    top?: AlarmSourceCount[];
+    total?: number;
+  }>('GET', `/api/v1/alarms/stats`, query, undefined, false);
+  }
+
+  /** Alarm summary for the alarm bar
+   *
+   * How many alarms wait for an acknowledgement, how many are active, how many are shelved, and the most important unacknowledged alarm (`top`, null when none). Shelved alarms are not counted as unacknowledged or active.
+   * 
+   * Requires permission `data.read`. */
+  getAlarmsSummary(): Promise<{
+    active?: number;
+    shelved?: number;
+    top?: Alarm;
+    unack?: number;
+  }> {
+    return this.request<{
+    active?: number;
+    shelved?: number;
+    top?: Alarm;
+    unack?: number;
+  }>('GET', `/api/v1/alarms/summary`, undefined, undefined, false);
+  }
+
+  /** Acknowledge an alarm
+   *
+   * An active alarm or one that returned to normal unacknowledged. Stops the escalation ladder; recorded in the alarm log with the actor and reason. 404 when the alarm is already acknowledged.
    * 
    * Requires permission `alarm.ack`. */
   postAlarmsIdAck(id: string, body: {
@@ -1897,6 +2127,46 @@ export class Ctrl32Client {
     /** true on success */
     ok?: boolean;
   }>('POST', `/api/v1/alarms/${encodeURIComponent(id)}/ack`, undefined, body, false);
+  }
+
+  /** Shelve an alarm
+   *
+   * Shelves the rule of the alarm for 15 minutes to 24 hours: its alarms that have not returned to normal, and every new one until then, are recorded (state `suppressed`, `isa_state` `shelved`) but not annunciated — no alarm bar, no notification, no escalation. The shelf ends by itself. 409 when already shelved.
+   * 
+   * Requires permission `alarm.ack`. */
+  postAlarmsIdShelve(id: string, body: {
+    /** 15 to 1440 */
+    minutes: number;
+    /** at least 3 characters */
+    reason: string;
+  }): Promise<{
+    /** alarms shelved now */
+    alarms?: number;
+    shelved_until?: string;
+  }> {
+    return this.request<{
+    /** alarms shelved now */
+    alarms?: number;
+    shelved_until?: string;
+  }>('POST', `/api/v1/alarms/${encodeURIComponent(id)}/shelve`, undefined, body, false);
+  }
+
+  /** End the shelf of an alarm
+   *
+   * Alarms still active return to the current list (unacknowledged ones are annunciated again). 409 when the alarm is not shelved.
+   * 
+   * Requires permission `alarm.ack`. */
+  postAlarmsIdUnshelve(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    /** alarms returned to the list */
+    alarms?: number;
+  }> {
+    return this.request<{
+    /** alarms returned to the list */
+    alarms?: number;
+  }>('POST', `/api/v1/alarms/${encodeURIComponent(id)}/unshelve`, undefined, body, false);
   }
 
   /** Annotations of a datastream

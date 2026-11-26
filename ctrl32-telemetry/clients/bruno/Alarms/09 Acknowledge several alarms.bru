@@ -1,0 +1,28 @@
+meta {
+  name: Acknowledge several alarms
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v1/alarms/ack
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "ids": [
+      "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00"
+    ],
+    "reason": "string"
+  }
+}
+
+docs {
+  Acknowledge several alarms
+  
+  Up to 500 alarms with one reason; alarms already acknowledged or of another organization are skipped. Each acknowledgement is written to the alarm log and the audit trail.
+  
+  Requires permission `alarm.ack`.
+}

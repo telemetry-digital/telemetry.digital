@@ -1,0 +1,19 @@
+meta {
+  name: Alarm summary for the alarm bar
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/v1/alarms/summary
+  body: none
+  auth: inherit
+}
+
+docs {
+  Alarm summary for the alarm bar
+  
+  How many alarms wait for an acknowledgement, how many are active, how many are shelved, and the most important unacknowledged alarm (`top`, null when none). Shelved alarms are not counted as unacknowledged or active.
+  
+  Requires permission `data.read`.
+}

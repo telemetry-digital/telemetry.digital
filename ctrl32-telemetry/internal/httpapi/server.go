@@ -694,6 +694,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("GET /assets/automation", movedTo("/automation/rules"))
 	mux.HandleFunc("GET /users/{section}", page("users.html"))
 	mux.HandleFunc("GET /organizations", page("organizations.html"))
+	mux.HandleFunc("GET /alarms", page("alarms.html")) // alarm management after ISA-18.2 (spec 035)
+	mux.HandleFunc("GET /alarms/{section}", page("alarms.html"))
 	mux.HandleFunc("GET /incidents", page("incidents.html"))
 	mux.HandleFunc("GET /audit", page("audit.html"))
 	mux.HandleFunc("GET /audit/{section}", page("audit.html"))

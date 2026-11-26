@@ -1,0 +1,35 @@
+meta {
+  name: Change an alarm class
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{baseUrl}}/api/v1/alarm-classes/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "ack_required": true,
+    "code": "string",
+    "color": "string",
+    "name": "string",
+    "priority": 1,
+    "reason": "string",
+    "sound": "none"
+  }
+}
+
+docs {
+  Change an alarm class
+  
+  The code stays; `ack_required` left out keeps its value.
+  
+  Requires permission `config.write`.
+}
