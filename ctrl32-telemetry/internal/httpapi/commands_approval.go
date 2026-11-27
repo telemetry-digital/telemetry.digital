@@ -192,8 +192,17 @@ func (s *Server) approveCommand(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, code, err.Error())
 		return
 	}
-	if _, err := s.pool.Exec(r.Context(), `UPDATE core.device_command SET status = 'queued', approved_by = NULLIF($2,'')::uuid, approved_by_name = $3, approved_at = now() WHERE id = $1::uuid AND status = 'pending'`, cid, p.UserID, p.Username); err != nil {
+	// The decision is taken by the database: only the request whose update changes the pending row goes on. Two people
+	// deciding at the same moment — one approves, one rejects — can never both win, and a command that was rejected (or
+	// approved by somebody else, or expired) in between is not sent.
+	tag, err := s.pool.Exec(r.Context(), `UPDATE core.device_command SET status = 'queued', approved_by = NULLIF($2,'')::uuid, approved_by_name = $3, approved_at = now()
+		WHERE id = $1::uuid AND status = 'pending' AND (expires_at IS NULL OR expires_at > now())`, cid, p.UserID, p.Username)
+	if err != nil {
 		writeErr(w, 500, "update failed")
+		return
+	}
+	if tag.RowsAffected() != 1 {
+		writeErr(w, 409, "the command is not waiting for approval any more")
 		return
 	}
 	exp := time.Now().Add(5 * time.Minute)
@@ -227,8 +236,13 @@ func (s *Server) rejectCommand(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, err := s.pool.Exec(r.Context(), `UPDATE core.device_command SET status = 'rejected', error = $2, acked_at = now(), approved_by = NULLIF($3,'')::uuid, approved_by_name = $4, approved_at = now() WHERE id = $1::uuid AND status = 'pending'`, cid, "rejected: "+in.Reason, p.UserID, p.Username); err != nil {
+	tag, err := s.pool.Exec(r.Context(), `UPDATE core.device_command SET status = 'rejected', error = $2, acked_at = now(), approved_by = NULLIF($3,'')::uuid, approved_by_name = $4, approved_at = now() WHERE id = $1::uuid AND status = 'pending'`, cid, "rejected: "+in.Reason, p.UserID, p.Username)
+	if err != nil {
 		writeErr(w, 500, "update failed")
+		return
+	}
+	if tag.RowsAffected() != 1 { // approved or rejected by somebody else in between: nothing is recorded as rejected
+		writeErr(w, 409, "the command is not waiting for approval any more")
 		return
 	}
 	if s.live != nil {

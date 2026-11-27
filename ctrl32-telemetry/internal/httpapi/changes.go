@@ -289,13 +289,26 @@ func (s *Server) decideChange(w http.ResponseWriter, r *http.Request, approve bo
 		return
 	}
 	if !approve {
-		_, _ = s.pool.Exec(r.Context(), `UPDATE core.change_request SET status = 'rejected', decided_by = NULLIF($2,'')::uuid, decided_by_name = $3, decided_at = now(), decision_reason = $4 WHERE id = $1::uuid`, id, p.UserID, p.Username, in.Reason)
+		tag, err := s.pool.Exec(r.Context(), `UPDATE core.change_request SET status = 'rejected', decided_by = NULLIF($2,'')::uuid, decided_by_name = $3, decided_at = now(), decision_reason = $4 WHERE id = $1::uuid AND status = 'pending'`, id, p.UserID, p.Username, in.Reason)
+		if err != nil || tag.RowsAffected() != 1 { // decided by somebody else in between
+			writeErr(w, 409, "the change request is not waiting any more")
+			return
+		}
 		s.audit(r, "change_request.reject", "change_request", id, map[string]any{"status": "pending", "summary": summary, "requested_by": byName}, map[string]any{"status": "rejected", "rejected_by": p.Username}, in.Reason)
 		writeJSON(w, 200, map[string]any{"id": id, "status": "rejected"})
 		return
 	}
 	if (byID != "" && byID == p.UserID) || (byID == "" && byName == p.Username) {
 		writeErr(w, 403, "four eyes: a different user must approve this change")
+		return
+	}
+	// The decision is taken by the database before anything runs: only the request whose update changes the pending row
+	// replays the call. Two approvals at the same moment run the change once; an approval that meets a rejection runs
+	// nothing.
+	tag, err := s.pool.Exec(r.Context(), `UPDATE core.change_request SET status = 'approved', decided_by = NULLIF($2,'')::uuid, decided_by_name = $3, decided_at = now(), decision_reason = $4
+		WHERE id = $1::uuid AND status = 'pending' AND expires_at > now()`, id, p.UserID, p.Username, in.Reason)
+	if err != nil || tag.RowsAffected() != 1 {
+		writeErr(w, 409, "the change request is not waiting any more")
 		return
 	}
 	// Replay the original call under the approver's identity, marked as an approved change.
@@ -306,6 +319,7 @@ func (s *Server) decideChange(w http.ResponseWriter, r *http.Request, approve bo
 	}
 	req, err := http.NewRequestWithContext(ctx, method, path, reqBody)
 	if err != nil {
+		_, _ = s.pool.Exec(r.Context(), `UPDATE core.change_request SET status = 'failed' WHERE id = $1::uuid`, id)
 		writeErr(w, 500, "replay failed")
 		return
 	}
