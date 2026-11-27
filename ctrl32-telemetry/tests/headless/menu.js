@@ -50,7 +50,7 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
   await desktop(1500);
   await go("/settings/branding");
   expect("headings", await ev(heads), "Monitoring|Devices and automation|Administration");
-  expect("top-level order", await ev(top), "/,/dashboards,/operator,/recipes,/home,/energy,/counting,/video,/displays,/alarms,/incidents,/reports/templates,/devices,/assets,/flows,/fota,/users,/audit,/settings,/organizations,/account");
+  expect("top-level order", await ev(top), "/,/dashboards,/operator,/recipes,/home,/energy,/counting,/video,/displays,/alarms,/oplog,/incidents,/reports/templates,/devices,/assets,/flows,/fota,/users,/audit,/settings,/organizations,/account");
   // 0.75.0: clearer names, Reports and Automation groups, My account once (in the footer of the sidebar)
   expect("Overview and Dashboards", await ev(`[...document.querySelectorAll('#sidebar a.nav-link[href="/"], #sidebar a.nav-link[href="/dashboards"]')].map(a => a.textContent).join()`), "Overview,Dashboards");
   expect("My account once", await ev(`[...document.querySelectorAll('#sidebar a, #sidebar button')].filter(a => a.textContent.trim() === 'My account').length + ' ' + !!document.querySelector('#sidebar .side-foot .side-acct a[href="/account"]')`), "1 true");

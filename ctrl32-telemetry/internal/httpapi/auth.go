@@ -47,6 +47,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.setSessionCookie(w, r, res.SessionToken, int(res.Remember.Seconds()))
+	s.opSession(r, res.SessionToken, "login")
 	writeJSON(w, 200, map[string]any{"mfa_required": false, "must_change_password": res.MustChange, "user": res.User, "remembered_days": int(res.Remember.Hours() / 24)})
 }
 
@@ -72,12 +73,14 @@ func (s *Server) loginMFA(w http.ResponseWriter, r *http.Request) {
 	}
 	// a remembered session gets a persistent cookie, so it survives closing the browser or the installed app
 	s.setSessionCookie(w, r, token, int(remember.Seconds()))
+	s.opSession(r, token, "login")
 	writeJSON(w, 200, map[string]any{"ok": true, "remembered_days": int(remember.Hours() / 24)})
 }
 
 // POST /api/v1/auth/logout
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(sessionCookie); err == nil {
+		s.opSession(r, c.Value, "logout")
 		s.iam.Logout(r.Context(), c.Value, clientIP(r), r.UserAgent())
 	}
 	s.setSessionCookie(w, r, "", -1)
@@ -101,7 +104,8 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		"user_id": p.UserID, "org_id": p.OrgID, "username": p.Username, "full_name": p.FullName, "locale": locale,
 		"roles": p.Roles, "permissions": perms, "csrf_token": p.CSRFSecret,
 		"must_change_password": p.MustChange, "mfa_enabled": p.MFAEnabled, "mfa_required": p.MFARequired,
-		"auth": map[string]bool{"session": p.SessionID != "", "token": p.TokenID != ""},
+		"auth":        map[string]bool{"session": p.SessionID != "", "token": p.TokenID != ""},
+		"log_actions": s.opLogOn(r.Context(), p.OrgID), // the pages report picture changes only then
 	})
 }
 

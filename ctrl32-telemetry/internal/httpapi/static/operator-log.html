@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Operator log</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  /* operator action log (spec 039) */
+  .ol-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .ol-tools input[type=search] { min-width: 180px; }
+  table.ol td, table.ol th { vertical-align: top; }
+  table.ol td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.ol td.what { white-space: normal; word-break: break-word; }
+  .ol-kind { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid var(--line); }
+  .ol-kind.act { border-color: var(--primary); }
+  .ol-kind.move { color: var(--muted); }
+  .ol-off { border: 1px solid var(--warn); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 12px; }
+  .ol-empty { padding: 18px 4px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<div class="page-head"><h1>Operator log</h1></div>
+<div class="card">
+  <p class="muted" style="margin-top:0">Every action of a person at the controls: commands and presses of controls, recipe loads, camera movement, display commands, alarm acknowledgements, sign-ins, and the pictures and windows they opened.</p>
+  <div class="ol-off" id="olOff" hidden>The operator log is switched off for this organization, so nothing new is written. Switch it on in <a href="/settings/policy">Settings → Security policy</a>.</div>
+  <div class="ol-tools">
+    <label class="inline">From <input type="datetime-local" id="olFrom"></label>
+    <label class="inline">To <input type="datetime-local" id="olTo"></label>
+    <select id="olUser" class="notranslate"><option value="">All users</option></select>
+    <select id="olKind"><option value="">All actions</option><option value="acts">Actions only</option><option value="moves">Pictures and windows only</option></select>
+    <input type="search" id="olQ" placeholder="Search" maxlength="80">
+    <button class="btn small primary" type="button" id="olGo">Show</button><span class="grow"></span>
+    <span id="olCount" class="muted"></span><button class="btn small" type="button" id="olCsv">Download CSV</button>
+  </div>
+  <div class="table-wrap"><table class="ol" id="olTable"><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Target</th><th>Detail</th><th>Reason</th><th>From page</th><th>Station</th></tr></thead><tbody></tbody></table></div>
+  <div class="ol-empty" id="olNone" hidden>No action in this range.</div>
+  <div class="ol-tools" style="margin-top:10px"><button class="btn small" type="button" id="olMore" hidden>Older</button></div>
+</div>
+</main>
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api, t = ctrl32.t;
+const KIND = { command: 'Command', command_approve: 'Command approved', command_reject: 'Command rejected', attributes: 'Device attributes', alarm_ack: 'Alarm acknowledged', alarm_shelve: 'Alarm shelved',
+  alarm_unshelve: 'Alarm shelf ended', camera_mark: 'Camera mark', video_playback: 'Recording viewed', video_export: 'Recording exported', video_hold: 'Recording held as evidence', video_hold_release: 'Evidence hold released',
+  video_evidence: 'Evidence exported', video_unmask: 'Picture without masks', display: 'Display command', kiosk: 'Kiosk PC command', flow_inject: 'Flow test message', recipe_load: 'Recipe load', recipe_approve: 'Recipe load approved',
+  recipe_reject: 'Recipe load rejected', counting_correction: 'Occupancy corrected', ptz: 'Camera movement', scene: 'Scene', login: 'Signed in', logout: 'Signed out', navigate: 'Page opened', popup: 'Window opened', press: 'Control pressed', cancel: 'Press cancelled' };
+const MOVES = ['navigate', 'popup'];
+let ROWS = [], KINDS = [];
+const localField = d => { const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
+// the detail of an action in words a person reads; anything else as short key = value pairs
+function detail(a) { const d = a.detail || {}; const v = x => typeof x === 'object' ? JSON.stringify(x) : String(x);
+  if (a.kind === 'command') { const g = d.args || {}; return (g.key !== undefined ? `${g.key} → ${v(g.value)}` : `${d.method || ''} ${v(g)}`) + (d.status ? ` · ${d.status}` : ''); }
+  if (a.kind === 'ptz') return d.action === 'preset' ? `preset ${d.preset}` : d.action === 'move' ? `pan ${d.pan} · tilt ${d.tilt} · zoom ${d.zoom}` : String(d.action || '');
+  if (a.kind === 'recipe_load') return `${d.number || ''} ${d.record || ''} → ${d.unit || ''}${d.status ? ' · ' + d.status : ''}`;
+  if (a.kind === 'navigate') return d.path || '';
+  return Object.entries(d).filter(([k, x]) => x !== null && x !== '' && typeof x !== 'object').slice(0, 6).map(([k, x]) => `${k} = ${x}`).join(' · '); }
+function query(before) { const p = new URLSearchParams(); p.set('from', new Date($('#olFrom').value).toISOString()); p.set('to', new Date($('#olTo').value).toISOString());
+  if ($('#olUser').value) p.set('user', $('#olUser').value);
+  const k = $('#olKind').value; if (k === 'moves') p.set('kind', MOVES.join(',')); else if (k === 'acts') p.set('kind', KINDS.filter(x => !MOVES.includes(x)).join(',')); else if (k) p.set('kind', k);
+  if ($('#olQ').value.trim()) p.set('q', $('#olQ').value.trim()); if (before) p.set('before', before); return p; }
+async function load(more) {
+  let r; try { r = await api('GET', '/api/v1/operator-actions?limit=200&' + query(more && ROWS.length ? ROWS[ROWS.length - 1].ts : '')); } catch (x) { ctrl32.toast(x.message, 'bad'); return; }
+  $('#olOff').hidden = r.enabled;
+  if (!KINDS.length) { KINDS = r.kinds; $('#olKind').insertAdjacentHTML('beforeend', KINDS.map(k => `<option value="${esc(k)}">${esc(t(KIND[k] || k))}</option>`).join('')); }
+  if (!more) { const cur = $('#olUser').value; $('#olUser').innerHTML = `<option value="">${esc(t('All users'))}</option>` + r.users.map(u => `<option>${esc(u)}</option>`).join(''); $('#olUser').value = r.users.includes(cur) ? cur : ''; }
+  ROWS = more ? ROWS.concat(r.actions) : r.actions;
+  $('#olTable tbody').innerHTML = ROWS.map(a => `<tr><td class="num">${fmt(a.ts)}</td><td class="notranslate">${esc(a.operator ? a.operator + ' (' + a.user + ')' : a.user)}</td>
+    <td><span class="ol-kind ${MOVES.includes(a.kind) ? 'move' : 'act'}">${esc(t(KIND[a.kind] || a.kind))}</span></td><td class="what notranslate">${esc(a.target)}</td><td class="what notranslate">${esc(detail(a))}</td>
+    <td class="what notranslate">${esc(a.reason)}</td><td class="what notranslate">${esc(a.screen)}</td><td class="num notranslate">${esc(a.station)}</td></tr>`).join('');
+  $('#olNone').hidden = ROWS.length > 0; $('#olTable').hidden = !ROWS.length; $('#olCount').textContent = ROWS.length ? String(ROWS.length) : ''; $('#olMore').hidden = r.actions.length < 200;
+}
+$('#olGo').onclick = () => load(false); $('#olMore').onclick = () => load(true);
+$('#olQ').onkeydown = e => { if (e.key === 'Enter') load(false); };
+$('#olCsv').onclick = async () => { try { const p = new URLSearchParams(); p.set('from', new Date($('#olFrom').value).toISOString()); p.set('to', new Date($('#olTo').value).toISOString()); p.set('format', 'csv');
+  const b = await api('GET', '/api/v1/export/operator-actions?' + p); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'operator-log.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
+  catch (x) { ctrl32.toast(x.message, 'bad'); } };
+ctrl32.ready({ requireAuth: true, requirePerm: 'audit.read' }).then(async () => {
+  const now = new Date(); $('#olTo').value = localField(new Date(now.getTime() + 60000)); $('#olFrom').value = localField(new Date(now - 24 * 3600e3));
+  await load(false);
+});
+</script>
+</body>
+</html>

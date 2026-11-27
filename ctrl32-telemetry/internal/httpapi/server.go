@@ -246,6 +246,10 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("DELETE /api/v1/hmi/objects/{slug}", s.require("content.write", s.deleteHMIObject))
 	mux.Handle("GET /api/v1/hmi/objects/{slug}/svg", s.require("data.read", s.hmiObjectSVG))
 	mux.Handle("GET /api/v1/alarms", s.require("data.read", s.alarms))
+	// operator action log (spec 039): every action of a person at the controls, when the organization keeps it
+	mux.Handle("GET /api/v1/operator-actions", s.require("audit.read", s.listOperatorActions))
+	mux.Handle("POST /api/v1/operator-actions", s.require("data.read", s.reportOperatorAction))
+	mux.Handle("GET /api/v1/export/operator-actions", s.require("audit.read", s.exportOperatorActions))
 	// recipes (spec 038): elements, units, data records, loading a record into a unit, the load log
 	mux.Handle("GET /api/v1/recipes", s.require("data.read", s.listRecipes))
 	mux.Handle("POST /api/v1/recipes", s.require("config.write", s.saveRecipe))
@@ -713,7 +717,8 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.Handle("GET /assets/automation", movedTo("/automation/rules"))
 	mux.HandleFunc("GET /users/{section}", page("users.html"))
 	mux.HandleFunc("GET /organizations", page("organizations.html"))
-	mux.HandleFunc("GET /recipes", page("recipes.html")) // recipes (spec 038)
+	mux.HandleFunc("GET /oplog", page("operator-log.html")) // operator action log (spec 039)
+	mux.HandleFunc("GET /recipes", page("recipes.html"))    // recipes (spec 038)
 	mux.HandleFunc("GET /recipes/{section}", page("recipes.html"))
 	mux.HandleFunc("GET /alarms", page("alarms.html")) // alarm management after ISA-18.2 (spec 035)
 	mux.HandleFunc("GET /alarms/{section}", page("alarms.html"))

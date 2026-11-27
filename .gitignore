@@ -11,3 +11,6 @@ node_modules/
 __pycache__/
 pio-*.log
 ctrl32-telemetry-c/ci/gen/
+
+# screenshots that headless tests drop into the working directory when OUT is not set
+ctrl32-telemetry/*.png

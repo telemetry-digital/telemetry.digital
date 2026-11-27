@@ -40,6 +40,9 @@ type Policy struct {
 	FourEyesLimits       bool     `json:"four_eyes_limits"`      // URS H-08: alarm rule changes become change requests
 	FourEyesAssignments  bool     `json:"four_eyes_assignments"` // URS H-08: device ↔ datastream assignments become change requests
 	FourEyesVPN          bool     `json:"four_eyes_vpn"`         // ADR-0018: VPN access of technicians (user peers) needs a second person's approval
+	// LogOperatorActions keeps the operator action log (spec 039): every press, command, PTZ move, picture change and
+	// sign-in of a person at the controls. Off by default.
+	LogOperatorActions bool `json:"log_operator_actions"`
 	// RememberDeviceDays allows "Stay signed in on this device" at login: such a session lasts this many days instead of
 	// the idle and absolute limits (0 = not allowed, the default). MFA is still required at the sign-in itself.
 	RememberDeviceDays int `json:"remember_device_days"`

@@ -172,6 +172,7 @@ func (s *Server) audit(r *http.Request, action, entityType, entityID string, old
 	if _, _, err := audit.Append(r.Context(), s.pool, e); err != nil {
 		s.log.Error("audit append failed", "security", true, "action", action, "err", err)
 	}
+	s.opFromAudit(r, action, entityType, entityID, new, reason)
 }
 
 // setSessionCookie writes the session cookie with the hardened attributes.

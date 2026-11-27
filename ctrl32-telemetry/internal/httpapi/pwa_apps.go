@@ -91,7 +91,7 @@ var (
 var pwaSectionPaths = map[string][]string{
 	"dashboards": {"/", "/dashboards", "/operator", "/recipes"}, "home": {"/home", "/smarthome"}, "energy": {"/energy"}, "counting": {"/counting"}, "cameras": {"/video"},
 	"displays": {"/displays"}, "flows": {"/flows", "/automation"}, "devices": {"/devices"}, "incidents": {"/incidents"}, "assets": {"/assets"}, "alarms": {"/alarms"},
-	"firmware": {"/fota"}, "users": {"/users"}, "audit": {"/audit", "/reports/signatures"}, "settings": {"/settings", "/vpn"}, "system": {"/organizations", "/server", "/landing/edit"},
+	"firmware": {"/fota"}, "users": {"/users"}, "audit": {"/audit", "/reports/signatures", "/oplog"}, "settings": {"/settings", "/vpn"}, "system": {"/organizations", "/server", "/landing/edit"},
 	"reports": {"/reports"},
 }
 
