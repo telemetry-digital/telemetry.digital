@@ -100,6 +100,10 @@
       if (a.approved) return api(method, url, body, { noSecond: true });
       const e = new Error(a.cancelled ? t('A second person must approve this.') : t('It waits for approval by a second person')); e.status = 403; e.code = data.code; e.area = data.area; throw e;
     }
+    if (r.status === 403 && data && (data.code === 'scada_user_required' || data.code === 'scada_group_required') && !plain && me && me.auth && me.auth.session) {
+      // somebody has to sign in at the controls (spec 041); then the call is sent again
+      if (await scadaSignIn({ groups: data.groups || [], denied: data.code === 'scada_group_required' })) return api(method, url, body, opt);
+    }
     if (!r.ok) { const e = new Error((data && data.error) || ('HTTP ' + r.status)); e.status = r.status; e.code = data && data.code; throw e; }
     if (r.status === 202 && data && data.status === 'pending' && data.second_person && !plain && me) {
       // a single action is held: the second person may approve it here, or it stays in Approvals
@@ -107,6 +111,100 @@
       if (a.approved) return spResult(data.second_person.kind, data, a.result);
     }
     return data;
+  }
+  // ---- SCADA users (spec 041) ------------------------------------------------------------------------
+  // A person signs in at the controls on top of the session of the station, with a name and a PIN or a password. The
+  // server answers 403 scada_user_required / scada_group_required when a control needs somebody (else); the dialog
+  // signs the person in and the call is sent again. The chip in the header shows who is at the controls.
+  let scadaBusy = null, scadaUntil = 0, scadaTouched = 0;
+  const scadaOn = () => !!(me && me.scada && me.auth && me.auth.session && (me.scada.users > 0 || me.scada.required));
+  const scadaNames = (add) => { let l = []; try { l = JSON.parse(localStorage.getItem('ctrl32.scadaNames') || '[]'); } catch (e) { l = []; }
+    if (add) { l = [add, ...l.filter((x) => x !== add)].slice(0, 8); try { localStorage.setItem('ctrl32.scadaNames', JSON.stringify(l)); } catch (e) { /* private mode */ } }
+    return Array.isArray(l) ? l.filter((x) => typeof x === 'string') : []; };
+  function scadaSet(st, quiet) {
+    if (!me || !st) return;
+    const was = me.scada && me.scada.user ? me.scada.user.name : '';
+    me.scada = st; scadaUntil = st.user ? Date.now() + st.user.seconds_left * 1000 : 0;
+    if (was && !st.user && !quiet) toast(t('Signed out at the controls') + ': ' + was, 'warn');
+    scadaDraw();
+    document.dispatchEvent(new CustomEvent('ctrl32:scada', { detail: st }));
+  }
+  function scadaDraw() {
+    let c = $('#scadaChip');
+    if (!scadaOn()) { if (c) c.remove(); return; }
+    if (!c) { c = document.createElement('div'); c.id = 'scadaChip'; c.className = 'scada-chip'; }
+    // where it is seen: the frame of the operator view, the strip above the page on a desktop, the header on a phone
+    const op = $('.op-head .op-user'), bug = $('#bugBtnDesk'), row = $('header.topbar .container.row');
+    const host = op ? op.parentNode : (bug && bug.offsetParent ? bug.parentNode : (row || null));
+    if (!host) return;
+    if (c.parentNode !== host) { if (op) op.before(c); else if (host === row) row.append(c); else bug.before(c); }
+    const u = me.scada.user;
+    c.classList.toggle('on', !!u); c.classList.toggle('need', !u && !!me.scada.required);
+    c.innerHTML = u ? `${ICON.user}<b class="notranslate" title="${esc((u.full_name ? u.full_name + ' · ' : '') + (u.groups || []).join(', '))}">${esc(u.name)}</b><button class="btn small ghost" type="button" data-scada-out>${esc(t('Sign out at the controls'))}</button>`
+      : `<button class="btn small${me.scada.required ? ' primary' : ''}" type="button" data-scada-in>${ICON.user}<span>${esc(t('Sign in at the controls'))}</span></button>`;
+    const i = c.querySelector('[data-scada-in]'), o = c.querySelector('[data-scada-out]');
+    if (i) i.onclick = () => scadaSignIn({});
+    if (o) o.onclick = () => scadaSignOut();
+  }
+  async function scadaSignOut(why) {
+    try { scadaSet(await api('DELETE', '/api/v1/scada/session' + (why ? '?why=' + why : '')), true); toast(t('Signed out at the controls'), 'ok'); } catch (e) { toast(t(e.message), 'bad'); }
+  }
+  function scadaDialogEl() {
+    let d = $('#scadaDlg');
+    if (d) return d;
+    d = document.createElement('dialog'); d.id = 'scadaDlg'; d.className = 'sp-dlg scada-dlg';
+    d.innerHTML = `<form class="form" method="dialog" autocomplete="off">
+      <h2 style="margin-top:0">Sign in at the controls</h2>
+      <p class="sc-why muted"></p>
+      <div class="sc-names notranslate"></div>
+      <label><span>Your name at the controls</span> <input name="scname" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="32"></label>
+      <label><span>PIN or password</span> <input name="scsecret" type="password" autocomplete="new-password" maxlength="128"></label>
+      <div class="sc-pad notranslate">${[1, 2, 3, 4, 5, 6, 7, 8, 9, '⌫', 0, 'OK'].map((k) => `<button class="btn" type="${k === 'OK' ? 'submit' : 'button'}" data-k="${k}">${k}</button>`).join('')}</div>
+      <div class="err sp-err"></div>
+      <div class="actions"><button class="btn primary" type="submit">Sign in</button><button class="btn" type="button" data-sc-cancel>Cancel</button></div>
+      <p class="muted" style="margin-bottom:0">The computer stays signed in with its own account. You are signed out here after a time without activity.</p>
+    </form>`;
+    document.body.appendChild(d);
+    return d;
+  }
+  // scadaSignIn({groups, denied}) resolves true when somebody signed in
+  function scadaSignIn(info) {
+    if (scadaBusy) return scadaBusy;
+    scadaBusy = new Promise((resolve) => {
+      const d = scadaDialogEl(), f = d.querySelector('form'), err = d.querySelector('.sp-err');
+      const done = (v) => { scadaBusy = null; d.close(); resolve(v); };
+      const g = (info && info.groups || []).map((x) => t(x)).join(', '), u = me.scada && me.scada.user;
+      d.querySelector('.sc-why').textContent = info && info.denied ? t('The group of the person signed in may not use this control.') + (g ? ' ' + t('It is for') + ': ' + g : '')
+        : g ? t('This control is for') + ': ' + g : (me.scada && me.scada.required ? t('Sign in before you operate anything.') : '');
+      f.reset(); err.textContent = '';
+      const names = scadaNames().filter((n) => !(info && info.denied && u && u.name === n));
+      const box = d.querySelector('.sc-names'); box.innerHTML = names.map((n) => `<button class="btn small" type="button" data-n="${esc(n)}">${esc(n)}</button>`).join('');
+      for (const b of box.querySelectorAll('[data-n]')) b.onclick = () => { f.scname.value = b.dataset.n; f.scsecret.focus(); };
+      for (const b of d.querySelectorAll('.sc-pad [data-k]')) if (b.dataset.k !== 'OK') b.onclick = () => { f.scsecret.value = b.dataset.k === '⌫' ? f.scsecret.value.slice(0, -1) : f.scsecret.value + b.dataset.k; };
+      f.onsubmit = async (e) => {
+        e.preventDefault(); err.textContent = '';
+        const name = f.scname.value.trim().toLowerCase();
+        if (!name || !f.scsecret.value) { err.textContent = t('Enter your name and your PIN or password.'); return; }
+        try { const st = await api('POST', '/api/v1/scada/session', { name, secret: f.scsecret.value }); scadaNames(name); scadaSet(st, true); scadaTouched = Date.now(); toast(t('At the controls') + ': ' + st.user.name, 'ok'); done(true); }
+        catch (x) { err.textContent = t(x.message); f.scsecret.value = ''; f.scsecret.focus(); }
+      };
+      d.querySelector('[data-sc-cancel]').onclick = () => done(false);
+      d.oncancel = (e) => { e.preventDefault(); done(false); };
+      d.showModal();
+      (names.length === 1 && !f.scname.value ? (f.scname.value = names[0], f.scsecret) : f.scname).focus();
+    });
+    return scadaBusy;
+  }
+  function scadaWatch() {
+    if (!scadaOn() || scadaWatch.on) { scadaDraw(); return; }
+    scadaWatch.on = true; scadaSet(me.scada, true);
+    window.addEventListener('resize', () => scadaDraw());
+    // activity keeps the person signed in; the server decides when the time is over
+    const act = () => { if (me.scada.user && Date.now() - scadaTouched > 30000) { scadaTouched = Date.now(); api('POST', '/api/v1/scada/session/touch', {}).then((st) => scadaSet(st)).catch(() => {}); } };
+    for (const ev of ['pointerdown', 'keydown']) document.addEventListener(ev, act, { capture: true, passive: true });
+    let asked = 0;
+    setInterval(() => { const due = me.scada.user ? Date.now() > scadaUntil + 1000 : Date.now() - asked > 60000;
+      if (due && !document.hidden) { asked = Date.now(); api('GET', '/api/v1/scada/session').then((st) => scadaSet(st)).catch(() => {}); } }, 5000);
   }
   // ---- four eyes everywhere (spec 040) ---------------------------------------------------------------
   // The server holds a single action (202, second_person) or refuses continuous work (403, second_person_required)
@@ -125,9 +223,10 @@
       <p class="sp-wait" hidden>Your request waits for approval already.</p>
       <h3>Approve here</h3>
       <p class="muted" style="margin-top:0">The second person signs with their own name and password. Nobody is signed in or out.</p>
+      <label class="inline sp-scada" hidden><input type="checkbox" name="spscada"><span>The second person signs with the name and the PIN or password of the controls</span></label>
       <div class="row2"><label><span>Name of the second person</span> <input name="spuser" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
         <label><span>Password of the second person</span> <input name="sppass" type="password" autocomplete="new-password"></label></div>
-      <div class="row2"><label><span>Code from the authenticator app, when the second person uses one</span> <input name="spcode" inputmode="numeric" autocomplete="one-time-code" maxlength="12"></label>
+      <div class="row2"><label class="sp-codel"><span>Code from the authenticator app, when the second person uses one</span> <input name="spcode" inputmode="numeric" autocomplete="one-time-code" maxlength="12"></label>
         <label><span>Note of the second person</span> <input name="spnote" maxlength="200"></label></div>
       <div class="err sp-err"></div>
       <div class="actions"><button class="btn primary" type="submit" data-sp-ok>Approve</button><button class="btn" type="button" data-sp-wait>Leave it waiting</button></div>
@@ -149,6 +248,7 @@
       if (grant) d.querySelector('.sp-min').textContent = t('The approval lasts on this computer for (minutes)') + ': ' + (sp.minutes || '');
       d.querySelector('[data-sp-wait]').textContent = t(grant && !sp.id ? 'Ask and wait' : 'Leave it waiting');
       f.reset(); err.textContent = '';
+      d.querySelector('.sp-scada').hidden = !scadaOn(); f.spscada.onchange = () => { d.querySelector('.sp-codel').style.visibility = f.spscada.checked ? 'hidden' : ''; }; f.spscada.onchange();
       // a request for continuous work is recorded first; the same one is returned while it waits
       const ask = async () => {
         if (!grant || sp.id) return sp;
@@ -164,7 +264,7 @@
         try {
           const x = await ask(); sp = x;
           if (x.active) { done({ approved: true, result: null }); return; }
-          const r = await api('POST', '/api/v1/second-person/approve', { kind: x.kind || 'grant', id: x.id, device_id: x.device_id || '', username: f.spuser.value.trim(), password: f.sppass.value, code: f.spcode.value.trim(), reason: f.spnote.value.trim() });
+          const r = await api('POST', '/api/v1/second-person/approve', { kind: x.kind || 'grant', id: x.id, device_id: x.device_id || '', username: f.spuser.value.trim(), password: f.sppass.value, code: f.spcode.value.trim(), reason: f.spnote.value.trim(), scada: f.spscada.checked });
           toast(t('Approved by') + ' ' + r.approved_by, 'ok');
           done({ approved: true, result: r.result });
         } catch (x) { err.textContent = t(x.message); f.sppass.value = ''; if (x.code === 'second_person_code') f.spcode.focus(); }
@@ -392,7 +492,7 @@
         { href: '/fota', label: 'Images' }, { href: '/fota/campaigns', label: 'Campaigns' }] },
       { head: 'Administration' },
       { href: '/users', label: 'Users', icon: ICON.users, show: can('user.admin'), sec: 'users', children: [
-        { href: '/users', label: 'Accounts' }, { href: '/users/roles', label: 'Roles and permissions' }] },
+        { href: '/users', label: 'Accounts' }, { href: '/users/roles', label: 'Roles and permissions' }, { href: '/users/scada', label: 'SCADA users' }] },
       { href: can('audit.read') ? '/audit' : '/reports/signatures', label: 'Audit', icon: ICON.shield, show: can('audit.read') || can('report.sign'), sec: 'audit', children: [
         { href: '/audit', label: 'Audit trail', show: can('audit.read') }, { href: '/audit/reviews', label: 'Reviews', show: can('audit.read') },
         { href: '/reports/signatures', label: 'Report signatures' }] },
@@ -737,7 +837,7 @@
   let readyPromise = null;
   function ready(opts) {
     opts = opts || {};
-    if (!readyPromise) readyPromise = Promise.all([loadBranding(), loadMe(), loadApp()]).then(loadI18n).then(() => { renderShell(); footer(); wireLang(); alarmBar(); translateNode(document.body); if (document.title && catalog[document.title]) document.title = catalog[document.title]; observeI18n(); applyWhiteLabel(); updateBanner(); return { me, brand, app }; });
+    if (!readyPromise) readyPromise = Promise.all([loadBranding(), loadMe(), loadApp()]).then(loadI18n).then(() => { renderShell(); footer(); wireLang(); alarmBar(); scadaWatch(); translateNode(document.body); if (document.title && catalog[document.title]) document.title = catalog[document.title]; observeI18n(); applyWhiteLabel(); updateBanner(); return { me, brand, app }; });
     return readyPromise.then((r) => {
       if (opts.requireAuth && !me) { location.href = '/login'; return new Promise(() => {}); }
       // every page a signed-in person opens; the operator view reports its pictures itself
@@ -771,7 +871,7 @@
   }
   if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyMode);
   applyMode();
-  window.ctrl32 = { ready, loadBranding, loadMe, api, opReport, secondPerson, secondEnsure, logout, toggleMode, can, esc, section, t, appAllows, fullscreen, isFullscreen: () => !!fsCur(), ask, confirm: confirmAsk, setLocale, get locale() { return locale; }, get langs() { return langs; }, get brand() { return brand; }, get logo() { return logoURL(); }, get me() { return me; }, get csrf() { return csrf; }, get app() { return app; }, home, enterApp, ICON,
+  window.ctrl32 = { ready, loadBranding, loadMe, api, opReport, secondPerson, secondEnsure, scadaSignIn, scadaSignOut, logout, toggleMode, can, esc, section, t, appAllows, fullscreen, isFullscreen: () => !!fsCur(), ask, confirm: confirmAsk, setLocale, get locale() { return locale; }, get langs() { return langs; }, get brand() { return brand; }, get logo() { return logoURL(); }, get me() { return me; }, get csrf() { return csrf; }, get app() { return app; }, home, enterApp, ICON,
     fmt: (t) => (t ? new Date(t).toLocaleString(document.documentElement.lang || undefined) : '—'), toast, openSearch, alarmSound, alarmBarRefresh: () => abTick && abTick() };
   // Alarm bar (spec 035): on every page with the menu, for people who read data: the most important alarm waiting for
   // its acknowledgement (class colour, blinking), the numbers of unacknowledged and active alarms, and the class sound,

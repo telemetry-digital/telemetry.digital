@@ -1,0 +1,21 @@
+meta {
+  name: Sign out at the controls
+  type: http
+  seq: 14
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/scada/session
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~why: 
+}
+
+docs {
+  Sign out at the controls
+  
+  Requires permission `data.read`.
+}

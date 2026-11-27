@@ -163,6 +163,12 @@ func (s *Server) audit(r *http.Request, action, entityType, entityID string, old
 		case r.Context().Value(viaMCPKey) != nil:
 			e.ActorName += " via MCP"
 		}
+		// the person signed in at the controls (spec 041); an approval on the spot with a PIN already carries the name
+		if spotFrom(r.Context()) == nil {
+			if x := s.scadaAt(r.Context(), p); x != nil {
+				e.ActorName += " / " + x.Name
+			}
+		}
 	} else {
 		e.ActorType, e.ActorName = "system", "anonymous"
 	}

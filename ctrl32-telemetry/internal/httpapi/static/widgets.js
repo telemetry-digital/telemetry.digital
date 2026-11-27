@@ -355,7 +355,7 @@
     if (!reason) { out.innerHTML = '<span style="color:#d97706">reason is required</span>'; if (reasonEl) reasonEl.focus(); return; }
     if (p.confirm !== false && !window.confirm((p.title || p.key) + ' → ' + value + '?')) { if (window.ctrl32 && ctrl32.opReport) ctrl32.opReport('cancel', p.title || p.key, { key: p.key, value }); return; }
     out.innerHTML = '<span class="muted">sending…</span>';
-    try { const r = await api('POST', '/api/v1/devices/' + dev + '/commands', { method: p.method || 'write', args: { key: p.key, value }, reason, second_person: !!p.second_person });
+    try { const r = await api('POST', '/api/v1/devices/' + dev + '/commands', { method: p.method || 'write', args: { key: p.key, value }, reason, second_person: !!p.second_person, control: ctx.control });
       showCmd(out, r.status, { readback: r.result && r.result.readback, error: r.error });
       if (r.status === 'queued' || r.status === 'sent' || r.status === 'pending') PENDING.set(r.id, out);
       if (reasonEl) reasonEl.value = '';
@@ -571,23 +571,28 @@
   const stateOf = (spec, w) => (w.state || (((spec.states || [])[0] || {}).id) || '');
   const inState = (spec, w, st) => !(spec.states || []).length || stateOf(spec, w) === (st || spec.states[0].id);
   // render(container, spec, {range, filters, nav {state, current, go(state, entity), setEntity(entity)}, header(widget, index) -> html, onReady}) → refresh()
+  // a control that names SCADA groups (spec 041) says so next to its title: who may use it
+  let SG = null; const scadaGroups = () => (SG = SG || (PUBLIC ? Promise.resolve([]) : api('GET', '/api/v1/scada/groups').catch(() => [])));
+  const lockOf = (w) => { const params = w.params || {}; const g = params.scada_groups || []; return g.length ? `<span class="ctl-lock notranslate" data-groups="${esc(g.join(','))}" title="${esc(g.join(', '))}">${esc(g.join(', '))}</span>` : ''; };
+  async function lockNames(container) { const marks = container.querySelectorAll('.ctl-lock[data-groups]'); if (!marks.length) return; const gs = await scadaGroups();
+    for (const m of marks) { const names = m.dataset.groups.split(',').map((k) => TR((gs.find((g) => g.key === k) || { name: k }).name)).join(', '); m.textContent = names; m.title = TR('SCADA groups that may use it') + ': ' + names; } }
   async function render(container, spec, opts) {
-    opts = opts || {}; const range = opts.range || spec.range || '24h'; const filters = opts.filters || defaultFilters(spec); const rowH = (spec.layout && spec.layout.row_height) || 96; const canvas = isCanvas(spec);
+    opts = opts || {}; const slug = opts.slug || ''; const range = opts.range || spec.range || '24h'; const filters = opts.filters || defaultFilters(spec); const rowH = (spec.layout && spec.layout.row_height) || 96; const canvas = isCanvas(spec);
     const nav = opts.nav || null; const vis = (w) => canvas || inState(spec, w, nav && nav.state);
     if (canvas) {
       const W0 = spec.layout.width || 1600, H0 = spec.layout.height || 900;
-      container.innerHTML = `<div class="mimic-wrap"><div class="mimic" data-w="${W0}" data-h="${H0}" style="width:${W0}px;height:${H0}px"><div class="sc-host"></div>${(spec.widgets || []).map((w, i) => { const f = framed(w); return `<div class="dash-widget mimic-widget${f ? ' card' : ''}" data-i="${i}" data-id="${esc(w.id || '')}">${f || opts.header ? `<div class="dash-head${f ? '' : ' mimic-tools'}">${f ? `<b class="dash-title">${esc((w.params && w.params.title) || labelOf(w.type))}</b>` : ''}<span class="grow"></span>${opts.header ? opts.header(w, i) : ''}</div>` : ''}<div class="dash-body"><span class="muted">loading…</span></div></div>`; }).join('')}</div></div>`;
+      container.innerHTML = `<div class="mimic-wrap"><div class="mimic" data-w="${W0}" data-h="${H0}" style="width:${W0}px;height:${H0}px"><div class="sc-host"></div>${(spec.widgets || []).map((w, i) => { const f = framed(w); return `<div class="dash-widget mimic-widget${f ? ' card' : ''}" data-i="${i}" data-id="${esc(w.id || '')}">${f || opts.header ? `<div class="dash-head${f ? '' : ' mimic-tools'}">${f ? `<b class="dash-title">${esc((w.params && w.params.title) || labelOf(w.type))}</b>${lockOf(w)}` : ''}<span class="grow"></span>${opts.header ? opts.header(w, i) : ''}</div>` : ''}<div class="dash-body"><span class="muted">loading…</span></div></div>`; }).join('')}</div></div>`;
       for (const card of container.querySelectorAll('.dash-widget')) placeCanvas(card, spec.widgets[+card.dataset.i].geometry || { x: 0, y: 0, w: 200, h: 200 });
       // Drawing layer (spec 001): vector objects with dynamics below the widgets.
-      container._scada = (window.ctrl32Scada && (opts.edit || (spec.elements || []).length || (spec.layout && spec.layout.bg))) ? window.ctrl32Scada.mount(container.querySelector('.sc-host'), spec, { edit: !!opts.edit }) : null;
+      container._scada = (window.ctrl32Scada && (opts.edit || (spec.elements || []).length || (spec.layout && spec.layout.bg))) ? window.ctrl32Scada.mount(container.querySelector('.sc-host'), spec, { edit: !!opts.edit, slug }) : null;
       fitMimic(container); if (!container._fit) { container._fit = () => fitMimic(container); window.addEventListener('resize', container._fit); }
     } else {
-      container.innerHTML = `<div class="dash-grid" style="--row-h:${rowH}px">${(spec.widgets || []).map((w, i) => vis(w) ? `<div class="card dash-widget" data-i="${i}" data-id="${esc(w.id || '')}"><div class="dash-head"><b class="dash-title">${esc((w.params && w.params.title) || labelOf(w.type))}</b><span class="grow"></span>${opts.header ? opts.header(w, i) : ''}</div><div class="dash-body"><span class="muted">loading…</span></div></div>` : '').join('')}</div>`;
+      container.innerHTML = `<div class="dash-grid" style="--row-h:${rowH}px">${(spec.widgets || []).map((w, i) => vis(w) ? `<div class="card dash-widget" data-i="${i}" data-id="${esc(w.id || '')}"><div class="dash-head"><b class="dash-title">${esc((w.params && w.params.title) || labelOf(w.type))}</b>${lockOf(w)}<span class="grow"></span>${opts.header ? opts.header(w, i) : ''}</div><div class="dash-body"><span class="muted">loading…</span></div></div>` : '').join('')}</div>`;
       for (const card of container.querySelectorAll('.dash-widget')) place(card, spec.widgets[+card.dataset.i].geometry || { x: 0, y: 0, w: 6, h: 3 });
     }
     const ctxOf = (w, card) => { const g = w.geometry || { w: 6, h: 3 }; const res = (card && card._res) || null; const binds = res ? res.bindings : (w.bindings || {});
       const c = canvas ? { range, bindings: binds, w: Math.max(1, Math.round(g.w / 130)), h: Math.max(1, Math.round(g.h / 96)), px_h: g.h } : { range, bindings: binds, w: g.w, h: g.h, px_h: g.h * rowH };
-      c.cond = (v) => condFormat(card, w.params || {}, v); c.edit = !!opts.header; c.filters = filters; c.query = (extra) => (w.alias ? aliasQuery(spec, w, filters, extra, nav) : queryDS(w, filters, extra));
+      c.cond = (v) => condFormat(card, w.params || {}, v); c.edit = !!opts.header; c.control = slug && w.id ? { dashboard: slug, id: w.id } : undefined; c.filters = filters; c.query = (extra) => (w.alias ? aliasQuery(spec, w, filters, extra, nav) : queryDS(w, filters, extra));
       if (res) { c.scopeDS = res.scopeDS; c.devScope = res.devScope; c.truncated = res.truncated; c.total = res.total; c.items = res.items; }
       // drill-down: the actions of the widget for an event, running one with an entity, the current entity
       c.nav = nav; c.actions = (ev) => (w.actions || []).filter((a) => a.event === ev && (!PUBLIC || a.action === 'state')); c.act = (ev, ent, a) => (opts.header ? false : runAction(a || c.actions(ev)[0], ent, nav));
@@ -595,6 +600,7 @@
       c.entity = () => { const b = (res ? res.bindings : w.bindings) || {}; const id = (b.datastreams || [])[0]; if (id) { const it = (res && res.items || []).find((x) => x.id === id) || {}; return { type: 'datastream', id, name: it.label || it.key || '', device_id: it.device_id, device: it.device, asset_id: it.asset_id, asset: it.asset }; } const dv = (b.devices || [])[0]; if (dv) return { type: 'device', id: dv, device_id: dv }; return nav && nav.current ? nav.current : null; };
       return c; };
     for (const card of container.querySelectorAll('.dash-widget')) { const w = spec.widgets[+card.dataset.i]; decorate(card, w, opts, () => ctxOf(w, card)); }
+    lockNames(container);
     for (const card of container.querySelectorAll('.dash-widget')) filterBar(card, spec.widgets[+card.dataset.i], () => refreshOne(card));
     const HEAVY = new Set(['overview_table', 'period_table']);
     const refreshOne = async (card, live) => {

@@ -925,6 +925,10 @@ func (s *Server) downloadRecipe(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 409, map[string]any{"error": "nothing was written: " + problems[0]["label"] + ": " + problems[0]["error"], "problems": problems})
 		return
 	}
+	operator, ok := s.scadaGate(w, r, org, "recipe", nil) // who is at the controls (spec 041)
+	if !ok {
+		return
+	}
 	initial := "running"
 	if fourEyes {
 		initial = "pending"
@@ -939,9 +943,9 @@ func (s *Server) downloadRecipe(w http.ResponseWriter, r *http.Request) {
 	}
 	ij, _ := json.Marshal(items)
 	var did string
-	if err := s.pool.QueryRow(r.Context(), `INSERT INTO core.recipe_download (org_id, recipe_id, record_id, recipe_name, record_name, record_number, record_version, device_id, target_name, prefix, items, status, requested_by, requested_by_name, reason)
-		VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8::uuid, $9, $10, $11::jsonb, $12, NULLIF($13,'')::uuid, $14, $15) RETURNING id::text`,
-		org, rc.ID, rec.ID, rc.Name, rec.Name, rec.Number, rec.Version, tg.DeviceID, tg.Name, tg.Prefix, string(ij), initial, p.UserID, p.Username, in.Reason).Scan(&did); err != nil {
+	if err := s.pool.QueryRow(r.Context(), `INSERT INTO core.recipe_download (org_id, recipe_id, record_id, recipe_name, record_name, record_number, record_version, device_id, target_name, prefix, items, status, requested_by, requested_by_name, reason, operator)
+		VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8::uuid, $9, $10, $11::jsonb, $12, NULLIF($13,'')::uuid, $14, $15, $16) RETURNING id::text`,
+		org, rc.ID, rec.ID, rc.Name, rec.Name, rec.Number, rec.Version, tg.DeviceID, tg.Name, tg.Prefix, string(ij), initial, p.UserID, p.Username, in.Reason, operator).Scan(&did); err != nil {
 		s.log.Error("recipe download insert", "err", err)
 		writeErr(w, 500, "load not recorded")
 		return

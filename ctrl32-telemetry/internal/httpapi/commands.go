@@ -31,7 +31,7 @@ func (s *Server) listCommands(w http.ResponseWriter, r *http.Request) {
 	}
 	// lazy expiry: commands past their deadline without an ack are marked expired
 	_, _ = s.pool.Exec(r.Context(), `UPDATE core.device_command SET status = 'expired' WHERE device_id = $1::uuid AND status IN ('pending','queued','sent') AND expires_at IS NOT NULL AND expires_at < now()`, id)
-	rows, err := s.pool.Query(r.Context(), `SELECT c.id::text, c.method, c.args, c.expires_at, c.status, c.issued_by_name, c.issued_at, c.sent_at, c.acked_at, c.result, c.error, c.reason, c.approved_by_name
+	rows, err := s.pool.Query(r.Context(), `SELECT c.id::text, c.method, c.args, c.expires_at, c.status, c.issued_by_name, c.issued_at, c.sent_at, c.acked_at, c.result, c.error, c.reason, c.approved_by_name, c.operator
 		FROM core.device_command c JOIN core.device d ON d.id = c.device_id WHERE c.device_id = $1::uuid AND ($2 = '' OR d.org_id = $2::uuid) ORDER BY c.issued_at DESC LIMIT $3`, id, orgOf(p), limit)
 	if err != nil {
 		writeErr(w, 500, "query failed")
@@ -40,16 +40,16 @@ func (s *Server) listCommands(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	out := []map[string]any{}
 	for rows.Next() {
-		var cid, method, status, by, reason string
+		var cid, method, status, by, reason, operator string
 		var args, result json.RawMessage
 		var exp, sent, acked *time.Time
 		var issued time.Time
 		var errText, approvedBy *string
-		if err := rows.Scan(&cid, &method, &args, &exp, &status, &by, &issued, &sent, &acked, &result, &errText, &reason, &approvedBy); err != nil {
+		if err := rows.Scan(&cid, &method, &args, &exp, &status, &by, &issued, &sent, &acked, &result, &errText, &reason, &approvedBy, &operator); err != nil {
 			writeErr(w, 500, "scan failed")
 			return
 		}
-		out = append(out, map[string]any{"id": cid, "method": method, "args": args, "expires_at": exp, "status": status, "issued_by": by, "issued_at": issued, "sent_at": sent, "acked_at": acked, "result": result, "error": errText, "reason": reason, "approved_by": approvedBy})
+		out = append(out, map[string]any{"id": cid, "method": method, "args": args, "expires_at": exp, "status": status, "issued_by": by, "issued_at": issued, "sent_at": sent, "acked_at": acked, "result": result, "error": errText, "reason": reason, "approved_by": approvedBy, "operator": operator})
 	}
 	writeJSON(w, 200, out)
 }
@@ -69,6 +69,9 @@ func (s *Server) sendCommand(w http.ResponseWriter, r *http.Request) {
 		// SecondPerson: the control that sent it is marked "needs a second person" (spec 040); it can only add the
 		// approval, never remove the one the organization requires.
 		SecondPerson bool `json:"second_person"`
+		// Control names the widget or the picture element the command came from (spec 041). The server reads its
+		// groups and its mark "needs a second person" from the stored dashboard.
+		Control *controlRef `json:"control"`
 	}
 	if err := decodeJSON(r, &in, 16384); err != nil {
 		writeErr(w, 400, err.Error())
@@ -108,16 +111,26 @@ func (s *Server) sendCommand(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, code, err.Error())
 		return
 	}
+	// Who is at the controls (spec 041): the groups of the control, and the SCADA user the organization may require.
+	ctl, err := s.resolveControl(r.Context(), org, in.Control, in.Args)
+	if err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	operator, ok := s.scadaGate(w, r, org, "command", ctl)
+	if !ok {
+		return
+	}
 	// Four eyes (URS H-08): the command is recorded as pending and executed only after a different user approves it.
-	fourEyes := in.SecondPerson || (s.iam != nil && s.iam.Policy(r.Context(), org).FourEyesCommands)
+	fourEyes := in.SecondPerson || (ctl != nil && ctl.Second) || (s.iam != nil && s.iam.Policy(r.Context(), org).FourEyesCommands)
 	initial := "queued"
 	if fourEyes {
 		initial = "pending"
 	}
 	exp := time.Now().Add(time.Duration(in.TTLSeconds) * time.Second).UTC()
 	var cid string
-	if err := s.pool.QueryRow(r.Context(), `INSERT INTO core.device_command (org_id, device_id, method, args, expires_at, issued_by, issued_by_name, reason, status)
-		VALUES ($1::uuid, $2::uuid, $3, $4::jsonb, $5, NULLIF($6,'')::uuid, $7, $8, $9) RETURNING id::text`, org, id, in.Method, string(in.Args), exp, p.UserID, p.Username, in.Reason, initial).Scan(&cid); err != nil {
+	if err := s.pool.QueryRow(r.Context(), `INSERT INTO core.device_command (org_id, device_id, method, args, expires_at, issued_by, issued_by_name, reason, status, operator)
+		VALUES ($1::uuid, $2::uuid, $3, $4::jsonb, $5, NULLIF($6,'')::uuid, $7, $8, $9, $10) RETURNING id::text`, org, id, in.Method, string(in.Args), exp, p.UserID, p.Username, in.Reason, initial, operator).Scan(&cid); err != nil {
 		s.log.Error("command insert", "err", err)
 		writeErr(w, 500, "insert failed")
 		return

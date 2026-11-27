@@ -108,7 +108,7 @@ async function show(slug, how){
   const spec = d.spec || {}, work = $('#opWork');
   work.classList.toggle('scroll', !WG.isCanvas(spec));
   clearInterval(timer); work.innerHTML = '';
-  refreshFn = await WG.render(work, spec, {range: spec.range}); // states of grid dashboards stay on the dashboard page
+  refreshFn = await WG.render(work, spec, {range: spec.range, slug: d.slug || slug}); // states of grid dashboards stay on the dashboard page
   if(my !== seq) return;
   WG.fitMimic(work);
   timer = setInterval(() => refreshFn && refreshFn(), (spec.refresh_s || 30) * 1000);

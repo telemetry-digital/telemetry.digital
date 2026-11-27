@@ -308,6 +308,7 @@
       draw();
     }
     if (!opts.edit) {
+      if (opts.slug) for (const e of elements) SLUGS.set(e, opts.slug);
       root.addEventListener('click', (ev) => { const g = ev.target.closest('[data-eid]'); if (!g) return; const e = elements.find((x) => x.id === g.dataset.eid); if (e && clickable(e)) act(e, { values: vals, ds: dsMap }); });
     }
     draw();
@@ -315,6 +316,8 @@
   }
 
   // ---- events: faceplate, trend, screen change, command ------------------------------------------------
+  // the control a command comes from: the server reads its groups and its mark from the stored picture (spec 041)
+  const SLUGS = new WeakMap(); const ctlOf = (e) => (SLUGS.get(e) && e.id ? { dashboard: SLUGS.get(e), id: e.id } : undefined);
   const isPublic = () => !!(window.ctrl32Widgets && window.ctrl32Widgets.isPublic && window.ctrl32Widgets.isPublic());
   const canCmd = () => !isPublic() && window.ctrl32 && typeof ctrl32.can === 'function' && ctrl32.can('device.command');
   function act(e, live) {
@@ -375,15 +378,15 @@
       const spec = r.spec || {}; const w0 = (spec.layout && spec.layout.width) || 900;
       box.style.width = `min(${w0}px, 92vw)`;
       w.querySelector('.sc-pop-title').textContent = title;
-      const refresh = await WG.render(box, spec, { range: spec.range || '6h', live: false });
+      const refresh = await WG.render(box, spec, { range: spec.range || '6h', live: false, slug });
       if (WG.fitMimic) WG.fitMimic(box);
       w._timer = setInterval(() => { if (w.isConnected) refresh(); else closeWin(w); }, 3000);
     } catch (x) { box.innerHTML = `<span class="muted">${esc(x.message)}</span>`; }
   }
-  async function sendCommand(out, device, method, key, value, reason, second) {
+  async function sendCommand(out, device, method, key, value, reason, second, control) {
     out.innerHTML = '<span class="muted">sending…</span>';
     try {
-      const r = await ctrl32.api('POST', '/api/v1/devices/' + device + '/commands', { method: method || 'write', args: { key, value }, reason, second_person: !!second });
+      const r = await ctrl32.api('POST', '/api/v1/devices/' + device + '/commands', { method: method || 'write', args: { key, value }, reason, second_person: !!second, control });
       out.innerHTML = r.status === 'acked' ? '<span class="badge ok">acked</span>' : r.status === 'pending' ? '<span class="badge warn">pending</span> <span class="muted">waiting for approval by another user</span>' : `<span class="badge">${esc(r.status)}</span>`;
     } catch (x) { out.innerHTML = `<span class="badge bad">${esc(x.message)}</span>`; }
   }
@@ -393,7 +396,7 @@
     else if (!canCmd()) { d.innerHTML = `<div class="form"><h2 style="margin-top:0">${esc(e.name || 'Command')}</h2><p class="muted">${isPublic() ? 'read-only' : 'no permission to send commands'}</p><div class="actions"><button class="btn" type="button" data-close>Close</button></div></div>`; }
     else {
       d.innerHTML = `<form class="form" method="dialog"><h2 style="margin-top:0">${esc(e.name || 'Command')}</h2><p>${esc(ev.key)} → <b>${esc(String(ev.value ?? ''))}</b></p><label>Reason (audit trail) <input name="reason" required maxlength="200"></label><div class="sc-out" style="min-height:18px"></div><div class="actions"><button class="btn primary" type="submit">Send</button><button class="btn" type="button" data-close>Close</button></div></form>`;
-      d.querySelector('form').onsubmit = (x) => { x.preventDefault(); if (ev.confirm !== false && !window.confirm(`${ev.key} → ${ev.value}?`)) { if (window.ctrl32 && ctrl32.opReport) ctrl32.opReport('cancel', e.name || ev.key, { key: ev.key, value: ev.value }); return; } sendCommand(d.querySelector('.sc-out'), e.device, ev.method, ev.key, ev.value, x.target.reason.value.trim(), e.second_person); };
+      d.querySelector('form').onsubmit = (x) => { x.preventDefault(); if (ev.confirm !== false && !window.confirm(`${ev.key} → ${ev.value}?`)) { if (window.ctrl32 && ctrl32.opReport) ctrl32.opReport('cancel', e.name || ev.key, { key: ev.key, value: ev.value }); return; } sendCommand(d.querySelector('.sc-out'), e.device, ev.method, ev.key, ev.value, x.target.reason.value.trim(), e.second_person, ctlOf(e)); };
     }
     for (const b of d.querySelectorAll('[data-close]')) b.onclick = () => d.close();
     d.showModal();
@@ -417,7 +420,7 @@
     };
     for (const b of d.querySelectorAll('[data-r]')) b.onclick = () => { d.querySelectorAll('[data-r]').forEach((k) => k.classList.toggle('primary', k === b)); drawTrend(b.dataset.r); };
     if (ctl && canCmd()) {
-      const send = (value) => { const reason = d.querySelector('.sc-reason').value.trim(); const out = d.querySelector('.sc-out'); if (!reason) { out.innerHTML = '<span style="color:#d97706">reason is required</span>'; d.querySelector('.sc-reason').focus(); return; } if (!window.confirm(`${e.key} → ${value}?`)) return; sendCommand(out, e.device, 'write', e.key, value, reason, e.second_person); };
+      const send = (value) => { const reason = d.querySelector('.sc-reason').value.trim(); const out = d.querySelector('.sc-out'); if (!reason) { out.innerHTML = '<span style="color:#d97706">reason is required</span>'; d.querySelector('.sc-reason').focus(); return; } if (!window.confirm(`${e.key} → ${value}?`)) return; sendCommand(out, e.device, 'write', e.key, value, reason, e.second_person, ctlOf(e)); };
       for (const b of d.querySelectorAll('[data-v]')) b.onclick = () => send(b.dataset.v === 'true');
       d.querySelector('[data-sp]').onclick = () => { const v = parseFloat(d.querySelector('.sc-sp').value); if (isNaN(v)) { d.querySelector('.sc-out').innerHTML = '<span style="color:#d97706">enter a number</span>'; return; } send(v); };
     }

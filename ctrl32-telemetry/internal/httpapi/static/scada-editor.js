@@ -527,7 +527,7 @@
       h += `<div class="row">${t === 'symbol' || t === 'rect' || t === 'ellipse' || t === 'pipe' ? chk('style.shade', t === 'pipe' ? st.shade !== false : st.shade, t === 'pipe' ? '3D highlight' : 'Metallic shading') : ''}${chk('style.shadow', st.shadow, 'Shadow')}</div></details>`;
       if (one) {
         h += `<details open><summary>Binding</summary><label>Tag (datastream) <input class="se-dsfilter" placeholder="filter…"><select data-f="tag" data-kind="text">${dsOptions(e.tag, '— none —')}</select></label><div class="row">${txt('unit', e.unit, 'Unit (empty = datastream)', 'maxlength="16"')}${num('decimals', e.decimals, 'Decimals', 'min="0" max="6" step="1"')}</div>`;
-        h += `<label>Device for operation <select data-f="device" data-kind="text"><option value="">— none —</option>${(o.devices || []).map((d) => `<option value="${d.id}"${d.id === e.device ? ' selected' : ''}>${esc(d.name || d.external_id)}</option>`).join('')}</select></label>${txt('key', e.key, 'Command key (register / datastream key)', 'maxlength="64"')}${chk('second_person', e.second_person, 'Needs a second person')}</details>`;
+        h += `<label>Device for operation <select data-f="device" data-kind="text"><option value="">— none —</option>${(o.devices || []).map((d) => `<option value="${d.id}"${d.id === e.device ? ' selected' : ''}>${esc(d.name || d.external_id)}</option>`).join('')}</select></label>${txt('key', e.key, 'Command key (register / datastream key)', 'maxlength="64"')}${chk('second_person', e.second_person, 'Needs a second person')}${(o.groups || []).length ? `<fieldset class="se-grp" style="border:0;padding:0;margin:6px 0 0"><legend style="padding:0">SCADA groups that may use it</legend>${(o.groups || []).map((g) => `<label class="inline"><input type="checkbox" data-f="scada_groups" data-kind="grp" value="${esc(g.key)}" ${(e.scada_groups || []).includes(g.key) ? 'checked' : ''}><span class="notranslate">${esc(window.ctrl32 ? ctrl32.t(g.name) : g.name)}</span></label>`).join('')}</fieldset>` : ''}</details>`;
         h += dynEditor(e) + eventEditor(e);
       }
       props.innerHTML = h; wireProps(es);
@@ -595,6 +595,7 @@
         const f = ev.target.closest('[data-f]');
         if (f) {
           const path = f.dataset.f, kind = f.dataset.kind; let v = kind === 'bool' ? f.checked : kind === 'number' ? (f.value === '' ? undefined : parseFloat(f.value)) : f.value.trim();
+          if (kind === 'grp') { v = [...props.querySelectorAll('[data-f="scada_groups"]:checked')].map((x) => x.value); if (!v.length) v = undefined; }
           if (kind === 'color' && v && !colRe.test(v)) { f.setCustomValidity('#rrggbb or none'); f.reportValidity(); return; } f.setCustomValidity && f.setCustomValidity('');
           if (path[0] === '#') { // picture settings
             const k = path.slice(1); if (k === 'scheme') { if (v) spec.scheme = v; else delete spec.scheme; } else if (k === 'bg') { if (v) spec.layout.bg = v; else delete spec.layout.bg; } else if (v !== undefined) spec.layout[k] = Math.round(v);

@@ -1,0 +1,27 @@
+meta {
+  name: Remove a SCADA group
+  type: http
+  seq: 11
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/scada/groups/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~reason: 
+}
+
+docs {
+  Remove a SCADA group
+  
+  Controls that name the group stay closed to everybody until they are edited.
+  
+  Requires permission `user.admin`.
+}

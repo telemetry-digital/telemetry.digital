@@ -63,7 +63,8 @@ type spotCtxKey struct{}
 
 // spotInfo marks a request that runs an approval given on the spot: the approver's credentials were checked at the
 // station of Requester.
-type spotInfo struct{ Requester string }
+// Operator is the SCADA user who approved with a PIN or a password of the controls (spec 041), empty for an account.
+type spotInfo struct{ Requester, Operator string }
 
 func spotFrom(ctx context.Context) *spotInfo {
 	si, _ := ctx.Value(spotCtxKey{}).(*spotInfo)
@@ -163,8 +164,8 @@ func (s *Server) requestGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	minutes := pol.SecondPersonMinutes()
-	if err := s.pool.QueryRow(r.Context(), `INSERT INTO core.second_person_grant (org_id, area, user_id, user_name, station, station_ip, reason, minutes)
-		VALUES ($1::uuid, $2, NULLIF($3,'')::uuid, $4, $5, $6, $7, $8) RETURNING id::text, expires_at`, org, in.Area, p.UserID, p.Username, station(p), clientIP(r), strings.TrimSpace(in.Reason), minutes).Scan(&id, &expires); err != nil {
+	if err := s.pool.QueryRow(r.Context(), `INSERT INTO core.second_person_grant (org_id, area, user_id, user_name, station, station_ip, reason, minutes, operator)
+		VALUES ($1::uuid, $2, NULLIF($3,'')::uuid, $4, $5, $6, $7, $8, $9) RETURNING id::text, expires_at`, org, in.Area, p.UserID, p.Username, station(p), clientIP(r), strings.TrimSpace(in.Reason), minutes, s.opName(r)).Scan(&id, &expires); err != nil {
 		s.log.Error("second person grant insert", "err", err)
 		writeErr(w, 500, "request could not be recorded")
 		return
@@ -327,7 +328,7 @@ func (s *Server) listWaiting(w http.ResponseWriter, r *http.Request) {
 			"own": own, "can_approve": can && !own, "can_reject": can, "approve": base + "/approve", "reject": base + "/reject"})
 	}
 	if p.Has("device.command") || p.Has("data.read") {
-		rows, err := s.pool.Query(ctx, `SELECT c.id::text, c.device_id::text, d.name, c.method, c.args, c.reason, c.issued_by_name, COALESCE(c.issued_by::text, ''), c.issued_at, c.expires_at
+		rows, err := s.pool.Query(ctx, `SELECT c.id::text, c.device_id::text, d.name, c.method, c.args, c.reason, c.issued_by_name || CASE WHEN c.operator <> '' THEN ' / ' || c.operator ELSE '' END, COALESCE(c.issued_by::text, ''), c.issued_at, c.expires_at
 			FROM core.device_command c JOIN core.device d ON d.id = c.device_id
 			WHERE c.org_id = $1::uuid AND c.status = 'pending' AND (c.expires_at IS NULL OR c.expires_at > now()) ORDER BY c.issued_at LIMIT 200`, org)
 		if err == nil {
@@ -342,7 +343,7 @@ func (s *Server) listWaiting(w http.ResponseWriter, r *http.Request) {
 			}
 			rows.Close()
 		}
-		rows, err = s.pool.Query(ctx, `SELECT id::text, device_id::text, recipe_name, record_name, target_name, reason, requested_by_name, COALESCE(requested_by::text, ''), requested_at
+		rows, err = s.pool.Query(ctx, `SELECT id::text, device_id::text, recipe_name, record_name, target_name, reason, requested_by_name || CASE WHEN operator <> '' THEN ' / ' || operator ELSE '' END, COALESCE(requested_by::text, ''), requested_at
 			FROM core.recipe_download WHERE org_id = $1::uuid AND status = 'pending' AND requested_at > now() - interval '24 hours' ORDER BY requested_at LIMIT 200`, org)
 		if err == nil {
 			for rows.Next() {
@@ -355,7 +356,7 @@ func (s *Server) listWaiting(w http.ResponseWriter, r *http.Request) {
 			rows.Close()
 		}
 	}
-	rows, err := s.pool.Query(ctx, `SELECT id::text, kind, summary, reason, requested_by_name, COALESCE(requested_by::text, ''), requested_at, expires_at FROM core.change_request
+	rows, err := s.pool.Query(ctx, `SELECT id::text, kind, summary, reason, requested_by_name || CASE WHEN operator <> '' THEN ' / ' || operator ELSE '' END, COALESCE(requested_by::text, ''), requested_at, expires_at FROM core.change_request
 		WHERE org_id = $1::uuid AND status = 'pending' ORDER BY requested_at LIMIT 200`, org)
 	if err == nil {
 		for rows.Next() {
@@ -368,7 +369,7 @@ func (s *Server) listWaiting(w http.ResponseWriter, r *http.Request) {
 		}
 		rows.Close()
 	}
-	rows, err = s.pool.Query(ctx, `SELECT id::text, area, minutes, reason, user_name, COALESCE(user_id::text, ''), requested_at, expires_at FROM core.second_person_grant
+	rows, err = s.pool.Query(ctx, `SELECT id::text, area, minutes, reason, user_name || CASE WHEN operator <> '' THEN ' / ' || operator ELSE '' END, COALESCE(user_id::text, ''), requested_at, expires_at FROM core.second_person_grant
 		WHERE org_id = $1::uuid AND status = 'pending' ORDER BY requested_at LIMIT 200`, org)
 	if err == nil {
 		for rows.Next() {
@@ -402,6 +403,9 @@ func (s *Server) approveOnSpot(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 		Code     string `json:"code"`
 		Reason   string `json:"reason"`
+		// Scada: the second person is a SCADA user (spec 041); username is their name at the controls and password
+		// their PIN or password.
+		Scada bool `json:"scada"`
 	}
 	if err := decodeJSON(r, &in, 4096); err != nil {
 		writeErr(w, 400, err.Error())
@@ -434,7 +438,17 @@ func (s *Server) approveOnSpot(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 429, "too many failed approvals; wait a minute")
 		return
 	}
-	ap, err := s.iam.Witness(r.Context(), org, in.Username, in.Password, in.Code, clientIP(r), r.UserAgent())
+	var ap *iam.Principal
+	var err error
+	spot := &spotInfo{Requester: p.Username}
+	if in.Scada {
+		ap, err = s.scadaWitness(w, r, org, p, in.Kind, in.ID, in.Username, in.Password, spot)
+		if ap == nil && err == nil {
+			return // answered
+		}
+	} else {
+		ap, err = s.iam.Witness(r.Context(), org, in.Username, in.Password, in.Code, clientIP(r), r.UserAgent())
+	}
 	if err != nil {
 		s.stepUpLimiter.allow("second:" + p.UserID)
 		s.log.Warn("second person not accepted", "security", true, "station_user", p.Username, "second", in.Username, "err", err, "remote", clientIP(r))
@@ -448,7 +462,7 @@ func (s *Server) approveOnSpot(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if ap.UserID == p.UserID {
+	if !in.Scada && ap.UserID == p.UserID {
 		writeErr(w, 403, "four eyes: a different person must approve")
 		return
 	}
@@ -458,7 +472,7 @@ func (s *Server) approveOnSpot(w http.ResponseWriter, r *http.Request) {
 	}
 	body, _ := json.Marshal(map[string]string{"reason": reason})
 	ctx := context.WithValue(r.Context(), principalKey, ap)
-	ctx = context.WithValue(ctx, spotCtxKey{}, &spotInfo{Requester: p.Username})
+	ctx = context.WithValue(ctx, spotCtxKey{}, spot)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, path, bytes.NewReader(body))
 	if err != nil {
 		writeErr(w, 500, "approval failed")
@@ -490,6 +504,45 @@ func (s *Server) approveOnSpot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"kind": in.Kind, "id": in.ID, "approved_by": ap.Username, "result": result})
+}
+
+// scadaWitness checks a SCADA user who approves on the spot with the PIN or the password of the controls (spec 041).
+// The approval then runs with the rights of the station — a SCADA user never gets more than the station may do — and
+// is recorded as "station / name". Three things must hold: the person is a member of a group that may approve, the
+// request was made by a SCADA user, and that was somebody else. It returns nil, nil when it answered itself.
+func (s *Server) scadaWitness(w http.ResponseWriter, r *http.Request, org string, p *iam.Principal, kind, id, name, secret string, spot *spotInfo) (*iam.Principal, error) {
+	u, err := s.iam.ScadaVerify(r.Context(), org, name, secret, "scada_second", clientIP(r), r.UserAgent())
+	if err != nil {
+		return nil, err
+	}
+	if !u.Approves {
+		writeErr(w, 403, "four eyes: the groups of this SCADA user may not approve as the second person")
+		return nil, nil
+	}
+	q := map[string]string{
+		"command": `SELECT operator FROM core.device_command WHERE id = $1::uuid AND org_id = $2::uuid`,
+		"recipe":  `SELECT operator FROM core.recipe_download WHERE id = $1::uuid AND org_id = $2::uuid`,
+		"change":  `SELECT operator FROM core.change_request WHERE id = $1::uuid AND org_id = $2::uuid`,
+		"grant":   `SELECT operator FROM core.second_person_grant WHERE id = $1::uuid AND org_id = $2::uuid`,
+	}[kind]
+	var asked string
+	if err := s.pool.QueryRow(r.Context(), q, id, org).Scan(&asked); err != nil {
+		writeErr(w, 404, "the request was not found")
+		return nil, nil
+	}
+	if asked == "" {
+		writeErr(w, 403, "four eyes: nobody was signed in at the controls when this was asked for, so an account must approve it")
+		return nil, nil
+	}
+	if strings.EqualFold(asked, u.Name) {
+		writeErr(w, 403, "four eyes: a different person must approve")
+		return nil, nil
+	}
+	cp := *p
+	cp.UserID, cp.SessionID, cp.TokenID = "", "", ""
+	cp.Username = p.Username + " / " + u.Name
+	spot.Operator = u.Name
+	return &cp, nil
 }
 
 // wantsUnmasked: a live picture asked for without its privacy masks.

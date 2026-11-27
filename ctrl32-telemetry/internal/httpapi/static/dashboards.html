@@ -173,6 +173,7 @@
 const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api, WG = ctrl32Widgets;
 const parts = location.pathname.split('/').filter(Boolean); // dashboards | dashboards/slug | dashboards/slug/edit
 const SLUG = parts[1] || '', MODE = parts[2] || (SLUG ? 'view' : 'list');
+let SGROUPS = []; // SCADA groups a control may name (spec 041)
 let CAT = null, DS = [], DEVS = [], DASH = null, SPEC = null, SEL = -1, refreshFn = null, timer = null, FACETS = {}, EFC = null;
 const uid = () => 'w' + Math.random().toString(36).slice(2, 8);
 
@@ -204,7 +205,7 @@ async function loadView(){
   const nav = ctrl32DashStates.mount($('#vStates'), SPEC, {onChange: () => run()});
   const rf = (SPEC.filters || []).some(d => d.kind === 'range'); $('#vRangeL').hidden = rf;
   const ur = new URLSearchParams(location.search).get('f.range'); if(!rf && ur && ctrl32DashFilters.RANGES.includes(ur)) $('#vRange').value = ur;
-  const run = async () => { refreshFn = await WG.render($('#vGrid'), SPEC, {range: rf ? (fc.values.range || SPEC.range) : $('#vRange').value, filters: fc.values, nav}); };
+  const run = async () => { refreshFn = await WG.render($('#vGrid'), SPEC, {range: rf ? (fc.values.range || SPEC.range) : $('#vRange').value, filters: fc.values, nav, slug: DASH.slug}); };
   $('#vRange').onchange = () => { const u = new URLSearchParams(location.search); if($('#vRange').value === SPEC.range) u.delete('f.range'); else u.set('f.range', $('#vRange').value); history.replaceState(null, '', location.pathname + (u.toString() ? '?' + u : '')); run(); };
   $('#vRefresh').onclick = () => refreshFn && refreshFn();
   await run(); clearInterval(timer); timer = setInterval(() => refreshFn && refreshFn(), (SPEC.refresh_s || 30) * 1000);
@@ -276,6 +277,8 @@ const iconOpts = (v) => ['', ...Object.keys(window.ctrl32Icons || {})].map(n => 
 const toLocalDT = (s) => { if(!s) return ''; const d = new Date(s); if(isNaN(d)) return ''; const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 16); };
 const colorField = (attr, v) => `<span class="row" style="gap:4px;align-items:center;flex-wrap:nowrap"><input type="color" data-cpick value="${/^#[0-9a-f]{6}$/i.test(v || '') ? v : '#000000'}" style="width:34px;height:28px;padding:0;border:none;background:none"><input ${attr} value="${esc(v || '')}" placeholder="#rrggbb" maxlength="9" style="width:92px;font-family:var(--mono)"><button class="btn small ghost" type="button" data-cclear title="Clear">✕</button></span>`;
 function paramHTML(p, v){
+  if(p.name === 'scada_groups'){ const cur = Array.isArray(v) ? v : []; const all = SGROUPS.map(g => g.key); const gone = cur.filter(k => !all.includes(k));
+    return `<fieldset class="src-box"><legend>${esc(p.label)}</legend>${SGROUPS.map(g => `<label class="inline"><input type="checkbox" data-sg value="${esc(g.key)}" ${cur.includes(g.key) ? 'checked' : ''}><span class="notranslate">${esc(ctrl32.t(g.name))}</span></label>`).join('')}${gone.map(k => `<label class="inline"><input type="checkbox" data-sg value="${esc(k)}" checked><span class="notranslate" style="color:#d97706">${esc(k)}</span></label>`).join('')}<div class="muted" style="font-size:12px">Nobody ticked: everybody who may send commands. With groups, a person signs in at the controls with a PIN or a password.</div></fieldset>`; }
   const lab = esc(p.label) + (p.help ? ` <span class="muted" style="font-size:11px" title="${esc(p.help)}">ⓘ</span>` : '');
   switch(p.kind){
   case 'bool': return `<label class="inline"><input type="checkbox" data-p="${p.name}" ${v ? 'checked' : ''}><span>${lab}</span></label>`;
@@ -341,6 +344,7 @@ function renderProps(target){
     for(const el of box.querySelectorAll('[data-p]')){ const p = (d.params || []).find(x => x.name === el.dataset.p); if(!p) continue;
       if(p.kind === 'bool') w.params[p.name] = el.checked; else if(p.kind === 'number') w.params[p.name] = numOrNull(el.value); else if(p.kind === 'list') w.params[p.name] = el.value.split(',').map(s => s.trim()).filter(Boolean);
       else if(p.kind === 'datetime') w.params[p.name] = el.value ? new Date(el.value).toISOString().replace(/\.\d{3}Z$/, 'Z') : ''; else w.params[p.name] = el.value.trim(); }
+    if((d.params || []).some(x => x.name === 'scada_groups')) w.params.scada_groups = [...box.querySelectorAll('[data-sg]:checked')].map(x => x.value);
     for(const p of (d.params || []).filter(x => x.kind === 'multi')) w.params[p.name] = [...box.querySelectorAll(`[data-pm="${p.name}"]:checked`)].map(x => x.value);
     const sp = (d.params || []).find(x => x.kind === 'series'); if(sp && box.querySelector('[data-ser]')) w.params[sp.name] = [...box.querySelectorAll('[data-ser]')].map(f => { const o = {}; for(const el of f.querySelectorAll('[data-s]')){ const k = el.dataset.s; if(el.type === 'checkbox'){ if(el.checked) o[k] = true; } else if(k === 'decimals'){ if(el.value !== '') o[k] = parseFloat(el.value); } else if(el.value.trim()) o[k] = el.value.trim(); } return o; });
     for(const rp of (d.params || []).filter(x => x.kind === 'ranges')){ const host = box.querySelector(`[data-ranges="${rp.name}"]`); if(!host) continue; w.params[rp.name] = [...host.querySelectorAll('[data-rng]')].map(r => { const g = (k) => r.querySelector(`[data-r="${k}"]`).value; const o = {op: g('op'), v: numOrNull(g('v')), target: g('target'), color: g('color').trim()}; if(o.op === 'between') o.v2 = numOrNull(g('v2')); return o; }); }
@@ -643,6 +647,7 @@ function applyActions(box, w){
   if(out.length) w.actions = out; else delete w.actions;
 }
 async function loadEdit(){
+  SGROUPS = await api('GET', '/api/v1/scada/groups').catch(() => []);
   [CAT, DS, DEVS, DASH, FACETS, ASSETS, SITES] = await Promise.all([api('GET','/api/v1/dashboards/catalog'), api('GET','/api/v1/datastreams'), api('GET','/api/v1/devices'), api('GET', `/api/v1/dashboards/${encodeURIComponent(SLUG)}`), api('GET', '/api/v1/datastreams/facets?kinds=site,asset_type,quantity,device,attr_keys').catch(() => ({})), api('GET', '/api/v1/assets').catch(() => []), api('GET', '/api/v1/sites').catch(() => [])]);
   SPEC = DASH.spec; mountEditorFilters(); mountEditorNav(); $('#eTitle').textContent = 'Edit: ' + DASH.name; document.title = 'Edit ' + DASH.name; $('#eCancel').href = `/dashboards/${SLUG}`;
   const groups = {mimic: 'Process symbols', charts: 'Charts', values: 'Values', lists: 'Lists', control: 'Control', other: 'Other'};
@@ -671,7 +676,7 @@ async function loadEdit(){
     document.querySelector('#edit .dash-editor').hidden = true; $('#eHintGrid').hidden = true; $('#eHintCanvas').hidden = true;
     const hostEl = document.createElement('div'); hostEl.id = 'scadaEd'; document.querySelector('#edit .dash-editor').after(hostEl);
     const screens = await api('GET', '/api/v1/dashboards').catch(() => []);
-    EDITOR = ctrl32ScadaEditor.create({host: hostEl, spec: SPEC, datastreams: DS, devices: DEVS, screens: screens.filter(x => x.slug !== SLUG).map(x => ({slug: x.slug, name: x.name})),
+    EDITOR = ctrl32ScadaEditor.create({host: hostEl, spec: SPEC, datastreams: DS, devices: DEVS, groups: SGROUPS, screens: screens.filter(x => x.slug !== SLUG).map(x => ({slug: x.slug, name: x.name})),
       onDirty: dirty, widgetProps: (i, box) => { SEL = i; renderProps(box); }});
     window.__scadaEditor = EDITOR; await EDITOR.ready; return;
   }

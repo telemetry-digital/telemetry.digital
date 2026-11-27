@@ -1,0 +1,19 @@
+meta {
+  name: SCADA users
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{baseUrl}}/api/v1/scada/users
+  body: none
+  auth: inherit
+}
+
+docs {
+  SCADA users
+  
+  People who sign in at the controls — inside a picture or a dashboard — on top of the session of the station. They are not accounts: no session of their own, no permissions, no access to the API. The secret is never returned.
+  
+  Requires permission `user.admin`.
+}

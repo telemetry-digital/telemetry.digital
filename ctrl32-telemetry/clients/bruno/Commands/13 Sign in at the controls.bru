@@ -1,0 +1,26 @@
+meta {
+  name: Sign in at the controls
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/api/v1/scada/session
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "string",
+    "secret": "string"
+  }
+}
+
+docs {
+  Sign in at the controls
+  
+  A browser session only (403 for an API token). Wrong secrets count towards the lockout of that SCADA user (the thresholds of the security policy) and are limited per station (429); 403 `scada_failed`. Signing in replaces the person who was there. The sign-in ends with the session of the station, after `idle_minutes` without activity, or with DELETE.
+  
+  Requires permission `data.read`.
+}

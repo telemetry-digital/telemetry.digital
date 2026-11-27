@@ -1,0 +1,37 @@
+meta {
+  name: Change a SCADA user
+  type: http
+  seq: 18
+}
+
+put {
+  url: {{baseUrl}}/api/v1/scada/users/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "enabled": true,
+    "full_name": "string",
+    "groups": [
+      "string"
+    ],
+    "reason": "string",
+    "secret": "string",
+    "secret_kind": "pin",
+    "unlock": true
+  }
+}
+
+docs {
+  Change a SCADA user
+  
+  A new secret, or `enabled: false`, signs the person out everywhere. `unlock` clears a lockout after wrong secrets.
+  
+  Requires permission `user.admin`.
+}

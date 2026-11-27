@@ -104,6 +104,10 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		pol = s.iam.Policy(r.Context(), p.OrgID)
 	}
 	_ = s.pool.QueryRow(r.Context(), `SELECT locale FROM core.user_account WHERE id = $1::uuid`, p.UserID).Scan(&locale)
+	var scada map[string]any // spec 041: who is signed in at the controls of this station
+	if s.iam != nil && p.OrgID != "" {
+		scada = s.scadaState(r.Context(), p)
+	}
 	writeJSON(w, 200, map[string]any{
 		"user_id": p.UserID, "org_id": p.OrgID, "username": p.Username, "full_name": p.FullName, "locale": locale,
 		"roles": p.Roles, "permissions": perms, "csrf_token": p.CSRFSecret,
@@ -111,6 +115,7 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		"auth":        map[string]bool{"session": p.SessionID != "", "token": p.TokenID != ""},
 		"log_actions": s.opLogOn(r.Context(), p.OrgID),                                    // the pages report picture changes only then
 		"four_eyes":   fourEyesAreas(pol), "four_eyes_minutes": pol.SecondPersonMinutes(), // spec 040: where a second person is needed
+		"scada": scada, // spec 041: who is signed in at the controls
 	})
 }
 
