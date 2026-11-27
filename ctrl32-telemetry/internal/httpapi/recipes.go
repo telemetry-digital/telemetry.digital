@@ -1055,8 +1055,8 @@ func (s *Server) decideRecipeDownload(approve bool) http.HandlerFunc {
 		}
 		old := map[string]any{"download_id": id, "status": "pending", "requested_by": l.by}
 		if !approve {
-			if _, err := s.pool.Exec(r.Context(), `UPDATE core.recipe_download SET status = 'rejected', decided_by_name = $2, decided_at = now(), decide_reason = $3, finished_at = now() WHERE id = $1::uuid AND status = 'pending'`, id, p.Username, in.Reason); err != nil {
-				writeErr(w, 500, "update failed")
+			if tag, err := s.pool.Exec(r.Context(), `UPDATE core.recipe_download SET status = 'rejected', decided_by_name = $2, decided_at = now(), decide_reason = $3, finished_at = now() WHERE id = $1::uuid AND status = 'pending'`, id, p.Username, in.Reason); err != nil || tag.RowsAffected() != 1 {
+				writeErr(w, 409, "the load is not waiting for approval any more")
 				return
 			}
 			s.audit(r, "recipe.download_reject", "recipe", recipeID, old, map[string]any{"download_id": id, "status": "rejected", "rejected_by": p.Username}, in.Reason)
