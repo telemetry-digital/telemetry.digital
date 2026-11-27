@@ -101,6 +101,8 @@
 
 **Nasadenie 0.91.0 (26. 11. 2026):** portál (API so zálohou; disk potom 87 %, 4,8 GB voľných, 7 záloh po 1,1 GB — dnes pribudli štyri pred aktualizáciami) aj BB (API tunelom, 39/39 online a nahráva). Na portáli overené: `healthz` 0.91.0, stránka konektorov obsahuje import, endpoint importu bez prihlásenia vracia 401.
 
+**Nasadenie 0.95.0 (27. 11. 2026):** portál (API so zálohou; disk potom 76 %, voľných 8,9 GB — predtým zmazané štyri staršie zálohy so súhlasom používateľa) a BB (39/39 kamier nahráva). Na oboch nie sú žiadni používatelia SCADA a požiadavka osoby pri ovládaní je vypnutá, takže sa správanie nezmenilo; retencia denníka obsluhy je 0 (navždy).
+
 **Nasadenie 0.94.0 (27. 11. 2026):** portál (API so zálohou; disk potom 84 %, voľných 5,9 GB) a BB (39/39 kamier nahráva). Všetky prepínače štyroch očí aj denník obsluhy sú na oboch vypnuté.
 
 **Nasadenie 0.92.0 (26. 11. 2026):** portál (API so zálohou; disk potom 90 %, 3,8 GB voľných, 8 záloh po 1,1 GB — treba rozhodnúť o zmazaní starších) aj BB (API tunelom, 39/39 online a nahráva). Na portáli overené: `healthz` 0.92.0, `/recipes` 200, `GET /api/v1/recipes` 200, oprávnenie `recipe.edit` v zozname, denník nahratí bez prihlásenia 401. Receptúry nie sú overené na skutočnom PLC.
