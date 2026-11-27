@@ -1189,9 +1189,15 @@ export type PhysicalRange = {
 };
 
 export type Policy = {
+  four_eyes_alarms?: boolean;
   four_eyes_assignments?: boolean;
+  four_eyes_attributes?: boolean;
+  four_eyes_cameras?: boolean;
   four_eyes_commands?: boolean;
+  four_eyes_displays?: boolean;
   four_eyes_limits?: boolean;
+  /** length of an approval for cameras and displays */
+  four_eyes_minutes?: number;
   four_eyes_vpn?: boolean;
   /** the operator action log is kept */
   log_operator_actions?: boolean;
@@ -1500,6 +1506,29 @@ export type SceneAction = {
   service: string;
 };
 
+export type SecondPersonGrant = {
+  area?: "cameras" | "displays";
+  can_approve?: boolean;
+  can_end?: boolean;
+  decided_at?: string;
+  decided_by?: string;
+  /** a waiting request lapses */
+  expires_at?: string;
+  id?: string;
+  minutes?: number;
+  /** approved at the requester's station */
+  on_spot?: boolean;
+  reason?: string;
+  requested_at?: string;
+  /** address of the computer */
+  station?: string;
+  status?: "pending" | "active" | "rejected" | "expired" | "ended";
+  this_station?: boolean;
+  /** who works under it */
+  user?: string;
+  valid_until?: string;
+};
+
 export type Share = {
   public?: boolean;
   /** data URL of the QR code */
@@ -1785,6 +1814,29 @@ export type VideoWall = {
   updated_at?: string;
 };
 
+export type WaitingApproval = {
+  /** path of the approval */
+  approve?: string;
+  /** kind of a change request, or the area of a time-limited approval */
+  area?: string;
+  can_approve?: boolean;
+  can_reject?: boolean;
+  /** for a command or a recipe load */
+  device_id?: string;
+  expires_at?: string;
+  id?: string;
+  kind?: "command" | "recipe" | "change" | "grant";
+  /** asked by the caller */
+  own?: boolean;
+  reason?: string;
+  /** path of the rejection */
+  reject?: string;
+  requested_at?: string;
+  requested_by?: string;
+  /** what it does */
+  summary?: string;
+};
+
 export type WallRect = {
   /** height in cells, 1–rows */
   h: number;
@@ -2010,7 +2062,7 @@ export class Ctrl32Client {
 
   /** Acknowledge several alarms
    *
-   * Up to 500 alarms with one reason; alarms already acknowledged or of another organization are skipped. Each acknowledgement is written to the alarm log and the audit trail.
+   * Up to 500 alarms with one reason; alarms already acknowledged or of another organization are skipped. Each acknowledgement is written to the alarm log and the audit trail. With four eyes for alarms (policy `four_eyes_alarms`) the call answers 202 with a pending change request (`second_person`) instead and runs when a different user approves it.
    * 
    * Requires permission `alarm.ack`. */
   postAlarmsAck(body: {
@@ -2119,7 +2171,7 @@ export class Ctrl32Client {
 
   /** Acknowledge an alarm
    *
-   * An active alarm or one that returned to normal unacknowledged. Stops the escalation ladder; recorded in the alarm log with the actor and reason. 404 when the alarm is already acknowledged.
+   * An active alarm or one that returned to normal unacknowledged. Stops the escalation ladder; recorded in the alarm log with the actor and reason. 404 when the alarm is already acknowledged. With four eyes for alarms (policy `four_eyes_alarms`) the call answers 202 with a pending change request (`second_person`) instead and runs when a different user approves it.
    * 
    * Requires permission `alarm.ack`. */
   postAlarmsIdAck(id: string, body: {
@@ -2137,7 +2189,7 @@ export class Ctrl32Client {
 
   /** Shelve an alarm
    *
-   * Shelves the rule of the alarm for 15 minutes to 24 hours: its alarms that have not returned to normal, and every new one until then, are recorded (state `suppressed`, `isa_state` `shelved`) but not annunciated — no alarm bar, no notification, no escalation. The shelf ends by itself. 409 when already shelved.
+   * Shelves the rule of the alarm for 15 minutes to 24 hours: its alarms that have not returned to normal, and every new one until then, are recorded (state `suppressed`, `isa_state` `shelved`) but not annunciated — no alarm bar, no notification, no escalation. The shelf ends by itself. 409 when already shelved. With four eyes for alarms (policy `four_eyes_alarms`) the call answers 202 with a pending change request (`second_person`) instead and runs when a different user approves it.
    * 
    * Requires permission `alarm.ack`. */
   postAlarmsIdShelve(id: string, body: {
@@ -2159,7 +2211,7 @@ export class Ctrl32Client {
 
   /** End the shelf of an alarm
    *
-   * Alarms still active return to the current list (unacknowledged ones are annunciated again). 409 when the alarm is not shelved.
+   * Alarms still active return to the current list (unacknowledged ones are annunciated again). 409 when the alarm is not shelved. With four eyes for alarms (policy `four_eyes_alarms`) the call answers 202 with a pending change request (`second_person`) instead and runs when a different user approves it.
    * 
    * Requires permission `alarm.ack`. */
   postAlarmsIdUnshelve(id: string, body: {
@@ -2621,7 +2673,7 @@ export class Ctrl32Client {
 
   /** Who am I
    *
-   * The signed-in principal: user, organization, roles, effective permissions and the CSRF token for cookie sessions.
+   * The signed-in principal: user, organization, roles, effective permissions and the CSRF token for cookie sessions. `four_eyes` says for which areas the organization requires a second person, `four_eyes_minutes` how long an approval for cameras and displays lasts.
    * 
    * Requires a signed-in user or an API token (any permission). */
   getAuthMe(): Promise<Me> {
@@ -4479,7 +4531,7 @@ export class Ctrl32Client {
 
   /** Set or remove shared attributes
    *
-   * Merged into the retained MQTT attributes message.
+   * Merged into the retained MQTT attributes message. With four eyes for device attributes (policy `four_eyes_attributes`) the call answers 202 with a pending change request (`second_person`) instead and runs when a different user approves it.
    * 
    * Requires permission `device.manage`. */
   putDevicesIdAttributes(id: string, body: {
@@ -4509,7 +4561,7 @@ export class Ctrl32Client {
 
   /** Send a command or write a value
    *
-   * MQTT devices receive `{id, m, a, exp}` on `d/{external_id}/cmd` and acknowledge on `d/{external_id}/cmd/ack`. OPC UA and Modbus devices accept `method: write` with `args: {key, value}` for a writable node/register (limits checked, value read back). With the four-eyes policy the command is stored as `pending` (202) until another user approves it.
+   * MQTT devices receive `{id, m, a, exp}` on `d/{external_id}/cmd` and acknowledge on `d/{external_id}/cmd/ack`. OPC UA and Modbus devices accept `method: write` with `args: {key, value}` for a writable node/register (limits checked, value read back). With the four-eyes policy the command is stored as `pending` (202) until another user approves it. `second_person: true` (sent by a control marked *Needs a second person*) holds the command for approval even when the policy four_eyes_commands is off; a held command answers 202 with `second_person` {kind, id, device_id, summary}.
    * 
    * Requires permission `device.command`. */
   postDevicesIdCommands(id: string, body: {
@@ -5092,7 +5144,7 @@ export class Ctrl32Client {
 
   /** Send a command or message to several displays
    *
-   * The same actions for the listed displays, those of a location, or all displays of the organization. One audit entry lists the displays.
+   * The same actions for the listed displays, those of a location, or all displays of the organization. One audit entry lists the displays. With four eyes for displays (policy `four_eyes_displays`) the call answers 403 `second_person_required` until a second person approved the work for a limited time on this station (see `POST /api/v1/second-person/grants`).
    * 
    * Requires permission `display.control`. */
   postDisplaysCommand(body: {
@@ -5168,7 +5220,7 @@ export class Ctrl32Client {
 
   /** Send a command to a display
    *
-   * camera: show a camera the operator may see (seconds 5–3600); identify: show the display's name; reload; clear: back to the content (also ends a message); message: an announcement (info as a band at the bottom, warning at the top, alarm over the whole screen) shown apart from cameras. Audited.
+   * camera: show a camera the operator may see (seconds 5–3600); identify: show the display's name; reload; clear: back to the content (also ends a message); message: an announcement (info as a band at the bottom, warning at the top, alarm over the whole screen) shown apart from cameras. Audited. With four eyes for displays (policy `four_eyes_displays`) the call answers 403 `second_person_required` until a second person approved the work for a limited time on this station (see `POST /api/v1/second-person/grants`).
    * 
    * Requires permission `display.control`. */
   postDisplaysIdCommand(id: string, body: {
@@ -6465,7 +6517,7 @@ export class Ctrl32Client {
 
   /** Ask a kiosk PC for an operation
    *
-   * A closed list the PC's agent performs within its poll (15 s): `report` (report now), `restart_browsers` (the launcher starts them again within 30 s), `reboot` (in 10 s), `update_scripts` (the agent and launcher of this server version), `screenshot` (needs display.screenshot and screenshots allowed for the PC; fetch it with GET …/screenshot). The operation waits 10 minutes for the PC. Audited as kiosk.command.
+   * A closed list the PC's agent performs within its poll (15 s): `report` (report now), `restart_browsers` (the launcher starts them again within 30 s), `reboot` (in 10 s), `update_scripts` (the agent and launcher of this server version), `screenshot` (needs display.screenshot and screenshots allowed for the PC; fetch it with GET …/screenshot). The operation waits 10 minutes for the PC. Audited as kiosk.command. With four eyes for displays (policy `four_eyes_displays`) the call answers 403 `second_person_required` until a second person approved the work for a limited time on this station (see `POST /api/v1/second-person/grants`).
    * 
    * Requires permission `display.manage`. */
   postKiosksIdCommand(id: string, body: {
@@ -6490,7 +6542,7 @@ export class Ctrl32Client {
 
   /** Open the emergency remote desktop of a kiosk PC
    *
-   * The MeshCentral link to the PC (needs the MeshCentral address of the server and the PC's node). Audited as remote.mesh_open.
+   * The MeshCentral link to the PC (needs the MeshCentral address of the server and the PC's node). Audited as remote.mesh_open. With four eyes for displays (policy `four_eyes_displays`) the call answers 403 `second_person_required` until a second person approved the work for a limited time on this station (see `POST /api/v1/second-person/grants`).
    * 
    * Requires permission `display.manage`. */
   postKiosksIdRemote(id: string, body: {
@@ -9413,6 +9465,128 @@ export class Ctrl32Client {
   }>('GET', `/api/v1/search`, query, undefined, false);
   }
 
+  /** Approve on the spot, with the second person's credentials
+   *
+   * The second person approves at the station of the person who asked: `username` and `password` (and `code` when that account uses two-factor sign-in) are checked with the same lockout as a sign-in, no session is created, and the approval of `kind` (`command` with `device_id`, `recipe`, `change`, `grant`) runs as that person — it needs the same permission as an approval from the list and is recorded with both names. 403 `second_person_failed` for wrong credentials, `second_person_code` when the code is missing, 403 when the second person is the caller; failed attempts are limited per caller (429).
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  postSecondPersonApprove(body: {
+    /** authenticator code of the second person */
+    code?: string;
+    /** for a command */
+    device_id?: string;
+    id: string;
+    kind: "command" | "recipe" | "change" | "grant";
+    password: string;
+    /** note of the second person */
+    reason?: string;
+    username: string;
+  }): Promise<{
+    approved_by?: string;
+    id?: string;
+    kind?: string;
+    /** the answer of the approval */
+    result?: Record<string, unknown>;
+  }> {
+    return this.request<{
+    approved_by?: string;
+    id?: string;
+    kind?: string;
+    /** the answer of the approval */
+    result?: Record<string, unknown>;
+  }>('POST', `/api/v1/second-person/approve`, undefined, body, false);
+  }
+
+  /** Time-limited approvals
+   *
+   * Approvals for cameras and displays of the organization, newest first: waiting, running, ended. `mine=1` only those of the caller's station; `status` pending, active, rejected, expired, ended or all.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  getSecondPersonGrants(query?: { status?: string; mine?: string; /** 1 = the caller's station only */ }): Promise<SecondPersonGrant[]> {
+    return this.request<SecondPersonGrant[]>('GET', `/api/v1/second-person/grants`, query, undefined, false);
+  }
+
+  /** Ask for a time-limited approval
+   *
+   * For `area` cameras or displays, when four eyes are on for it (409 otherwise) and the caller holds a permission of the area. The request waits up to an hour; asking again returns the waiting or running one (200). Bound to the caller's station: the browser session or the API token.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  postSecondPersonGrants(body: {
+    area: "cameras" | "displays";
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<SecondPersonGrant> {
+    return this.request<SecondPersonGrant>('POST', `/api/v1/second-person/grants`, undefined, body, false);
+  }
+
+  /** End a time-limited approval early
+   *
+   * By the person who works under it or by anyone who could approve it.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  deleteSecondPersonGrantsId(id: string): Promise<{
+    id?: string;
+    status?: string;
+  }> {
+    return this.request<{
+    id?: string;
+    status?: string;
+  }>('DELETE', `/api/v1/second-person/grants/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Approve a time-limited approval
+   *
+   * A different user with a permission of the area. The approval runs for the minutes of the policy from now.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  postSecondPersonGrantsIdApprove(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    area?: string;
+    id?: string;
+    minutes?: number;
+    status?: string;
+    valid_until?: string;
+  }> {
+    return this.request<{
+    area?: string;
+    id?: string;
+    minutes?: number;
+    status?: string;
+    valid_until?: string;
+  }>('POST', `/api/v1/second-person/grants/${encodeURIComponent(id)}/approve`, undefined, body, false);
+  }
+
+  /** Reject a request for a time-limited approval
+   *
+   * Requires a signed-in user or an API token (any permission). */
+  postSecondPersonGrantsIdReject(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    id?: string;
+    status?: string;
+  }> {
+    return this.request<{
+    id?: string;
+    status?: string;
+  }>('POST', `/api/v1/second-person/grants/${encodeURIComponent(id)}/reject`, undefined, body, false);
+  }
+
+  /** Everything that waits for a second person
+   *
+   * Held commands, recipe loads, change requests and requests for a time-limited approval of the organization, oldest first, each with what it does, who asked and why. `can_approve` is false for the person who asked. `approve` and `reject` are the calls a different user makes from their own session.
+   * 
+   * Requires a signed-in user or an API token (any permission). */
+  getSecondPersonWaiting(): Promise<{
+    waiting?: WaitingApproval[];
+  }> {
+    return this.request<{
+    waiting?: WaitingApproval[];
+  }>('GET', `/api/v1/second-person/waiting`, undefined, undefined, false);
+  }
+
   /** Server status and configuration summary
    *
    * Version, listeners, database, SMTP, storage paths, connected MQTT clients, update availability (`update`: current, available, release_date of this version, updates_until and updates_ended of the license).
@@ -11374,13 +11548,19 @@ export class Ctrl32Client {
 
   /** Set the four-eyes policies and Stay signed in
    *
-   * `four_eyes_commands`: commands wait for approval. `four_eyes_limits`: alarm rule changes become change requests. `four_eyes_assignments`: device ↔ datastream assignments become change requests. `four_eyes_vpn`: VPN access of technicians needs a grant approved by a second person. `log_operator_actions`: keep the operator action log (off by default). `remember_device_days`: 0 (default) or up to 90 — the sign-in page offers *Stay signed in on this device*, such a session lasts this many days with a persistent cookie; lowering it applies to open sessions at once. At least one field.
+   * `four_eyes_commands`: commands wait for approval. `four_eyes_limits`: alarm rule changes become change requests. `four_eyes_assignments`: device ↔ datastream assignments become change requests. `four_eyes_vpn`: VPN access of technicians needs a grant approved by a second person. `four_eyes_alarms`, `four_eyes_attributes`: alarm acknowledgements and shelves, and device attributes, become change requests. `four_eyes_cameras`, `four_eyes_displays`: work with cameras (movement, recordings, export, evidence, pictures without masks) and commands to displays and kiosk PCs need an approval of a second person that lasts `four_eyes_minutes` (1–480, default 15) on one station. All off by default. `log_operator_actions`: keep the operator action log (off by default). `remember_device_days`: 0 (default) or up to 90 — the sign-in page offers *Stay signed in on this device*, such a session lasts this many days with a persistent cookie; lowering it applies to open sessions at once. At least one field.
    * 
    * Requires permission `user.admin`. */
   putSettingsPolicy(body: {
+    four_eyes_alarms?: boolean;
     four_eyes_assignments?: boolean;
+    four_eyes_attributes?: boolean;
+    four_eyes_cameras?: boolean;
     four_eyes_commands?: boolean;
+    four_eyes_displays?: boolean;
     four_eyes_limits?: boolean;
+    /** 1–480 */
+    four_eyes_minutes?: number;
     four_eyes_vpn?: boolean;
     log_operator_actions?: boolean;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
@@ -11941,7 +12121,7 @@ export class Ctrl32Client {
 
   /** Signed evidence package
    *
-   * ZIP with video.mp4 (remuxed, not re-encoded), manifest.json (SHA-256 of the video and of every recorded file as computed while recording and now, events, who exported it and why), manifest.sig (Ed25519 by the server key), public_key.txt and README.txt. At most one hour. Verify with `ctrl32-telemetry verify-evidence`. Audited with the video hash.
+   * ZIP with video.mp4 (remuxed, not re-encoded), manifest.json (SHA-256 of the video and of every recorded file as computed while recording and now, events, who exported it and why), manifest.sig (Ed25519 by the server key), public_key.txt and README.txt. At most one hour. Verify with `ctrl32-telemetry verify-evidence`. Audited with the video hash. With four eyes for cameras (policy `four_eyes_cameras`) the call answers 403 `second_person_required` until a second person approved the work for a limited time on this station (see `POST /api/v1/second-person/grants`).
    * 
    * Requires permission `video.evidence`. */
   getVideoCamerasIdEvidence(id: string, query: { from: string; /** RFC 3339 */ to: string; /** RFC 3339 */ reason: string; /** written into the manifest */ case_ref?: string; }): Promise<Response> {
@@ -11950,7 +12130,7 @@ export class Ctrl32Client {
 
   /** Download recorded video
    *
-   * One MP4 file (fragmented) of at most 24 hours; a change of resolution or codec ends it early. The recorded sound is the second track only for people with video.audio. format=h264 converts an H.265 recording to H.264 + AAC (at most 1080 lines, at most one hour, one conversion at a time per server: 409 while another runs, 503 without ffmpeg); H.264 recordings are sent unchanged. Only the original is the unchanged recording. Written to the audit trail (video.export).
+   * One MP4 file (fragmented) of at most 24 hours; a change of resolution or codec ends it early. The recorded sound is the second track only for people with video.audio. format=h264 converts an H.265 recording to H.264 + AAC (at most 1080 lines, at most one hour, one conversion at a time per server: 409 while another runs, 503 without ffmpeg); H.264 recordings are sent unchanged. Only the original is the unchanged recording. Written to the audit trail (video.export). With four eyes for cameras (policy `four_eyes_cameras`) the call answers 403 `second_person_required` until a second person approved the work for a limited time on this station (see `POST /api/v1/second-person/grants`).
    * 
    * Requires permission `video.playback`. */
   getVideoCamerasIdExport(id: string, query?: { from?: string; /** RFC 3339, required */ to?: string; /** RFC 3339, required */ format?: string; /** original (default) or h264 */ }): Promise<Response> {
@@ -11959,7 +12139,7 @@ export class Ctrl32Client {
 
   /** Live video (WebSocket)
    *
-   * Upgrade to a WebSocket. Text messages: `{type:"init", codec, mime, width, height}`, `{type:"time", t (ms), pos (s)}` at key frames, `{type:"status", state, error}`, `{type:"audio", mime, codec}` when the sound comes (spec 020: `audio=1`, main stream, camera with sound, video.audio; audited as video.listen): binary messages starting with the byte `A` then carry the sound as its own fragmented MP4 stream on the picture's time line; for G.711 cameras `{type:"audio", codec:"pcm", rate, channels}` and binary messages `P` + float64 position (s, big-endian) + 16-bit big-endian samples, for WebAudio. Binary messages: for H.264/H.265 the MP4 initialization, then one fragment (moof+mdat) per frame, for Media Source Extensions; for MJPEG one JPEG picture each.
+   * Upgrade to a WebSocket. Text messages: `{type:"init", codec, mime, width, height}`, `{type:"time", t (ms), pos (s)}` at key frames, `{type:"status", state, error}`, `{type:"audio", mime, codec}` when the sound comes (spec 020: `audio=1`, main stream, camera with sound, video.audio; audited as video.listen): binary messages starting with the byte `A` then carry the sound as its own fragmented MP4 stream on the picture's time line; for G.711 cameras `{type:"audio", codec:"pcm", rate, channels}` and binary messages `P` + float64 position (s, big-endian) + 16-bit big-endian samples, for WebAudio. Binary messages: for H.264/H.265 the MP4 initialization, then one fragment (moof+mdat) per frame, for Media Source Extensions; for MJPEG one JPEG picture each. With four eyes for cameras (policy `four_eyes_cameras`) a picture without masks (`unmask=1`) answers 403 `second_person_required` until a second person approved the work on this station.
    * 
    * Requires permission `video.view`. */
   getVideoCamerasIdLive(id: string, query?: { audio?: string; /** 1 = with the sound (needs video.audio) */ quality?: string; /** sub (default; falls back to main) or main */ }): Promise<unknown> {
@@ -11990,7 +12170,7 @@ export class Ctrl32Client {
 
   /** Recorded video (WebSocket)
    *
-   * Same messages as live, paced by the recording from the key frame before `from`; periods without recording are skipped; `{type:"end"}` after the newest recording. Written to the audit trail (video.playback).
+   * Same messages as live, paced by the recording from the key frame before `from`; periods without recording are skipped; `{type:"end"}` after the newest recording. Written to the audit trail (video.playback). With four eyes for cameras (policy `four_eyes_cameras`) the call answers 403 `second_person_required` until a second person approved the work for a limited time on this station (see `POST /api/v1/second-person/grants`).
    * 
    * Requires permission `video.playback`. */
   getVideoCamerasIdPlayback(id: string, query?: { audio?: string; /** 1 = with the recorded sound at speed 1 (needs video.audio) */ from?: string; /** RFC 3339, required */ speed?: string; /** 0.25–16, default 1 */ }): Promise<unknown> {
@@ -11999,7 +12179,7 @@ export class Ctrl32Client {
 
   /** Turn and zoom a PTZ camera
    *
-   * move starts a continuous movement (speeds -1…1) until stop; preset goes to a stored position. Audited (moves once per the video setting ptz_audit_minutes per user and camera, presets always).
+   * move starts a continuous movement (speeds -1…1) until stop; preset goes to a stored position. Audited (moves once per the video setting ptz_audit_minutes per user and camera, presets always). With four eyes for cameras (policy `four_eyes_cameras`) the call answers 403 `second_person_required` until a second person approved the work for a limited time on this station (see `POST /api/v1/second-person/grants`).
    * 
    * Requires permission `video.ptz`. */
   postVideoCamerasIdPtz(id: string, body: {
@@ -12174,7 +12354,7 @@ export class Ctrl32Client {
 
   /** Hold recordings as evidence
    *
-   * Recordings of the camera in the range are never deleted — not by the camera's retention nor to free disk space — until released. At most 31 days. Audited.
+   * Recordings of the camera in the range are never deleted — not by the camera's retention nor to free disk space — until released. At most 31 days. Audited. With four eyes for cameras (policy `four_eyes_cameras`) the call answers 403 `second_person_required` until a second person approved the work for a limited time on this station (see `POST /api/v1/second-person/grants`).
    * 
    * Requires permission `video.evidence`. */
   postVideoHolds(body: {
@@ -12193,7 +12373,7 @@ export class Ctrl32Client {
 
   /** Release held recordings
    *
-   * The normal retention deletes them afterwards. Audited with the reason.
+   * The normal retention deletes them afterwards. Audited with the reason. With four eyes for cameras (policy `four_eyes_cameras`) the call answers 403 `second_person_required` until a second person approved the work for a limited time on this station (see `POST /api/v1/second-person/grants`).
    * 
    * Requires permission `video.evidence`. */
   deleteVideoHoldsId(id: string, query?: { reason?: string; /** required */ }): Promise<{

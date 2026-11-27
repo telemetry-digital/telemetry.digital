@@ -950,7 +950,7 @@ func (s *Server) downloadRecipe(w http.ResponseWriter, r *http.Request) {
 	if fourEyes {
 		detail["status"] = "pending"
 		s.audit(r, "recipe.download", "recipe", rc.ID, nil, detail, in.Reason)
-		writeJSON(w, 202, map[string]any{"id": did, "status": "pending"})
+		writeJSON(w, 202, map[string]any{"id": did, "status": "pending", "second_person": map[string]any{"kind": "recipe", "id": did, "summary": "recipe " + rc.Name + " / " + rec.Name + " → " + tg.Name}})
 		return
 	}
 	// the load is finished even when the browser goes away in the middle

@@ -49,6 +49,7 @@ func (s *Server) fourEyes(kind string, fn http.HandlerFunc) http.HandlerFunc {
 		}
 		pol := s.iam.Policy(r.Context(), p.OrgID)
 		on := (kind == "limits" && pol.FourEyesLimits) || (kind == "assignments" && pol.FourEyesAssignments) ||
+			(kind == "alarms" && pol.FourEyesAlarms) || (kind == "attributes" && pol.FourEyesAttributes) ||
 			(kind == "flows" && pol.FourEyesCommands && s.flowNeedsFourEyes(r, p.OrgID))
 		if !on {
 			fn(w, r)
@@ -97,7 +98,8 @@ func (s *Server) holdChange(w http.ResponseWriter, r *http.Request, kind string,
 		return
 	}
 	s.audit(r, "change_request.create", "change_request", id, nil, map[string]any{"kind": kind, "method": r.Method, "path": r.URL.Path, "summary": summary}, reason)
-	writeJSON(w, 202, map[string]any{"status": "pending", "change_request": map[string]any{"id": id, "kind": kind, "summary": summary, "expires_at": expires}})
+	writeJSON(w, 202, map[string]any{"status": "pending", "change_request": map[string]any{"id": id, "kind": kind, "summary": summary, "expires_at": expires},
+		"second_person": map[string]any{"kind": "change", "id": id, "summary": summary}})
 }
 
 // changeSummary describes the change in words for the approver.
@@ -143,6 +145,38 @@ func (s *Server) changeSummary(ctx context.Context, kind, method, path string, b
 		return "assign " + dsLabel(str("datastream_id")) + " to device " + devLabel(parts[3])
 	case kind == "assignments" && method == http.MethodDelete && len(parts) >= 6:
 		return "remove " + dsLabel(parts[5]) + " from device " + devLabel(parts[3])
+	case kind == "alarms" && len(parts) >= 4 && parts[3] == "ack":
+		ids, _ := in["ids"].([]any)
+		return fmt.Sprintf("acknowledge %d alarms", len(ids))
+	case kind == "alarms" && len(parts) >= 5:
+		var typ, sev string
+		var ds *string
+		label := parts[3]
+		if err := s.pool.QueryRow(ctx, `SELECT r.type, a.severity, a.datastream_id::text FROM core.alarm a JOIN core.alarm_rule r ON r.id = a.rule_id WHERE a.id = $1::uuid`, parts[3]).Scan(&typ, &sev, &ds); err == nil {
+			label = typ + " (" + sev + ")"
+			if ds != nil {
+				label += " on " + dsLabel(*ds)
+			}
+		}
+		switch parts[4] {
+		case "shelve":
+			m, _ := in["minutes"].(float64)
+			return fmt.Sprintf("shelve alarm %s for %d minutes", label, int(m))
+		case "unshelve":
+			return "end the shelf of alarm " + label
+		}
+		return "acknowledge alarm " + label
+	case kind == "attributes" && len(parts) >= 4:
+		set, _ := json.Marshal(in["attributes"])
+		out := "attributes of device " + devLabel(parts[3]) + ": set " + string(set)
+		if rm, ok := in["remove"].([]any); ok && len(rm) > 0 {
+			b, _ := json.Marshal(rm)
+			out += ", remove " + string(b)
+		}
+		if len(out) > 400 {
+			out = out[:400] + "…"
+		}
+		return out
 	case kind == "flows" && len(parts) >= 4:
 		var name string
 		var version int
@@ -164,8 +198,10 @@ func (s *Server) canApprove(p *iam.Principal, kind string) bool {
 	switch kind {
 	case "limits":
 		return p.Has("config.write")
-	case "assignments":
+	case "assignments", "attributes":
 		return p.Has("device.manage")
+	case "alarms":
+		return p.Has("alarm.ack")
 	case "flows":
 		return p.Has("content.write") && p.Has("device.command")
 	case "vpn":
@@ -181,8 +217,8 @@ func (s *Server) listChangeRequests(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := PrincipalFrom(r.Context())
-	if !p.Has("config.write") && !p.Has("device.manage") && !p.Has("vpn.manage") && !p.Has("system.admin") {
-		writeErr(w, 403, "config.write, device.manage, vpn.manage or system.admin permission required")
+	if !p.Has("config.write") && !p.Has("device.manage") && !p.Has("vpn.manage") && !p.Has("system.admin") && !p.Has("alarm.ack") {
+		writeErr(w, 403, "config.write, device.manage, alarm.ack, vpn.manage or system.admin permission required")
 		return
 	}
 	// lazy expiry

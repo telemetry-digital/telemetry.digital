@@ -1,0 +1,29 @@
+meta {
+  name: Approve a time-limited approval
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/v1/second-person/grants/:id/approve
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Approve a time-limited approval
+  
+  A different user with a permission of the area. The approval runs for the minutes of the policy from now.
+  
+  Requires a signed-in user or an API token (any permission).
+}

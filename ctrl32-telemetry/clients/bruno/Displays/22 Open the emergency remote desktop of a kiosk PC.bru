@@ -23,7 +23,7 @@ body:json {
 docs {
   Open the emergency remote desktop of a kiosk PC
   
-  The MeshCentral link to the PC (needs the MeshCentral address of the server and the PC's node). Audited as remote.mesh_open.
+  The MeshCentral link to the PC (needs the MeshCentral address of the server and the PC's node). Audited as remote.mesh_open. With four eyes for displays (policy `four_eyes_displays`) the call answers 403 `second_person_required` until a second person approved the work for a limited time on this station (see `POST /api/v1/second-person/grants`).
   
   Requires permission `display.manage`.
 }

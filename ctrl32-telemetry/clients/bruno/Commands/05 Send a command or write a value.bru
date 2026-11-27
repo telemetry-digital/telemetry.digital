@@ -26,7 +26,7 @@ body:json {
 docs {
   Send a command or write a value
   
-  MQTT devices receive `{id, m, a, exp}` on `d/{external_id}/cmd` and acknowledge on `d/{external_id}/cmd/ack`. OPC UA and Modbus devices accept `method: write` with `args: {key, value}` for a writable node/register (limits checked, value read back). With the four-eyes policy the command is stored as `pending` (202) until another user approves it.
+  MQTT devices receive `{id, m, a, exp}` on `d/{external_id}/cmd` and acknowledge on `d/{external_id}/cmd/ack`. OPC UA and Modbus devices accept `method: write` with `args: {key, value}` for a writable node/register (limits checked, value read back). With the four-eyes policy the command is stored as `pending` (202) until another user approves it. `second_person: true` (sent by a control marked *Needs a second person*) holds the command for approval even when the policy four_eyes_commands is off; a held command answers 202 with `second_person` {kind, id, device_id, summary}.
   
   Requires permission `device.command`.
 }

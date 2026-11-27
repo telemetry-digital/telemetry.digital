@@ -35,6 +35,8 @@ var opAuditKinds = map[string]string{
 	"flow.inject":     "flow_inject",
 	"recipe.download": "recipe_load", "recipe.download_approve": "recipe_approve", "recipe.download_reject": "recipe_reject",
 	"counting_occupancy.update": "counting_correction",
+	"second_person.request":     "second_request", "second_person.approve": "second_approve", "second_person.reject": "second_reject", "second_person.end": "second_end",
+	"change_request.create": "change_request", "change_request.approve": "change_approve", "change_request.reject": "change_reject",
 }
 
 // opClientKinds are the kinds a page may report itself: they change nothing, so the server cannot see them.

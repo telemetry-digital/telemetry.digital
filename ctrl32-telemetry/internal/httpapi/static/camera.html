@@ -139,9 +139,11 @@ function live() {
   P.sound(SOUND);
   ui(); drawCursor();
 }
-function playFrom(ms) {
+async function playFrom(ms) {
   if (!can('video.playback')) return;
   if (ms >= Date.now() - 1500) { live(); return; }
+  // four eyes for cameras (spec 040): a recording plays only under the approval of a second person
+  if (!(await ctrl32.secondEnsure('cameras'))) { live(); return; }
   MODE = 'rec'; PAUSED = false; CUR = ms;
   const recSound = SOUND && SPEED === 1 && CAM && CAM.audio_record !== false; // sound heard only live is not recorded
   // the server paces the frames by the speed; the picture plays them at the same rate (their timestamps are recorded time)
@@ -394,14 +396,16 @@ $('#hold').onclick = async () => {
   try { await api('POST', '/api/v1/video/holds', {camera_id: ID, from: new Date(Math.min(...SEL)).toISOString(), to: new Date(Math.max(...SEL)).toISOString(), title, case_ref: caseRef, reason});
     ctrl32.toast(t('held as evidence'), 'ok'); loadRecordings(); } catch (x) { ctrl32.toast(x.message, 'bad'); }
 };
-$('#evidence').onclick = () => {
+$('#evidence').onclick = async () => {
+  if (!(await ctrl32.secondEnsure('cameras'))) return;
   const reason = ctrl32.ask('Reason for the evidence package (it is written into the signed manifest and the audit trail)'); if (!reason) return;
   const caseRef = window.prompt(t('Case or report number (optional)')) || '';
   const a = document.createElement('a');
   a.href = `/api/v1/video/cameras/${ID}/evidence?from=${new Date(Math.min(...SEL)).toISOString()}&to=${new Date(Math.max(...SEL)).toISOString()}&reason=${encodeURIComponent(reason)}&case_ref=${encodeURIComponent(caseRef)}`;
   a.click();
 };
-$('#export').onclick = () => {
+$('#export').onclick = async () => {
+  if (!(await ctrl32.secondEnsure('cameras'))) return;
   const a = document.createElement('a');
   const h264 = !$('#exportFmt').hidden && $('#exportFmt').value === 'h264';
   if (h264 && Math.abs(SEL[1] - SEL[0]) > HOURMS) { ctrl32.toast(t('Compatible format: at most one hour'), 'bad'); return; }

@@ -1,0 +1,24 @@
+meta {
+  name: Time-limited approvals
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/second-person/grants
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~status: 
+  ~mine: 
+}
+
+docs {
+  Time-limited approvals
+  
+  Approvals for cameras and displays of the organization, newest first: waiting, running, ended. `mine=1` only those of the caller's station; `status` pending, active, rejected, expired, ended or all.
+  
+  Requires a signed-in user or an API token (any permission).
+}
