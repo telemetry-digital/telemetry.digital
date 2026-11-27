@@ -1,0 +1,24 @@
+meta {
+  name: Export the operator action log
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/export/operator-actions
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~from: 
+  ~to: 
+  ~format: 
+  ~limit: 
+}
+
+docs {
+  Export the operator action log
+  
+  Requires permission `audit.read`.
+}

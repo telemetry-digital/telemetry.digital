@@ -1193,6 +1193,8 @@ export type Policy = {
   four_eyes_commands?: boolean;
   four_eyes_limits?: boolean;
   four_eyes_vpn?: boolean;
+  /** the operator action log is kept */
+  log_operator_actions?: boolean;
   mfa_required_all?: boolean;
   mfa_required_roles?: string[];
   password_min_length?: number;
@@ -5596,6 +5598,13 @@ export class Ctrl32Client {
     return this.request<Response>('GET', `/api/v1/export/observations`, query, undefined, true);
   }
 
+  /** Export the operator action log
+   *
+   * Requires permission `audit.read`. */
+  getExportOperatorActions(query?: { from?: string; to?: string; format?: string; /** csv | jsonl */ limit?: number; }): Promise<Response> {
+    return this.request<Response>('GET', `/api/v1/export/operator-actions`, query, undefined, true);
+  }
+
   /** Export an organization as a ZIP archive
    *
    * CSV files of every table of the caller's organization for a period, with a manifest and SHA-256 checksums. An organization administrator task (user.admin) since 0.65.0.
@@ -7098,6 +7107,46 @@ export class Ctrl32Client {
    * This description. The reference page at `/api/docs` renders it. */
   getOpenapiJson(): Promise<Record<string, unknown>> {
     return this.request<Record<string, unknown>>('GET', `/api/v1/openapi.json`, undefined, undefined, false);
+  }
+
+  /** Operator action log
+   *
+   * Every action of a person at the controls, newest first, when the organization keeps the log (policy `log_operator_actions`, off by default; `enabled` says whether it is on): commands and presses of controls, recipe loads, PTZ moves, display commands, alarm acknowledgements and shelving, recordings viewed and exported, sign-ins and sign-outs, and the pictures and windows opened. Each row has the user, the kind, the target, the page it came from, the detail, the reason and the address of the computer. The rows cannot be changed or deleted.
+   * 
+   * Requires permission `audit.read`. */
+  getOperatorActions(query?: { from?: string; /** RFC 3339, default 24 hours before `to` */ to?: string; /** RFC 3339, default now */ user?: string; /** exact user name */ kind?: string; /** comma-separated kinds */ q?: string; /** text in the target, page, reason or detail */ limit?: number; /** 1..1000, default 200 */ before?: string; /** RFC 3339 time of the last row, for paging */ }): Promise<{
+    actions?: (Record<string, unknown>)[];
+    /** the organization keeps the log */
+    enabled?: boolean;
+    kinds?: string[];
+    users?: string[];
+  }> {
+    return this.request<{
+    actions?: (Record<string, unknown>)[];
+    /** the organization keeps the log */
+    enabled?: boolean;
+    kinds?: string[];
+    users?: string[];
+  }>('GET', `/api/v1/operator-actions`, query, undefined, false);
+  }
+
+  /** Report an action only the page can see
+   *
+   * Used by the web pages: a picture or page was opened (`navigate`), a faceplate or window was opened (`popup`), a control was pressed without a command (`press`), a press was cancelled in the confirmation (`cancel`). Needs a browser session. Nothing is stored while the organization does not keep the log (`logged: false`).
+   * 
+   * Requires permission `data.read`. */
+  postOperatorActions(body: {
+    /** free details */
+    detail?: Record<string, unknown>;
+    kind: "navigate" | "popup" | "press" | "cancel";
+    /** the name of the picture or control, 1–200 characters */
+    target: string;
+  }): Promise<{
+    logged?: boolean;
+  }> {
+    return this.request<{
+    logged?: boolean;
+  }>('POST', `/api/v1/operator-actions`, undefined, body, false);
   }
 
   /** Attributes of the organization
@@ -11325,7 +11374,7 @@ export class Ctrl32Client {
 
   /** Set the four-eyes policies and Stay signed in
    *
-   * `four_eyes_commands`: commands wait for approval. `four_eyes_limits`: alarm rule changes become change requests. `four_eyes_assignments`: device ↔ datastream assignments become change requests. `four_eyes_vpn`: VPN access of technicians needs a grant approved by a second person. `remember_device_days`: 0 (default) or up to 90 — the sign-in page offers *Stay signed in on this device*, such a session lasts this many days with a persistent cookie; lowering it applies to open sessions at once. At least one field.
+   * `four_eyes_commands`: commands wait for approval. `four_eyes_limits`: alarm rule changes become change requests. `four_eyes_assignments`: device ↔ datastream assignments become change requests. `four_eyes_vpn`: VPN access of technicians needs a grant approved by a second person. `log_operator_actions`: keep the operator action log (off by default). `remember_device_days`: 0 (default) or up to 90 — the sign-in page offers *Stay signed in on this device*, such a session lasts this many days with a persistent cookie; lowering it applies to open sessions at once. At least one field.
    * 
    * Requires permission `user.admin`. */
   putSettingsPolicy(body: {
@@ -11333,6 +11382,7 @@ export class Ctrl32Client {
     four_eyes_commands?: boolean;
     four_eyes_limits?: boolean;
     four_eyes_vpn?: boolean;
+    log_operator_actions?: boolean;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
     /** 0–90 */

@@ -382,6 +382,7 @@ func (s *Server) activateScene(w http.ResponseWriter, r *http.Request) {
 	if reason == "" {
 		reason = "Scene: " + name
 	}
+	s.opLog(r, "scene", "scene", id, name, map[string]any{"actions": len(actions)}, reason)
 	results := []map[string]any{}
 	failed := 0
 	for _, a := range actions {

@@ -344,6 +344,7 @@
     const key = [slug, ev.asset || '', ev.prefix === undefined ? '~' : ev.prefix, ev.asset ? '' : e.tag || ''].join('|');
     const old = wins.find((x) => x.dataset.key === key); if (old) { front(old); return; }
     while (wins.length >= 4) closeWin(wins[0]);
+    if (window.ctrl32 && ctrl32.opReport) ctrl32.opReport('popup', e.name || slug, { screen: slug, asset: ev.asset || '', prefix: ev.prefix || '' });
     const w = document.createElement('div'); w.className = 'sc-win card'; w.dataset.key = key; w.dataset.slug = slug;
     w.innerHTML = `<div class="sc-fp-head"><b class="sc-pop-title">${esc(e.name || slug)}</b><span class="grow"></span><button class="btn small ghost" type="button" data-close title="Close">✕</button></div><div class="sc-pop-body"><span class="muted">loading…</span></div>`;
     const n = wins.length; w.style.left = (48 + n * 30) + 'px'; w.style.top = (64 + n * 30) + 'px'; front(w);
@@ -392,12 +393,13 @@
     else if (!canCmd()) { d.innerHTML = `<div class="form"><h2 style="margin-top:0">${esc(e.name || 'Command')}</h2><p class="muted">${isPublic() ? 'read-only' : 'no permission to send commands'}</p><div class="actions"><button class="btn" type="button" data-close>Close</button></div></div>`; }
     else {
       d.innerHTML = `<form class="form" method="dialog"><h2 style="margin-top:0">${esc(e.name || 'Command')}</h2><p>${esc(ev.key)} → <b>${esc(String(ev.value ?? ''))}</b></p><label>Reason (audit trail) <input name="reason" required maxlength="200"></label><div class="sc-out" style="min-height:18px"></div><div class="actions"><button class="btn primary" type="submit">Send</button><button class="btn" type="button" data-close>Close</button></div></form>`;
-      d.querySelector('form').onsubmit = (x) => { x.preventDefault(); if (ev.confirm !== false && !window.confirm(`${ev.key} → ${ev.value}?`)) return; sendCommand(d.querySelector('.sc-out'), e.device, ev.method, ev.key, ev.value, x.target.reason.value.trim()); };
+      d.querySelector('form').onsubmit = (x) => { x.preventDefault(); if (ev.confirm !== false && !window.confirm(`${ev.key} → ${ev.value}?`)) { if (window.ctrl32 && ctrl32.opReport) ctrl32.opReport('cancel', e.name || ev.key, { key: ev.key, value: ev.value }); return; } sendCommand(d.querySelector('.sc-out'), e.device, ev.method, ev.key, ev.value, x.target.reason.value.trim()); };
     }
     for (const b of d.querySelectorAll('[data-close]')) b.onclick = () => d.close();
     d.showModal();
   }
   async function faceplate(e, live, trendOnly) {
+    if (window.ctrl32 && ctrl32.opReport) ctrl32.opReport('popup', e.name || e.key || e.tag || 'faceplate', { trend: !!trendOnly, key: e.key || '' });
     const d = dialog(); const tag = e.tag; const ds = tag ? live.ds[tag] : null; const x = tag ? live.values[tag] : null;
     const unit = e.unit ?? (ds ? ds.unit : ''); const v = x ? (numVal(x) ?? x.value_json) : null;
     const title = e.name || (ds ? `${ds.asset} / ${ds.key}` : e.symbol || e.type);

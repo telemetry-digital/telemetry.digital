@@ -245,7 +245,7 @@ func (s *Server) getPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pol := s.iam.Policy(r.Context(), org)
-	writeJSON(w, 200, map[string]any{"four_eyes_commands": pol.FourEyesCommands, "four_eyes_limits": pol.FourEyesLimits, "four_eyes_assignments": pol.FourEyesAssignments, "four_eyes_vpn": pol.FourEyesVPN, "mfa_required_all": pol.MFARequiredAll, "mfa_required_roles": pol.MFARequiredRoles, "password_min_length": pol.PasswordMinLength,
+	writeJSON(w, 200, map[string]any{"four_eyes_commands": pol.FourEyesCommands, "four_eyes_limits": pol.FourEyesLimits, "four_eyes_assignments": pol.FourEyesAssignments, "four_eyes_vpn": pol.FourEyesVPN, "log_operator_actions": pol.LogOperatorActions, "mfa_required_all": pol.MFARequiredAll, "mfa_required_roles": pol.MFARequiredRoles, "password_min_length": pol.PasswordMinLength,
 		"session_idle_minutes": pol.SessionIdleMinutes, "session_absolute_hours": pol.SessionAbsoluteHours, "remember_device_days": pol.RememberDeviceDays})
 }
 
@@ -260,6 +260,7 @@ func (s *Server) putPolicy(w http.ResponseWriter, r *http.Request) {
 		Limits      *bool  `json:"four_eyes_limits"`
 		Assignments *bool  `json:"four_eyes_assignments"`
 		VPN         *bool  `json:"four_eyes_vpn"`
+		LogActions  *bool  `json:"log_operator_actions"`
 		Remember    *int   `json:"remember_device_days"`
 		Reason      string `json:"reason"`
 	}
@@ -283,6 +284,9 @@ func (s *Server) putPolicy(w http.ResponseWriter, r *http.Request) {
 	if in.VPN != nil {
 		set["four_eyes_vpn"] = *in.VPN
 	}
+	if in.LogActions != nil {
+		set["log_operator_actions"] = *in.LogActions
+	}
 	if in.Remember != nil {
 		if *in.Remember < 0 || *in.Remember > iam.MaxRememberDeviceDays {
 			writeErr(w, 400, fmt.Sprintf("remember_device_days must be 0 to %d", iam.MaxRememberDeviceDays))
@@ -291,7 +295,7 @@ func (s *Server) putPolicy(w http.ResponseWriter, r *http.Request) {
 		set["remember_device_days"] = *in.Remember
 	}
 	if len(set) == 0 {
-		writeErr(w, 400, "four_eyes_commands, four_eyes_limits, four_eyes_assignments, four_eyes_vpn or remember_device_days required")
+		writeErr(w, 400, "four_eyes_commands, four_eyes_limits, four_eyes_assignments, four_eyes_vpn, log_operator_actions or remember_device_days required")
 		return
 	}
 	old := s.iam.Policy(r.Context(), org)
@@ -300,7 +304,8 @@ func (s *Server) putPolicy(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "update failed")
 		return
 	}
-	s.audit(r, "organization.policy", "organization", org, map[string]any{"four_eyes_commands": old.FourEyesCommands, "four_eyes_limits": old.FourEyesLimits, "four_eyes_assignments": old.FourEyesAssignments, "four_eyes_vpn": old.FourEyesVPN, "remember_device_days": old.RememberDeviceDays}, set, in.Reason)
+	s.audit(r, "organization.policy", "organization", org, map[string]any{"four_eyes_commands": old.FourEyesCommands, "four_eyes_limits": old.FourEyesLimits, "four_eyes_assignments": old.FourEyesAssignments, "four_eyes_vpn": old.FourEyesVPN, "log_operator_actions": old.LogOperatorActions, "remember_device_days": old.RememberDeviceDays}, set, in.Reason)
+	opLogCache.Delete(org)
 	pol := s.iam.Policy(r.Context(), org)
-	writeJSON(w, 200, map[string]any{"four_eyes_commands": pol.FourEyesCommands, "four_eyes_limits": pol.FourEyesLimits, "four_eyes_assignments": pol.FourEyesAssignments, "four_eyes_vpn": pol.FourEyesVPN, "remember_device_days": pol.RememberDeviceDays})
+	writeJSON(w, 200, map[string]any{"four_eyes_commands": pol.FourEyesCommands, "four_eyes_limits": pol.FourEyesLimits, "four_eyes_assignments": pol.FourEyesAssignments, "four_eyes_vpn": pol.FourEyesVPN, "log_operator_actions": pol.LogOperatorActions, "remember_device_days": pol.RememberDeviceDays})
 }

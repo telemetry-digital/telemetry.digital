@@ -290,6 +290,15 @@ func (s *Server) cameraPTZ(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "action: move, stop or preset")
 		return
 	}
+	// the audit trail thins out PTZ moves; the operator action log (when on) keeps every one of them
+	ptz := map[string]any{"action": in.Action, "ok": err == nil}
+	switch in.Action {
+	case "move":
+		ptz["pan"], ptz["tilt"], ptz["zoom"] = in.Pan, in.Tilt, in.Zoom
+	case "preset":
+		ptz["preset"] = in.Preset
+	}
+	s.opLog(r, "ptz", "camera", c.id, c.name, ptz, "")
 	if err != nil {
 		onvifErr(w, 502, err)
 		return

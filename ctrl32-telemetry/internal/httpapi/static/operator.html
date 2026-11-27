@@ -104,6 +104,7 @@ async function show(slug, how){
   if(how === 'push'){ DEPTH++; history.pushState({slug, n: DEPTH}, '', '/operator/' + enc(slug)); }
   else if(how === 'replace') history.replaceState({slug, n: DEPTH}, '', '/operator/' + enc(slug));
   CUR = slug; NAME = d.name; document.title = d.name + ' — ' + t('Operator view');
+  ctrl32.opReport('navigate', d.name, { path: '/operator/' + slug });
   const spec = d.spec || {}, work = $('#opWork');
   work.classList.toggle('scroll', !WG.isCanvas(spec));
   clearInterval(timer); work.innerHTML = '';

@@ -353,7 +353,7 @@
   async function ctlSend(el, ctx, p, value) {
     const dev = ((ctx.bindings || {}).devices || [])[0]; const out = el.querySelector('.ctl-out'); const reasonEl = el.querySelector('.ctl-reason'); const reason = (reasonEl && reasonEl.value || '').trim();
     if (!reason) { out.innerHTML = '<span style="color:#d97706">reason is required</span>'; if (reasonEl) reasonEl.focus(); return; }
-    if (p.confirm !== false && !window.confirm((p.title || p.key) + ' → ' + value + '?')) return;
+    if (p.confirm !== false && !window.confirm((p.title || p.key) + ' → ' + value + '?')) { if (window.ctrl32 && ctrl32.opReport) ctrl32.opReport('cancel', p.title || p.key, { key: p.key, value }); return; }
     out.innerHTML = '<span class="muted">sending…</span>';
     try { const r = await api('POST', '/api/v1/devices/' + dev + '/commands', { method: p.method || 'write', args: { key: p.key, value }, reason });
       showCmd(out, r.status, { readback: r.result && r.result.readback, error: r.error });

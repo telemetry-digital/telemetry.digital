@@ -85,12 +85,20 @@
   async function api(method, url, body) {
     const h = { 'Content-Type': 'application/json' };
     if (csrf) h['X-CSRF-Token'] = csrf;
+    // the page an action comes from, for the operator action log (spec 039)
+    if (method !== 'GET') h['X-Ctrl32-Screen'] = encodeURI(location.pathname + location.search).slice(0, 300);
     const r = await fetch(url, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'same-origin' });
     const ct = r.headers.get('Content-Type') || '';
     const data = ct.includes('json') ? await r.json().catch(() => ({})) : await r.blob();
     if (r.status === 401 && meLoaded && me) { location.href = '/login'; }
     if (!r.ok) { const e = new Error((data && data.error) || ('HTTP ' + r.status)); e.status = r.status; e.code = data && data.code; throw e; }
     return data;
+  }
+  // Operator action log (spec 039): the pages report what the server cannot see — a picture or a window was opened,
+  // a press was cancelled. Only when the organization keeps the log (me.log_actions) and never from a public page.
+  function opReport(kind, target, detail) {
+    if (!me || !me.log_actions || !csrf || !target) return;
+    api('POST', '/api/v1/operator-actions', { kind, target: String(target).slice(0, 200), detail: detail || {} }).catch(() => {});
   }
   async function logout() { try { await api('POST', '/api/v1/auth/logout', {}); } catch (e) { /* already gone */ } location.href = app ? '/login' : '/'; }
 
@@ -129,7 +137,7 @@
   const APP_PATHS = {
     dashboards: ['/', '/dashboards', '/operator', '/recipes'], home: ['/home', '/smarthome'], energy: ['/energy'], counting: ['/counting'], cameras: ['/video'],
     displays: ['/displays'], flows: ['/flows', '/automation'], devices: ['/devices'], incidents: ['/incidents'], assets: ['/assets'], alarms: ['/alarms'],
-    firmware: ['/fota'], users: ['/users'], audit: ['/audit', '/reports/signatures'], settings: ['/settings', '/vpn'], system: ['/organizations', '/server', '/landing/edit'],
+    firmware: ['/fota'], users: ['/users'], audit: ['/audit', '/reports/signatures', '/oplog'], settings: ['/settings', '/vpn'], system: ['/organizations', '/server', '/landing/edit'],
     reports: ['/reports'],
   };
   const APP_ALWAYS = ['/login', '/forgot', '/reset', '/account/security', '/license'];
@@ -256,6 +264,8 @@
       { href: '/alarms', label: 'Alarms', icon: ICON.bell, show: can('data.read'), sec: 'alarms', children: [
         { href: '/alarms', label: 'Current' }, { href: '/alarms/shelved', label: 'Shelved' }, { href: '/alarms/history', label: 'History' },
         { href: '/alarms/statistics', label: 'Statistics' }, { href: '/alarms/classes', label: 'Alarm classes' }] },
+      // operator action log (spec 039): who pressed what, when the organization keeps it
+      { href: '/oplog', label: 'Operator log', icon: ICON.report, show: can('audit.read'), sec: 'audit' },
       { href: '/incidents', label: 'Incidents', icon: ICON.alert, show: can('data.read'), sec: 'incidents' },
       // every report page in one place (0.75.0); the old addresses under Settings and Audit redirect here
       { href: cw ? '/reports/templates' : '/reports/signatures', base: '/reports', label: 'Reports', icon: ICON.report, show: cw || can('audit.read') || can('report.sign'), sec: 'reports', children: [
@@ -621,6 +631,8 @@
     if (!readyPromise) readyPromise = Promise.all([loadBranding(), loadMe(), loadApp()]).then(loadI18n).then(() => { renderShell(); footer(); wireLang(); alarmBar(); translateNode(document.body); if (document.title && catalog[document.title]) document.title = catalog[document.title]; observeI18n(); applyWhiteLabel(); updateBanner(); return { me, brand, app }; });
     return readyPromise.then((r) => {
       if (opts.requireAuth && !me) { location.href = '/login'; return new Promise(() => {}); }
+      // every page a signed-in person opens; the operator view reports its pictures itself
+      if (me && !/^\/operator(\/|$)/.test(location.pathname)) setTimeout(() => opReport('navigate', document.title || location.pathname, { path: location.pathname + location.search }), 600);
       if (opts.requirePerm && !can(opts.requirePerm)) { const m = $('main'); if (m) m.innerHTML = '<div class="card">Your role has no <code>' + esc(opts.requirePerm) + '</code> permission.</div>'; return new Promise(() => {}); }
       return r;
     });
@@ -650,7 +662,7 @@
   }
   if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyMode);
   applyMode();
-  window.ctrl32 = { ready, loadBranding, loadMe, api, logout, toggleMode, can, esc, section, t, appAllows, fullscreen, isFullscreen: () => !!fsCur(), ask, confirm: confirmAsk, setLocale, get locale() { return locale; }, get langs() { return langs; }, get brand() { return brand; }, get logo() { return logoURL(); }, get me() { return me; }, get csrf() { return csrf; }, get app() { return app; }, home, enterApp, ICON,
+  window.ctrl32 = { ready, loadBranding, loadMe, api, opReport, logout, toggleMode, can, esc, section, t, appAllows, fullscreen, isFullscreen: () => !!fsCur(), ask, confirm: confirmAsk, setLocale, get locale() { return locale; }, get langs() { return langs; }, get brand() { return brand; }, get logo() { return logoURL(); }, get me() { return me; }, get csrf() { return csrf; }, get app() { return app; }, home, enterApp, ICON,
     fmt: (t) => (t ? new Date(t).toLocaleString(document.documentElement.lang || undefined) : '—'), toast, openSearch, alarmSound, alarmBarRefresh: () => abTick && abTick() };
   // Alarm bar (spec 035): on every page with the menu, for people who read data: the most important alarm waiting for
   // its acknowledgement (class colour, blinking), the numbers of unacknowledged and active alarms, and the class sound,

@@ -1,0 +1,29 @@
+meta {
+  name: Operator action log
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/operator-actions
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~from: 
+  ~to: 
+  ~user: 
+  ~kind: 
+  ~q: 
+  ~limit: 
+  ~before: 
+}
+
+docs {
+  Operator action log
+  
+  Every action of a person at the controls, newest first, when the organization keeps the log (policy `log_operator_actions`, off by default; `enabled` says whether it is on): commands and presses of controls, recipe loads, PTZ moves, display commands, alarm acknowledgements and shelving, recordings viewed and exported, sign-ins and sign-outs, and the pictures and windows opened. Each row has the user, the kind, the target, the page it came from, the detail, the reason and the address of the computer. The rows cannot be changed or deleted.
+  
+  Requires permission `audit.read`.
+}

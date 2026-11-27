@@ -1,0 +1,27 @@
+meta {
+  name: Report an action only the page can see
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/operator-actions
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "detail": {},
+    "kind": "navigate",
+    "target": "string"
+  }
+}
+
+docs {
+  Report an action only the page can see
+  
+  Used by the web pages: a picture or page was opened (`navigate`), a faceplate or window was opened (`popup`), a control was pressed without a command (`press`), a press was cancelled in the confirmation (`cancel`). Needs a browser session. Nothing is stored while the organization does not keep the log (`logged: false`).
+  
+  Requires permission `data.read`.
+}
