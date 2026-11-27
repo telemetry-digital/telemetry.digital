@@ -1680,6 +1680,33 @@ export type TilesInfo = {
   tiles?: number;
 };
 
+export type TrendSpec = {
+  /** mark when the alarms of the curves were active */
+  alarms?: boolean;
+  curves: (Record<string, unknown>)[];
+  /** a fixed window instead, with to */
+  from?: string;
+  /** draw the alarm limits of the curves */
+  limits?: boolean;
+  /** rolling window of a live view */
+  range?: "5m" | "15m" | "1h" | "6h" | "8h" | "12h" | "24h" | "7d" | "30d" | "90d";
+  to?: string;
+};
+
+export type TrendView = {
+  can_edit?: boolean;
+  created_at?: string;
+  id?: string;
+  mine?: boolean;
+  name?: string;
+  owner?: string;
+  /** shared with the organization */
+  shared?: boolean;
+  spec?: TrendSpec;
+  updated_at?: string;
+  updated_by?: string;
+};
+
 export type User = {
   created_at?: string;
   disabled?: boolean;
@@ -11929,6 +11956,65 @@ export class Ctrl32Client {
     /** true on success */
     ok?: boolean;
   }>('DELETE', `/api/v1/tokens/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Saved trend views
+   *
+   * The views shared with the organization and the caller's own. A trend view says which curves are looked at together (at most 16 datastreams), their colours, axes and time window; the curves themselves are read with `GET /api/v1/observations`.
+   * 
+   * Requires permission `data.read`. */
+  getTrends(): Promise<TrendView[]> {
+    return this.request<TrendView[]>('GET', `/api/v1/trends`, undefined, undefined, false);
+  }
+
+  /** Save a trend view
+   *
+   * A personal view (`shared: false`) is the caller's own selection: only its owner reads and changes it, no reason. A view shared with the organization needs the permission content.write and a reason and is written to the audit trail. At most 500 views.
+   * 
+   * Requires permission `data.read`. */
+  postTrends(body: {
+    /** 1–80 characters */
+    name: string;
+    /** for a shared view */
+    reason?: string;
+    shared?: boolean;
+    spec: TrendSpec;
+  }): Promise<TrendView> {
+    return this.request<TrendView>('POST', `/api/v1/trends`, undefined, body, false);
+  }
+
+  /** One trend view
+   *
+   * Requires permission `data.read`. */
+  getTrendsId(id: string): Promise<TrendView> {
+    return this.request<TrendView>('GET', `/api/v1/trends/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** Change a trend view
+   *
+   * A shared view: content.write and a reason. A personal view: its owner. A view that stops being shared becomes the caller's own.
+   * 
+   * Requires permission `data.read`. */
+  putTrendsId(id: string, body: {
+    name: string;
+    reason?: string;
+    shared?: boolean;
+    spec: TrendSpec;
+  }): Promise<TrendView> {
+    return this.request<TrendView>('PUT', `/api/v1/trends/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Remove a trend view
+   *
+   * Requires permission `data.read`. */
+  deleteTrendsId(id: string, query?: { reason?: string; /** for a shared view */ }): Promise<{
+    deleted?: boolean;
+    id?: string;
+  }> {
+    return this.request<{
+    deleted?: boolean;
+    id?: string;
+  }>('DELETE', `/api/v1/trends/${encodeURIComponent(id)}`, query, undefined, false);
   }
 
   /** List users

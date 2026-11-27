@@ -1,0 +1,19 @@
+meta {
+  name: Saved trend views
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/v1/trends
+  body: none
+  auth: inherit
+}
+
+docs {
+  Saved trend views
+  
+  The views shared with the organization and the caller's own. A trend view says which curves are looked at together (at most 16 datastreams), their colours, axes and time window; the curves themselves are read with `GET /api/v1/observations`.
+  
+  Requires permission `data.read`.
+}
