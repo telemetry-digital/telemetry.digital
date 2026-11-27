@@ -1,0 +1,37 @@
+meta {
+  name: Save a trend view
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{baseUrl}}/api/v1/trends
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "string",
+    "reason": "string",
+    "shared": true,
+    "spec": {
+      "alarms": true,
+      "curves": [
+        {}
+      ],
+      "from": "2026-09-24T12:00:00Z",
+      "limits": true,
+      "range": "5m",
+      "to": "2026-09-24T12:00:00Z"
+    }
+  }
+}
+
+docs {
+  Save a trend view
+  
+  A personal view (`shared: false`) is the caller's own selection: only its owner reads and changes it, no reason. A view shared with the organization needs the permission content.write and a reason and is written to the audit trail. At most 500 views.
+  
+  Requires permission `data.read`.
+}

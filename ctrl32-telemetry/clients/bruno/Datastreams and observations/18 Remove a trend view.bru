@@ -1,0 +1,25 @@
+meta {
+  name: Remove a trend view
+  type: http
+  seq: 18
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/trends/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~reason: 
+}
+
+docs {
+  Remove a trend view
+  
+  Requires permission `data.read`.
+}

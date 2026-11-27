@@ -6,6 +6,7 @@
     shield: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3"/><path d="M9 12l2 2l4 -4"/></svg>',
     display: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="1"/><path d="M7 20h10"/><path d="M9 16v4"/><path d="M15 16v4"/></svg>',
     bolt: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3l0 7l6 0l-8 11l0 -7l-6 0l8 -11"/></svg>',
+    chart: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="M4 15l4 -6l4 2l4 -5l4 4"/></svg>',
     home: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l-2 0l9 -9l9 9l-2 0"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7"/><path d="M10 12h4v4h-4z"/></svg>',
     flow: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="6" height="5" rx="1"/><rect x="15" y="4" width="6" height="5" rx="1"/><rect x="15" y="15" width="6" height="5" rx="1"/><path d="M9 6.5h6"/><path d="M6 9v6.5a1 1 0 0 0 1 1h8"/></svg>',
     github: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5"/></svg>',
@@ -342,7 +343,7 @@
   // page, and always its start page. Anything else opens the start page instead. This confines the user interface only;
   // permissions stay the security boundary (the API answers what the role allows, whatever window asks).
   const APP_PATHS = {
-    dashboards: ['/', '/dashboards', '/operator', '/recipes'], home: ['/home', '/smarthome'], energy: ['/energy'], counting: ['/counting'], cameras: ['/video'],
+    dashboards: ['/', '/dashboards', '/operator', '/trends', '/recipes'], home: ['/home', '/smarthome'], energy: ['/energy'], counting: ['/counting'], cameras: ['/video'],
     displays: ['/displays'], flows: ['/flows', '/automation'], devices: ['/devices'], incidents: ['/incidents'], assets: ['/assets'], alarms: ['/alarms', '/approvals'],
     firmware: ['/fota'], users: ['/users'], audit: ['/audit', '/reports/signatures', '/oplog'], settings: ['/settings', '/vpn'], system: ['/organizations', '/server', '/landing/edit'],
     reports: ['/reports'],
@@ -453,6 +454,7 @@
       // operator view (spec 036): pictures in a fixed frame with the alarm line and the picture tree
       { href: '/operator', label: 'Operator view', icon: ICON.display, show: can('data.read'), sec: 'dashboards' },
       // recipes (spec 038): data records loaded into the units of a plant
+      { href: '/trends', label: 'Trends', icon: ICON.chart, show: can('data.read'), sec: 'dashboards' },
       { href: '/recipes', label: 'Recipes', icon: ICON.file, show: can('data.read'), sec: 'dashboards', children: [
         { href: '/recipes', label: 'Recipes' }, { href: '/recipes/loads', label: 'Loads' }] },
       { head: 'Monitoring' },

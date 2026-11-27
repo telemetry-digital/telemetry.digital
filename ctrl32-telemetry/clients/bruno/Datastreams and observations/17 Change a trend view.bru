@@ -1,0 +1,41 @@
+meta {
+  name: Change a trend view
+  type: http
+  seq: 17
+}
+
+put {
+  url: {{baseUrl}}/api/v1/trends/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "name": "string",
+    "reason": "string",
+    "shared": true,
+    "spec": {
+      "alarms": true,
+      "curves": [
+        {}
+      ],
+      "from": "2026-09-24T12:00:00Z",
+      "limits": true,
+      "range": "5m",
+      "to": "2026-09-24T12:00:00Z"
+    }
+  }
+}
+
+docs {
+  Change a trend view
+  
+  A shared view: content.write and a reason. A personal view: its owner. A view that stops being shared becomes the caller's own.
+  
+  Requires permission `data.read`.
+}

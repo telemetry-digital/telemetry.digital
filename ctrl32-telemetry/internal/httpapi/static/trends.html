@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Trends — ctrl32 telemetry</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  /* trends (spec 042) */
+  .tr-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .tr-bar .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 4px; }
+  .tr-bar select, .tr-bar input[type=datetime-local] { width: auto; min-width: 0; }
+  .tr-bar .btn.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .tr-host { position: relative; width: 100%; height: min(56vh, 560px); min-height: 260px; }
+  .tr-canvas { display: block; touch-action: none; cursor: crosshair; outline: none; border-radius: 6px; }
+  .tr-note { font-size: 12px; min-height: 16px; margin-top: 2px; }
+  .tr-read { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; margin: 4px 0 8px; min-height: 20px; }
+  .tr-read b { font-variant-numeric: tabular-nums; }
+  #trTable td, #trTable th { white-space: nowrap; }
+  #trTable td.num, #trTable th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  #trTable tr.off td { opacity: .45; }
+  .tr-sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 6px; border: 0; padding: 0; cursor: pointer; }
+  .tr-name { max-width: 34ch; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: bottom; }
+  dialog.tr-dlg { max-width: min(640px, 94vw); width: 640px; }
+  .tr-pick { max-height: 46vh; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+  .tr-pick label { display: flex; gap: 8px; align-items: center; padding: 5px 10px; border-bottom: 1px solid var(--line); margin: 0; font-weight: 400; }
+  .tr-pick label:last-child { border-bottom: 0; }
+  .tr-pick .u { margin-left: auto; color: var(--muted); font-size: 12px; }
+  @media (max-width: 700px) { .tr-host { height: 46vh; } .tr-bar .hide-s { display: none; } }
+  @media print { header.topbar, #sidebar, .top-strip, .tr-bar, .footer, .page-head .btn { display: none !important; } }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<div class="page-head"><h1>Trends</h1><span class="grow"></span>
+  <select id="trView" title="Saved views" style="width:auto;max-width:36ch"></select>
+  <button class="btn" id="trSave" type="button">Save</button>
+  <button class="btn" id="trSaveAs" type="button">Save as…</button>
+  <button class="btn danger" id="trDelete" type="button" hidden>Remove</button>
+</div>
+<div class="card">
+  <div class="tr-bar" id="trBar">
+    <button class="btn primary" id="trAdd" type="button">Add curves</button>
+    <span class="sep"></span>
+    <span id="trRanges"></span>
+    <button class="btn small" id="trLive" type="button" title="The window follows the clock">Live</button>
+    <span class="sep"></span>
+    <button class="btn small" data-act="back" type="button" title="Earlier">◀</button>
+    <button class="btn small" data-act="fwd" type="button" title="Later">▶</button>
+    <button class="btn small" data-act="in" type="button" title="Zoom in">+</button>
+    <button class="btn small" data-act="out" type="button" title="Zoom out">−</button>
+    <button class="btn small" id="trBox" type="button" title="Drag over the chart to zoom into that time">Zoom to selection</button>
+    <span class="sep hide-s"></span>
+    <button class="btn small" id="trSecond" type="button" title="A click places ruler B instead of ruler A">Ruler B</button>
+    <button class="btn small" id="trClear" type="button">Clear rulers</button>
+    <span class="sep hide-s"></span>
+    <button class="btn small" id="trLimits" type="button" title="Draw the alarm limits of the curves">Alarm limits</button>
+    <button class="btn small" id="trAlarms" type="button" title="Mark when the alarms of the curves were active">Alarms</button>
+    <span class="grow"></span>
+    <button class="btn small" id="trCsv" type="button" hidden>CSV</button>
+    <button class="btn small notranslate" id="trPng" type="button">PNG</button>
+  </div>
+  <div class="tr-bar">
+    <label class="inline" style="margin:0"><span>From</span> <input type="datetime-local" id="trFrom" step="1"></label>
+    <label class="inline" style="margin:0"><span>To</span> <input type="datetime-local" id="trTo" step="1"></label>
+    <button class="btn small" id="trApply" type="button">Show</button>
+    <span class="muted" id="trWin" style="font-size:12px"></span>
+  </div>
+  <div id="trChart"></div>
+  <div class="tr-read" id="trRead"></div>
+  <div class="table-wrap"><table id="trTable"><thead><tr><th>Curve</th><th>Unit</th><th class="num">At the pointer</th><th class="num">Ruler A</th><th class="num">Ruler B</th><th class="num">B − A</th><th class="num">Minimum</th><th class="num">Maximum</th><th class="num">Average</th><th></th></tr></thead><tbody></tbody></table></div>
+  <p class="muted" style="margin-bottom:0;font-size:12px">Drag the chart to move in time, turn the wheel to zoom, click to place a ruler. Minimum, maximum and average are those of the window shown.</p>
+</div>
+
+<dialog id="addDlg" class="tr-dlg"><form class="form" method="dialog">
+  <h2 style="margin-top:0">Add curves</h2>
+  <input id="addFilter" placeholder="Search by asset, key or unit…" autocomplete="off">
+  <div class="tr-pick" id="addList" style="margin-top:8px"></div>
+  <p class="muted" id="addInfo" style="margin:8px 0 0"></p>
+  <div class="actions"><button class="btn primary" type="submit">Add</button><button class="btn" type="button" data-close>Close</button></div>
+</form></dialog>
+
+<dialog id="curveDlg" class="tr-dlg"><form class="form" method="dialog">
+  <h2 style="margin-top:0" id="curveTitle" class="notranslate"></h2>
+  <div class="row2"><label><span>Label (empty = asset / key)</span> <input name="label" maxlength="80"></label>
+    <label><span>Colour</span> <input name="color" type="color"></label></div>
+  <div class="row2"><label><span>Drawn as</span> <select name="style"><option value="">Automatic</option><option value="line">Line</option><option value="step">Step line</option><option value="points">Points</option></select></label>
+    <label><span>Axis of its own (empty = shared by unit)</span> <input name="axis" maxlength="24"></label></div>
+  <div class="row2"><label><span>Axis from (empty = automatic)</span> <input name="min" type="number" step="any"></label>
+    <label><span>Axis to (empty = automatic)</span> <input name="max" type="number" step="any"></label></div>
+  <div class="err" id="curveErr"></div>
+  <div class="actions"><button class="btn primary" type="submit">Apply</button><button class="btn danger" type="button" id="curveRemove">Remove the curve</button><span class="grow"></span><button class="btn" type="button" data-close>Close</button></div>
+</form></dialog>
+
+<dialog id="saveDlg" class="tr-dlg"><form class="form" method="dialog">
+  <h2 style="margin-top:0">Save the view</h2>
+  <label><span>Name</span> <input name="name" maxlength="80" required></label>
+  <label class="inline" id="saveSharedRow"><input type="checkbox" name="shared"><span>Shared with the organization (everybody sees it; changes need a reason)</span></label>
+  <label class="inline"><input type="checkbox" name="fixed"><span>Remember the time shown now instead of a live window</span></label>
+  <label id="saveReasonRow"><span>Reason (audit trail)</span> <input name="reason" maxlength="200"></label>
+  <div class="err" id="saveErr"></div>
+  <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" data-close>Close</button></div>
+</form></dialog>
+</main>
+<script src="/app.js"></script>
+<script src="/trend.js"></script>
+<script>
+const { api, esc, t } = ctrl32; const $ = (s) => document.querySelector(s); const TRD = window.ctrl32Trend;
+const RANGES = ['5m', '15m', '1h', '6h', '24h', '7d', '30d'];
+let DS = [], VIEWS = [], VIEW = null, CTL = null, RANGE = '1h', DIRTY = false;
+const dsName = (d) => (d.asset ? d.asset + ' / ' : '') + d.key;
+const toLocal = (ms) => { const d = new Date(ms - new Date(ms).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 19); };
+const params = () => new URLSearchParams(location.search);
+function setURL() {
+  const st = CTL.state(), u = new URLSearchParams();
+  if (VIEW && !DIRTY) u.set('view', VIEW.id); else if (CTL.curves().length) u.set('ds', CTL.curves().map((c) => c.datastream_id).join(','));
+  if (st.live) { if (RANGE !== '1h' || !VIEW) u.set('range', RANGE); } else { u.set('from', new Date(st.t0).toISOString()); u.set('to', new Date(st.t1).toISOString()); }
+  const q = u.toString(); if (q !== location.search.slice(1)) history.replaceState(null, '', '/trends' + (q ? '?' + q : ''));
+}
+let urlT = null;
+function onChange(st) {
+  // the toolbar
+  for (const b of document.querySelectorAll('#trRanges [data-r]')) b.classList.toggle('on', st.live && b.dataset.r === RANGE);
+  $('#trLive').classList.toggle('on', st.live); $('#trSecond').classList.toggle('on', st.second); $('#trBox').classList.toggle('on', st.box);
+  $('#trLimits').classList.toggle('on', st.limits); $('#trAlarms').classList.toggle('on', st.alarms);
+  if (document.activeElement !== $('#trFrom')) $('#trFrom').value = toLocal(st.t0);
+  if (document.activeElement !== $('#trTo')) $('#trTo').value = toLocal(st.t1);
+  $('#trWin').textContent = TRD.fmtSpan(st.span) + (st.live ? ' · ' + t('live') : '');
+  // the read-out of the pointer and the rulers
+  const parts = [];
+  if (st.hover != null) parts.push(`<span>${esc(t('Pointer'))}: <b>${esc(TRD.fmtTime(st.hover))}</b></span>`);
+  if (st.A != null) parts.push(`<span>A: <b>${esc(TRD.fmtTime(st.A))}</b></span>`);
+  if (st.B != null) parts.push(`<span>B: <b>${esc(TRD.fmtTime(st.B))}</b></span>`);
+  if (st.A != null && st.B != null) parts.push(`<span>B − A: <b>${esc(TRD.fmtSpan(st.B - st.A))}</b></span>`);
+  $('#trRead').innerHTML = parts.join('');
+  const n = (v, d) => TRD.fmtNum(v, d);
+  $('#trTable tbody').innerHTML = st.rows.map((r) => `<tr class="${r.curve.hidden ? 'off' : ''}" data-i="${r.i}"><td><button class="tr-sw" type="button" data-vis style="background:${esc(r.color)}" title="${esc(t('Show or hide'))}"></button><span class="tr-name notranslate" title="${esc(r.name)}">${esc(r.name)}</span></td><td class="notranslate">${esc(r.unit)}</td>
+    <td class="num">${n(r.cur, r.dec)}</td><td class="num">${n(r.a, r.dec)}</td><td class="num">${n(r.b, r.dec)}</td><td class="num">${r.a != null && r.b != null ? n(r.b - r.a, r.dec) : '—'}</td>
+    <td class="num">${r.stats ? n(r.stats.min, r.dec) : '—'}</td><td class="num">${r.stats ? n(r.stats.max, r.dec) : '—'}</td><td class="num">${r.stats ? n(r.stats.avg, r.dec) : '—'}</td>
+    <td><button class="btn small ghost" type="button" data-edit>${esc(t('Settings'))}</button></td></tr>`).join('') || `<tr><td colspan="10" class="muted">${esc(t('No curves yet. Add the datastreams you want to see together.'))}</td></tr>`;
+  clearTimeout(urlT); urlT = setTimeout(setURL, 400);
+}
+$('#trTable').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-i]'); if (!tr) return; const i = +tr.dataset.i, cs = CTL.curves();
+  if (e.target.closest('[data-vis]')) { cs[i].hidden = !cs[i].hidden; touch(); CTL.setCurves(cs); }
+  else if (e.target.closest('[data-edit]')) curveDialog(i);
+});
+const touch = () => { DIRTY = true; title(); };
+function title() { $('#trSave').disabled = !CTL || !CTL.curves().length || (VIEW && !VIEW.can_edit); $('#trSaveAs').disabled = !CTL || !CTL.curves().length; $('#trDelete').hidden = !(VIEW && VIEW.can_edit);
+  document.title = (VIEW ? VIEW.name + ' — ' : '') + t('Trends') + ' — ctrl32 telemetry'; }
+
+// ---- views ----
+async function loadViews(sel) {
+  VIEWS = await api('GET', '/api/v1/trends');
+  const opt = (v) => `<option value="${esc(v.id)}" class="notranslate">${esc(v.name)}</option>`;
+  const sh = VIEWS.filter((v) => v.shared), my = VIEWS.filter((v) => !v.shared);
+  $('#trView').innerHTML = `<option value="">${esc(t('— a view not saved —'))}</option>` + (sh.length ? `<optgroup label="${esc(t('Shared with the organization'))}">${sh.map(opt).join('')}</optgroup>` : '') + (my.length ? `<optgroup label="${esc(t('Only mine'))}">${my.map(opt).join('')}</optgroup>` : '');
+  $('#trView').value = sel || '';
+}
+async function openView(id) {
+  VIEW = VIEWS.find((v) => v.id === id) || null; DIRTY = false;
+  if (!VIEW) { title(); return; }
+  const sp = VIEW.spec || {};
+  CTL.toggle('limits', !!sp.limits); CTL.toggle('alarms', !!sp.alarms);
+  await CTL.setCurves(sp.curves || []);
+  if (sp.from && sp.to) CTL.setWindow(Date.parse(sp.from), Date.parse(sp.to)); else { RANGE = sp.range || '1h'; CTL.setRange(RANGE); }
+  title();
+}
+$('#trView').onchange = () => { if ($('#trView').value) openView($('#trView').value); else { VIEW = null; DIRTY = true; title(); } };
+function specNow(fixed) {
+  const st = CTL.state(), sp = { curves: CTL.curves(), limits: st.limits, alarms: st.alarms };
+  if (fixed) { sp.from = new Date(st.t0).toISOString(); sp.to = new Date(st.t1).toISOString(); } else sp.range = RANGE;
+  return sp;
+}
+function saveDialog(asNew) {
+  const d = $('#saveDlg'), f = d.querySelector('form'); f.reset(); $('#saveErr').textContent = '';
+  const v = asNew ? null : VIEW;
+  f.name.value = v ? v.name : ''; f.shared.checked = !!(v && v.shared); f.fixed.checked = !CTL.state().live;
+  $('#saveSharedRow').hidden = !ctrl32.can('content.write');
+  const sync = () => { $('#saveReasonRow').hidden = !(f.shared.checked || (v && v.shared)); }; f.shared.onchange = sync; sync();
+  f.onsubmit = async (e) => { e.preventDefault(); $('#saveErr').textContent = '';
+    const body = { name: f.name.value.trim(), shared: f.shared.checked, spec: specNow(f.fixed.checked), reason: f.reason.value.trim() };
+    try { const r = v ? await api('PUT', '/api/v1/trends/' + v.id, body) : await api('POST', '/api/v1/trends', body);
+      await loadViews(r.id); VIEW = VIEWS.find((x) => x.id === r.id); DIRTY = false; title(); setURL(); ctrl32.toast(t('saved'), 'ok'); d.close();
+    } catch (x) { $('#saveErr').textContent = t(x.message); } };
+  d.showModal(); f.name.focus();
+}
+$('#trSave').onclick = () => saveDialog(!VIEW);
+$('#trSaveAs').onclick = () => saveDialog(true);
+$('#trDelete').onclick = async () => {
+  if (!VIEW) return; let reason = '';
+  if (VIEW.shared) { reason = ctrl32.ask('Reason (audit trail)'); if (!reason) return; } else if (!window.confirm(t('Remove this view?'))) return;
+  try { await api('DELETE', '/api/v1/trends/' + VIEW.id + '?reason=' + encodeURIComponent(reason)); VIEW = null; DIRTY = true; await loadViews(''); title(); ctrl32.toast(t('removed'), 'ok'); } catch (x) { ctrl32.toast(t(x.message), 'bad'); }
+};
+
+// ---- curves ----
+function addDialog() {
+  const d = $('#addDlg'), have = new Set(CTL.curves().map((c) => c.datastream_id)); $('#addFilter').value = '';
+  const draw = () => { const q = $('#addFilter').value.trim().toLowerCase(); const list = DS.filter((x) => !q || (dsName(x) + ' ' + x.unit + ' ' + x.quantity).toLowerCase().includes(q));
+    $('#addList').innerHTML = list.slice(0, 300).map((x) => `<label class="notranslate"><input type="checkbox" value="${esc(x.id)}" ${have.has(x.id) ? 'checked disabled' : ''}><span>${esc(dsName(x))}</span><span class="u">${esc(x.unit || x.kind)}</span></label>`).join('') || `<div class="muted" style="padding:10px">${esc(t('nothing found'))}</div>`;
+    $('#addInfo').textContent = list.length > 300 ? t('Showing the first 300; type to narrow the list.') : t('At most 16 curves in a view.'); };
+  $('#addFilter').oninput = draw; draw();
+  d.querySelector('form').onsubmit = (e) => { e.preventDefault(); const ids = [...d.querySelectorAll('#addList input:checked:not(:disabled)')].map((i) => i.value); const cs = CTL.curves();
+    for (const id of ids) if (cs.length < 16) cs.push({ datastream_id: id, color: TRD.PALETTE[cs.length % TRD.PALETTE.length] });
+    if (ids.length) { touch(); CTL.setCurves(cs); } d.close(); };
+  d.showModal(); $('#addFilter').focus();
+}
+$('#trAdd').onclick = addDialog;
+function curveDialog(i) {
+  const d = $('#curveDlg'), f = d.querySelector('form'), cs = CTL.curves(), c = cs[i], row = CTL.state().rows[i]; f.reset(); $('#curveErr').textContent = '';
+  $('#curveTitle').textContent = row.name; f.label.value = c.label || ''; f.color.value = row.color; f.style.value = c.style || ''; f.axis.value = c.axis || ''; f.min.value = c.min ?? ''; f.max.value = c.max ?? '';
+  f.onsubmit = (e) => { e.preventDefault(); const mn = f.min.value === '' ? null : parseFloat(f.min.value), mx = f.max.value === '' ? null : parseFloat(f.max.value);
+    if (mn != null && mx != null && mx <= mn) { $('#curveErr').textContent = t('The end of the axis must be above its start.'); return; }
+    const n = { datastream_id: c.datastream_id, color: f.color.value }; if (f.label.value.trim()) n.label = f.label.value.trim(); if (f.style.value) n.style = f.style.value; if (f.axis.value.trim()) n.axis = f.axis.value.trim(); if (mn != null) n.min = mn; if (mx != null) n.max = mx; if (c.hidden) n.hidden = true;
+    cs[i] = n; touch(); CTL.setCurves(cs); d.close(); };
+  $('#curveRemove').onclick = () => { cs.splice(i, 1); touch(); CTL.setCurves(cs); d.close(); };
+  d.showModal();
+}
+
+// ---- time and tools ----
+$('#trRanges').innerHTML = RANGES.map((r) => `<button class="btn small notranslate" type="button" data-r="${r}">${r.replace(/(\d+)/, '$1 ')}</button>`).join(' ');
+for (const b of document.querySelectorAll('#trRanges [data-r]')) b.onclick = () => { RANGE = b.dataset.r; CTL.setRange(RANGE); };
+$('#trLive').onclick = () => CTL.setLive(!CTL.state().live);
+for (const b of document.querySelectorAll('#trBar [data-act]')) b.onclick = () => ({ back: () => CTL.pan(-0.5), fwd: () => CTL.pan(0.5), in: () => CTL.zoom(0.5), out: () => CTL.zoom(2) })[b.dataset.act]();
+$('#trBox').onclick = () => CTL.toggle('box', !CTL.state().box);
+$('#trSecond').onclick = () => CTL.toggle('second', !CTL.state().second);
+$('#trClear').onclick = () => CTL.clearRulers();
+$('#trLimits').onclick = () => { CTL.toggle('limits', !CTL.state().limits); touch(); };
+$('#trAlarms').onclick = () => { CTL.toggle('alarms', !CTL.state().alarms); touch(); };
+$('#trApply').onclick = () => { const a = Date.parse($('#trFrom').value), b = Date.parse($('#trTo').value); if (!(b > a)) { ctrl32.toast(t('to must be after from'), 'bad'); return; } CTL.setWindow(a, b); };
+const download = (blob, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); };
+const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+$('#trPng').onclick = async () => download(await CTL.png(), 'trend-' + stamp() + '.png');
+$('#trCsv').onclick = () => {
+  const tb = CTL.table(); if (!tb.rows.length) { ctrl32.toast(t('no data in this range'), 'bad'); return; }
+  const q = (s) => '"' + String(s).replace(/"/g, '""') + '"';
+  const head = ['time', ...tb.cols.map((c) => c.name + (c.unit ? ' [' + c.unit + ']' : '') + (c.bucket ? ' (avg ' + c.bucket + ' s)' : ''))].map(q).join(';');
+  const body = tb.rows.map((r) => [new Date(r[0]).toISOString(), ...r.slice(1).map((v) => (v == null ? '' : String(v).replace('.', (1.1).toLocaleString(document.documentElement.lang || undefined).charAt(1) === ',' ? ',' : '.')))].join(';')).join('\r\n');
+  download(new Blob(['﻿' + head + '\r\n' + body + '\r\n'], { type: 'text/csv;charset=utf-8' }), 'trend-' + stamp() + '.csv');
+  ctrl32.opReport('press', 'Trend export', { rows: tb.rows.length, curves: tb.cols.length });
+};
+for (const b of document.querySelectorAll('dialog [data-close]')) b.onclick = () => b.closest('dialog').close();
+
+ctrl32.ready({ requireAuth: true, requirePerm: 'data.read' }).then(async () => {
+  $('#trCsv').hidden = !ctrl32.can('data.export');
+  const p = params();
+  [DS] = await Promise.all([api('GET', '/api/v1/datastreams'), loadViews(p.get('view') || '')]);
+  DS.sort((a, b) => dsName(a).localeCompare(dsName(b)));
+  const v = VIEWS.find((x) => x.id === p.get('view')); let curves = [], o = { range: '1h' };
+  if (v) { VIEW = v; curves = (v.spec.curves || []); o = { range: v.spec.range || '1h', from: v.spec.from, to: v.spec.to, limits: v.spec.limits, alarms: v.spec.alarms }; }
+  else { const ids = (p.get('ds') || '').split(',').filter((id) => DS.some((d) => d.id === id)).slice(0, 16); curves = ids.map((id, i) => ({ datastream_id: id, color: TRD.PALETTE[i % TRD.PALETTE.length] })); $('#trView').value = ''; DIRTY = curves.length > 0; }
+  if (p.get('from') && p.get('to') && Date.parse(p.get('to')) > Date.parse(p.get('from'))) { o.from = p.get('from'); o.to = p.get('to'); }
+  else if (TRD.RANGE_MS[p.get('range')]) { o.range = p.get('range'); o.from = o.to = undefined; }
+  RANGE = o.range || '1h';
+  CTL = TRD.create($('#trChart'), { ...o, curves, datastreams: DS, onChange });
+  title();
+}).catch((x) => ctrl32.toast(x.message, 'bad'));
+</script>
+</body>
+</html>

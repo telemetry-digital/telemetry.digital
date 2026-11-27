@@ -1,0 +1,21 @@
+meta {
+  name: One trend view
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{baseUrl}}/api/v1/trends/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  One trend view
+  
+  Requires permission `data.read`.
+}

@@ -611,6 +611,12 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	// four eyes everywhere (spec 040): what waits for a second person, approval on the spot, time-limited approvals
 	mux.Handle("GET /api/v1/second-person/waiting", s.require("", s.listWaiting))
 	mux.Handle("POST /api/v1/second-person/approve", s.require("", s.approveOnSpot))
+	// trends (spec 042): saved trend views; the curves themselves are read with /observations
+	mux.Handle("GET /api/v1/trends", s.require("data.read", s.listTrends))
+	mux.Handle("POST /api/v1/trends", s.require("data.read", s.createTrend))
+	mux.Handle("GET /api/v1/trends/{id}", s.require("data.read", s.getTrend))
+	mux.Handle("PUT /api/v1/trends/{id}", s.require("data.read", s.updateTrend))
+	mux.Handle("DELETE /api/v1/trends/{id}", s.require("data.read", s.deleteTrend))
 	// SCADA users (spec 041): people who sign in at the controls on top of the session of the station
 	mux.Handle("GET /api/v1/scada/groups", s.require("data.read", s.listScadaGroups))
 	mux.Handle("POST /api/v1/scada/groups", s.require("user.admin", s.createScadaGroup))
@@ -750,6 +756,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, br *broker.Broker, iamSvc *iam.
 	mux.HandleFunc("GET /oplog", page("operator-log.html"))
 	mux.HandleFunc("GET /users/scada", page("scada-users.html")) // SCADA users and their groups (spec 041)
 	mux.HandleFunc("GET /approvals", page("approvals.html"))     // everything that waits for a second person (spec 040) // operator action log (spec 039)
+	mux.HandleFunc("GET /trends", page("trends.html"))           // trends (spec 042)
 	mux.HandleFunc("GET /recipes", page("recipes.html"))         // recipes (spec 038)
 	mux.HandleFunc("GET /recipes/{section}", page("recipes.html"))
 	mux.HandleFunc("GET /alarms", page("alarms.html")) // alarm management after ISA-18.2 (spec 035)
