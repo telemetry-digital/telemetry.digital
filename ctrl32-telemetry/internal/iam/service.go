@@ -40,12 +40,34 @@ type Policy struct {
 	FourEyesLimits       bool     `json:"four_eyes_limits"`      // URS H-08: alarm rule changes become change requests
 	FourEyesAssignments  bool     `json:"four_eyes_assignments"` // URS H-08: device ↔ datastream assignments become change requests
 	FourEyesVPN          bool     `json:"four_eyes_vpn"`         // ADR-0018: VPN access of technicians (user peers) needs a second person's approval
+	// Four eyes everywhere (spec 040, ADR-0026 step 2), all off by default. Alarms and attributes are held as change
+	// requests; cameras and displays need an approval of a second person that lasts FourEyesMinutes on that station.
+	FourEyesAlarms     bool `json:"four_eyes_alarms"`     // acknowledge, shelve, end a shelf
+	FourEyesAttributes bool `json:"four_eyes_attributes"` // shared attributes of a device
+	FourEyesCameras    bool `json:"four_eyes_cameras"`    // PTZ, playback, export, evidence, pictures without masks
+	FourEyesDisplays   bool `json:"four_eyes_displays"`   // commands to displays and kiosk PCs
+	FourEyesMinutes    int  `json:"four_eyes_minutes"`    // length of a time-limited approval (cameras, displays)
 	// LogOperatorActions keeps the operator action log (spec 039): every press, command, PTZ move, picture change and
 	// sign-in of a person at the controls. Off by default.
 	LogOperatorActions bool `json:"log_operator_actions"`
 	// RememberDeviceDays allows "Stay signed in on this device" at login: such a session lasts this many days instead of
 	// the idle and absolute limits (0 = not allowed, the default). MFA is still required at the sign-in itself.
 	RememberDeviceDays int `json:"remember_device_days"`
+}
+
+// Limits and the default of FourEyesMinutes.
+const (
+	MinFourEyesMinutes     = 1
+	MaxFourEyesMinutes     = 480
+	DefaultFourEyesMinutes = 15
+)
+
+// SecondPersonMinutes is the length of a time-limited approval by a second person.
+func (p Policy) SecondPersonMinutes() int {
+	if p.FourEyesMinutes < MinFourEyesMinutes || p.FourEyesMinutes > MaxFourEyesMinutes {
+		return DefaultFourEyesMinutes
+	}
+	return p.FourEyesMinutes
 }
 
 // MaxRememberDeviceDays caps RememberDeviceDays.
@@ -573,6 +595,72 @@ func (s *Service) CompleteMFA(ctx context.Context, preAuthToken, code, ip, ua st
 		return raw, abs, nil
 	}
 	return raw, 0, nil
+}
+
+// ErrMFACode: the second person signs in with two factors and the code was missing or wrong.
+var ErrMFACode = errors.New("authenticator code required")
+
+// Witness checks the credentials of a second person who approves an action on the spot, at another user's station
+// (spec 040): the account must belong to orgID, be enabled and not locked; the password is checked with the same
+// lockout as a sign-in, and an account with two-factor sign-in needs the code. No session is created: the returned
+// Principal has neither a session nor a token and lives for the one approval.
+func (s *Service) Witness(ctx context.Context, orgID, username, password, code, ip, ua string) (*Principal, error) {
+	username = strings.ToLower(strings.TrimSpace(username))
+	var p Principal
+	var hash string
+	var disabled, lockedUntil *time.Time
+	var failed int
+	err := s.pool.QueryRow(ctx, `SELECT u.id::text, u.org_id::text, COALESCE(u.customer_id::text,''), u.username, u.full_name, u.password_hash, u.disabled_at, u.locked_until, u.failed_logins,
+		u.mfa_enabled, u.must_change_password, u.camera_groups IS NOT NULL, COALESCE(u.camera_groups, '{}')
+		FROM core.user_account u WHERE (u.username = $1 OR lower(u.email) = $1) AND u.org_id = $2::uuid`, username, orgID).
+		Scan(&p.UserID, &p.OrgID, &p.CustomerID, &p.Username, &p.FullName, &hash, &disabled, &lockedUntil, &failed, &p.MFAEnabled, &p.MustChange, &p.CameraLimited, &p.CameraGroups)
+	if err != nil {
+		s.hasher.Verify(password, "$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+		s.access(ctx, orgID, "", username, "second_person_failed", false, ip, ua, map[string]any{"reason": "unknown_user"})
+		return nil, ErrInvalidCredentials
+	}
+	pol := s.policy(ctx, orgID)
+	if disabled != nil {
+		s.access(ctx, orgID, p.UserID, username, "second_person_failed", false, ip, ua, map[string]any{"reason": "disabled"})
+		return nil, ErrDisabled
+	}
+	if lockedUntil != nil && lockedUntil.After(time.Now()) {
+		s.access(ctx, orgID, p.UserID, username, "second_person_failed", false, ip, ua, map[string]any{"reason": "locked"})
+		return nil, ErrLocked
+	}
+	fail := func(reason string) error {
+		failed++
+		var lock *time.Time
+		if failed >= pol.LockoutThreshold {
+			t := time.Now().Add(time.Duration(pol.LockoutMinutes) * time.Minute)
+			lock = &t
+			failed = 0
+		}
+		_, _ = s.pool.Exec(ctx, `UPDATE core.user_account SET failed_logins = $2, locked_until = $3 WHERE id = $1::uuid`, p.UserID, failed, lock)
+		s.access(ctx, orgID, p.UserID, username, "second_person_failed", false, ip, ua, map[string]any{"reason": reason, "locked": lock != nil})
+		if lock != nil {
+			return ErrLocked
+		}
+		return ErrInvalidCredentials
+	}
+	if !s.hasher.Verify(password, hash) {
+		return nil, fail("bad_password")
+	}
+	if p.MFAEnabled {
+		if strings.TrimSpace(code) == "" {
+			return nil, ErrMFACode
+		}
+		if ok, err := s.verifyTOTP(ctx, p.UserID, strings.TrimSpace(code), true); err != nil || !ok {
+			return nil, fail("bad_code")
+		}
+		p.MFAVerified = true
+	}
+	if p.Roles, p.Permissions, err = s.permissionsFor(ctx, p.UserID); err != nil {
+		return nil, err
+	}
+	_, _ = s.pool.Exec(ctx, `UPDATE core.user_account SET failed_logins = 0, locked_until = NULL WHERE id = $1::uuid`, p.UserID)
+	s.access(ctx, orgID, p.UserID, username, "second_person_ok", true, ip, ua, nil)
+	return &p, nil
 }
 
 // ReauthPassword re-checks the password of the current user (for signing and sensitive actions).

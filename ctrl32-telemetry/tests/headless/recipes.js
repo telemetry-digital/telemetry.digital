@@ -131,6 +131,9 @@ const expect = (label, cond, detail) => { console.log((cond ? "  ok   " : "  FAI
   await ev(`(document.querySelector('#loadBtn').click(), 1)`);
   expect("the load dialog announces four eyes", await until(`document.querySelector('#ldDlg').open && !document.querySelector('#ldGo').disabled && !document.querySelector('#ldFour').hidden`));
   await ev(`(document.querySelector('#ldForm').reason.value = 'batch 2026-119', document.querySelector('#ldForm').requestSubmit(), 1)`);
+  // four eyes everywhere (spec 040): the dialog of the second person opens over the load; here it is left waiting
+  expect("the second person is asked for", await until(`!!(document.querySelector('#spDlg') && document.querySelector('#spDlg').open) && /Line A|→/.test(document.querySelector('#spDlg .sp-sum').textContent)`));
+  await ev(`(document.querySelector('#spDlg [data-sp-wait]').click(), 1)`);
   expect("the load waits, nothing is written", await until(`document.querySelector('#ldGo').hidden`) && await ev(`document.querySelectorAll('#ldValues .rc-st').length === 0`));
   await go("/recipes/loads");
   expect("the load log shows the waiting load with Approve and Reject", await until(`${mine()}.length === 2`) && await ev(`${mine("[data-approve]")}.length === 1 && ${mine(".rc-st.pending")}.length === 1 && ${mine(".rc-st.done")}.length === 1`), await ev(`${mine()}.map(r => r.textContent)`));

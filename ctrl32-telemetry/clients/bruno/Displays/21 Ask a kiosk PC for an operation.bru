@@ -24,7 +24,7 @@ body:json {
 docs {
   Ask a kiosk PC for an operation
   
-  A closed list the PC's agent performs within its poll (15 s): `report` (report now), `restart_browsers` (the launcher starts them again within 30 s), `reboot` (in 10 s), `update_scripts` (the agent and launcher of this server version), `screenshot` (needs display.screenshot and screenshots allowed for the PC; fetch it with GET …/screenshot). The operation waits 10 minutes for the PC. Audited as kiosk.command.
+  A closed list the PC's agent performs within its poll (15 s): `report` (report now), `restart_browsers` (the launcher starts them again within 30 s), `reboot` (in 10 s), `update_scripts` (the agent and launcher of this server version), `screenshot` (needs display.screenshot and screenshots allowed for the PC; fetch it with GET …/screenshot). The operation waits 10 minutes for the PC. Audited as kiosk.command. With four eyes for displays (policy `four_eyes_displays`) the call answers 403 `second_person_required` until a second person approved the work for a limited time on this station (see `POST /api/v1/second-person/grants`).
   
   Requires permission `display.manage`.
 }

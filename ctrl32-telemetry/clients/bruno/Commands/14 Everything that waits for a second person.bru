@@ -1,0 +1,19 @@
+meta {
+  name: Everything that waits for a second person
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/v1/second-person/waiting
+  body: none
+  auth: inherit
+}
+
+docs {
+  Everything that waits for a second person
+  
+  Held commands, recipe loads, change requests and requests for a time-limited approval of the organization, oldest first, each with what it does, who asked and why. `can_approve` is false for the person who asked. `approve` and `reject` are the calls a different user makes from their own session.
+  
+  Requires a signed-in user or an API token (any permission).
+}

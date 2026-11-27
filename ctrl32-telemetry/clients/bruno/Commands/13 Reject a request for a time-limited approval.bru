@@ -1,0 +1,27 @@
+meta {
+  name: Reject a request for a time-limited approval
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/api/v1/second-person/grants/:id/reject
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  Reject a request for a time-limited approval
+  
+  Requires a signed-in user or an API token (any permission).
+}

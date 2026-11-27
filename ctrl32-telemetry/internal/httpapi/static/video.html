@@ -375,13 +375,14 @@ function drawMasks() {
   for (const b of document.querySelectorAll('[data-mi]')) b.onpointerdown = e => { e.stopPropagation(); MASKS.splice(+b.dataset.mi, 1); drawMasks(); };
   for (const b of document.querySelectorAll('[data-zi]')) b.onpointerdown = e => { e.stopPropagation(); ZONES.splice(+b.dataset.zi, 1); drawMasks(); };
 }
-function maskEditor(c) {
+async function maskEditor(c) {
   if (maskPlayer) { maskPlayer.close(); maskPlayer = null; }
   $('#maskSec').hidden = !c;
   if (!c) return;
   MASKS = JSON.parse(JSON.stringify(c.privacy_masks || [])); ZONES = JSON.parse(JSON.stringify(c.motion_zones || []));
   // the editor shows the picture without masks when permitted (audited), so the areas can be placed exactly
-  maskPlayer = ctrl32Player($('#maskBox'), {url: `/api/v1/video/cameras/${c.id}/live?quality=sub&unmask=1`, live: true, onMasks: () => {}});
+  const bare = await ctrl32.secondEnsure('cameras'); // four eyes for cameras: without the second person the picture keeps its masks
+  maskPlayer = ctrl32Player($('#maskBox'), {url: `/api/v1/video/cameras/${c.id}/live?quality=sub${bare ? '&unmask=1' : ''}`, live: true, onMasks: () => {}});
   $('#maskBox').prepend(maskPlayer.el);
   const layer = $('#maskDraw'); let start = null, ghost = null;
   const pt = e => { const b = $('#maskBox').getBoundingClientRect(), r = maskRect(); return [Math.min(1, Math.max(0, (e.clientX - b.left - r.x) / r.w)), Math.min(1, Math.max(0, (e.clientY - b.top - r.y) / r.h))]; };

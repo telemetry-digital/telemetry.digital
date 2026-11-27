@@ -1,0 +1,26 @@
+meta {
+  name: Ask for a time-limited approval
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/v1/second-person/grants
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "area": "cameras",
+    "reason": "string"
+  }
+}
+
+docs {
+  Ask for a time-limited approval
+  
+  For `area` cameras or displays, when four eyes are on for it (409 otherwise) and the caller holds a permission of the area. The request waits up to an hour; asking again returns the waiting or running one (200). Bound to the caller's station: the browser session or the API token.
+  
+  Requires a signed-in user or an API token (any permission).
+}

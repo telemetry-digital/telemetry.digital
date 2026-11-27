@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Approvals</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  /* four eyes everywhere (spec 040): what waits for a second person */
+  table.ap td, table.ap th { vertical-align: top; }
+  table.ap td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.ap td.what { white-space: normal; overflow-wrap: anywhere; min-width: 200px; }
+  table.ap td.acts { white-space: nowrap; }
+  .ap-kind { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid var(--primary); margin-bottom: 3px; }
+  .ap-empty { padding: 14px 4px; color: var(--muted); }
+  .ap-areas { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+  .ap-area { padding: 2px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); color: var(--muted); }
+  .ap-area.on { border-color: var(--ok); color: var(--fg); }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<div class="page-head"><h1>Approvals</h1></div>
+<div class="card">
+  <p class="muted" style="margin-top:0">Actions that wait for a second person. Whoever asked cannot approve; a different user with the permission of that action can. The second person can also approve at the computer of the person who asked, with their own name and password.</p>
+  <div class="ap-areas" id="apAreas"></div>
+  <div class="table-wrap"><table class="ap" id="apWait"><thead><tr><th>Requested</th><th>Requested by</th><th>What</th><th>Reason</th><th>Expires</th><th></th></tr></thead><tbody></tbody></table></div>
+  <div class="ap-empty" id="apNone" hidden>Nothing waits for approval.</div>
+</div>
+<div class="card" id="apRunCard" hidden>
+  <h2 style="margin-top:0">Running approvals</h2>
+  <p class="muted" style="margin-top:0">Work with cameras and displays that a second person approved for a limited time on one computer.</p>
+  <div class="table-wrap"><table class="ap" id="apRun"><thead><tr><th>Area</th><th>User</th><th>Station</th><th>Approved by</th><th>Reason</th><th>Valid until</th><th></th></tr></thead><tbody></tbody></table></div>
+</div>
+<div class="card" id="apHistCard" hidden>
+  <h2 style="margin-top:0">Earlier approvals for cameras and displays</h2>
+  <div class="table-wrap"><table class="ap" id="apHist"><thead><tr><th>Requested</th><th>Area</th><th>User</th><th>Reason</th><th>State</th><th>Decided by</th></tr></thead><tbody></tbody></table></div>
+</div>
+</main>
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, api = ctrl32.api, t = ctrl32.t;
+const KIND = { command: 'Command', recipe: 'Recipe load', change: 'Change', grant: 'Approval for a limited time' };
+const AREA = { commands: 'Commands', alarms: 'Alarms', attributes: 'Device attributes', cameras: 'Cameras', displays: 'Displays', limits: 'Alarm limits', assignments: 'Datastream assignments', vpn: 'VPN access', flows: 'Flows' };
+const GRANT = { cameras: 'Cameras: movement, recordings, export, evidence, pictures without masks', displays: 'Displays and kiosk PCs: commands' };
+const STATE = { pending: 'Waits for approval', active: 'Running', rejected: 'Rejected', expired: 'Expired', ended: 'Ended' };
+let WAIT = [], busy = false;
+async function decide(w, approve) {
+  const reason = ctrl32.ask(approve ? 'Reason for approving:' : 'Reason for rejecting:'); if (!reason) return;
+  try { const r = await api('POST', approve ? w.approve : w.reject, {reason}, {noSecond: true});
+    ctrl32.toast(approve ? (r.status === 'failed' ? 'approved, but the change failed' : 'approved') : 'rejected', r.status === 'failed' ? 'bad' : 'ok'); } catch (x) { ctrl32.toast(x.message, 'bad'); }
+  load();
+}
+async function load() {
+  if (busy) return; busy = true;
+  try {
+    const [w, g] = await Promise.all([api('GET', '/api/v1/second-person/waiting'), api('GET', '/api/v1/second-person/grants')]);
+    WAIT = w.waiting;
+    $('#apWait tbody').innerHTML = WAIT.map((x, i) => `<tr><td class="num">${fmt(x.requested_at)}</td><td class="notranslate">${esc(x.requested_by)}${x.own ? ` <span class="badge">${esc(t('you'))}</span>` : ''}</td>
+      <td class="what"><span class="ap-kind">${esc(t(KIND[x.kind] || x.kind))}${x.area ? ' · ' + esc(t(AREA[x.area] || x.area)) : ''}</span><div class="notranslate">${esc(x.kind === 'grant' ? `${t(GRANT[x.area] || x.area)} — ${x.minutes} min` : x.summary)}</div></td>
+      <td class="what notranslate">${esc(x.reason)}</td><td class="num">${x.expires_at ? fmt(x.expires_at) : '—'}</td>
+      <td class="acts">${x.can_approve ? `<button class="btn small primary" type="button" data-ok="${i}">${esc(t('Approve'))}</button> ` : ''}${x.can_reject ? `<button class="btn small" type="button" data-no="${i}">${esc(t(x.own ? 'Withdraw' : 'Reject'))}</button>` : ''}</td></tr>`).join('');
+    $('#apWait').hidden = !WAIT.length; $('#apNone').hidden = !!WAIT.length;
+    for (const b of document.querySelectorAll('[data-ok]')) b.onclick = () => decide(WAIT[+b.dataset.ok], true);
+    for (const b of document.querySelectorAll('[data-no]')) b.onclick = () => decide(WAIT[+b.dataset.no], false);
+    const run = g.filter(x => x.status === 'active'), hist = g.filter(x => x.status !== 'active' && x.status !== 'pending').slice(0, 30);
+    $('#apRunCard').hidden = !run.length; $('#apHistCard').hidden = !hist.length;
+    $('#apRun tbody').innerHTML = run.map(x => `<tr><td>${esc(t(AREA[x.area] || x.area))}</td><td class="notranslate">${esc(x.user)}</td><td class="num notranslate">${esc(x.station)}${x.this_station ? ` <span class="badge">${esc(t('this computer'))}</span>` : ''}</td>
+      <td class="notranslate">${esc(x.decided_by || '')}${x.on_spot ? ` <span class="badge">${esc(t('on the spot'))}</span>` : ''}</td><td class="what notranslate">${esc(x.reason)}</td><td class="num">${fmt(x.valid_until)}</td>
+      <td class="acts">${x.can_end ? `<button class="btn small" type="button" data-end="${x.id}">${esc(t('End now'))}</button>` : ''}</td></tr>`).join('');
+    for (const b of document.querySelectorAll('[data-end]')) b.onclick = async () => { try { await api('DELETE', `/api/v1/second-person/grants/${b.dataset.end}`); ctrl32.toast('ended', 'ok'); } catch (x) { ctrl32.toast(x.message, 'bad'); } load(); };
+    $('#apHist tbody').innerHTML = hist.map(x => `<tr><td class="num">${fmt(x.requested_at)}</td><td>${esc(t(AREA[x.area] || x.area))}</td><td class="notranslate">${esc(x.user)}</td><td class="what notranslate">${esc(x.reason)}</td>
+      <td>${esc(t(STATE[x.status] || x.status))}${x.on_spot ? ` <span class="badge">${esc(t('on the spot'))}</span>` : ''}</td><td class="notranslate">${esc(x.decided_by || x.ended_by || '')}</td></tr>`).join('');
+  } catch (x) { ctrl32.toast(x.message, 'bad'); }
+  busy = false;
+}
+ctrl32.ready({ requireAuth: true }).then(async ({ me }) => {
+  const fe = (me && me.four_eyes) || {};
+  const on = Object.keys(AREA).filter(k => fe[k]);
+  $('#apAreas').innerHTML = `<span class="muted" style="font-size:12px">${esc(t('Four eyes are switched on for'))}:</span> ` + (on.length ? on.map(k => `<span class="ap-area on">${esc(t(AREA[k]))}</span>`).join('') : `<span class="ap-area">${esc(t('nothing'))}</span>`)
+    + (ctrl32.can('user.admin') ? ` <a href="/settings/policy" style="font-size:12px">${esc(t('Security policy'))}</a>` : '');
+  load(); setInterval(() => { if (!document.hidden && !document.querySelector('dialog[open]')) load(); }, 10000);
+});
+</script>
+</body>
+</html>

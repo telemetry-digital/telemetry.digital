@@ -23,7 +23,7 @@ body:json {
 docs {
   End the shelf of an alarm
   
-  Alarms still active return to the current list (unacknowledged ones are annunciated again). 409 when the alarm is not shelved.
+  Alarms still active return to the current list (unacknowledged ones are annunciated again). 409 when the alarm is not shelved. With four eyes for alarms (policy `four_eyes_alarms`) the call answers 202 with a pending change request (`second_person`) instead and runs when a different user approves it.
   
   Requires permission `alarm.ack`.
 }

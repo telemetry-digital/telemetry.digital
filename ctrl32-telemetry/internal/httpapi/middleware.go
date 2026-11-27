@@ -169,6 +169,9 @@ func (s *Server) audit(r *http.Request, action, entityType, entityID string, old
 	if ci := changeFrom(r.Context()); ci != nil {
 		e.Reason = reason + " (approved change " + ci.ID + " requested by " + ci.RequestedBy + ")"
 	}
+	if si := spotFrom(r.Context()); si != nil {
+		e.Reason += " (second person on the spot, at the station of " + si.Requester + ")"
+	}
 	if _, _, err := audit.Append(r.Context(), s.pool, e); err != nil {
 		s.log.Error("audit append failed", "security", true, "action", action, "err", err)
 	}

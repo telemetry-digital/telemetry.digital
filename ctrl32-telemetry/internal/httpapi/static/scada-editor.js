@@ -527,7 +527,7 @@
       h += `<div class="row">${t === 'symbol' || t === 'rect' || t === 'ellipse' || t === 'pipe' ? chk('style.shade', t === 'pipe' ? st.shade !== false : st.shade, t === 'pipe' ? '3D highlight' : 'Metallic shading') : ''}${chk('style.shadow', st.shadow, 'Shadow')}</div></details>`;
       if (one) {
         h += `<details open><summary>Binding</summary><label>Tag (datastream) <input class="se-dsfilter" placeholder="filter…"><select data-f="tag" data-kind="text">${dsOptions(e.tag, '— none —')}</select></label><div class="row">${txt('unit', e.unit, 'Unit (empty = datastream)', 'maxlength="16"')}${num('decimals', e.decimals, 'Decimals', 'min="0" max="6" step="1"')}</div>`;
-        h += `<label>Device for operation <select data-f="device" data-kind="text"><option value="">— none —</option>${(o.devices || []).map((d) => `<option value="${d.id}"${d.id === e.device ? ' selected' : ''}>${esc(d.name || d.external_id)}</option>`).join('')}</select></label>${txt('key', e.key, 'Command key (register / datastream key)', 'maxlength="64"')}</details>`;
+        h += `<label>Device for operation <select data-f="device" data-kind="text"><option value="">— none —</option>${(o.devices || []).map((d) => `<option value="${d.id}"${d.id === e.device ? ' selected' : ''}>${esc(d.name || d.external_id)}</option>`).join('')}</select></label>${txt('key', e.key, 'Command key (register / datastream key)', 'maxlength="64"')}${chk('second_person', e.second_person, 'Needs a second person')}</details>`;
         h += dynEditor(e) + eventEditor(e);
       }
       props.innerHTML = h; wireProps(es);

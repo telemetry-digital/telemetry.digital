@@ -355,7 +355,7 @@
     if (!reason) { out.innerHTML = '<span style="color:#d97706">reason is required</span>'; if (reasonEl) reasonEl.focus(); return; }
     if (p.confirm !== false && !window.confirm((p.title || p.key) + ' → ' + value + '?')) { if (window.ctrl32 && ctrl32.opReport) ctrl32.opReport('cancel', p.title || p.key, { key: p.key, value }); return; }
     out.innerHTML = '<span class="muted">sending…</span>';
-    try { const r = await api('POST', '/api/v1/devices/' + dev + '/commands', { method: p.method || 'write', args: { key: p.key, value }, reason });
+    try { const r = await api('POST', '/api/v1/devices/' + dev + '/commands', { method: p.method || 'write', args: { key: p.key, value }, reason, second_person: !!p.second_person });
       showCmd(out, r.status, { readback: r.result && r.result.readback, error: r.error });
       if (r.status === 'queued' || r.status === 'sent' || r.status === 'pending') PENDING.set(r.id, out);
       if (reasonEl) reasonEl.value = '';

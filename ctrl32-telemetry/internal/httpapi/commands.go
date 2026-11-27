@@ -66,6 +66,9 @@ func (s *Server) sendCommand(w http.ResponseWriter, r *http.Request) {
 		Args       json.RawMessage `json:"args"`
 		TTLSeconds int             `json:"ttl_seconds"`
 		Reason     string          `json:"reason"`
+		// SecondPerson: the control that sent it is marked "needs a second person" (spec 040); it can only add the
+		// approval, never remove the one the organization requires.
+		SecondPerson bool `json:"second_person"`
 	}
 	if err := decodeJSON(r, &in, 16384); err != nil {
 		writeErr(w, 400, err.Error())
@@ -93,9 +96,9 @@ func (s *Server) sendCommand(w http.ResponseWriter, r *http.Request) {
 	if !reasonOf(w, in.Reason) {
 		return
 	}
-	var ext string
+	var ext, devName string
 	var transport string
-	if err := s.pool.QueryRow(r.Context(), `SELECT external_id, transport FROM core.device WHERE id = $1::uuid AND org_id = $2::uuid AND revoked_at IS NULL`, id, org).Scan(&ext, &transport); err != nil {
+	if err := s.pool.QueryRow(r.Context(), `SELECT external_id, transport, name FROM core.device WHERE id = $1::uuid AND org_id = $2::uuid AND revoked_at IS NULL`, id, org).Scan(&ext, &transport, &devName); err != nil {
 		writeErr(w, 404, "device not found")
 		return
 	}
@@ -106,7 +109,7 @@ func (s *Server) sendCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Four eyes (URS H-08): the command is recorded as pending and executed only after a different user approves it.
-	fourEyes := s.iam != nil && s.iam.Policy(r.Context(), org).FourEyesCommands
+	fourEyes := in.SecondPerson || (s.iam != nil && s.iam.Policy(r.Context(), org).FourEyesCommands)
 	initial := "queued"
 	if fourEyes {
 		initial = "pending"
@@ -130,11 +133,13 @@ func (s *Server) sendCommand(w http.ResponseWriter, r *http.Request) {
 	msg, _ := json.Marshal(map[string]any{"id": cid, "m": in.Method, "a": in.Args, "exp": exp.Unix()})
 	_, _ = s.pool.Exec(r.Context(), `INSERT INTO core.raw_message (org_id, device_id, connector, direction, topic, payload, payload_json, decode_status) VALUES ($1::uuid, $2::uuid, 'mqtt', 'out', $3, $4, $4::jsonb, 'ok')`, org, id, "d/"+ext+"/cmd", msg)
 	s.audit(r, "device.command", "device", id, nil, map[string]any{"command_id": cid, "method": in.Method, "args": in.Args, "ttl_seconds": in.TTLSeconds, "status": status}, in.Reason)
+	out := map[string]any{"id": cid, "method": in.Method, "status": status, "expires_at": exp, "result": result, "error": cmdErr}
 	code = 201
 	if fourEyes {
 		code = 202
+		out["second_person"] = map[string]any{"kind": "command", "id": cid, "device_id": id, "summary": cmdSummary(devName, in.Method, in.Args)}
 	}
-	writeJSON(w, code, map[string]any{"id": cid, "method": in.Method, "status": status, "expires_at": exp, "result": result, "error": cmdErr})
+	writeJSON(w, code, out)
 }
 
 func (s *Server) getAttributes(w http.ResponseWriter, r *http.Request) {

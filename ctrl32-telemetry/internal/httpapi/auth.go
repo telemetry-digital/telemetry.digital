@@ -99,13 +99,18 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		perms = append(perms, k)
 	}
 	locale := "en"
+	var pol iam.Policy
+	if s.iam != nil && p.OrgID != "" {
+		pol = s.iam.Policy(r.Context(), p.OrgID)
+	}
 	_ = s.pool.QueryRow(r.Context(), `SELECT locale FROM core.user_account WHERE id = $1::uuid`, p.UserID).Scan(&locale)
 	writeJSON(w, 200, map[string]any{
 		"user_id": p.UserID, "org_id": p.OrgID, "username": p.Username, "full_name": p.FullName, "locale": locale,
 		"roles": p.Roles, "permissions": perms, "csrf_token": p.CSRFSecret,
 		"must_change_password": p.MustChange, "mfa_enabled": p.MFAEnabled, "mfa_required": p.MFARequired,
 		"auth":        map[string]bool{"session": p.SessionID != "", "token": p.TokenID != ""},
-		"log_actions": s.opLogOn(r.Context(), p.OrgID), // the pages report picture changes only then
+		"log_actions": s.opLogOn(r.Context(), p.OrgID),                                    // the pages report picture changes only then
+		"four_eyes":   fourEyesAreas(pol), "four_eyes_minutes": pol.SecondPersonMinutes(), // spec 040: where a second person is needed
 	})
 }
 

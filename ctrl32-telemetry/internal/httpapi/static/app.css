@@ -979,3 +979,9 @@ body.has-sidebar #alarmBar { position: sticky; top: 8px; z-index: 15; box-shadow
 @keyframes alBlink { 50% { opacity: .2; } }
 @media (prefers-reduced-motion: reduce) { #alarmBar.unack .ab-dot, .al-blink { animation: none; } }
 @media (max-width: 700px) { #alarmBar .ab-count span { display: none; } }
+
+/* four eyes everywhere (spec 040): the dialog of the second person */
+dialog.sp-dlg h3 { margin: 14px 0 4px; font-size: 14px; }
+dialog.sp-dlg .sp-sum { font-weight: 600; overflow-wrap: anywhere; margin: 0 0 6px; }
+dialog.sp-dlg .sp-wait { color: var(--warn); }
+dialog.sp-dlg .sp-list { margin-bottom: 0; }

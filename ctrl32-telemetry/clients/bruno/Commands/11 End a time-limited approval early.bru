@@ -1,0 +1,23 @@
+meta {
+  name: End a time-limited approval early
+  type: http
+  seq: 11
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/second-person/grants/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  End a time-limited approval early
+  
+  By the person who works under it or by anyone who could approve it.
+  
+  Requires a signed-in user or an API token (any permission).
+}

@@ -82,7 +82,7 @@
   }
   // can('a') or can('a|b'): any of the permissions (as the server's "a|b" routes)
   const can = (p) => !!(me && me.permissions && String(p).split('|').some((x) => me.permissions.includes(x)));
-  async function api(method, url, body) {
+  async function api(method, url, body, opt) {
     const h = { 'Content-Type': 'application/json' };
     if (csrf) h['X-CSRF-Token'] = csrf;
     // the page an action comes from, for the operator action log (spec 039)
@@ -91,8 +91,115 @@
     const ct = r.headers.get('Content-Type') || '';
     const data = ct.includes('json') ? await r.json().catch(() => ({})) : await r.blob();
     if (r.status === 401 && meLoaded && me) { location.href = '/login'; }
+    const plain = opt && opt.noSecond;
+    if (r.status === 403 && data && data.code === 'second_person_required' && !plain && me) {
+      // continuous work (cameras, displays): ask for an approval that lasts some minutes, then send the call again
+      const mine = await api('GET', '/api/v1/second-person/grants?mine=1', undefined, { noSecond: true }).catch(() => []);
+      const waiting = mine.find((g) => g.area === data.area && g.status === 'pending');
+      const a = await secondPerson({ area: data.area, minutes: data.minutes, kind: 'grant', id: waiting ? waiting.id : undefined });
+      if (a.approved) return api(method, url, body, { noSecond: true });
+      const e = new Error(a.cancelled ? t('A second person must approve this.') : t('It waits for approval by a second person')); e.status = 403; e.code = data.code; e.area = data.area; throw e;
+    }
     if (!r.ok) { const e = new Error((data && data.error) || ('HTTP ' + r.status)); e.status = r.status; e.code = data && data.code; throw e; }
+    if (r.status === 202 && data && data.status === 'pending' && data.second_person && !plain && me) {
+      // a single action is held: the second person may approve it here, or it stays in Approvals
+      const a = await secondPerson(data.second_person);
+      if (a.approved) return spResult(data.second_person.kind, data, a.result);
+    }
     return data;
+  }
+  // ---- four eyes everywhere (spec 040) ---------------------------------------------------------------
+  // The server holds a single action (202, second_person) or refuses continuous work (403, second_person_required)
+  // until a second person approves. The dialog lets that person approve on the spot with their own name and password;
+  // otherwise the action waits in Approvals for a different user in their own session.
+  let spBusy = null; const spUntil = {};
+  function spDialog() {
+    let d = $('#spDlg');
+    if (d) return d;
+    d = document.createElement('dialog'); d.id = 'spDlg'; d.className = 'sp-dlg';
+    d.innerHTML = `<form class="form" method="dialog" autocomplete="off">
+      <h2 style="margin-top:0">A second person is needed</h2>
+      <p class="sp-sum notranslate"></p>
+      <p class="muted sp-min" hidden></p>
+      <label class="sp-why" hidden><span>Why you need it</span> <input name="why" maxlength="200"></label>
+      <p class="sp-wait" hidden>Your request waits for approval already.</p>
+      <h3>Approve here</h3>
+      <p class="muted" style="margin-top:0">The second person signs with their own name and password. Nobody is signed in or out.</p>
+      <div class="row2"><label><span>Name of the second person</span> <input name="spuser" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+        <label><span>Password of the second person</span> <input name="sppass" type="password" autocomplete="new-password"></label></div>
+      <div class="row2"><label><span>Code from the authenticator app, when the second person uses one</span> <input name="spcode" inputmode="numeric" autocomplete="one-time-code" maxlength="12"></label>
+        <label><span>Note of the second person</span> <input name="spnote" maxlength="200"></label></div>
+      <div class="err sp-err"></div>
+      <div class="actions"><button class="btn primary" type="submit" data-sp-ok>Approve</button><button class="btn" type="button" data-sp-wait>Leave it waiting</button></div>
+      <p class="muted sp-list"><span>The second person can also approve it at their own computer.</span> <a href="/approvals">Approvals</a></p>
+    </form>`;
+    document.body.appendChild(d);
+    return d;
+  }
+  // secondPerson({kind, id, device_id, summary}) for something the server holds, or ({area, minutes}) for continuous
+  // work. Resolves {approved: true, result} when the second person approved on the spot, {approved: false} when it waits.
+  function secondPerson(sp) {
+    if (spBusy) return spBusy;
+    spBusy = new Promise((resolve) => {
+      const d = spDialog(), f = d.querySelector('form'), err = d.querySelector('.sp-err');
+      const grant = !!sp.area, done = (v) => { spBusy = null; d.close(); resolve(v); };
+      const AREAS = { cameras: 'Cameras: movement, recordings, export, evidence, pictures without masks', displays: 'Displays and kiosk PCs: commands' };
+      d.querySelector('.sp-sum').textContent = grant ? t(AREAS[sp.area] || sp.area) : (sp.summary || '');
+      d.querySelector('.sp-min').hidden = !grant; d.querySelector('.sp-why').hidden = !grant || !!sp.id; d.querySelector('.sp-wait').hidden = !(grant && sp.id);
+      if (grant) d.querySelector('.sp-min').textContent = t('The approval lasts on this computer for (minutes)') + ': ' + (sp.minutes || '');
+      d.querySelector('[data-sp-wait]').textContent = t(grant && !sp.id ? 'Ask and wait' : 'Leave it waiting');
+      f.reset(); err.textContent = '';
+      // a request for continuous work is recorded first; the same one is returned while it waits
+      const ask = async () => {
+        if (!grant || sp.id) return sp;
+        const why = f.why.value.trim();
+        if (!why) { f.why.focus(); throw new Error(t('reason required')); }
+        const g = await api('POST', '/api/v1/second-person/grants', { area: sp.area, reason: why });
+        if (g.status === 'active') return { ...sp, id: g.id, active: true };
+        return { ...sp, kind: 'grant', id: g.id };
+      };
+      f.onsubmit = async (e) => {
+        e.preventDefault(); err.textContent = '';
+        if (!f.spuser.value.trim() || !f.sppass.value) { err.textContent = t('Enter the name and the password of the second person.'); return; }
+        try {
+          const x = await ask(); sp = x;
+          if (x.active) { done({ approved: true, result: null }); return; }
+          const r = await api('POST', '/api/v1/second-person/approve', { kind: x.kind || 'grant', id: x.id, device_id: x.device_id || '', username: f.spuser.value.trim(), password: f.sppass.value, code: f.spcode.value.trim(), reason: f.spnote.value.trim() });
+          toast(t('Approved by') + ' ' + r.approved_by, 'ok');
+          done({ approved: true, result: r.result });
+        } catch (x) { err.textContent = t(x.message); f.sppass.value = ''; if (x.code === 'second_person_code') f.spcode.focus(); }
+      };
+      d.querySelector('[data-sp-wait]').onclick = async () => {
+        err.textContent = '';
+        try { await ask(); } catch (x) { err.textContent = t(x.message); return; }
+        toast(t('It waits for approval by a second person'), 'ok');
+        done({ approved: false });
+      };
+      d.oncancel = (e) => { e.preventDefault(); d.querySelector('[data-sp-wait]').hidden = false; if (grant && !sp.id) done({ approved: false, cancelled: true }); else done({ approved: false }); };
+      d.showModal();
+      (grant && !sp.id ? f.why : f.spuser).focus();
+    });
+    return spBusy;
+  }
+  // what a held action answers once it is approved on the spot: the same as if it had run at once
+  function spResult(kind, held, r) {
+    if (kind === 'change') {
+      if (!r || r.status !== 'approved') { const e = new Error((r && r.result && r.result.error) || t('the approved change failed')); e.status = r && r.code; throw e; }
+      return r.result && typeof r.result === 'object' ? r.result : {};
+    }
+    return r || held;
+  }
+  // secondEnsure(area): before work that is not sent through api() (a recording in the player, a download link)
+  async function secondEnsure(area) {
+    if (!me || !me.four_eyes || !me.four_eyes[area]) return true;
+    if (spUntil[area] && Date.now() < spUntil[area]) return true;
+    let mine = [];
+    try { mine = await api('GET', '/api/v1/second-person/grants?mine=1'); } catch (e) { return true; }
+    const run = mine.find((g) => g.area === area && g.status === 'active');
+    if (run) { spUntil[area] = Date.parse(run.valid_until) - 2000; return true; }
+    const waiting = mine.find((g) => g.area === area && g.status === 'pending');
+    const r = await secondPerson({ area, minutes: me.four_eyes_minutes, kind: 'grant', id: waiting ? waiting.id : undefined });
+    return !!r.approved;
   }
   // Operator action log (spec 039): the pages report what the server cannot see — a picture or a window was opened,
   // a press was cancelled. Only when the organization keeps the log (me.log_actions) and never from a public page.
@@ -136,7 +243,7 @@
   // permissions stay the security boundary (the API answers what the role allows, whatever window asks).
   const APP_PATHS = {
     dashboards: ['/', '/dashboards', '/operator', '/recipes'], home: ['/home', '/smarthome'], energy: ['/energy'], counting: ['/counting'], cameras: ['/video'],
-    displays: ['/displays'], flows: ['/flows', '/automation'], devices: ['/devices'], incidents: ['/incidents'], assets: ['/assets'], alarms: ['/alarms'],
+    displays: ['/displays'], flows: ['/flows', '/automation'], devices: ['/devices'], incidents: ['/incidents'], assets: ['/assets'], alarms: ['/alarms', '/approvals'],
     firmware: ['/fota'], users: ['/users'], audit: ['/audit', '/reports/signatures', '/oplog'], settings: ['/settings', '/vpn'], system: ['/organizations', '/server', '/landing/edit'],
     reports: ['/reports'],
   };
@@ -266,6 +373,8 @@
         { href: '/alarms/statistics', label: 'Statistics' }, { href: '/alarms/classes', label: 'Alarm classes' }] },
       // operator action log (spec 039): who pressed what, when the organization keeps it
       { href: '/oplog', label: 'Operator log', icon: ICON.report, show: can('audit.read'), sec: 'audit' },
+      // four eyes everywhere (spec 040): what waits for a second person
+      { href: '/approvals', label: 'Approvals', icon: ICON.shield, show: can('device.command|alarm.ack|video.ptz|video.playback|display.control|config.write|device.manage'), sec: 'alarms' },
       { href: '/incidents', label: 'Incidents', icon: ICON.alert, show: can('data.read'), sec: 'incidents' },
       // every report page in one place (0.75.0); the old addresses under Settings and Audit redirect here
       { href: cw ? '/reports/templates' : '/reports/signatures', base: '/reports', label: 'Reports', icon: ICON.report, show: cw || can('audit.read') || can('report.sign'), sec: 'reports', children: [
@@ -662,7 +771,7 @@
   }
   if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyMode);
   applyMode();
-  window.ctrl32 = { ready, loadBranding, loadMe, api, opReport, logout, toggleMode, can, esc, section, t, appAllows, fullscreen, isFullscreen: () => !!fsCur(), ask, confirm: confirmAsk, setLocale, get locale() { return locale; }, get langs() { return langs; }, get brand() { return brand; }, get logo() { return logoURL(); }, get me() { return me; }, get csrf() { return csrf; }, get app() { return app; }, home, enterApp, ICON,
+  window.ctrl32 = { ready, loadBranding, loadMe, api, opReport, secondPerson, secondEnsure, logout, toggleMode, can, esc, section, t, appAllows, fullscreen, isFullscreen: () => !!fsCur(), ask, confirm: confirmAsk, setLocale, get locale() { return locale; }, get langs() { return langs; }, get brand() { return brand; }, get logo() { return logoURL(); }, get me() { return me; }, get csrf() { return csrf; }, get app() { return app; }, home, enterApp, ICON,
     fmt: (t) => (t ? new Date(t).toLocaleString(document.documentElement.lang || undefined) : '—'), toast, openSearch, alarmSound, alarmBarRefresh: () => abTick && abTick() };
   // Alarm bar (spec 035): on every page with the menu, for people who read data: the most important alarm waiting for
   // its acknowledgement (class colour, blinking), the numbers of unacknowledged and active alarms, and the class sound,
