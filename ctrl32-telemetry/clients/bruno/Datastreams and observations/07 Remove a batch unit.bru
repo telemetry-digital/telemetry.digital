@@ -1,0 +1,27 @@
+meta {
+  name: Remove a batch unit
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/batch-units/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~reason: 
+}
+
+docs {
+  Remove a batch unit
+  
+  The unit goes from the lists, its running batch is ended, its batches stay.
+  
+  Requires permission `device.manage`.
+}

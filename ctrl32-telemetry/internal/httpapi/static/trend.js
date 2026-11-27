@@ -39,7 +39,8 @@
 
   // create(host, opts) → controller. opts: {curves, range | from+to, limits, alarms, onChange(state), onData()}
   function create(host, opts) {
-    const api = ctrl32.api;
+    // a dashboard widget passes its own api and path mapping (public links and displays read through their token)
+    const api = opts.api || ctrl32.api, P = opts.path || ((u) => u), aux = opts.aux !== false;
     host.classList.add('tr-host');
     host.innerHTML = '<canvas class="tr-canvas" tabindex="0"></canvas><div class="tr-note muted"></div>';
     const cv = host.querySelector('canvas'), note = host.querySelector('.tr-note'), g = cv.getContext('2d');
@@ -59,7 +60,7 @@
     // ---- data ----------------------------------------------------------------------------------------
     async function fetchCurve(c, a, b) {
       const span = (b - a) / 1000; let bucket = Math.ceil(span / 1500);
-      const q = `/api/v1/observations?datastream_id=${c.datastream_id}&from=${iso(a)}&to=${iso(b)}`;
+      const q = P(`/api/v1/observations?datastream_id=${c.datastream_id}&from=${iso(a)}&to=${iso(b)}`);
       if (bucket < 5) {
         const rows = await api('GET', q + '&limit=10000');
         if (rows.length < 10000) return { bucket: 0, a, b, pts: rows.filter((r) => r.value != null).map((r) => ({ t: Date.parse(r.measured_at), v: r.value, n: 1, flagged: suspect(r.quality) })) };
@@ -87,15 +88,17 @@
     async function loadMeta() {
       const need = S.curves.filter((c) => !S.meta[c.datastream_id]);
       if (!need.length) return;
-      try { const all = opts.datastreams || await api('GET', '/api/v1/datastreams'); for (const d of all) S.meta[d.id] = d; } catch (e) { S.err = e.message; }
+      try { const all = opts.datastreams || await api('GET', P('/api/v1/datastreams')); for (const d of all) S.meta[d.id] = d; } catch (e) { S.err = e.message; }
     }
     async function loadRules() {
+      if (!aux) return;
       for (const c of S.curves) if (!(c.datastream_id in S.rules)) {
         S.rules[c.datastream_id] = [];
         api('GET', '/api/v1/alarm-rules?datastream_id=' + c.datastream_id).then((r) => { S.rules[c.datastream_id] = Array.isArray(r) ? r : []; draw(); }).catch(() => {});
       }
     }
     async function loadAlarms(a, b) {
+      if (!aux) return;
       for (const c of S.curves) api('GET', `/api/v1/alarms?datastream_id=${c.datastream_id}`).then((r) => { S.alarms[c.datastream_id] = (Array.isArray(r) ? r : []).filter((x) => Date.parse(x.raised_at) < b && (!x.cleared_at || Date.parse(x.cleared_at) > a)); draw(); }).catch(() => {});
     }
 
@@ -111,7 +114,8 @@
     // a hole in the data: more than a few usual steps between two points
     function gapOf(d) {
       if (d._gap) return d._gap; const p = d.pts; let g = d.bucket ? d.bucket * 3000 : 0;
-      if (!g && p.length > 2) { const ds = []; for (let i = 1; i < p.length && i < 400; i++) ds.push(p[i].t - p[i - 1].t); ds.sort((x, y) => x - y); g = Math.max(ds[ds.length >> 1] * 5, 5000); }
+      // the usual step of the data counts too: a value sampled once a minute is not a hole in a window of six-second buckets
+      if (p.length > 2) { const ds = []; for (let i = 1; i < p.length && i < 400; i++) ds.push(p[i].t - p[i - 1].t); ds.sort((x, y) => x - y); g = Math.max(g, ds[ds.length >> 1] * 5, 5000); }
       return (d._gap = g || Infinity);
     }
     function statsOf(c, a, b) {

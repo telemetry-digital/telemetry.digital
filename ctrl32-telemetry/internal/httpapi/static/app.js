@@ -343,7 +343,7 @@
   // page, and always its start page. Anything else opens the start page instead. This confines the user interface only;
   // permissions stay the security boundary (the API answers what the role allows, whatever window asks).
   const APP_PATHS = {
-    dashboards: ['/', '/dashboards', '/operator', '/trends', '/recipes'], home: ['/home', '/smarthome'], energy: ['/energy'], counting: ['/counting'], cameras: ['/video'],
+    dashboards: ['/', '/dashboards', '/operator', '/trends', '/recipes', '/batches'], home: ['/home', '/smarthome'], energy: ['/energy'], counting: ['/counting'], cameras: ['/video'],
     displays: ['/displays'], flows: ['/flows', '/automation'], devices: ['/devices'], incidents: ['/incidents'], assets: ['/assets'], alarms: ['/alarms', '/approvals'],
     firmware: ['/fota'], users: ['/users'], audit: ['/audit', '/reports/signatures', '/oplog'], settings: ['/settings', '/vpn'], system: ['/organizations', '/server', '/landing/edit'],
     reports: ['/reports'],
@@ -457,6 +457,8 @@
       { href: '/trends', label: 'Trends', icon: ICON.chart, show: can('data.read'), sec: 'dashboards' },
       { href: '/recipes', label: 'Recipes', icon: ICON.file, show: can('data.read'), sec: 'dashboards', children: [
         { href: '/recipes', label: 'Recipes' }, { href: '/recipes/loads', label: 'Loads' }] },
+      { href: '/batches', label: 'Batches', icon: ICON.report, show: can('data.read'), sec: 'dashboards', children: [
+        { href: '/batches', label: 'Batches' }, { href: '/batches/units', label: 'Units' }] },
       { head: 'Monitoring' },
       { href: '/home', label: 'Home', icon: ICON.home, show: can('data.read'), sec: 'home' },
       { href: '/energy', label: 'Energy', icon: ICON.bolt, show: can('data.read'), sec: 'energy' },

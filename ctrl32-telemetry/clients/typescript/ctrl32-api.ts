@@ -187,6 +187,78 @@ export type AssetDevice = {
   transport?: string;
 };
 
+export type Batch = {
+  /** the number from the controller, the recipe record, or typed */
+  code?: string;
+  curves?: string[];
+  end_reason?: string;
+  end_source?: "" | "recipe" | "tag" | "manual";
+  ended_at?: string | null;
+  ended_by?: string;
+  id?: string;
+  /** detail only */
+  next?: string;
+  /** counted per unit */
+  number?: number;
+  /** SCADA user at the controls */
+  operator?: string;
+  /** detail only */
+  previous?: string;
+  reason?: string;
+  recipe?: string;
+  recipe_download_id?: string;
+  record?: string;
+  record_number?: number | null;
+  /** how long it ran, or has run */
+  seconds?: number;
+  start_source?: "recipe" | "tag" | "manual";
+  started_at?: string;
+  /** account; empty when the controller began it */
+  started_by?: string;
+  /** detail only: {datastream id: {n, min, max, avg, first, last}} */
+  stats?: Record<string, unknown>;
+  status?: "running" | "finished";
+  unit?: string;
+  unit_id?: string;
+};
+
+export type BatchUnit = {
+  batches?: number;
+  curves?: string[];
+  device?: string;
+  device_id?: string;
+  enabled?: boolean;
+  id?: string;
+  mode?: "recipe" | "tag";
+  name?: string;
+  prefix?: string;
+  /** id of the running batch */
+  running?: string;
+  /** asset / key */
+  tag?: string;
+  tag_datastream?: string;
+  tag_kind?: "run" | "number";
+};
+
+export type BatchUnitInput = {
+  curves?: string[];
+  /** mode recipe */
+  device_id?: string;
+  /** batches begin and end by themselves (default true) */
+  enabled?: boolean;
+  mode: "recipe" | "tag";
+  /** 1–80 characters */
+  name: string;
+  /** mode recipe: key prefix of the unit, as in its recipes */
+  prefix?: string;
+  /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+  reason: string;
+  /** mode tag */
+  tag_datastream?: string;
+  /** mode tag */
+  tag_kind?: "run" | "number";
+};
+
 export type Branding = {
   /** product footer: text, github, license, links, show_version, white_label, intro */
   footer?: Record<string, unknown>;
@@ -2844,6 +2916,113 @@ export class Ctrl32Client {
     qr?: string;
     secret?: string;
   }>('POST', `/api/v1/auth/totp/setup`, undefined, undefined, false);
+  }
+
+  /** Batch units
+   *
+   * The places where batches run. `mode` recipe: a finished load of a recipe record into `device_id` with `prefix` begins a batch and ends the one that ran. `mode` tag: a datastream of the controller — `tag_kind` run (not zero while a batch runs) or number (a new number begins a batch that carries it, zero means none); the batch begins and ends at the time of the sample. `curves`: the datastreams drawn and summarised for each batch. `running`: the id of the batch that runs now.
+   * 
+   * Requires permission `data.read`. */
+  getBatchUnits(): Promise<BatchUnit[]> {
+    return this.request<BatchUnit[]>('GET', `/api/v1/batch-units`, undefined, undefined, false);
+  }
+
+  /** Create a batch unit
+   *
+   * A tag unit starts watching from now: what the tag did before is not a batch. At most 200 units.
+   * 
+   * Requires permission `device.manage`. */
+  postBatchUnits(body: BatchUnitInput): Promise<BatchUnit> {
+    return this.request<BatchUnit>('POST', `/api/v1/batch-units`, undefined, body, false);
+  }
+
+  /** Change a batch unit
+   *
+   * Finished batches keep the curves and statistics they ended with.
+   * 
+   * Requires permission `device.manage`. */
+  putBatchUnitsId(id: string, body: BatchUnitInput): Promise<BatchUnit> {
+    return this.request<BatchUnit>('PUT', `/api/v1/batch-units/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Remove a batch unit
+   *
+   * The unit goes from the lists, its running batch is ended, its batches stay.
+   * 
+   * Requires permission `device.manage`. */
+  deleteBatchUnitsId(id: string, query?: { reason?: string; /** required */ }): Promise<{
+    deleted?: boolean;
+    id?: string;
+  }> {
+    return this.request<{
+    deleted?: boolean;
+    id?: string;
+  }>('DELETE', `/api/v1/batch-units/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Batches, newest first
+   *
+   * The batches that ran between `from` and `to` (default the last 30 days); a running batch is always listed. `q` searches the code, the unit, the recipe, the record and the number.
+   * 
+   * Requires permission `data.read`. */
+  getBatches(query?: { unit?: string; /** id of a unit */ status?: string; /** running | finished */ from?: string; to?: string; q?: string; limit?: number; /** 1–1000, default 200 */ }): Promise<Batch[]> {
+    return this.request<Batch[]>('GET', `/api/v1/batches`, query, undefined, false);
+  }
+
+  /** Begin a batch by hand
+   *
+   * On any unit; the batch that runs there ends. Audited. With the policy scada_users_required a person must be signed in at the controls.
+   * 
+   * Requires permission `device.command`. */
+  postBatches(body: {
+    /** lot, order…; at most 60 characters */
+    code?: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    unit_id: string;
+  }): Promise<{
+    code?: string;
+    id?: string;
+    number?: number;
+    status?: string;
+    unit?: string;
+    unit_id?: string;
+  }> {
+    return this.request<{
+    code?: string;
+    id?: string;
+    number?: number;
+    status?: string;
+    unit?: string;
+    unit_id?: string;
+  }>('POST', `/api/v1/batches`, undefined, body, false);
+  }
+
+  /** One batch with its curves and statistics
+   *
+   * `curves` and `stats` (per datastream: n, min, max, avg, first, last) are those kept when the batch ended; for a running batch they are read now from the unit. `previous` and `next` are the neighbouring batches of the unit.
+   * 
+   * Requires permission `data.read`. */
+  getBatchesId(id: string): Promise<Batch> {
+    return this.request<Batch>('GET', `/api/v1/batches/${encodeURIComponent(id)}`, undefined, undefined, false);
+  }
+
+  /** End a batch by hand
+   *
+   * 409 when it has ended already. Audited.
+   * 
+   * Requires permission `device.command`. */
+  postBatchesIdEnd(id: string, body: {
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<{
+    id?: string;
+    status?: string;
+  }> {
+    return this.request<{
+    id?: string;
+    status?: string;
+  }>('POST', `/api/v1/batches/${encodeURIComponent(id)}/end`, undefined, body, false);
   }
 
   /** Branding, theme, map settings and version

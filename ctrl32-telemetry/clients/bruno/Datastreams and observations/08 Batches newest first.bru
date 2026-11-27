@@ -1,0 +1,28 @@
+meta {
+  name: Batches newest first
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/batches
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~unit: 
+  ~status: 
+  ~from: 
+  ~to: 
+  ~q: 
+  ~limit: 
+}
+
+docs {
+  Batches, newest first
+  
+  The batches that ran between `from` and `to` (default the last 30 days); a running batch is always listed. `q` searches the code, the unit, the recipe, the record and the number.
+  
+  Requires permission `data.read`.
+}

@@ -1,0 +1,39 @@
+meta {
+  name: Change a batch unit
+  type: http
+  seq: 6
+}
+
+put {
+  url: {{baseUrl}}/api/v1/batch-units/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "curves": [
+      "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00"
+    ],
+    "device_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "enabled": true,
+    "mode": "recipe",
+    "name": "string",
+    "prefix": "string",
+    "reason": "string",
+    "tag_datastream": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "tag_kind": "run"
+  }
+}
+
+docs {
+  Change a batch unit
+  
+  Finished batches keep the curves and statistics they ended with.
+  
+  Requires permission `device.manage`.
+}

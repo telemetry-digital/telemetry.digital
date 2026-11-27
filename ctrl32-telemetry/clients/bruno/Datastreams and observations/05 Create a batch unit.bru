@@ -1,0 +1,35 @@
+meta {
+  name: Create a batch unit
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/batch-units
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "curves": [
+      "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00"
+    ],
+    "device_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "enabled": true,
+    "mode": "recipe",
+    "name": "string",
+    "prefix": "string",
+    "reason": "string",
+    "tag_datastream": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00",
+    "tag_kind": "run"
+  }
+}
+
+docs {
+  Create a batch unit
+  
+  A tag unit starts watching from now: what the tag did before is not a batch. At most 200 units.
+  
+  Requires permission `device.manage`.
+}

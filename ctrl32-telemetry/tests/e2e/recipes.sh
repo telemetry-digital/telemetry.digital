@@ -84,6 +84,7 @@ req GET "/api/v1/recipes/$RC"; check "values rounded to the decimals" "$(jx 'j.r
 
 echo "== check and load"
 req GET "/api/v1/recipes/$RC/compare?target=u1&record=$R1"; check "values in the unit before the load" "$(st):$(jx 'j.differ > 0')" "200:true"
+req POST /api/v1/batch-units "{\"name\":\"Mixer 1 $SUF\",\"mode\":\"recipe\",\"device_id\":\"$DEV\",\"prefix\":\"m1_\",\"reason\":\"e2e\"}"; BU=$(jget id < "$TMP/b"); check "a batch unit that follows the loads into Mixer 1 (spec 043)" "$(st)" 201
 req POST "/api/v1/recipes/$RC/records/$R1/download" '{"target":"u1","dry_run":true}'; check "check only" "$(st):$(jx 'j.ok + " " + j.problems.length + " " + j.four_eyes')" "200:true 0 false"
 req POST "/api/v1/recipes/$RC/records/$R1/download" '{"target":"u1"}'; check "a load needs a reason" "$(st)" 400
 req POST "/api/v1/recipes/$RC/records/$R1/download" '{"target":"u9","reason":"e2e"}'; check "unknown unit" "$(st)" 400
@@ -97,12 +98,19 @@ req GET "/api/v1/devices/$DEV/commands?limit=10"; check "every write is in the c
 req GET "/api/v1/recipe-downloads?recipe=$RC"; check "load log" "$(jx 'j.length + " " + j[0].status + " " + j[0].record + " " + j[0].unit + " " + j[0].requested_by + " " + j[0].items.length + " " + j[0].reason')" "1 done Cream Mixer 1 $USER 4 batch 1"
 req2 POST "/api/v1/recipes/$RC/records/$R1/download" '{"target":"u2","reason":"operator loads"}'; check "operator loads a record" "$(st):$(jx j.status)" "201:done"
 
+echo "== batch record: a load begins a batch on the unit that follows it"
+req GET "/api/v1/batches?unit=$BU"; check "the load into Mixer 1 began batch 1; the check and the load into Mixer 2 did not" "$(jx 'j.length + " " + j[0].number + " " + j[0].status + " " + j[0].start_source + " " + j[0].record + " " + (j[0].recipe_download_id.length > 30)')" "1 1 running recipe $(jx 'j[0].record') true"
+B1=$(jx 'j[0].id')
+req POST "/api/v1/recipes/$RC/records/$R1/download" '{"target":"u1","reason":"batch 2"}'; check "the next load" "$(st):$(jx j.status)" "201:done"
+req GET "/api/v1/batches?unit=$BU"; check "ends batch 1 and begins batch 2" "$(jx 'j.map(b => b.number + ":" + b.status + ":" + b.end_source).join(" ")')" "2:running: 1:finished:recipe"
+req GET "/api/v1/batches/$B1"; check "the finished batch names its recipe and who loaded it" "$(jx '[j.recipe.length > 3, j.started_by, j.end_reason, j.next.length > 30].join(" ")')" "true $USER the next batch began true"
+
 echo "== a value the connector refuses: nothing is written"
 req POST "/api/v1/recipes/$RC/records/$R2/download" '{"target":"u1","dry_run":true}'; check "check names the problem" "$(jx 'j.ok + " " + j.problems.length + " " + j.problems[0].key')" "false 1 speed"
 req POST "/api/v1/recipes/$RC/records/$R2/download" '{"target":"u1","reason":"too fast"}'; check "load refused" "$(st)" 409
 grep -q "nothing was written" "$TMP/b" && ok "the message says nothing was written" || bad "message: $(cat "$TMP/b")"
 sleep 2; req GET "/api/v1/recipes/$RC/compare?target=u1&record=$R1"; check "the unit still holds the first record" "$(jx 'j.differ')" 0
-req GET "/api/v1/recipe-downloads?recipe=$RC"; check "a refused load is not in the log" "$(jx 'j.length')" 2
+req GET "/api/v1/recipe-downloads?recipe=$RC"; check "a refused load is not in the log" "$(jx 'j.length')" 3
 
 echo "== a value the controller refuses in the middle: the rest is not written"
 EL2='[{"key":"speed","label":"Speed"},{"key":"gone","label":"Missing block"},{"key":"temp","label":"Temperature","decimals":1}]'
@@ -113,6 +121,7 @@ check "written, failed, not written" "$(jx 'j.results.map(r => r.status).join(" 
 [[ "$(jx 'j.error.startsWith("Missing block: ")')" == "true" ]] && ok "the error names the element" || bad "error: $(jx j.error)"
 sleep 2; req GET "/api/v1/recipes/$RB/compare?target=u1&record=$RBR"; check "the unit: first value written, last one not" "$(jx 'j.items[0].same + " " + j.items[2].same')" "true false"
 
+req GET "/api/v1/batches?unit=$BU"; check "a load that failed begins no batch" "$(jx 'j.length')" 2
 echo "== a record that does not fit the changed recipe"
 EL3='[{"key":"speed","label":"Speed","unit":"rpm","min":0,"max":1000},{"key":"temp","label":"Temperature","unit":"°C","decimals":1,"min":10,"max":90},{"key":"heat","label":"Heating","type":"bool"},{"key":"name","label":"Product","type":"text"}]'
 req PUT "/api/v1/recipes/$RC" "{\"name\":\"Mixing $SUF\",\"elements\":$EL3,\"targets\":[{\"id\":\"u1\",\"name\":\"Mixer 1\",\"device_id\":\"$DEV\",\"prefix\":\"m1_\"},{\"id\":\"u2\",\"name\":\"Mixer 2\",\"device_id\":\"$DEV\",\"prefix\":\"m2_\"}],\"reason\":\"lower limit\"}"; check "recipe changed" "$(st)" 200
