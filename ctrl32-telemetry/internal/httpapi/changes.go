@@ -90,9 +90,9 @@ func (s *Server) holdChange(w http.ResponseWriter, r *http.Request, kind string,
 	p := PrincipalFrom(r.Context())
 	var id string
 	var expires time.Time
-	if err := s.pool.QueryRow(r.Context(), `INSERT INTO core.change_request (org_id, kind, method, path, body, summary, reason, requested_by, requested_by_name)
-		VALUES ($1::uuid, $2, $3, $4, $5::jsonb, $6, $7, NULLIF($8,'')::uuid, $9) RETURNING id::text, expires_at`,
-		p.OrgID, kind, r.Method, r.URL.RequestURI(), string(body), summary, reason, p.UserID, p.Username).Scan(&id, &expires); err != nil {
+	if err := s.pool.QueryRow(r.Context(), `INSERT INTO core.change_request (org_id, kind, method, path, body, summary, reason, requested_by, requested_by_name, operator)
+		VALUES ($1::uuid, $2, $3, $4, $5::jsonb, $6, $7, NULLIF($8,'')::uuid, $9, $10) RETURNING id::text, expires_at`,
+		p.OrgID, kind, r.Method, r.URL.RequestURI(), string(body), summary, reason, p.UserID, p.Username, s.opName(r)).Scan(&id, &expires); err != nil {
 		s.log.Error("change request insert", "err", err)
 		writeErr(w, 500, "change request could not be recorded")
 		return

@@ -192,9 +192,18 @@ func validateElements(raw []any, width, height int) ([]map[string]any, error) {
 			}
 			e["decimals"] = math.Round(d)
 		}
-		for _, k := range []string{"locked", "hidden"} {
+		for _, k := range []string{"locked", "hidden", "second_person"} { // second_person: its commands wait for a second person (spec 040)
 			if b, ok := src[k].(bool); ok && b {
 				e[k] = true
+			}
+		}
+		if v, ok := src["scada_groups"]; ok && v != nil { // the SCADA groups that may operate it (spec 041)
+			gs, err := validGroupKeys(v)
+			if err != nil {
+				return nil, elemErr(i, "scada_groups: %v", err)
+			}
+			if len(gs) > 0 {
+				e["scada_groups"] = gs
 			}
 		}
 		if v, ok := src["style"]; ok && v != nil {

@@ -23,7 +23,7 @@ body:json {
 docs {
   Activate a scene
   
-  Each action is an entity command of the signed-in user (four eyes when required, audit with reason "Scene: <name>"). 409 when every command failed.
+  Each action is an entity command of the signed-in user (four eyes when required, audit with reason "Scene: <name>"). 409 when every command failed. With the policy `scada_users_required` a browser session needs a SCADA user signed in (403 `scada_user_required`), except an account with device.manage.
   
   Requires permission `device.command`.
 }

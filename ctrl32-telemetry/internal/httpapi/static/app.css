@@ -985,3 +985,17 @@ dialog.sp-dlg h3 { margin: 14px 0 4px; font-size: 14px; }
 dialog.sp-dlg .sp-sum { font-weight: 600; overflow-wrap: anywhere; margin: 0 0 6px; }
 dialog.sp-dlg .sp-wait { color: var(--warn); }
 dialog.sp-dlg .sp-list { margin-bottom: 0; }
+
+/* SCADA users (spec 041): who is at the controls, and the sign-in with a PIN pad for touch screens */
+.scada-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
+.scada-chip svg { width: 16px; height: 16px; flex: none; }
+.scada-chip.on { padding: 2px 4px 2px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); }
+.scada-chip.on b { max-width: 14ch; overflow: hidden; text-overflow: ellipsis; }
+.scada-chip .btn { display: inline-flex; align-items: center; gap: 6px; }
+dialog.scada-dlg { max-width: min(380px, 94vw); }
+dialog.scada-dlg .sc-names { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+dialog.scada-dlg .sc-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 10px 0 6px; }
+dialog.scada-dlg .sc-pad .btn { min-height: 46px; font-size: 18px; justify-content: center; }
+@media (max-width: 700px) { .scada-chip.on .btn span, .scada-chip [data-scada-in] span { display: none; } }
+.ctl-lock { margin-left: 8px; padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 11px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+.ctl-lock::before { content: "\1F512\FE0E "; }

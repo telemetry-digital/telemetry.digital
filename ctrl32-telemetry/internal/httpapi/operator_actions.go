@@ -36,6 +36,7 @@ var opAuditKinds = map[string]string{
 	"recipe.download": "recipe_load", "recipe.download_approve": "recipe_approve", "recipe.download_reject": "recipe_reject",
 	"counting_occupancy.update": "counting_correction",
 	"second_person.request":     "second_request", "second_person.approve": "second_approve", "second_person.reject": "second_reject", "second_person.end": "second_end",
+	"scada_user.create": "scada_admin", "scada_user.update": "scada_admin", "scada_user.delete": "scada_admin",
 	"change_request.create": "change_request", "change_request.approve": "change_approve", "change_request.reject": "change_reject",
 }
 
@@ -44,7 +45,7 @@ var opClientKinds = map[string]bool{"navigate": true, "popup": true, "press": tr
 
 // OpKinds lists every kind of the log (for the filter of the page and the API reference).
 func opKinds() []string {
-	seen := map[string]bool{"ptz": true, "scene": true, "login": true, "logout": true}
+	seen := map[string]bool{"ptz": true, "scene": true, "login": true, "logout": true, "scada_login": true, "scada_logout": true, "scada_failed": true, "scada_denied": true}
 	for _, k := range opAuditKinds {
 		seen[k] = true
 	}
@@ -115,10 +116,10 @@ func (s *Server) opLog(r *http.Request, kind, targetType, targetID, target strin
 	case p.TokenID != "":
 		actor, name = "api_token", p.Username+" (token "+p.TokenID[:8]+")"
 	}
-	s.opInsert(r.Context(), p.OrgID, p.UserID, name, actor, kind, targetType, targetID, target, opScreen(r), detail, reason, clientIP(r))
+	s.opInsert(r.Context(), p.OrgID, p.UserID, name, actor, s.opName(r), kind, targetType, targetID, target, opScreen(r), detail, reason, clientIP(r))
 }
 
-func (s *Server) opInsert(ctx context.Context, org, userID, userName, actor, kind, targetType, targetID, target, screen string, detail any, reason, station string) {
+func (s *Server) opInsert(ctx context.Context, org, userID, userName, actor, operator, kind, targetType, targetID, target, screen string, detail any, reason, station string) {
 	dj := []byte(`{}`)
 	if detail != nil {
 		if b, err := json.Marshal(detail); err == nil && len(b) <= 16<<10 && len(b) > 0 && b[0] == '{' {
@@ -138,9 +139,9 @@ func (s *Server) opInsert(ctx context.Context, org, userID, userName, actor, kin
 		reason = reason[:500]
 	}
 	// the log must never break the action it describes: a failed insert is reported, not returned
-	if _, err := s.pool.Exec(context.WithoutCancel(ctx), `INSERT INTO core.operator_action (org_id, user_id, user_name, actor_type, kind, target_type, target_id, target, screen, detail, reason, station)
-		VALUES ($1::uuid, NULLIF($2,'')::uuid, $3, $4, $5, $6, NULLIF($7,'')::uuid, $8, $9, $10::jsonb, $11, $12)`,
-		org, userID, userName, actor, kind, targetType, targetID, target, screen, string(dj), reason, station); err != nil {
+	if _, err := s.pool.Exec(context.WithoutCancel(ctx), `INSERT INTO core.operator_action (org_id, user_id, user_name, actor_type, kind, target_type, target_id, target, screen, detail, reason, station, operator)
+		VALUES ($1::uuid, NULLIF($2,'')::uuid, $3, $4, $5, $6, NULLIF($7,'')::uuid, $8, $9, $10::jsonb, $11, $12, $13)`,
+		org, userID, userName, actor, kind, targetType, targetID, target, screen, string(dj), reason, station, operator); err != nil {
 		s.log.Error("operator action not logged", "security", true, "kind", kind, "err", err)
 	}
 }
@@ -154,7 +155,7 @@ func (s *Server) opSession(r *http.Request, token, kind string) {
 	if err != nil || p == nil || p.OrgID == "" || !s.opLogOn(r.Context(), p.OrgID) {
 		return
 	}
-	s.opInsert(r.Context(), p.OrgID, p.UserID, p.Username, "user", kind, "user", p.UserID, p.Username, opScreen(r), nil, "", clientIP(r))
+	s.opInsert(r.Context(), p.OrgID, p.UserID, p.Username, "user", "", kind, "user", p.UserID, p.Username, opScreen(r), nil, "", clientIP(r))
 }
 
 // opFromAudit copies an audit entry that is an operator action into the log.

@@ -1,0 +1,32 @@
+meta {
+  name: Create a SCADA user
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{baseUrl}}/api/v1/scada/users
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "full_name": "string",
+    "groups": [
+      "string"
+    ],
+    "name": "string",
+    "reason": "string",
+    "secret": "string",
+    "secret_kind": "pin"
+  }
+}
+
+docs {
+  Create a SCADA user
+  
+  `secret_kind` pin (4–12 digits) or password (at least 8 characters), as the administrator chooses for each person. At most 500.
+  
+  Requires permission `user.admin`.
+}

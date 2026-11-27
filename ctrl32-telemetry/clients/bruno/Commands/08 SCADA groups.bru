@@ -1,0 +1,19 @@
+meta {
+  name: SCADA groups
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/scada/groups
+  body: none
+  auth: inherit
+}
+
+docs {
+  SCADA groups
+  
+  The groups of people at the controls (Operator, Shift leader, Technologist, Maintenance by default). A control names groups by `key`, which never changes. `approves`: its members may approve as the second person.
+  
+  Requires permission `data.read`.
+}

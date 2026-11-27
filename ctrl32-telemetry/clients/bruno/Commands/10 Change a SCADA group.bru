@@ -1,0 +1,33 @@
+meta {
+  name: Change a SCADA group
+  type: http
+  seq: 10
+}
+
+put {
+  url: {{baseUrl}}/api/v1/scada/groups/:id
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "approves": true,
+    "description": "string",
+    "name": "string",
+    "position": 1,
+    "reason": "string"
+  }
+}
+
+docs {
+  Change a SCADA group
+  
+  The key cannot be changed.
+  
+  Requires permission `user.admin`.
+}

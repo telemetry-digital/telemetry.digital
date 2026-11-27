@@ -378,6 +378,9 @@ func (s *Server) activateScene(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "scene not found")
 		return
 	}
+	if _, ok := s.scadaGate(w, r, org, "scene", nil); !ok { // who is at the controls (spec 041)
+		return
+	}
 	reason := strings.TrimSpace(in.Reason)
 	if reason == "" {
 		reason = "Scene: " + name

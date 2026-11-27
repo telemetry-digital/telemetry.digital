@@ -1203,7 +1203,11 @@ export type Policy = {
   log_operator_actions?: boolean;
   mfa_required_all?: boolean;
   mfa_required_roles?: string[];
+  /** retention of the operator log, 0 = for good */
+  operator_log_days?: number;
   password_min_length?: number;
+  scada_idle_minutes?: number;
+  scada_users_required?: boolean;
 };
 
 export type PushSubscription = {
@@ -1479,6 +1483,44 @@ export type S7Tag = {
   type?: "bool" | "byte" | "char" | "sint" | "usint" | "int" | "uint" | "word" | "dint" | "udint" | "dword" | "real" | "lreal" | "string";
   /** not for inputs */
   writable?: boolean;
+};
+
+export type ScadaGroup = {
+  /** members may approve as the second person */
+  approves?: boolean;
+  description?: string;
+  id?: string;
+  /** what controls name; never changes */
+  key?: string;
+  members?: number;
+  name?: string;
+  position?: number;
+};
+
+export type ScadaState = {
+  idle_minutes?: number;
+  /** policy scada_users_required */
+  required?: boolean;
+  /** null, or {name, full_name, groups, seconds_left} */
+  user?: Record<string, unknown>;
+  /** enabled SCADA users of the organization */
+  users?: number;
+};
+
+export type ScadaUser = {
+  created_at?: string;
+  enabled?: boolean;
+  full_name?: string;
+  groups?: string[];
+  id?: string;
+  last_used_at?: string;
+  /** after wrong secrets */
+  locked_until?: string;
+  /** the name at the controls */
+  name?: string;
+  secret_kind?: "pin" | "password";
+  /** the account of the station where the person is signed in now */
+  signed_in_at?: string;
 };
 
 export type Scene = {
@@ -2673,7 +2715,7 @@ export class Ctrl32Client {
 
   /** Who am I
    *
-   * The signed-in principal: user, organization, roles, effective permissions and the CSRF token for cookie sessions. `four_eyes` says for which areas the organization requires a second person, `four_eyes_minutes` how long an approval for cameras and displays lasts.
+   * The signed-in principal: user, organization, roles, effective permissions and the CSRF token for cookie sessions. `four_eyes` says for which areas the organization requires a second person, `four_eyes_minutes` how long an approval for cameras and displays lasts. `scada` {required, idle_minutes, users, user {name, full_name, groups, seconds_left}} says who is signed in at the controls of this browser session.
    * 
    * Requires a signed-in user or an API token (any permission). */
   getAuthMe(): Promise<Me> {
@@ -4561,7 +4603,7 @@ export class Ctrl32Client {
 
   /** Send a command or write a value
    *
-   * MQTT devices receive `{id, m, a, exp}` on `d/{external_id}/cmd` and acknowledge on `d/{external_id}/cmd/ack`. OPC UA and Modbus devices accept `method: write` with `args: {key, value}` for a writable node/register (limits checked, value read back). With the four-eyes policy the command is stored as `pending` (202) until another user approves it. `second_person: true` (sent by a control marked *Needs a second person*) holds the command for approval even when the policy four_eyes_commands is off; a held command answers 202 with `second_person` {kind, id, device_id, summary}.
+   * MQTT devices receive `{id, m, a, exp}` on `d/{external_id}/cmd` and acknowledge on `d/{external_id}/cmd/ack`. OPC UA and Modbus devices accept `method: write` with `args: {key, value}` for a writable node/register (limits checked, value read back). With the four-eyes policy the command is stored as `pending` (202) until another user approves it. `second_person: true` (sent by a control marked *Needs a second person*) holds the command for approval even when the policy four_eyes_commands is off; a held command answers 202 with `second_person` {kind, id, device_id, summary}. `control` {dashboard, id} names the widget or the picture element the command came from (sent by the pages): the server reads the SCADA groups of that control and its mark *Needs a second person* from the stored dashboard, checks that the key is the one the control sends, and answers 403 `scada_user_required` (nobody is signed in at the controls) or `scada_group_required` (the person is in none of the groups; `groups` lists their names). With the policy `scada_users_required` a command from a browser session needs a SCADA user, and an account without device.manage must name a control (403 `scada_control_required`). API tokens are not asked for a SCADA user and cannot use a control that names groups. The command log carries `operator`, the SCADA user.
    * 
    * Requires permission `device.command`. */
   postDevicesIdCommands(id: string, body: {
@@ -8984,6 +9026,165 @@ export class Ctrl32Client {
   }>('POST', `/api/v1/rules/${encodeURIComponent(id)}/reject`, undefined, body, false);
   }
 
+  /** SCADA groups
+   *
+   * The groups of people at the controls (Operator, Shift leader, Technologist, Maintenance by default). A control names groups by `key`, which never changes. `approves`: its members may approve as the second person.
+   * 
+   * Requires permission `data.read`. */
+  getScadaGroups(): Promise<ScadaGroup[]> {
+    return this.request<ScadaGroup[]>('GET', `/api/v1/scada/groups`, undefined, undefined, false);
+  }
+
+  /** Create a SCADA group
+   *
+   * `key` is made from the name when left out. At most 32 groups.
+   * 
+   * Requires permission `user.admin`. */
+  postScadaGroups(body: {
+    approves?: boolean;
+    description?: string;
+    /** ^[a-z][a-z0-9_]{0,31}$ */
+    key?: string;
+    /** 1–60 characters */
+    name: string;
+    /** order, 0–9999 */
+    position?: number;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<ScadaGroup> {
+    return this.request<ScadaGroup>('POST', `/api/v1/scada/groups`, undefined, body, false);
+  }
+
+  /** Change a SCADA group
+   *
+   * The key cannot be changed.
+   * 
+   * Requires permission `user.admin`. */
+  putScadaGroupsId(id: string, body: {
+    approves?: boolean;
+    description?: string;
+    name?: string;
+    position?: number;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+  }): Promise<ScadaGroup> {
+    return this.request<ScadaGroup>('PUT', `/api/v1/scada/groups/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Remove a SCADA group
+   *
+   * Controls that name the group stay closed to everybody until they are edited.
+   * 
+   * Requires permission `user.admin`. */
+  deleteScadaGroupsId(id: string, query?: { reason?: string; /** required */ }): Promise<{
+    deleted?: boolean;
+    id?: string;
+  }> {
+    return this.request<{
+    deleted?: boolean;
+    id?: string;
+  }>('DELETE', `/api/v1/scada/groups/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
+  /** Who is signed in at the controls
+   *
+   * Of the caller's station — the browser session. `user` is null when nobody is.
+   * 
+   * Requires permission `data.read`. */
+  getScadaSession(): Promise<ScadaState> {
+    return this.request<ScadaState>('GET', `/api/v1/scada/session`, undefined, undefined, false);
+  }
+
+  /** Sign in at the controls
+   *
+   * A browser session only (403 for an API token). Wrong secrets count towards the lockout of that SCADA user (the thresholds of the security policy) and are limited per station (429); 403 `scada_failed`. Signing in replaces the person who was there. The sign-in ends with the session of the station, after `idle_minutes` without activity, or with DELETE.
+   * 
+   * Requires permission `data.read`. */
+  postScadaSession(body: {
+    name: string;
+    /** the PIN or the password */
+    secret: string;
+  }): Promise<ScadaState> {
+    return this.request<ScadaState>('POST', `/api/v1/scada/session`, undefined, body, false);
+  }
+
+  /** Sign out at the controls
+   *
+   * Requires permission `data.read`. */
+  deleteScadaSession(query?: { why?: string; /** idle when the page signs the person out */ }): Promise<ScadaState> {
+    return this.request<ScadaState>('DELETE', `/api/v1/scada/session`, query, undefined, false);
+  }
+
+  /** The person at the controls is still working
+   *
+   * Sent by the pages on activity; starts the time without activity again.
+   * 
+   * Requires permission `data.read`. */
+  postScadaSessionTouch(): Promise<ScadaState> {
+    return this.request<ScadaState>('POST', `/api/v1/scada/session/touch`, undefined, undefined, false);
+  }
+
+  /** SCADA users
+   *
+   * People who sign in at the controls — inside a picture or a dashboard — on top of the session of the station. They are not accounts: no session of their own, no permissions, no access to the API. The secret is never returned.
+   * 
+   * Requires permission `user.admin`. */
+  getScadaUsers(): Promise<ScadaUser[]> {
+    return this.request<ScadaUser[]>('GET', `/api/v1/scada/users`, undefined, undefined, false);
+  }
+
+  /** Create a SCADA user
+   *
+   * `secret_kind` pin (4–12 digits) or password (at least 8 characters), as the administrator chooses for each person. At most 500.
+   * 
+   * Requires permission `user.admin`. */
+  postScadaUsers(body: {
+    full_name?: string;
+    groups?: string[];
+    /** what the person types: ^[a-z0-9][a-z0-9._-]{0,31}$ */
+    name: string;
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    /** the PIN or the password */
+    secret: string;
+    secret_kind: "pin" | "password";
+  }): Promise<ScadaUser> {
+    return this.request<ScadaUser>('POST', `/api/v1/scada/users`, undefined, body, false);
+  }
+
+  /** Change a SCADA user
+   *
+   * A new secret, or `enabled: false`, signs the person out everywhere. `unlock` clears a lockout after wrong secrets.
+   * 
+   * Requires permission `user.admin`. */
+  putScadaUsersId(id: string, body: {
+    enabled?: boolean;
+    full_name?: string;
+    groups?: string[];
+    /** Reason for the change, written to the audit trail (required, 3–200 characters). */
+    reason: string;
+    secret?: string;
+    secret_kind?: "pin" | "password";
+    unlock?: boolean;
+  }): Promise<ScadaUser> {
+    return this.request<ScadaUser>('PUT', `/api/v1/scada/users/${encodeURIComponent(id)}`, undefined, body, false);
+  }
+
+  /** Remove a SCADA user
+   *
+   * Commands, the audit trail and the operator log keep the name.
+   * 
+   * Requires permission `user.admin`. */
+  deleteScadaUsersId(id: string, query?: { reason?: string; /** required */ }): Promise<{
+    deleted?: boolean;
+    id?: string;
+  }> {
+    return this.request<{
+    deleted?: boolean;
+    id?: string;
+  }>('DELETE', `/api/v1/scada/users/${encodeURIComponent(id)}`, query, undefined, false);
+  }
+
   /** Scenes
    *
    * Requires permission `data.read`. */
@@ -9070,7 +9271,7 @@ export class Ctrl32Client {
 
   /** Activate a scene
    *
-   * Each action is an entity command of the signed-in user (four eyes when required, audit with reason "Scene: <name>"). 409 when every command failed.
+   * Each action is an entity command of the signed-in user (four eyes when required, audit with reason "Scene: <name>"). 409 when every command failed. With the policy `scada_users_required` a browser session needs a SCADA user signed in (403 `scada_user_required`), except an account with device.manage.
    * 
    * Requires permission `device.command`. */
   postScenesIdActivate(id: string, body: {
@@ -9467,7 +9668,7 @@ export class Ctrl32Client {
 
   /** Approve on the spot, with the second person's credentials
    *
-   * The second person approves at the station of the person who asked: `username` and `password` (and `code` when that account uses two-factor sign-in) are checked with the same lockout as a sign-in, no session is created, and the approval of `kind` (`command` with `device_id`, `recipe`, `change`, `grant`) runs as that person — it needs the same permission as an approval from the list and is recorded with both names. 403 `second_person_failed` for wrong credentials, `second_person_code` when the code is missing, 403 when the second person is the caller; failed attempts are limited per caller (429).
+   * The second person approves at the station of the person who asked: `username` and `password` (and `code` when that account uses two-factor sign-in) are checked with the same lockout as a sign-in, no session is created, and the approval of `kind` (`command` with `device_id`, `recipe`, `change`, `grant`) runs as that person — it needs the same permission as an approval from the list and is recorded with both names. 403 `second_person_failed` for wrong credentials, `second_person_code` when the code is missing, 403 when the second person is the caller; failed attempts are limited per caller (429). With `scada: true` the second person is a SCADA user: `username` is the name at the controls and `password` the PIN or the password. The person must be a member of a group that may approve, the request must have been made by a SCADA user, and by a different one; the approval then runs with the rights of the station and is recorded as *station / name*.
    * 
    * Requires a signed-in user or an API token (any permission). */
   postSecondPersonApprove(body: {
@@ -11548,7 +11749,7 @@ export class Ctrl32Client {
 
   /** Set the four-eyes policies and Stay signed in
    *
-   * `four_eyes_commands`: commands wait for approval. `four_eyes_limits`: alarm rule changes become change requests. `four_eyes_assignments`: device ↔ datastream assignments become change requests. `four_eyes_vpn`: VPN access of technicians needs a grant approved by a second person. `four_eyes_alarms`, `four_eyes_attributes`: alarm acknowledgements and shelves, and device attributes, become change requests. `four_eyes_cameras`, `four_eyes_displays`: work with cameras (movement, recordings, export, evidence, pictures without masks) and commands to displays and kiosk PCs need an approval of a second person that lasts `four_eyes_minutes` (1–480, default 15) on one station. All off by default. `log_operator_actions`: keep the operator action log (off by default). `remember_device_days`: 0 (default) or up to 90 — the sign-in page offers *Stay signed in on this device*, such a session lasts this many days with a persistent cookie; lowering it applies to open sessions at once. At least one field.
+   * `four_eyes_commands`: commands wait for approval. `four_eyes_limits`: alarm rule changes become change requests. `four_eyes_assignments`: device ↔ datastream assignments become change requests. `four_eyes_vpn`: VPN access of technicians needs a grant approved by a second person. `four_eyes_alarms`, `four_eyes_attributes`: alarm acknowledgements and shelves, and device attributes, become change requests. `four_eyes_cameras`, `four_eyes_displays`: work with cameras (movement, recordings, export, evidence, pictures without masks) and commands to displays and kiosk PCs need an approval of a second person that lasts `four_eyes_minutes` (1–480, default 15) on one station. All off by default. `log_operator_actions`: keep the operator action log (off by default). `operator_log_days`: drop its rows older than this once a day (0 = keep for good, the default; otherwise 30–3650). `scada_users_required`: commands, recipe loads and scenes from a browser session need a SCADA user signed in at the controls (off by default); `scada_idle_minutes`: that person is signed out after this time without activity (1–480, default 10). `remember_device_days`: 0 (default) or up to 90 — the sign-in page offers *Stay signed in on this device*, such a session lasts this many days with a persistent cookie; lowering it applies to open sessions at once. At least one field.
    * 
    * Requires permission `user.admin`. */
   putSettingsPolicy(body: {
@@ -11563,10 +11764,15 @@ export class Ctrl32Client {
     four_eyes_minutes?: number;
     four_eyes_vpn?: boolean;
     log_operator_actions?: boolean;
+    /** 0 or 30–3650 */
+    operator_log_days?: number;
     /** Reason for the change, written to the audit trail (required, 3–200 characters). */
     reason: string;
     /** 0–90 */
     remember_device_days?: number;
+    /** 1–480 */
+    scada_idle_minutes?: number;
+    scada_users_required?: boolean;
   }): Promise<{
     four_eyes_assignments?: boolean;
     four_eyes_commands?: boolean;

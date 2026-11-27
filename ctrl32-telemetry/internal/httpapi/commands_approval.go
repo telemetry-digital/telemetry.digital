@@ -245,7 +245,7 @@ func (s *Server) getPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pol := s.iam.Policy(r.Context(), org)
-	writeJSON(w, 200, map[string]any{"four_eyes_commands": pol.FourEyesCommands, "four_eyes_limits": pol.FourEyesLimits, "four_eyes_assignments": pol.FourEyesAssignments, "four_eyes_vpn": pol.FourEyesVPN, "four_eyes_alarms": pol.FourEyesAlarms, "four_eyes_attributes": pol.FourEyesAttributes, "four_eyes_cameras": pol.FourEyesCameras, "four_eyes_displays": pol.FourEyesDisplays, "four_eyes_minutes": pol.SecondPersonMinutes(), "log_operator_actions": pol.LogOperatorActions, "mfa_required_all": pol.MFARequiredAll, "mfa_required_roles": pol.MFARequiredRoles, "password_min_length": pol.PasswordMinLength,
+	writeJSON(w, 200, map[string]any{"four_eyes_commands": pol.FourEyesCommands, "four_eyes_limits": pol.FourEyesLimits, "four_eyes_assignments": pol.FourEyesAssignments, "four_eyes_vpn": pol.FourEyesVPN, "four_eyes_alarms": pol.FourEyesAlarms, "four_eyes_attributes": pol.FourEyesAttributes, "four_eyes_cameras": pol.FourEyesCameras, "four_eyes_displays": pol.FourEyesDisplays, "four_eyes_minutes": pol.SecondPersonMinutes(), "log_operator_actions": pol.LogOperatorActions, "operator_log_days": pol.OperatorLogDays, "scada_users_required": pol.ScadaUsersRequired, "scada_idle_minutes": pol.ScadaIdle(), "mfa_required_all": pol.MFARequiredAll, "mfa_required_roles": pol.MFARequiredRoles, "password_min_length": pol.PasswordMinLength,
 		"session_idle_minutes": pol.SessionIdleMinutes, "session_absolute_hours": pol.SessionAbsoluteHours, "remember_device_days": pol.RememberDeviceDays})
 }
 
@@ -267,6 +267,9 @@ func (s *Server) putPolicy(w http.ResponseWriter, r *http.Request) {
 		Displays    *bool  `json:"four_eyes_displays"`
 		Minutes     *int   `json:"four_eyes_minutes"`
 		Remember    *int   `json:"remember_device_days"`
+		LogDays     *int   `json:"operator_log_days"`
+		ScadaReq    *bool  `json:"scada_users_required"`
+		ScadaIdle   *int   `json:"scada_idle_minutes"`
 		Reason      string `json:"reason"`
 	}
 	if err := decodeJSON(r, &in, 4096); err != nil {
@@ -311,8 +314,25 @@ func (s *Server) putPolicy(w http.ResponseWriter, r *http.Request) {
 		}
 		set["remember_device_days"] = *in.Remember
 	}
+	if in.LogDays != nil {
+		if *in.LogDays != 0 && (*in.LogDays < iam.MinOperatorLogDays || *in.LogDays > iam.MaxOperatorLogDays) {
+			writeErr(w, 400, fmt.Sprintf("operator_log_days must be 0 (keep for good) or %d to %d", iam.MinOperatorLogDays, iam.MaxOperatorLogDays))
+			return
+		}
+		set["operator_log_days"] = *in.LogDays
+	}
+	if in.ScadaReq != nil {
+		set["scada_users_required"] = *in.ScadaReq
+	}
+	if in.ScadaIdle != nil {
+		if *in.ScadaIdle < iam.MinScadaIdleMinutes || *in.ScadaIdle > iam.MaxScadaIdleMinutes {
+			writeErr(w, 400, fmt.Sprintf("scada_idle_minutes must be %d to %d", iam.MinScadaIdleMinutes, iam.MaxScadaIdleMinutes))
+			return
+		}
+		set["scada_idle_minutes"] = *in.ScadaIdle
+	}
 	if len(set) == 0 {
-		writeErr(w, 400, "a four_eyes_… switch, four_eyes_minutes, log_operator_actions or remember_device_days required")
+		writeErr(w, 400, "a four_eyes_… switch, four_eyes_minutes, log_operator_actions, operator_log_days, scada_users_required, scada_idle_minutes or remember_device_days required")
 		return
 	}
 	old := s.iam.Policy(r.Context(), org)
@@ -321,8 +341,8 @@ func (s *Server) putPolicy(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "update failed")
 		return
 	}
-	s.audit(r, "organization.policy", "organization", org, map[string]any{"four_eyes_commands": old.FourEyesCommands, "four_eyes_limits": old.FourEyesLimits, "four_eyes_assignments": old.FourEyesAssignments, "four_eyes_vpn": old.FourEyesVPN, "four_eyes_alarms": old.FourEyesAlarms, "four_eyes_attributes": old.FourEyesAttributes, "four_eyes_cameras": old.FourEyesCameras, "four_eyes_displays": old.FourEyesDisplays, "four_eyes_minutes": old.SecondPersonMinutes(), "log_operator_actions": old.LogOperatorActions, "remember_device_days": old.RememberDeviceDays}, set, in.Reason)
+	s.audit(r, "organization.policy", "organization", org, map[string]any{"four_eyes_commands": old.FourEyesCommands, "four_eyes_limits": old.FourEyesLimits, "four_eyes_assignments": old.FourEyesAssignments, "four_eyes_vpn": old.FourEyesVPN, "four_eyes_alarms": old.FourEyesAlarms, "four_eyes_attributes": old.FourEyesAttributes, "four_eyes_cameras": old.FourEyesCameras, "four_eyes_displays": old.FourEyesDisplays, "four_eyes_minutes": old.SecondPersonMinutes(), "log_operator_actions": old.LogOperatorActions, "operator_log_days": old.OperatorLogDays, "scada_users_required": old.ScadaUsersRequired, "scada_idle_minutes": old.ScadaIdle(), "remember_device_days": old.RememberDeviceDays}, set, in.Reason)
 	opLogCache.Delete(org)
 	pol := s.iam.Policy(r.Context(), org)
-	writeJSON(w, 200, map[string]any{"four_eyes_commands": pol.FourEyesCommands, "four_eyes_limits": pol.FourEyesLimits, "four_eyes_assignments": pol.FourEyesAssignments, "four_eyes_vpn": pol.FourEyesVPN, "four_eyes_alarms": pol.FourEyesAlarms, "four_eyes_attributes": pol.FourEyesAttributes, "four_eyes_cameras": pol.FourEyesCameras, "four_eyes_displays": pol.FourEyesDisplays, "four_eyes_minutes": pol.SecondPersonMinutes(), "log_operator_actions": pol.LogOperatorActions, "remember_device_days": pol.RememberDeviceDays})
+	writeJSON(w, 200, map[string]any{"four_eyes_commands": pol.FourEyesCommands, "four_eyes_limits": pol.FourEyesLimits, "four_eyes_assignments": pol.FourEyesAssignments, "four_eyes_vpn": pol.FourEyesVPN, "four_eyes_alarms": pol.FourEyesAlarms, "four_eyes_attributes": pol.FourEyesAttributes, "four_eyes_cameras": pol.FourEyesCameras, "four_eyes_displays": pol.FourEyesDisplays, "four_eyes_minutes": pol.SecondPersonMinutes(), "log_operator_actions": pol.LogOperatorActions, "operator_log_days": pol.OperatorLogDays, "scada_users_required": pol.ScadaUsersRequired, "scada_idle_minutes": pol.ScadaIdle(), "remember_device_days": pol.RememberDeviceDays})
 }

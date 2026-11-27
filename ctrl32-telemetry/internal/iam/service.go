@@ -50,6 +50,14 @@ type Policy struct {
 	// LogOperatorActions keeps the operator action log (spec 039): every press, command, PTZ move, picture change and
 	// sign-in of a person at the controls. Off by default.
 	LogOperatorActions bool `json:"log_operator_actions"`
+	// OperatorLogDays: rows of the operator action log older than this are dropped (0 = kept for good, the default;
+	// otherwise 30–3650).
+	OperatorLogDays int `json:"operator_log_days"`
+	// SCADA users (spec 041, ADR-0026 step 3). ScadaUsersRequired: commands, recipe loads and scenes sent from a browser
+	// session need a person signed in at the controls (off by default). ScadaIdleMinutes: that person is signed out
+	// after this time without activity (1–480, default 10).
+	ScadaUsersRequired bool `json:"scada_users_required"`
+	ScadaIdleMinutes   int  `json:"scada_idle_minutes"`
 	// RememberDeviceDays allows "Stay signed in on this device" at login: such a session lasts this many days instead of
 	// the idle and absolute limits (0 = not allowed, the default). MFA is still required at the sign-in itself.
 	RememberDeviceDays int `json:"remember_device_days"`
@@ -61,6 +69,23 @@ const (
 	MaxFourEyesMinutes     = 480
 	DefaultFourEyesMinutes = 15
 )
+
+// Limits of the SCADA sign-in and of the retention of the operator log.
+const (
+	MinScadaIdleMinutes     = 1
+	MaxScadaIdleMinutes     = 480
+	DefaultScadaIdleMinutes = 10
+	MinOperatorLogDays      = 30
+	MaxOperatorLogDays      = 3650
+)
+
+// ScadaIdle is the time without activity after which a person is signed out of the controls.
+func (p Policy) ScadaIdle() int {
+	if p.ScadaIdleMinutes < MinScadaIdleMinutes || p.ScadaIdleMinutes > MaxScadaIdleMinutes {
+		return DefaultScadaIdleMinutes
+	}
+	return p.ScadaIdleMinutes
+}
 
 // SecondPersonMinutes is the length of a time-limited approval by a second person.
 func (p Policy) SecondPersonMinutes() int {

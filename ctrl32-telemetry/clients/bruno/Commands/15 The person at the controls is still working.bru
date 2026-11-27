@@ -1,0 +1,19 @@
+meta {
+  name: The person at the controls is still working
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{baseUrl}}/api/v1/scada/session/touch
+  body: none
+  auth: inherit
+}
+
+docs {
+  The person at the controls is still working
+  
+  Sent by the pages on activity; starts the time without activity again.
+  
+  Requires permission `data.read`.
+}

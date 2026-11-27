@@ -1,0 +1,19 @@
+meta {
+  name: Who is signed in at the controls
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/v1/scada/session
+  body: none
+  auth: inherit
+}
+
+docs {
+  Who is signed in at the controls
+  
+  Of the caller's station — the browser session. `user` is null when nobody is.
+  
+  Requires permission `data.read`.
+}

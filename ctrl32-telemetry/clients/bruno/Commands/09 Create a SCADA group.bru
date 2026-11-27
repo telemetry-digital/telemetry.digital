@@ -1,0 +1,30 @@
+meta {
+  name: Create a SCADA group
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v1/scada/groups
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "approves": true,
+    "description": "string",
+    "key": "string",
+    "name": "string",
+    "position": 1,
+    "reason": "string"
+  }
+}
+
+docs {
+  Create a SCADA group
+  
+  `key` is made from the name when left out. At most 32 groups.
+  
+  Requires permission `user.admin`.
+}

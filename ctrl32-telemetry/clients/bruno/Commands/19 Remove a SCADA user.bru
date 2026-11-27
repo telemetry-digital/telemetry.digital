@@ -1,0 +1,27 @@
+meta {
+  name: Remove a SCADA user
+  type: http
+  seq: 19
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/scada/users/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+params:query {
+  ~reason: 
+}
+
+docs {
+  Remove a SCADA user
+  
+  Commands, the audit trail and the operator log keep the name.
+  
+  Requires permission `user.admin`.
+}

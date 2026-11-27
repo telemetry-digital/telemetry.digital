@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SCADA users — ctrl32 telemetry</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  .su-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 12px; }
+  .su-state { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; }
+  #suUsers tbody tr, #suGroups tbody tr { cursor: pointer; }
+  dialog.su-dlg { max-width: min(560px, 94vw); }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<nav class="subnav">
+  <a href="/users">Accounts</a>
+  <a href="/users/roles">Roles and permissions</a>
+  <a href="/users/scada" class="active">SCADA users</a>
+</nav>
+<div class="page-head"><h1>SCADA users</h1><span class="grow"></span><button class="btn" id="newGroup" type="button">New group</button><button class="btn primary" id="newUser" type="button">New SCADA user</button></div>
+<div class="card">
+  <p style="margin-top:0">People who sign in at the controls — inside a process picture or a dashboard — on top of the account the computer is signed in with. A SCADA user cannot sign in to the application and has no access to the API; at the controls it never gets more than the account of the computer may do.</p>
+  <div class="su-state muted" id="suState"></div>
+</div>
+<div class="card" style="margin-top:16px">
+  <h2>People</h2>
+  <div class="table-wrap"><table id="suUsers"><thead><tr><th>Name at the controls</th><th>Full name</th><th>Signs in with</th><th>Groups</th><th>Status</th><th>Last used</th></tr></thead><tbody></tbody></table></div>
+</div>
+<div class="card" style="margin-top:16px">
+  <h2>Groups</h2>
+  <div class="table-wrap"><table id="suGroups"><thead><tr><th>Group</th><th>Key</th><th>Description</th><th>May approve as the second person</th><th>Members</th></tr></thead><tbody></tbody></table></div>
+  <p class="muted" style="margin-bottom:0">A control of a dashboard and an element of a process picture name the groups that may use them, by key. The key of a group never changes; its name can.</p>
+</div>
+
+<dialog id="userDlg" class="su-dlg"><form class="form" method="dialog" autocomplete="off">
+  <h2 style="margin-top:0" id="userTitle">New SCADA user</h2>
+  <div class="row2"><label><span>Name at the controls</span> <input name="name" maxlength="32" autocapitalize="none" spellcheck="false" autocomplete="off" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]*"></label>
+    <label><span>Full name</span> <input name="full_name" maxlength="100" autocomplete="off"></label></div>
+  <div class="row2"><label><span>Signs in with</span> <select name="secret_kind"><option value="pin">PIN (4–12 digits)</option><option value="password">Password (at least 8 characters)</option></select></label>
+    <label><span id="secretLabel">PIN</span> <input name="secret" type="password" autocomplete="new-password" maxlength="128"></label></div>
+  <p class="muted" id="secretHint" style="margin:0" hidden>Leave empty to keep the current one. A new one signs the person out everywhere.</p>
+  <fieldset style="border:0;padding:0;margin:10px 0 0"><legend style="font-weight:600;padding:0">Groups</legend><div class="su-groups" id="userGroups"></div></fieldset>
+  <label class="inline" id="enabledRow" hidden><input type="checkbox" name="enabled"><span>May sign in at the controls</span></label>
+  <label><span>Reason (audit trail)</span> <input name="reason" maxlength="200" required></label>
+  <div class="err" id="userErr"></div>
+  <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" id="userUnlock" hidden>Unlock</button><button class="btn danger" type="button" id="userDelete" hidden>Remove</button><span class="grow"></span><button class="btn" type="button" data-close>Close</button></div>
+</form></dialog>
+
+<dialog id="groupDlg" class="su-dlg"><form class="form" method="dialog" autocomplete="off">
+  <h2 style="margin-top:0" id="groupTitle">New group</h2>
+  <div class="row2"><label><span>Name</span> <input name="name" maxlength="60" required></label>
+    <label><span>Key (for controls)</span> <input name="key" maxlength="32" autocapitalize="none" spellcheck="false" placeholder="from the name" pattern="[a-z][a-z0-9_]*"></label></div>
+  <label><span>Description</span> <input name="description" maxlength="200"></label>
+  <label class="inline"><input type="checkbox" name="approves"><span>Its members may approve as the second person (four eyes) with their PIN or password</span></label>
+  <label><span>Reason (audit trail)</span> <input name="reason" maxlength="200" required></label>
+  <div class="err" id="groupErr"></div>
+  <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn danger" type="button" id="groupDelete" hidden>Remove</button><span class="grow"></span><button class="btn" type="button" data-close>Close</button></div>
+</form></dialog>
+</main>
+<script src="/app.js"></script>
+<script>
+const { api, esc, t } = ctrl32; const $ = (s) => document.querySelector(s);
+const fmt = (x) => x ? new Date(x).toLocaleString(document.documentElement.lang || undefined) : '—';
+let USERS = [], GROUPS = [];
+const gname = (k) => t((GROUPS.find((g) => g.key === k) || { name: k }).name);
+async function load(){
+  [GROUPS, USERS] = await Promise.all([api('GET', '/api/v1/scada/groups'), api('GET', '/api/v1/scada/users')]);
+  let pol = {}; try { pol = await api('GET', '/api/v1/settings/policy'); } catch (e) { /* no permission to read the policy */ }
+  $('#suState').innerHTML = `<span>${esc(t('A person at the controls is required'))}: <b>${esc(t(pol.scada_users_required ? 'yes' : 'no'))}</b></span><span>${esc(t('Signed out after (minutes without activity)'))}: <b>${esc(String(pol.scada_idle_minutes || 10))}</b></span><a href="/settings/policy">${esc(t('Security policy'))}</a>`;
+  $('#suUsers tbody').innerHTML = USERS.map((u) => `<tr data-id="${esc(u.id)}"><td class="notranslate"><b>${esc(u.name)}</b></td><td class="notranslate">${esc(u.full_name)}</td><td>${u.secret_kind === 'pin' ? 'PIN' : esc(t('Password'))}</td>
+    <td class="notranslate">${u.groups.map((k) => `<span class="badge">${esc(gname(k))}</span>`).join(' ') || '<span class="muted">—</span>'}</td>
+    <td>${!u.enabled ? `<span class="badge bad">${esc(t('disabled'))}</span>` : u.locked_until ? `<span class="badge warn">${esc(t('locked'))}</span>` : u.signed_in_at ? `<span class="badge ok">${esc(t('at the controls'))}</span> <span class="muted notranslate">${esc(u.signed_in_at)}</span>` : `<span class="badge">${esc(t('Active'))}</span>`}</td>
+    <td>${fmt(u.last_used_at)}</td></tr>`).join('') || `<tr><td colspan="6" class="muted">${esc(t('No SCADA users yet. Until there are some, nothing changes at the controls.'))}</td></tr>`;
+  $('#suGroups tbody').innerHTML = GROUPS.map((g) => `<tr data-id="${esc(g.id)}"><td class="notranslate"><b>${esc(t(g.name))}</b></td><td><code>${esc(g.key)}</code></td><td class="notranslate">${esc(t(g.description))}</td><td>${g.approves ? `<span class="badge ok">${esc(t('yes'))}</span>` : esc(t('no'))}</td><td>${g.members}</td></tr>`).join('');
+  for (const tr of document.querySelectorAll('#suUsers tr[data-id]')) tr.onclick = () => userDialog(USERS.find((u) => u.id === tr.dataset.id));
+  for (const tr of document.querySelectorAll('#suGroups tr[data-id]')) tr.onclick = () => groupDialog(GROUPS.find((g) => g.id === tr.dataset.id));
+}
+function userDialog(u){
+  const d = $('#userDlg'), f = d.querySelector('form'); f.reset(); $('#userErr').textContent = '';
+  $('#userTitle').textContent = t(u ? 'SCADA user' : 'New SCADA user') + (u ? ': ' + u.name : '');
+  f.name.value = u ? u.name : ''; f.name.readOnly = !!u; f.full_name.value = u ? u.full_name : ''; f.secret_kind.value = u ? u.secret_kind : 'pin';
+  const kind = () => { const pin = f.secret_kind.value === 'pin'; $('#secretLabel').textContent = t(pin ? 'PIN' : 'Password'); f.secret.inputMode = pin ? 'numeric' : 'text'; }; f.secret_kind.onchange = kind; kind();
+  $('#secretHint').hidden = !u; $('#enabledRow').hidden = !u; f.enabled.checked = !u || u.enabled;
+  $('#userGroups').innerHTML = GROUPS.map((g) => `<label class="inline"><input type="checkbox" name="grp" value="${esc(g.key)}" ${u && u.groups.includes(g.key) ? 'checked' : ''}><span class="notranslate">${esc(t(g.name))}</span></label>`).join('');
+  $('#userDelete').hidden = !u; $('#userUnlock').hidden = !(u && u.locked_until);
+  const reason = () => { const r = f.reason.value.trim(); if (!r) { $('#userErr').textContent = t('reason is required'); f.reason.focus(); } return r; };
+  const fail = (x) => { $('#userErr').textContent = t(x.message); };
+  f.onsubmit = async (e) => { e.preventDefault(); $('#userErr').textContent = '';
+    const groups = [...f.querySelectorAll('input[name=grp]:checked')].map((i) => i.value);
+    try {
+      if (u) { const b = { full_name: f.full_name.value, enabled: f.enabled.checked, groups, reason: f.reason.value }; if (f.secret.value || f.secret_kind.value !== u.secret_kind) { b.secret_kind = f.secret_kind.value; b.secret = f.secret.value; } await api('PUT', '/api/v1/scada/users/' + u.id, b); }
+      else await api('POST', '/api/v1/scada/users', { name: f.name.value.trim().toLowerCase(), full_name: f.full_name.value, secret_kind: f.secret_kind.value, secret: f.secret.value, groups, reason: f.reason.value });
+      ctrl32.toast(t('saved'), 'ok'); d.close(); load();
+    } catch (x) { fail(x); } };
+  $('#userUnlock').onclick = async () => { const r = reason(); if (!r) return; try { await api('PUT', '/api/v1/scada/users/' + u.id, { unlock: true, reason: r }); ctrl32.toast(t('done'), 'ok'); d.close(); load(); } catch (x) { fail(x); } };
+  $('#userDelete').onclick = async () => { const r = reason(); if (!r) return; try { await api('DELETE', '/api/v1/scada/users/' + u.id + '?reason=' + encodeURIComponent(r)); ctrl32.toast(t('removed'), 'ok'); d.close(); load(); } catch (x) { fail(x); } };
+  d.showModal(); (u ? f.full_name : f.name).focus();
+}
+function groupDialog(g){
+  const d = $('#groupDlg'), f = d.querySelector('form'); f.reset(); $('#groupErr').textContent = '';
+  $('#groupTitle').textContent = t(g ? 'Group' : 'New group') + (g ? ': ' + g.name : '');
+  f.name.value = g ? g.name : ''; f.key.value = g ? g.key : ''; f.key.readOnly = !!g; f.description.value = g ? g.description : ''; f.approves.checked = !!(g && g.approves);
+  $('#groupDelete').hidden = !g;
+  const fail = (x) => { $('#groupErr').textContent = t(x.message); };
+  f.onsubmit = async (e) => { e.preventDefault(); $('#groupErr').textContent = '';
+    try {
+      if (g) await api('PUT', '/api/v1/scada/groups/' + g.id, { name: f.name.value, description: f.description.value, approves: f.approves.checked, reason: f.reason.value });
+      else await api('POST', '/api/v1/scada/groups', { name: f.name.value, key: f.key.value.trim(), description: f.description.value, approves: f.approves.checked, reason: f.reason.value });
+      ctrl32.toast(t('saved'), 'ok'); d.close(); load();
+    } catch (x) { fail(x); } };
+  $('#groupDelete').onclick = async () => { const r = f.reason.value.trim(); if (!r) { $('#groupErr').textContent = t('reason is required'); f.reason.focus(); return; }
+    if (!window.confirm(t('Controls that name this group will be closed to everybody until they are edited. Remove it?'))) return;
+    try { await api('DELETE', '/api/v1/scada/groups/' + g.id + '?reason=' + encodeURIComponent(r)); ctrl32.toast(t('removed'), 'ok'); d.close(); load(); } catch (x) { fail(x); } };
+  d.showModal(); f.name.focus();
+}
+for (const b of document.querySelectorAll('dialog [data-close]')) b.onclick = () => b.closest('dialog').close();
+$('#newUser').onclick = () => userDialog(null);
+$('#newGroup').onclick = () => groupDialog(null);
+ctrl32.ready({ requireAuth: true, requirePerm: 'user.admin' }).then(() => load().catch((x) => ctrl32.toast(x.message, 'bad')));
+</script>
+</body>
+</html>
