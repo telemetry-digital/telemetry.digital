@@ -104,6 +104,8 @@
 
 **Nasadenie 0.91.0 (26. 11. 2026):** portál (API so zálohou; disk potom 87 %, 4,8 GB voľných, 7 záloh po 1,1 GB — dnes pribudli štyri pred aktualizáciami) aj BB (API tunelom, 39/39 online a nahráva). Na portáli overené: `healthz` 0.91.0, stránka konektorov obsahuje import, endpoint importu bez prihlásenia vracia 401.
 
+**Nasadenie 0.97.0 (28. 11. 2026):** portál (API so zálohou; disk potom 84 %, voľných 5,8 GB, šesť záloh — staré treba zmazať, so súhlasom používateľa) a BB (39/39 kamier nahráva). Na oboch nie je žiadna jednotka šarží, takže sa nič nespúšťa samo.
+
 **Nasadenie 0.96.1 (27. 11. 2026):** portál (API so zálohou; disk potom 81 %, voľných 6,9 GB, päť záloh — pred ďalším vydaním treba staré zmazať, so súhlasom) a BB (39/39 kamier nahráva).
 
 **Nasadenie 0.96.0 (27. 11. 2026):** portál (API so zálohou; disk potom 79 %, voľných 7,9 GB, štyri zálohy) a BB (39/39 kamier nahráva). Stránka Trendy je dostupná všetkým s `data.read`; nič iné sa nezmenilo.
