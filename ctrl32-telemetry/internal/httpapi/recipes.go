@@ -811,6 +811,7 @@ func (s *Server) prepareRecipe(ctx context.Context, deviceID, transport, prefix 
 type recipeLoad struct {
 	id, org, deviceID, ext, transport, prefix string
 	recipeName, recordName, by, byID, reason  string
+	operator                                  string // the SCADA user at the controls
 	recordNumber                              int
 }
 
@@ -853,6 +854,9 @@ func (s *Server) runRecipeLoad(ctx context.Context, l recipeLoad, ops []recipePr
 	}
 	rj, _ := json.Marshal(results)
 	_, _ = s.pool.Exec(ctx, `UPDATE core.recipe_download SET status = $2, results = $3::jsonb, error = $4, finished_at = now() WHERE id = $1::uuid`, l.id, status, string(rj), firstErr)
+	if status == "done" { // the load of a record begins a batch on the units that follow it (spec 043)
+		s.batchFromRecipe(ctx, l, l.operator)
+	}
 	return status, results, firstErr
 }
 
@@ -961,7 +965,7 @@ func (s *Server) downloadRecipe(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 3*time.Minute)
 	defer cancel()
 	status, results, firstErr := s.runRecipeLoad(ctx, recipeLoad{id: did, org: org, deviceID: tg.DeviceID, ext: dev[1], transport: dev[2], prefix: tg.Prefix,
-		recipeName: rc.Name, recordName: rec.Name, recordNumber: rec.Number, by: p.Username, byID: p.UserID, reason: in.Reason}, ops)
+		recipeName: rc.Name, recordName: rec.Name, recordNumber: rec.Number, by: p.Username, byID: p.UserID, reason: in.Reason, operator: operator}, ops)
 	detail["status"], detail["results"] = status, results
 	s.audit(r, "recipe.download", "recipe", rc.ID, nil, detail, in.Reason)
 	writeJSON(w, 201, map[string]any{"id": did, "status": status, "results": results, "error": firstErr})

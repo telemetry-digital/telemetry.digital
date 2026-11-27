@@ -167,6 +167,8 @@
 <script src="/widgets.js"></script>
 <script src="/widgets-more.js"></script>
 <script src="/widgets-counting.js"></script>
+<script src="/trend.js"></script>
+<script src="/widgets-trend.js"></script>
 <script src="/scada-editor.js"></script>
 <script src="/dashfilters.js"></script>
 <script>
@@ -174,6 +176,7 @@ const $ = s => document.querySelector(s), esc = ctrl32.esc, fmt = ctrl32.fmt, ap
 const parts = location.pathname.split('/').filter(Boolean); // dashboards | dashboards/slug | dashboards/slug/edit
 const SLUG = parts[1] || '', MODE = parts[2] || (SLUG ? 'view' : 'list');
 let SGROUPS = []; // SCADA groups a control may name (spec 041)
+let BUNITS = []; // batch units for the batch widget (spec 043)
 let CAT = null, DS = [], DEVS = [], DASH = null, SPEC = null, SEL = -1, refreshFn = null, timer = null, FACETS = {}, EFC = null;
 const uid = () => 'w' + Math.random().toString(36).slice(2, 8);
 
@@ -277,6 +280,7 @@ const iconOpts = (v) => ['', ...Object.keys(window.ctrl32Icons || {})].map(n => 
 const toLocalDT = (s) => { if(!s) return ''; const d = new Date(s); if(isNaN(d)) return ''; const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 16); };
 const colorField = (attr, v) => `<span class="row" style="gap:4px;align-items:center;flex-wrap:nowrap"><input type="color" data-cpick value="${/^#[0-9a-f]{6}$/i.test(v || '') ? v : '#000000'}" style="width:34px;height:28px;padding:0;border:none;background:none"><input ${attr} value="${esc(v || '')}" placeholder="#rrggbb" maxlength="9" style="width:92px;font-family:var(--mono)"><button class="btn small ghost" type="button" data-cclear title="Clear">✕</button></span>`;
 function paramHTML(p, v){
+  if(p.name === 'batch_unit') return `<label>${esc(p.label)} <select data-p="${p.name}"><option value="">${esc(ctrl32.t('All units'))}</option>${BUNITS.map(u => `<option value="${esc(u.id)}" class="notranslate" ${u.id === v ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}</select></label>`;
   if(p.name === 'scada_groups'){ const cur = Array.isArray(v) ? v : []; const all = SGROUPS.map(g => g.key); const gone = cur.filter(k => !all.includes(k));
     return `<fieldset class="src-box"><legend>${esc(p.label)}</legend>${SGROUPS.map(g => `<label class="inline"><input type="checkbox" data-sg value="${esc(g.key)}" ${cur.includes(g.key) ? 'checked' : ''}><span class="notranslate">${esc(ctrl32.t(g.name))}</span></label>`).join('')}${gone.map(k => `<label class="inline"><input type="checkbox" data-sg value="${esc(k)}" checked><span class="notranslate" style="color:#d97706">${esc(k)}</span></label>`).join('')}<div class="muted" style="font-size:12px">Nobody ticked: everybody who may send commands. With groups, a person signs in at the controls with a PIN or a password.</div></fieldset>`; }
   const lab = esc(p.label) + (p.help ? ` <span class="muted" style="font-size:11px" title="${esc(p.help)}">ⓘ</span>` : '');
@@ -648,6 +652,7 @@ function applyActions(box, w){
 }
 async function loadEdit(){
   SGROUPS = await api('GET', '/api/v1/scada/groups').catch(() => []);
+  BUNITS = await api('GET', '/api/v1/batch-units').catch(() => []);
   [CAT, DS, DEVS, DASH, FACETS, ASSETS, SITES] = await Promise.all([api('GET','/api/v1/dashboards/catalog'), api('GET','/api/v1/datastreams'), api('GET','/api/v1/devices'), api('GET', `/api/v1/dashboards/${encodeURIComponent(SLUG)}`), api('GET', '/api/v1/datastreams/facets?kinds=site,asset_type,quantity,device,attr_keys').catch(() => ({})), api('GET', '/api/v1/assets').catch(() => []), api('GET', '/api/v1/sites').catch(() => [])]);
   SPEC = DASH.spec; mountEditorFilters(); mountEditorNav(); $('#eTitle').textContent = 'Edit: ' + DASH.name; document.title = 'Edit ' + DASH.name; $('#eCancel').href = `/dashboards/${SLUG}`;
   const groups = {mimic: 'Process symbols', charts: 'Charts', values: 'Values', lists: 'Lists', control: 'Control', other: 'Other'};

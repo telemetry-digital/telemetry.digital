@@ -1,0 +1,19 @@
+meta {
+  name: Batch units
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/batch-units
+  body: none
+  auth: inherit
+}
+
+docs {
+  Batch units
+  
+  The places where batches run. `mode` recipe: a finished load of a recipe record into `device_id` with `prefix` begins a batch and ends the one that ran. `mode` tag: a datastream of the controller — `tag_kind` run (not zero while a batch runs) or number (a new number begins a batch that carries it, zero means none); the batch begins and ends at the time of the sample. `curves`: the datastreams drawn and summarised for each batch. `running`: the id of the batch that runs now.
+  
+  Requires permission `data.read`.
+}

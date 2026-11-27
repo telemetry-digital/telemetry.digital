@@ -1,0 +1,23 @@
+meta {
+  name: One batch with its curves and statistics
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/v1/batches/:id
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+docs {
+  One batch with its curves and statistics
+  
+  `curves` and `stats` (per datastream: n, min, max, avg, first, last) are those kept when the batch ended; for a running batch they are read now from the unit. `previous` and `next` are the neighbouring batches of the unit.
+  
+  Requires permission `data.read`.
+}

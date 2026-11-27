@@ -1,0 +1,29 @@
+meta {
+  name: End a batch by hand
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/v1/batches/:id/end
+  body: json
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+body:json {
+  {
+    "reason": "string"
+  }
+}
+
+docs {
+  End a batch by hand
+  
+  409 when it has ended already. Audited.
+  
+  Requires permission `device.command`.
+}

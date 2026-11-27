@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Batches — ctrl32 telemetry</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#e30613">
+<link rel="stylesheet" href="/app.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  /* batch record (spec 043) */
+  .bt-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-bottom: 10px; }
+  .bt-tools label { margin: 0; }
+  .bt-tools select, .bt-tools input { width: auto; min-width: 0; }
+  #btList tbody tr { cursor: pointer; }
+  #btList tbody tr.on td { background: var(--bg2); }
+  .bt-head { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 18px; margin-bottom: 10px; }
+  .bt-head div span { display: block; font-size: 12px; color: var(--muted); }
+  .bt-head div b { overflow-wrap: anywhere; }
+  .bt-chart { height: min(44vh, 420px); min-height: 240px; }
+  .bt-cmp { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+  table.bt-stats td.num, table.bt-stats th.num, #btList td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bt-sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+  dialog.bt-dlg { max-width: min(620px, 94vw); width: 620px; }
+  .bt-pick { max-height: 34vh; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+  .bt-pick label { display: flex; gap: 8px; align-items: center; padding: 4px 10px; border-bottom: 1px solid var(--line); margin: 0; font-weight: 400; }
+  .bt-pick .u { margin-left: auto; color: var(--muted); font-size: 12px; }
+  @media print { header.topbar, #sidebar, .top-strip, .subnav, .bt-tools, #btListCard, .footer, .page-head .btn, .bt-actions { display: none !important; } }
+</style>
+</head>
+<body>
+<header class="topbar"></header>
+<main class="container">
+<nav class="subnav">
+  <a href="/batches" data-section="batches">Batches</a>
+  <a href="/batches/units" data-section="units">Units</a>
+</nav>
+
+<section data-section="batches">
+  <div class="page-head"><h1>Batches</h1><span class="grow"></span><button class="btn primary" id="btStart" type="button" hidden>Begin a batch</button></div>
+  <div class="card" id="btListCard">
+    <div class="bt-tools">
+      <label><span>Unit</span> <select id="fUnit"></select></label>
+      <label><span>State</span> <select id="fStatus"><option value="">All</option><option value="running">Running</option><option value="finished">Finished</option></select></label>
+      <label><span>From</span> <input type="date" id="fFrom"></label>
+      <label><span>To</span> <input type="date" id="fTo"></label>
+      <label><span>Search</span> <input id="fQ" placeholder="number, code, recipe…" maxlength="80"></label>
+      <button class="btn" id="fGo" type="button">Show</button>
+    </div>
+    <div class="table-wrap"><table id="btList"><thead><tr><th>Unit</th><th class="num">No.</th><th>Code</th><th>Recipe</th><th>Began</th><th>Ended</th><th class="num">Lasted</th><th>State</th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <div class="card" id="btDetail" style="margin-top:16px" hidden>
+    <div class="page-head" style="margin-top:0"><h2 style="margin:0" id="dTitle" class="notranslate"></h2><span class="grow"></span>
+      <span class="bt-actions"><a class="btn small" id="dPrev" hidden>◀</a> <a class="btn small" id="dNext" hidden>▶</a>
+      <a class="btn small" id="dTrends">Open in Trends</a> <button class="btn small" id="dPrint" type="button">Print</button> <button class="btn small danger" id="dEnd" type="button" hidden>End the batch</button></span></div>
+    <div class="bt-head" id="dHead"></div>
+    <div class="bt-chart" id="dChart"></div>
+    <div class="table-wrap"><table class="bt-stats" id="dStats"><thead><tr><th>Curve</th><th>Unit</th><th class="num">At the beginning</th><th class="num">At the end</th><th class="num">Minimum</th><th class="num">Maximum</th><th class="num">Average</th><th class="num">Samples</th></tr></thead><tbody></tbody></table></div>
+    <h3>Alarms during the batch</h3>
+    <div class="table-wrap"><table id="dAlarms"><thead><tr><th>Raised</th><th>Cleared</th><th>Alarm</th><th>Severity</th><th class="num">Value</th></tr></thead><tbody></tbody></table></div>
+    <div class="bt-cmp">
+      <div class="bt-tools"><label><span>Compare with another batch of this unit</span> <select id="cSel"></select></label></div>
+      <div id="cBox" hidden>
+        <p class="muted" id="cInfo" style="margin:0 0 6px"></p>
+        <div class="bt-chart" id="cChart"></div>
+        <div class="table-wrap"><table class="bt-stats" id="cStats"><thead><tr><th>Curve</th><th>Unit</th><th class="num">Minimum</th><th class="num">Maximum</th><th class="num">Average</th><th class="num">Difference of the averages</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section data-section="units">
+  <div class="page-head"><h1>Units</h1><span class="grow"></span><button class="btn primary" id="uNew" type="button" hidden>New unit</button></div>
+  <div class="card">
+    <p style="margin-top:0">A unit is a place where batches run — a mixer, a reactor, a line. It says how its batches begin and end, and which values are drawn for each batch.</p>
+    <div class="table-wrap"><table id="uList"><thead><tr><th>Unit</th><th>Batches begin with</th><th>Source</th><th class="num">Curves</th><th class="num">Batches</th><th>State</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</section>
+
+<dialog id="uDlg" class="bt-dlg"><form class="form" method="dialog" autocomplete="off">
+  <h2 style="margin-top:0" id="uTitle">New unit</h2>
+  <div class="row2"><label><span>Name</span> <input name="name" maxlength="80" required></label>
+    <label><span>Batches begin with</span> <select name="mode"><option value="recipe">the load of a recipe record</option><option value="tag">a tag of the controller</option></select></label></div>
+  <div class="row2" id="uRecipe"><label><span>Device of the unit</span> <select name="device_id"></select></label>
+    <label><span>Key prefix of the unit (as in its recipes)</span> <input name="prefix" maxlength="32" placeholder="m1_"></label></div>
+  <div class="row2" id="uTag" hidden><label><span>Tag (datastream)</span> <select name="tag_datastream"></select></label>
+    <label><span>The tag is</span> <select name="tag_kind"><option value="run">a run bit: not zero while a batch runs</option><option value="number">the batch number: a new number begins a batch, zero means none</option></select></label></div>
+  <p class="muted" id="uHint" style="margin:0"></p>
+  <label style="margin-top:10px"><span>Values drawn for each batch (at most 16)</span> <input id="uFilter" placeholder="Search by asset, key or unit…"></label>
+  <div class="bt-pick" id="uCurves"></div>
+  <label class="inline"><input type="checkbox" name="enabled" checked><span>Batches begin and end by themselves</span></label>
+  <label><span>Reason (audit trail)</span> <input name="reason" maxlength="200" required></label>
+  <div class="err" id="uErr"></div>
+  <div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn danger" type="button" id="uDelete" hidden>Remove</button><span class="grow"></span><button class="btn" type="button" data-close>Close</button></div>
+</form></dialog>
+
+<dialog id="sDlg" class="bt-dlg"><form class="form" method="dialog" autocomplete="off">
+  <h2 style="margin-top:0">Begin a batch</h2>
+  <label><span>Unit</span> <select name="unit_id"></select></label>
+  <label><span>Code of the batch (lot, order…)</span> <input name="code" maxlength="60"></label>
+  <p class="muted" style="margin:0">The batch that runs on the unit ends when this one begins.</p>
+  <label><span>Reason (audit trail)</span> <input name="reason" maxlength="200" required></label>
+  <div class="err" id="sErr"></div>
+  <div class="actions"><button class="btn primary" type="submit">Begin</button><button class="btn" type="button" data-close>Close</button></div>
+</form></dialog>
+</main>
+<script src="/app.js"></script>
+<script src="/trend.js"></script>
+<script>
+const { api, esc, t } = ctrl32; const $ = (s) => document.querySelector(s); const TRD = window.ctrl32Trend;
+const lang = () => document.documentElement.lang || undefined;
+const fmt = (x) => x ? new Date(x).toLocaleString(lang(), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+const dur = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ' h ' : '') + (h || m ? m + ' min ' : '') + (h ? '' : x + ' s'); };
+const num = (v, d = 2) => TRD.fmtNum(v, d);
+let UNITS = [], DS = [], DEVS = [], LIST = [], CUR = null, CTL = null, CCTL = null, liveT = null;
+const dsOf = (id) => DS.find((d) => d.id === id) || { id, key: id.slice(0, 8), asset: '', unit: '' };
+const dsName = (d) => (d.asset ? d.asset + ' / ' : '') + d.key;
+const SRC = { recipe: 'the load of a recipe record', tag: 'a tag of the controller', manual: 'a person' };
+const stBadge = (b) => b.status === 'running' ? `<span class="badge ok">${esc(t('running'))}</span>` : `<span class="badge">${esc(t('finished'))}</span>`;
+
+// ---- the list ----
+async function loadList() {
+  const u = new URLSearchParams(); if ($('#fUnit').value) u.set('unit', $('#fUnit').value); if ($('#fStatus').value) u.set('status', $('#fStatus').value);
+  if ($('#fFrom').value) u.set('from', new Date($('#fFrom').value + 'T00:00:00').toISOString()); if ($('#fTo').value) u.set('to', new Date($('#fTo').value + 'T23:59:59').toISOString());
+  if ($('#fQ').value.trim()) u.set('q', $('#fQ').value.trim());
+  LIST = await api('GET', '/api/v1/batches?' + u);
+  $('#btList tbody').innerHTML = LIST.map((b) => `<tr data-id="${esc(b.id)}" class="${CUR && CUR.id === b.id ? 'on' : ''}"><td class="notranslate">${esc(b.unit)}</td><td class="num">${b.number}</td><td class="notranslate">${esc(b.code)}</td><td class="notranslate">${esc(b.recipe ? b.recipe + ' / ' + b.record : '')}</td><td>${fmt(b.started_at)}</td><td>${fmt(b.ended_at)}</td><td class="num">${esc(dur(b.seconds))}</td><td>${stBadge(b)}</td></tr>`).join('')
+    || `<tr><td colspan="8" class="muted">${esc(t(UNITS.length ? 'No batches in this time.' : 'No units yet. Set up a unit first; its batches then appear here by themselves.'))}</td></tr>`;
+  for (const tr of document.querySelectorAll('#btList tr[data-id]')) tr.onclick = () => open(tr.dataset.id, true);
+}
+// ---- one batch ----
+function chart(host, b, onChange) {
+  const a = Date.parse(b.started_at), e = b.ended_at ? Date.parse(b.ended_at) : Date.now(), pad = Math.max(2000, (e - a) * 0.03);
+  const c = TRD.create(host, { curves: b.curves.map((id, i) => ({ datastream_id: id, color: TRD.PALETTE[i % TRD.PALETTE.length] })), from: new Date(a - pad), to: new Date(e + pad), datastreams: DS, limits: true, onChange });
+  c.toggle('limits', true); c.setRuler('A', a); if (b.ended_at) c.setRuler('B', e);
+  return c;
+}
+function statRows(b) {
+  return b.curves.map((id, i) => { const d = dsOf(id), s = b.stats[id] || {}; return { id, i, d, s }; });
+}
+async function open(id, push) {
+  let b; try { b = await api('GET', '/api/v1/batches/' + id); } catch (x) { ctrl32.toast(t(x.message), 'bad'); return; }
+  CUR = b; clearInterval(liveT);
+  if (push) history.pushState(null, '', '/batches?id=' + id);
+  for (const tr of document.querySelectorAll('#btList tr[data-id]')) tr.classList.toggle('on', tr.dataset.id === id);
+  $('#btDetail').hidden = false;
+  $('#dTitle').textContent = b.unit + ' · ' + t('batch') + ' ' + b.number + (b.code ? ' · ' + b.code : '');
+  document.title = $('#dTitle').textContent + ' — ctrl32 telemetry';
+  const cell = (k, v, raw) => `<div><span>${esc(t(k))}</span><b class="${raw ? '' : 'notranslate'}">${raw ? v : esc(v || '—')}</b></div>`;
+  $('#dHead').innerHTML = cell('State', stBadge(b), true) + cell('Began', fmt(b.started_at)) + cell('Ended', fmt(b.ended_at)) + cell('Lasted', dur(b.seconds))
+    + cell('Begun by', esc(t(SRC[b.start_source] || b.start_source)) + (b.started_by ? ': <span class="notranslate">' + esc(b.started_by + (b.operator ? ' / ' + b.operator : '')) + '</span>' : ''), true)
+    + (b.recipe ? cell('Recipe and record', b.recipe + ' / ' + (b.record_number != null ? b.record_number + ' ' : '') + b.record) : '')
+    + (b.reason ? cell('Reason', b.reason) : '')
+    + (b.status === 'finished' ? cell('Ended by', esc(t(SRC[b.end_source] || b.end_source)) + (b.ended_by ? ': <span class="notranslate">' + esc(b.ended_by) + '</span>' : '') + (b.end_reason ? ' — <span class="notranslate">' + esc(t(b.end_reason)) + '</span>' : ''), true) : '');
+  $('#dPrev').hidden = !b.previous; $('#dNext').hidden = !b.next; $('#dPrev').onclick = () => open(b.previous, true); $('#dNext').onclick = () => open(b.next, true);
+  $('#dEnd').hidden = !(b.status === 'running' && ctrl32.can('device.command'));
+  const a = Date.parse(b.started_at), e = b.ended_at ? Date.parse(b.ended_at) : Date.now();
+  $('#dTrends').href = '/trends?ds=' + b.curves.join(',') + '&from=' + encodeURIComponent(new Date(a).toISOString()) + '&to=' + encodeURIComponent(new Date(e).toISOString());
+  $('#dTrends').hidden = !b.curves.length;
+  if (CTL) CTL.destroy(); CTL = null; $('#dChart').hidden = !b.curves.length;
+  if (b.curves.length) CTL = chart($('#dChart'), b);
+  $('#dStats tbody').innerHTML = statRows(b).map((r) => `<tr><td><span class="bt-sw" style="background:${TRD.PALETTE[r.i % TRD.PALETTE.length]}"></span><span class="notranslate">${esc(dsName(r.d))}</span></td><td class="notranslate">${esc(r.d.unit || '')}</td><td class="num">${num(r.s.first)}</td><td class="num">${num(r.s.last)}</td><td class="num">${num(r.s.min)}</td><td class="num">${num(r.s.max)}</td><td class="num">${num(r.s.avg)}</td><td class="num">${r.s.n || 0}</td></tr>`).join('')
+    || `<tr><td colspan="8" class="muted">${esc(t('The unit names no values to draw. Add them in Units.'))}</td></tr>`;
+  alarms(b, a, e); compareList(b);
+  // a running batch grows: the detail is read again every ten seconds
+  if (b.status === 'running') liveT = setInterval(() => { if (!document.hidden && CUR && CUR.id === id) open(id, false); }, 10000);
+}
+async function alarms(b, a, e) {
+  let rows = [];
+  try { rows = await api('GET', `/api/v1/alarms?view=history&from=${encodeURIComponent(new Date(a).toISOString())}&to=${encodeURIComponent(new Date(e).toISOString())}`); } catch (x) { rows = []; }
+  rows = (Array.isArray(rows) ? rows : []).filter((x) => x.datastream_id && b.curves.includes(x.datastream_id));
+  $('#dAlarms tbody').innerHTML = rows.map((x) => `<tr><td>${fmt(x.raised_at)}</td><td>${fmt(x.cleared_at)}</td><td class="notranslate">${esc(dsName(dsOf(x.datastream_id)))}</td><td><span class="badge ${x.severity === 'warning' ? 'warn' : 'bad'}">${esc(t(x.severity))}</span></td><td class="num">${num(x.value)}</td></tr>`).join('')
+    || `<tr><td colspan="5" class="muted">${esc(t('No alarm of these values was raised during the batch.'))}</td></tr>`;
+}
+async function compareList(b) {
+  let others = []; try { others = (await api('GET', '/api/v1/batches?unit=' + b.unit_id + '&from=' + encodeURIComponent(new Date(Date.now() - 365 * 86400e3).toISOString()) + '&limit=200')).filter((x) => x.id !== b.id); } catch (x) { others = []; }
+  $('#cSel').innerHTML = `<option value="">${esc(t('— none —'))}</option>` + others.map((x) => `<option value="${esc(x.id)}" class="notranslate">${x.number}${x.code ? ' · ' + esc(x.code) : ''} · ${esc(fmt(x.started_at))}</option>`).join('');
+  $('#cBox').hidden = true; if (CCTL) { CCTL.destroy(); CCTL = null; }
+  $('#cSel').onchange = () => compare(b, $('#cSel').value);
+}
+async function compare(b, id) {
+  if (CCTL) { CCTL.destroy(); CCTL = null; }
+  if (!id) { $('#cBox').hidden = true; return; }
+  const o = await api('GET', '/api/v1/batches/' + id); $('#cBox').hidden = false;
+  $('#cInfo').textContent = o.unit + ' · ' + t('batch') + ' ' + o.number + (o.code ? ' · ' + o.code : '') + ' · ' + fmt(o.started_at) + ' · ' + dur(o.seconds);
+  // the same curves and the same length of time, so that the two charts can be read against each other
+  const span = Math.max(b.seconds, o.seconds, 1) * 1000, a = Date.parse(o.started_at), pad = Math.max(2000, span * 0.03);
+  const cmp = { ...o, curves: b.curves };
+  CCTL = TRD.create($('#cChart'), { curves: cmp.curves.map((x, i) => ({ datastream_id: x, color: TRD.PALETTE[i % TRD.PALETTE.length] })), from: new Date(a - pad), to: new Date(a + span + pad), datastreams: DS });
+  CCTL.setRuler('A', a); if (o.ended_at) CCTL.setRuler('B', Date.parse(o.ended_at));
+  if (CTL) { const a0 = Date.parse(b.started_at); CTL.setWindow(a0 - pad, a0 + span + pad); }
+  $('#cStats tbody').innerHTML = b.curves.map((cid, i) => { const d = dsOf(cid), s = o.stats[cid] || {}, m = b.stats[cid] || {};
+    return `<tr><td><span class="bt-sw" style="background:${TRD.PALETTE[i % TRD.PALETTE.length]}"></span><span class="notranslate">${esc(dsName(d))}</span></td><td class="notranslate">${esc(d.unit || '')}</td><td class="num">${num(s.min)}</td><td class="num">${num(s.max)}</td><td class="num">${num(s.avg)}</td><td class="num">${s.avg != null && m.avg != null ? num(s.avg - m.avg) : '—'}</td></tr>`; }).join('');
+}
+$('#dPrint').onclick = () => window.print();
+$('#dEnd').onclick = async () => { const reason = ctrl32.ask('Reason (audit trail)'); if (!reason) return;
+  try { await api('POST', '/api/v1/batches/' + CUR.id + '/end', { reason }); ctrl32.toast(t('The batch has ended.'), 'ok'); await loadList(); open(CUR.id, false); } catch (x) { ctrl32.toast(t(x.message), 'bad'); } };
+$('#fGo').onclick = () => loadList().catch((x) => ctrl32.toast(t(x.message), 'bad'));
+$('#fQ').onkeydown = (e) => { if (e.key === 'Enter') $('#fGo').click(); };
+$('#btStart').onclick = () => { const d = $('#sDlg'), f = d.querySelector('form'); f.reset(); $('#sErr').textContent = '';
+  f.unit_id.innerHTML = UNITS.map((u) => `<option value="${esc(u.id)}" class="notranslate">${esc(u.name)}</option>`).join(''); if ($('#fUnit').value) f.unit_id.value = $('#fUnit').value;
+  f.onsubmit = async (e) => { e.preventDefault(); try { const r = await api('POST', '/api/v1/batches', { unit_id: f.unit_id.value, code: f.code.value.trim(), reason: f.reason.value.trim() }); d.close(); ctrl32.toast(t('The batch has begun.'), 'ok'); await loadList(); open(r.id, true); } catch (x) { $('#sErr').textContent = t(x.message); } };
+  d.showModal(); f.code.focus(); };
+
+// ---- units ----
+async function loadUnits() {
+  UNITS = await api('GET', '/api/v1/batch-units');
+  $('#fUnit').innerHTML = `<option value="">${esc(t('All units'))}</option>` + UNITS.map((u) => `<option value="${esc(u.id)}" class="notranslate">${esc(u.name)}</option>`).join('');
+  $('#uList tbody').innerHTML = UNITS.map((u) => `<tr data-id="${esc(u.id)}" style="cursor:pointer"><td class="notranslate"><b>${esc(u.name)}</b></td><td>${esc(t(SRC[u.mode]))}</td><td class="notranslate">${esc(u.mode === 'recipe' ? u.device + (u.prefix ? ' · ' + u.prefix : '') : u.tag)}</td><td class="num">${u.curves.length}</td><td class="num">${u.batches}</td>
+    <td>${!u.enabled ? `<span class="badge warn">${esc(t('by hand only'))}</span>` : u.running ? `<span class="badge ok">${esc(t('a batch is running'))}</span>` : `<span class="badge">${esc(t('waiting'))}</span>`}</td></tr>`).join('')
+    || `<tr><td colspan="6" class="muted">${esc(t('No units yet.'))}</td></tr>`;
+  if (ctrl32.can('device.manage')) for (const tr of document.querySelectorAll('#uList tr[data-id]')) tr.onclick = () => unitDialog(UNITS.find((u) => u.id === tr.dataset.id));
+}
+function unitDialog(u) {
+  const d = $('#uDlg'), f = d.querySelector('form'); f.reset(); $('#uErr').textContent = ''; $('#uFilter').value = '';
+  $('#uTitle').textContent = t(u ? 'Unit' : 'New unit') + (u ? ': ' + u.name : '');
+  f.device_id.innerHTML = DEVS.map((x) => `<option value="${esc(x.id)}" class="notranslate">${esc(x.name || x.external_id)}</option>`).join('');
+  f.tag_datastream.innerHTML = DS.map((x) => `<option value="${esc(x.id)}" class="notranslate">${esc(dsName(x))}</option>`).join('');
+  const sel = new Set(u ? u.curves : []);
+  if (u) { f.name.value = u.name; f.mode.value = u.mode; if (u.device_id) f.device_id.value = u.device_id; f.prefix.value = u.prefix || ''; if (u.tag_datastream) f.tag_datastream.value = u.tag_datastream; f.tag_kind.value = u.tag_kind; f.enabled.checked = u.enabled; }
+  const sync = () => { const tag = f.mode.value === 'tag'; $('#uRecipe').hidden = tag; $('#uTag').hidden = !tag;
+    $('#uHint').textContent = t(tag ? 'The batch begins and ends at the time of the sample of the tag. What the tag did before the unit was set up is not a batch.' : 'A finished load of a record into this device and prefix begins a batch and ends the one that ran. The last batch is ended by a person.'); };
+  f.mode.onchange = sync; sync();
+  const draw = () => { const q = $('#uFilter').value.trim().toLowerCase(); const list = DS.filter((x) => sel.has(x.id) || !q || (dsName(x) + ' ' + x.unit).toLowerCase().includes(q)).sort((a, b) => sel.has(b.id) - sel.has(a.id));
+    $('#uCurves').innerHTML = list.slice(0, 200).map((x) => `<label class="notranslate"><input type="checkbox" value="${esc(x.id)}" ${sel.has(x.id) ? 'checked' : ''}><span>${esc(dsName(x))}</span><span class="u">${esc(x.unit || x.kind)}</span></label>`).join('');
+    for (const c of $('#uCurves').querySelectorAll('input')) c.onchange = () => { if (c.checked) sel.add(c.value); else sel.delete(c.value); }; };
+  $('#uFilter').oninput = draw; draw();
+  $('#uDelete').hidden = !u;
+  const fail = (x) => { $('#uErr').textContent = t(x.message); };
+  f.onsubmit = async (e) => { e.preventDefault(); $('#uErr').textContent = '';
+    const body = { name: f.name.value.trim(), mode: f.mode.value, device_id: f.device_id.value, prefix: f.prefix.value.trim(), tag_datastream: f.tag_datastream.value, tag_kind: f.tag_kind.value, curves: [...sel], enabled: f.enabled.checked, reason: f.reason.value.trim() };
+    try { if (u) await api('PUT', '/api/v1/batch-units/' + u.id, body); else await api('POST', '/api/v1/batch-units', body); ctrl32.toast(t('saved'), 'ok'); d.close(); loadUnits(); } catch (x) { fail(x); } };
+  $('#uDelete').onclick = async () => { const r = f.reason.value.trim(); if (!r) { $('#uErr').textContent = t('reason is required'); f.reason.focus(); return; }
+    if (!window.confirm(t('The unit goes from the lists; its batches stay. Remove it?'))) return;
+    try { await api('DELETE', '/api/v1/batch-units/' + u.id + '?reason=' + encodeURIComponent(r)); ctrl32.toast(t('removed'), 'ok'); d.close(); loadUnits(); } catch (x) { fail(x); } };
+  d.showModal(); f.name.focus();
+}
+$('#uNew').onclick = () => unitDialog(null);
+for (const b of document.querySelectorAll('dialog [data-close]')) b.onclick = () => b.closest('dialog').close();
+window.addEventListener('popstate', () => { const id = new URLSearchParams(location.search).get('id'); if (id) open(id, false); else { $('#btDetail').hidden = true; CUR = null; clearInterval(liveT); } });
+
+ctrl32.ready({ requireAuth: true, requirePerm: 'data.read' }).then(async () => {
+  const sec = ctrl32.section('batches', ['batches', 'units']);
+  document.title = t(sec === 'units' ? 'Units' : 'Batches') + ' — ctrl32 telemetry';
+  [DS, DEVS] = await Promise.all([api('GET', '/api/v1/datastreams'), api('GET', '/api/v1/devices').catch(() => [])]);
+  DS.sort((a, b) => dsName(a).localeCompare(dsName(b)));
+  await loadUnits();
+  $('#uNew').hidden = !ctrl32.can('device.manage'); $('#btStart').hidden = !(ctrl32.can('device.command') && UNITS.length);
+  if (sec === 'batches') { const p = new URLSearchParams(location.search); if (p.get('unit')) $('#fUnit').value = p.get('unit'); await loadList(); if (p.get('id')) open(p.get('id'), false); }
+}).catch((x) => ctrl32.toast(x.message, 'bad'));
+</script>
+</body>
+</html>

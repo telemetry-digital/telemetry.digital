@@ -1,0 +1,27 @@
+meta {
+  name: Begin a batch by hand
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v1/batches
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "code": "string",
+    "reason": "string",
+    "unit_id": "018f5c2a-1b7e-7c3d-9a41-3f2e6b8d1c00"
+  }
+}
+
+docs {
+  Begin a batch by hand
+  
+  On any unit; the batch that runs there ends. Audited. With the policy scada_users_required a person must be signed in at the controls.
+  
+  Requires permission `device.command`.
+}

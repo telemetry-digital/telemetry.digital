@@ -999,3 +999,20 @@ dialog.scada-dlg .sc-pad .btn { min-height: 46px; font-size: 18px; justify-conte
 @media (max-width: 700px) { .scada-chip.on .btn span, .scada-chip [data-scada-in] span { display: none; } }
 .ctl-lock { margin-left: 8px; padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 11px; font-weight: 500; color: var(--muted); white-space: nowrap; }
 .ctl-lock::before { content: "\1F512\FE0E "; }
+
+/* the trend control (spec 042) and the trend and batch widgets (spec 043) */
+.tr-host { position: relative; width: 100%; }
+.tr-canvas { display: block; touch-action: none; cursor: crosshair; outline: none; border-radius: 6px; }
+.tr-note { font-size: 12px; min-height: 16px; margin-top: 2px; }
+.trw { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 4px; }
+.trw-bar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.trw-bar .btn { padding: 2px 8px; font-size: 12px; }
+.trw-bar .btn.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.trw-chart { flex: 1 1 auto; min-height: 140px; }
+.trw-chart .tr-note { display: none; }
+.trw-table { font-size: 12px; max-height: 38%; overflow: auto; }
+.trw-table td.num, .trw-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.trw-sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }
+.btw-now { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; padding: 6px 10px; border: 1px solid var(--line); border-left: 4px solid var(--ok); border-radius: var(--radius); margin-bottom: 6px; }
+.btw-now.idle { border-left-color: var(--line); }
+.btw-now b { font-size: 18px; }

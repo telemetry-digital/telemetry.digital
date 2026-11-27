@@ -37,6 +37,7 @@ var opAuditKinds = map[string]string{
 	"counting_occupancy.update": "counting_correction",
 	"second_person.request":     "second_request", "second_person.approve": "second_approve", "second_person.reject": "second_reject", "second_person.end": "second_end",
 	"scada_user.create": "scada_admin", "scada_user.update": "scada_admin", "scada_user.delete": "scada_admin",
+	"batch.start": "batch_start", "batch.end": "batch_end",
 	"change_request.create": "change_request", "change_request.approve": "change_approve", "change_request.reject": "change_reject",
 }
 
