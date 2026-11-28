@@ -20,6 +20,13 @@ var trendWidgets = []WidgetDef{
 			{Name: "batch_unit", Label: "Unit (empty = all units)", Kind: "text"},
 			{Name: "rows", Label: "Batches listed", Kind: "number", Default: 6, Min: fptr(0), Max: fptr(30)},
 			{Name: "running", Label: "Show the running batch on top", Kind: "bool", Default: true}}},
+	// spec 044: rendered by static/widgets-more.js
+	{Type: "scada_user", Label: "Person at the controls", Group: "control", Help: "Who is signed in at the controls of this computer (SCADA users), with large buttons to sign in and to sign out — for a touch panel. It shows the same person as the chip in the header; what a person may operate is decided by the server.",
+		Default: [2]int{4, 3},
+		Params: []ScreenParam{pTitle,
+			{Name: "show_groups", Label: "Show the groups of the person", Kind: "bool", Default: true},
+			{Name: "show_time", Label: "Show the time left before the sign-out without activity", Kind: "bool", Default: true},
+			{Name: "quick_names", Label: "Buttons with the names used on this computer", Kind: "bool", Default: true}}},
 }
 
 // init runs before the catalog is completed in widget_params.go (files initialise in name order).

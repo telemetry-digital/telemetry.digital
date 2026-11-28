@@ -4280,5 +4280,14 @@
  "the command is not waiting for approval any more": "polecenie nie czeka już na zatwierdzenie",
  "the change request is not waiting any more": "wniosek o zmianę już nie czeka",
  "Curves of the bound datastreams on one time axis, with an axis per unit: drag to move in time, turn the wheel to zoom, click to place a ruler. For a fixed set of curves on a dashboard; the Trends page adds saved views, a second ruler and the export.": "Krzywe powiązanych strumieni danych na jednej osi czasu, z osią dla każdej jednostki miary: przeciągnij, aby przesunąć się w czasie, obróć kółko, aby przybliżyć, kliknij, aby ustawić linijkę. Dla stałego zestawu krzywych na dashboardzie; strona Trendy dodaje zapisane widoki, drugą linijkę i eksport.",
- "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Partia, która teraz trwa na jednostce — jej numer, kod, receptura i czas trwania — oraz ostatnie partie. Kliknięcie otwiera zapis partii."
+ "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Partia, która teraz trwa na jednostce — jej numer, kod, receptura i czas trwania — oraz ostatnie partie. Kliknięcie otwiera zapis partii.",
+ "Person at the controls": "Osoba przy sterowaniu",
+ "Who is signed in at the controls of this computer (SCADA users), with large buttons to sign in and to sign out — for a touch panel. It shows the same person as the chip in the header; what a person may operate is decided by the server.": "Kto jest zalogowany do sterowania na tym komputerze (użytkownicy SCADA), z dużymi przyciskami do logowania i wylogowania — dla panelu dotykowego. Pokazuje tę samą osobę co znacznik w nagłówku; o tym, co osoba może obsługiwać, decyduje serwer.",
+ "Show the groups of the person": "Pokaż grupy osoby",
+ "Show the time left before the sign-out without activity": "Pokaż czas pozostały do wylogowania z powodu braku aktywności",
+ "Buttons with the names used on this computer": "Przyciski z nazwami używanymi na tym komputerze",
+ "Signing in at the controls works for signed-in users in a browser.": "Logowanie do sterowania działa dla zalogowanych użytkowników w przeglądarce.",
+ "No SCADA users are set up.": "Nie skonfigurowano żadnych użytkowników SCADA.",
+ "Signed out without activity in": "Wylogowanie z powodu braku aktywności za",
+ "Nobody is signed in at the controls": "Nikt nie jest zalogowany do sterowania"
 }

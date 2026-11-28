@@ -4280,5 +4280,14 @@
  "the command is not waiting for approval any more": "la commande n'attend plus d'approbation",
  "the change request is not waiting any more": "la demande de modification n'est plus en attente",
  "Curves of the bound datastreams on one time axis, with an axis per unit: drag to move in time, turn the wheel to zoom, click to place a ruler. For a fixed set of curves on a dashboard; the Trends page adds saved views, a second ruler and the export.": "Courbes des flux de données liés sur un seul axe du temps, avec un axe par unité de mesure : faites glisser pour vous déplacer dans le temps, tournez la molette pour zoomer, cliquez pour placer une règle. Pour un ensemble fixe de courbes sur un tableau de bord ; la page Tendances ajoute les vues enregistrées, une seconde règle et l'export.",
- "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Le lot en cours sur une unité — son numéro, son code, sa recette et sa durée jusqu'ici — et les derniers lots. Un clic ouvre le dossier d'un lot."
+ "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Le lot en cours sur une unité — son numéro, son code, sa recette et sa durée jusqu'ici — et les derniers lots. Un clic ouvre le dossier d'un lot.",
+ "Person at the controls": "Personne au pupitre",
+ "Who is signed in at the controls of this computer (SCADA users), with large buttons to sign in and to sign out — for a touch panel. It shows the same person as the chip in the header; what a person may operate is decided by the server.": "Qui est connecté au pupitre de cet ordinateur (utilisateurs SCADA), avec de grands boutons pour se connecter et se déconnecter — pour un écran tactile. Il montre la même personne que la pastille de l'en-tête ; ce qu'une personne peut manœuvrer est décidé par le serveur.",
+ "Show the groups of the person": "Afficher les groupes de la personne",
+ "Show the time left before the sign-out without activity": "Afficher le temps restant avant la déconnexion pour inactivité",
+ "Buttons with the names used on this computer": "Boutons avec les noms utilisés sur cet ordinateur",
+ "Signing in at the controls works for signed-in users in a browser.": "La connexion au pupitre fonctionne pour les utilisateurs connectés dans un navigateur.",
+ "No SCADA users are set up.": "Aucun utilisateur SCADA n'est configuré.",
+ "Signed out without activity in": "Déconnexion pour inactivité dans",
+ "Nobody is signed in at the controls": "Personne n'est connecté au pupitre"
 }

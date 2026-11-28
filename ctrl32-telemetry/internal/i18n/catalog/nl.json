@@ -4280,5 +4280,14 @@
  "the command is not waiting for approval any more": "de opdracht wacht niet meer op goedkeuring",
  "the change request is not waiting any more": "het wijzigingsverzoek wacht niet meer",
  "Curves of the bound datastreams on one time axis, with an axis per unit: drag to move in time, turn the wheel to zoom, click to place a ruler. For a fixed set of curves on a dashboard; the Trends page adds saved views, a second ruler and the export.": "Curven van de gekoppelde datastromen op één tijdas, met een as per meeteenheid: sleep om in de tijd te bewegen, draai aan het wiel om te zoomen, klik om een liniaal te plaatsen. Voor een vaste set curven op een dashboard; de pagina Trends voegt opgeslagen weergaven, een tweede liniaal en de export toe.",
- "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "De batch die nu op een eenheid loopt — nummer, code, recept en hoe lang hij al loopt — en de laatste batches. Een klik opent het verslag van een batch."
+ "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "De batch die nu op een eenheid loopt — nummer, code, recept en hoe lang hij al loopt — en de laatste batches. Een klik opent het verslag van een batch.",
+ "Person at the controls": "Persoon bij de bediening",
+ "Who is signed in at the controls of this computer (SCADA users), with large buttons to sign in and to sign out — for a touch panel. It shows the same person as the chip in the header; what a person may operate is decided by the server.": "Wie bij de bediening van deze computer is aangemeld (SCADA-gebruikers), met grote knoppen om aan en af te melden — voor een aanraakpaneel. Het toont dezelfde persoon als de chip in de koptekst; wat een persoon mag bedienen, bepaalt de server.",
+ "Show the groups of the person": "De groepen van de persoon tonen",
+ "Show the time left before the sign-out without activity": "De resterende tijd tot het afmelden zonder activiteit tonen",
+ "Buttons with the names used on this computer": "Knoppen met de namen die op deze computer worden gebruikt",
+ "Signing in at the controls works for signed-in users in a browser.": "Aanmelden bij de bediening werkt voor aangemelde gebruikers in een browser.",
+ "No SCADA users are set up.": "Er zijn geen SCADA-gebruikers ingesteld.",
+ "Signed out without activity in": "Afgemeld zonder activiteit over",
+ "Nobody is signed in at the controls": "Niemand is aangemeld bij de bediening"
 }

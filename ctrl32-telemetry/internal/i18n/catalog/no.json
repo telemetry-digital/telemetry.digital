@@ -4280,5 +4280,14 @@
  "the command is not waiting for approval any more": "kommandoen venter ikke lenger på godkjenning",
  "the change request is not waiting any more": "endringsforespørselen venter ikke lenger",
  "Curves of the bound datastreams on one time axis, with an axis per unit: drag to move in time, turn the wheel to zoom, click to place a ruler. For a fixed set of curves on a dashboard; the Trends page adds saved views, a second ruler and the export.": "Kurver for de bundne datastrømmene på én tidsakse, med en akse per måleenhet: dra for å flytte deg i tid, rull hjulet for å zoome, klikk for å plassere en linjal. For et fast sett med kurver på et dashbord; siden Trender legger til lagrede visninger, en ekstra linjal og eksport.",
- "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Batchen som kjører på en produksjonsenhet nå — nummer, kode, resept og hvor lenge den har kjørt — og de siste batchene. Et klikk åpner protokollen for en batch."
+ "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Batchen som kjører på en produksjonsenhet nå — nummer, kode, resept og hvor lenge den har kjørt — og de siste batchene. Et klikk åpner protokollen for en batch.",
+ "Person at the controls": "Person ved betjeningen",
+ "Who is signed in at the controls of this computer (SCADA users), with large buttons to sign in and to sign out — for a touch panel. It shows the same person as the chip in the header; what a person may operate is decided by the server.": "Hvem som er logget inn ved betjeningen på denne datamaskinen (SCADA-brukere), med store knapper for å logge inn og ut — for et berøringspanel. Den viser den samme personen som merket i toppteksten; hva en person kan betjene, avgjøres av serveren.",
+ "Show the groups of the person": "Vis gruppene til personen",
+ "Show the time left before the sign-out without activity": "Vis tiden som gjenstår før utlogging uten aktivitet",
+ "Buttons with the names used on this computer": "Knapper med navnene som brukes på denne datamaskinen",
+ "Signing in at the controls works for signed-in users in a browser.": "Pålogging ved betjeningen fungerer for påloggede brukere i en nettleser.",
+ "No SCADA users are set up.": "Ingen SCADA-brukere er satt opp.",
+ "Signed out without activity in": "Logges ut uten aktivitet om",
+ "Nobody is signed in at the controls": "Ingen er logget inn ved betjeningen"
 }

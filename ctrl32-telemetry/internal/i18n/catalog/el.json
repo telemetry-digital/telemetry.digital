@@ -4280,5 +4280,14 @@
  "the command is not waiting for approval any more": "η εντολή δεν αναμένει πλέον έγκριση",
  "the change request is not waiting any more": "το αίτημα αλλαγής δεν αναμένει πλέον",
  "Curves of the bound datastreams on one time axis, with an axis per unit: drag to move in time, turn the wheel to zoom, click to place a ruler. For a fixed set of curves on a dashboard; the Trends page adds saved views, a second ruler and the export.": "Καμπύλες των δεσμευμένων ροών δεδομένων σε έναν άξονα χρόνου, με έναν άξονα ανά μονάδα μέτρησης: σύρετε για να μετακινηθείτε στον χρόνο, γυρίστε τον τροχό για ζουμ, κάντε κλικ για να τοποθετήσετε έναν χάρακα. Για ένα σταθερό σύνολο καμπυλών σε έναν πίνακα ελέγχου· η σελίδα Τάσεις προσθέτει αποθηκευμένες προβολές, δεύτερο χάρακα και εξαγωγή.",
- "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Η παρτίδα που εκτελείται τώρα σε μια μονάδα — ο αριθμός, ο κωδικός, η συνταγή της και πόση ώρα εκτελείται — και οι τελευταίες παρτίδες. Ένα κλικ ανοίγει το πρωτόκολλο μιας παρτίδας."
+ "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Η παρτίδα που εκτελείται τώρα σε μια μονάδα — ο αριθμός, ο κωδικός, η συνταγή της και πόση ώρα εκτελείται — και οι τελευταίες παρτίδες. Ένα κλικ ανοίγει το πρωτόκολλο μιας παρτίδας.",
+ "Person at the controls": "Άτομο στα χειριστήρια",
+ "Who is signed in at the controls of this computer (SCADA users), with large buttons to sign in and to sign out — for a touch panel. It shows the same person as the chip in the header; what a person may operate is decided by the server.": "Ποιος είναι συνδεδεμένος στα χειριστήρια αυτού του υπολογιστή (χρήστες SCADA), με μεγάλα κουμπιά για σύνδεση και αποσύνδεση — για οθόνη αφής. Δείχνει το ίδιο άτομο με την ετικέτα στην κεφαλίδα· το τι επιτρέπεται να χειρίζεται ένα άτομο το αποφασίζει ο διακομιστής.",
+ "Show the groups of the person": "Εμφάνιση των ομάδων του ατόμου",
+ "Show the time left before the sign-out without activity": "Εμφάνιση του χρόνου που απομένει πριν από την αποσύνδεση χωρίς δραστηριότητα",
+ "Buttons with the names used on this computer": "Κουμπιά με τα ονόματα που χρησιμοποιούνται σε αυτόν τον υπολογιστή",
+ "Signing in at the controls works for signed-in users in a browser.": "Η σύνδεση στα χειριστήρια λειτουργεί για συνδεδεμένους χρήστες σε πρόγραμμα περιήγησης.",
+ "No SCADA users are set up.": "Δεν έχουν ρυθμιστεί χρήστες SCADA.",
+ "Signed out without activity in": "Αποσύνδεση χωρίς δραστηριότητα σε",
+ "Nobody is signed in at the controls": "Κανείς δεν είναι συνδεδεμένος στα χειριστήρια"
 }

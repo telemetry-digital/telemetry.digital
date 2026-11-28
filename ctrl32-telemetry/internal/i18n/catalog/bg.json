@@ -4280,5 +4280,14 @@
  "the command is not waiting for approval any more": "командата вече не чака одобрение",
  "the change request is not waiting any more": "заявката за промяна вече не чака",
  "Curves of the bound datastreams on one time axis, with an axis per unit: drag to move in time, turn the wheel to zoom, click to place a ruler. For a fixed set of curves on a dashboard; the Trends page adds saved views, a second ruler and the export.": "Криви на свързаните потоци от данни на една времева ос, с отделна ос за всяка мерна единица: плъзнете, за да се движите във времето, завъртете колелцето за мащабиране, щракнете, за да поставите линийка. За постоянен набор от криви на табло; страницата Тенденции добавя запазени изгледи, втора линийка и експорт.",
- "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Партидата, която се изпълнява на единица в момента — нейният номер, код, рецепта и откога се изпълнява — и последните партиди. Щракване отваря протокола на партидата."
+ "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Партидата, която се изпълнява на единица в момента — нейният номер, код, рецепта и откога се изпълнява — и последните партиди. Щракване отваря протокола на партидата.",
+ "Person at the controls": "Лице на пулта",
+ "Who is signed in at the controls of this computer (SCADA users), with large buttons to sign in and to sign out — for a touch panel. It shows the same person as the chip in the header; what a person may operate is decided by the server.": "Кой е влязъл на пулта на този компютър (SCADA потребители), с големи бутони за вход и изход — за сензорен панел. Показва същото лице като етикета в заглавната част; какво може да управлява едно лице, решава сървърът.",
+ "Show the groups of the person": "Показване на групите на лицето",
+ "Show the time left before the sign-out without activity": "Показване на оставащото време до изхода без активност",
+ "Buttons with the names used on this computer": "Бутони с имената, използвани на този компютър",
+ "Signing in at the controls works for signed-in users in a browser.": "Входът на пулта работи за влезли потребители в браузър.",
+ "No SCADA users are set up.": "Няма настроени SCADA потребители.",
+ "Signed out without activity in": "Изход без активност след",
+ "Nobody is signed in at the controls": "Никой не е влязъл на пулта"
 }

@@ -125,7 +125,7 @@
   function scadaSet(st, quiet) {
     if (!me || !st) return;
     const was = me.scada && me.scada.user ? me.scada.user.name : '';
-    me.scada = st; scadaUntil = st.user ? Date.now() + st.user.seconds_left * 1000 : 0;
+    me.scada = st; st.at = Date.now(); scadaUntil = st.user ? Date.now() + st.user.seconds_left * 1000 : 0;
     if (was && !st.user && !quiet) toast(t('Signed out at the controls') + ': ' + was, 'warn');
     scadaDraw();
     document.dispatchEvent(new CustomEvent('ctrl32:scada', { detail: st }));
@@ -192,7 +192,8 @@
       d.querySelector('[data-sc-cancel]').onclick = () => done(false);
       d.oncancel = (e) => { e.preventDefault(); done(false); };
       d.showModal();
-      (names.length === 1 && !f.scname.value ? (f.scname.value = names[0], f.scsecret) : f.scname).focus();
+      if (info && info.name) f.scname.value = info.name;
+      (f.scname.value ? f.scsecret : names.length === 1 ? (f.scname.value = names[0], f.scsecret) : f.scname).focus();
     });
     return scadaBusy;
   }

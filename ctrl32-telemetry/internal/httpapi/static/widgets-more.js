@@ -604,4 +604,33 @@
     el.innerHTML = `<div class="dw-center"><button class="dw-rsw${on ? ' on' : ''}" type="button"${ro ? ' disabled' : ''} title="${esc(on ? (p.on_label || 'ON') : (p.off_label || 'OFF'))}">${icon('power', 26) || '⏻'}<br><span style="font-size:11px">${esc(on ? (p.on_label || 'ON') : (p.off_label || 'OFF'))}</span></button>${cur ? `<span class="muted" style="font-size:11px">${fmt(cur.measured_at)}</span>` : ''}</div>${ro ? h.html : `<div class="row" style="gap:6px">${u.reasonInput()}</div><div class="ctl-out" style="font-size:12px;min-height:16px"></div>`}`;
     if (!ro) el.querySelector('.dw-rsw').onclick = () => u.ctlSend(el, ctx, p, !on);
   }, { label: 'Round switch' });
+
+  // ---- person at the controls (spec 044) ----
+  // Who is signed in at the controls (SCADA users, spec 041), with large buttons to sign in and out: for a panel where
+  // the chip in the header is too small or hidden. The sign-in itself is the dialog of app.js.
+  const scLeft = (s) => { s = Math.max(0, Math.round(s)); const m = Math.floor(s / 60); return m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ':' + String(s % 60).padStart(2, '0'); };
+  const scDraw = (el, p, ctx) => {
+    const C = window.ctrl32, me = C && C.me, st = me && me.scada, tt = (x) => (C && C.t ? C.t(x) : x);
+    if (WG.isPublic() || !st || !(me.auth && me.auth.session)) { el.innerHTML = `<span class="muted">${esc(tt('Signing in at the controls works for signed-in users in a browser.'))}</span>`; return; }
+    if (!st.users && !st.required) { el.innerHTML = `<span class="muted">${esc(tt('No SCADA users are set up.'))}</span>${C.can && C.can('user.admin') && !ctx.edit ? ` <a href="/users/scada">${esc(tt('SCADA users'))}</a>` : ''}`; return; }
+    const usr = st.user; let names = [];
+    if (!usr && p.quick_names !== false) { try { names = JSON.parse(localStorage.getItem('ctrl32.scadaNames') || '[]'); } catch (e) { names = []; } names = Array.isArray(names) ? names.filter((x) => typeof x === 'string').slice(0, 6) : []; }
+    el.innerHTML = usr ? `<div class="scw on"><div class="scw-who">${icon('user', 30)}<div><b class="notranslate">${esc(usr.full_name || usr.name)}</b>${usr.full_name ? `<span class="muted notranslate">${esc(usr.name)}</span>` : ''}</div></div>${p.show_groups !== false && (usr.groups || []).length ? `<div class="scw-groups">${usr.groups.map((g) => `<span class="badge notranslate" data-g="${esc(g)}">${esc(g)}</span>`).join('')}</div>` : ''}${p.show_time !== false ? `<div class="muted scw-time">${esc(tt('Signed out without activity in'))} <b class="notranslate" data-left></b></div>` : ''}<button class="btn scw-btn" type="button" data-out>${esc(tt('Sign out at the controls'))}</button></div>`
+      : `<div class="scw${st.required ? ' need' : ''}"><div class="scw-who">${icon('user', 30)}<div><b>${esc(tt('Nobody is signed in at the controls'))}</b>${st.required ? `<span class="muted">${esc(tt('Sign in before you operate anything.'))}</span>` : ''}</div></div>${names.length ? `<div class="scw-names notranslate">${names.map((n) => `<button class="btn" type="button" data-n="${esc(n)}">${esc(n)}</button>`).join('')}</div>` : ''}<button class="btn primary scw-btn" type="button" data-in>${esc(tt('Sign in at the controls'))}</button></div>`;
+    if (el.querySelector('[data-g]')) u.scadaGroups().then((gs) => { for (const b of el.querySelectorAll('[data-g]')) { const g = gs.find((x) => x.key === b.dataset.g); if (g) b.textContent = tt(g.name); } });
+    if (!ctx.edit) {
+      const i = el.querySelector('[data-in]'), o = el.querySelector('[data-out]');
+      if (i) i.onclick = (e) => { e.stopPropagation(); C.scadaSignIn({}); };
+      if (o) o.onclick = (e) => { e.stopPropagation(); C.scadaSignOut(); };
+      for (const b of el.querySelectorAll('[data-n]')) b.onclick = (e) => { e.stopPropagation(); C.scadaSignIn({ name: b.dataset.n }); };
+    }
+    // the state changes outside the refresh of the dashboard: a sign-in from the header, the time running out
+    clearInterval(el._scw); if (el._scwOn) document.removeEventListener('ctrl32:scada', el._scwOn);
+    const again = () => { if (!el.isConnected) { clearInterval(el._scw); document.removeEventListener('ctrl32:scada', el._scwOn); return; } scDraw(el, p, ctx); };
+    el._scwOn = () => again(); document.addEventListener('ctrl32:scada', el._scwOn);
+    const left = el.querySelector('[data-left]');
+    const tick = () => { if (!el.isConnected) { clearInterval(el._scw); document.removeEventListener('ctrl32:scada', el._scwOn); return; } if (left) left.textContent = scLeft(usr.seconds_left - (Date.now() - (st.at || Date.now())) / 1000); };
+    tick(); el._scw = setInterval(tick, 1000);
+  };
+  reg('scada_user', scDraw, { label: 'Person at the controls' });
 })();

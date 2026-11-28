@@ -4280,5 +4280,14 @@
  "the command is not waiting for approval any more": "a parancs már nem vár jóváhagyásra",
  "the change request is not waiting any more": "a módosítási kérelem már nem várakozik",
  "Curves of the bound datastreams on one time axis, with an axis per unit: drag to move in time, turn the wheel to zoom, click to place a ruler. For a fixed set of curves on a dashboard; the Trends page adds saved views, a second ruler and the export.": "A kötött adatfolyamok görbéi egy időtengelyen, mértékegységenként egy tengellyel: húzza az időbeli mozgáshoz, forgassa a görgőt a nagyításhoz, kattintson egy vonalzó elhelyezéséhez. Rögzített görbekészlethez egy irányítópulton; a Trendek oldal mentett nézeteket, második vonalzót és exportot is kínál.",
- "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Az egységen most futó sarzs — száma, kódja, receptúrája és eddigi futási ideje — és az utolsó sarzsok. Kattintásra megnyílik a sarzs jegyzőkönyve."
+ "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Az egységen most futó sarzs — száma, kódja, receptúrája és eddigi futási ideje — és az utolsó sarzsok. Kattintásra megnyílik a sarzs jegyzőkönyve.",
+ "Person at the controls": "Bejelentkezett kezelő",
+ "Who is signed in at the controls of this computer (SCADA users), with large buttons to sign in and to sign out — for a touch panel. It shows the same person as the chip in the header; what a person may operate is decided by the server.": "Ki van kezelőként bejelentkezve ezen a számítógépen (SCADA-felhasználók), nagy gombokkal a be- és kijelentkezéshez — érintőpanelhez. Ugyanazt a személyt mutatja, mint a fejlécben lévő címke; azt, hogy egy személy mit kezelhet, a szerver dönti el.",
+ "Show the groups of the person": "A személy csoportjainak megjelenítése",
+ "Show the time left before the sign-out without activity": "A tétlenség miatti kijelentkeztetésig hátralévő idő megjelenítése",
+ "Buttons with the names used on this computer": "Gombok az ezen a számítógépen használt nevekkel",
+ "Signing in at the controls works for signed-in users in a browser.": "A kezelőként való bejelentkezés a böngészőben bejelentkezett felhasználóknak működik.",
+ "No SCADA users are set up.": "Nincsenek SCADA-felhasználók beállítva.",
+ "Signed out without activity in": "Kijelentkeztetés tétlenség esetén ennyi idő múlva:",
+ "Nobody is signed in at the controls": "Senki sincs kezelőként bejelentkezve"
 }

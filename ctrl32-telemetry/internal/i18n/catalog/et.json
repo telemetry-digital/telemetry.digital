@@ -4280,5 +4280,14 @@
  "the command is not waiting for approval any more": "käsk ei oota enam kinnitust",
  "the change request is not waiting any more": "muudatustaotlus ei oota enam",
  "Curves of the bound datastreams on one time axis, with an axis per unit: drag to move in time, turn the wheel to zoom, click to place a ruler. For a fixed set of curves on a dashboard; the Trends page adds saved views, a second ruler and the export.": "Seotud andmevoogude kõverad ühel ajateljel, iga mõõtühiku kohta oma telg: lohista ajas liikumiseks, keera ratast suumimiseks, klõpsa joonlaua asetamiseks. Kindla kõverate komplekti jaoks töölaual; leht Trendid lisab salvestatud vaated, teise joonlaua ja ekspordi.",
- "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Üksusel praegu jooksev partii — selle number, kood, retsept ja kestus seni — ning viimased partiid. Klõps avab partii protokolli."
+ "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Üksusel praegu jooksev partii — selle number, kood, retsept ja kestus seni — ning viimased partiid. Klõps avab partii protokolli.",
+ "Person at the controls": "Isik juhtimas",
+ "Who is signed in at the controls of this computer (SCADA users), with large buttons to sign in and to sign out — for a touch panel. It shows the same person as the chip in the header; what a person may operate is decided by the server.": "Kes on selles arvutis juhtimiseks sisse logitud (SCADA kasutajad), suurte nuppudega sisse- ja väljalogimiseks — puutepaneeli jaoks. See näitab sama isikut mis päises olev märgis; selle, mida isik tohib juhtida, otsustab server.",
+ "Show the groups of the person": "Kuva isiku rühmad",
+ "Show the time left before the sign-out without activity": "Kuva aeg, mis on jäänud tegevuseta väljalogimiseni",
+ "Buttons with the names used on this computer": "Nupud selles arvutis kasutatud nimedega",
+ "Signing in at the controls works for signed-in users in a browser.": "Juhtimiseks sisselogimine töötab brauseris sisselogitud kasutajatele.",
+ "No SCADA users are set up.": "Ühtegi SCADA kasutajat pole seadistatud.",
+ "Signed out without activity in": "Tegevuseta väljalogimine pärast",
+ "Nobody is signed in at the controls": "Keegi pole juhtimiseks sisse logitud"
 }

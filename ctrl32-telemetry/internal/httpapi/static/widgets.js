@@ -638,5 +638,5 @@
     defaultFilters, filtersActive, queryDS, queryParams, maxRows, inScope, devScope,
     aliasOf, keyFilterOf, aliasQuery, aliasParams, wantOf, colKeys, runAction, stateOf, inState, ENTITY_WIDGETS,
     // helpers for renderers registered from other files (widgets-more.js)
-    util: { esc, api, fmt, num, color, COLORS, dsInfo, sInfo, dsLabel, ids, level, lvlColor, niceTicks, timeTicks, sparkline, seriesWin, winOf, statsOf, hourly, ctlHead, ctlSend, ctlCurrent, reasonInput, canCmd, P } };
+    util: { scadaGroups, esc, api, fmt, num, color, COLORS, dsInfo, sInfo, dsLabel, ids, level, lvlColor, niceTicks, timeTicks, sparkline, seriesWin, winOf, statsOf, hourly, ctlHead, ctlSend, ctlCurrent, reasonInput, canCmd, P } };
 })();

@@ -4280,5 +4280,14 @@
  "the command is not waiting for approval any more": "comanda nu mai așteaptă aprobarea",
  "the change request is not waiting any more": "cererea de modificare nu mai este în așteptare",
  "Curves of the bound datastreams on one time axis, with an axis per unit: drag to move in time, turn the wheel to zoom, click to place a ruler. For a fixed set of curves on a dashboard; the Trends page adds saved views, a second ruler and the export.": "Curbele fluxurilor de date legate pe o singură axă de timp, cu câte o axă pentru fiecare unitate de măsură: trageți pentru a vă deplasa în timp, rotiți rotița pentru zoom, faceți clic pentru a plasa o riglă. Pentru un set fix de curbe pe un dashboard; pagina Tendințe adaugă vizualizările salvate, a doua riglă și exportul.",
- "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Șarja care rulează acum pe o unitate — numărul, codul, rețeta și de cât timp rulează — și ultimele șarje. Un clic deschide fișa unei șarje."
+ "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Șarja care rulează acum pe o unitate — numărul, codul, rețeta și de cât timp rulează — și ultimele șarje. Un clic deschide fișa unei șarje.",
+ "Person at the controls": "Persoana de la pupitru",
+ "Who is signed in at the controls of this computer (SCADA users), with large buttons to sign in and to sign out — for a touch panel. It shows the same person as the chip in the header; what a person may operate is decided by the server.": "Cine este autentificat la pupitrul acestui computer (utilizatori SCADA), cu butoane mari pentru autentificare și deconectare — pentru un panou tactil. Arată aceeași persoană ca eticheta din antet; ce are voie să opereze o persoană decide serverul.",
+ "Show the groups of the person": "Afișează grupurile persoanei",
+ "Show the time left before the sign-out without activity": "Afișează timpul rămas până la deconectarea fără activitate",
+ "Buttons with the names used on this computer": "Butoane cu numele folosite pe acest computer",
+ "Signing in at the controls works for signed-in users in a browser.": "Autentificarea la pupitru funcționează pentru utilizatorii autentificați într-un browser.",
+ "No SCADA users are set up.": "Nu este configurat niciun utilizator SCADA.",
+ "Signed out without activity in": "Deconectare fără activitate în",
+ "Nobody is signed in at the controls": "Nimeni nu este autentificat la pupitru"
 }

@@ -60,7 +60,7 @@ const expect = (label, cond, detail) => { console.log((cond ? "  ok   " : "  FAI
     await ctrl32.api('POST', '/api/v1/scada/users', { name: 'veduci', full_name: 'Milan Horváth', secret_kind: 'pin', secret: '4321', groups: ['shift_leader', 'operator'], reason: 'headless probe' });
     const dev = await ctrl32.api('POST', '/api/v1/devices', { external_id: 'scu-${suf}', name: 'Mixer M1', reason: 'headless probe' });
     const sw = (id, x, title, key, extra) => ({ id, type: 'switch', geometry: { x, y: 0, w: 4, h: 3 }, bindings: { devices: [dev.id] }, params: Object.assign({ title, key, confirm: false }, extra) });
-    const d = await ctrl32.api('POST', '/api/v1/dashboards', { name: 'Mixer M1 ${suf}', spec: { version: 1, range: '1h', refresh_s: 30, widgets: [sw('plain', 0, 'Lighting', 'light', {}), sw('tech', 4, 'Dosing pump', 'dosing', { scada_groups: ['technologist'] }), sw('two', 8, 'Main motor', 'motor', { second_person: true })] }, reason: 'headless probe' });
+    const d = await ctrl32.api('POST', '/api/v1/dashboards', { name: 'Mixer M1 ${suf}', spec: { version: 1, range: '1h', refresh_s: 30, widgets: [sw('plain', 0, 'Lighting', 'light', {}), sw('tech', 4, 'Dosing pump', 'dosing', { scada_groups: ['technologist'] }), sw('two', 8, 'Main motor', 'motor', { second_person: true }), { id: 'who', type: 'scada_user', geometry: { x: 0, y: 3, w: 4, h: 3 }, bindings: {}, params: { title: 'Person at the controls' } }] }, reason: 'headless probe' });
     const pic = await ctrl32.api('POST', '/api/v1/dashboards', { name: 'Valve picture ${suf}', spec: { kind: 'mimic', widgets: [], elements: [{ id: 'v1', type: 'rect', name: 'Drain valve', x: 100, y: 100, w: 200, h: 120, device: dev.id, key: 'drain', scada_groups: ['maintenance'], on: [{ act: 'command', key: 'drain', value: 1 }] }] }, reason: 'headless probe' });
     const cat = await ctrl32.api('GET', '/api/v1/dashboards/catalog');
     return { dev: dev.id, slug: d.slug, pic: pic.slug, groups: cat.widgets.filter(w => (w.params || []).some(p => p.name === 'scada_groups')).map(w => w.type).sort().join(',') };
@@ -170,6 +170,26 @@ const expect = (label, cond, detail) => { console.log((cond ? "  ok   " : "  FAI
   await go("/oplog");
   expect("the operator log names the people at the controls", await until(`(() => { const t = document.querySelector('#olTable tbody').innerText; return t.includes('peter (admin)') && t.includes('veduci (admin)'); })()`), (await ev(`document.querySelector('#olTable tbody').innerText`) || "").slice(0, 300));
   await shot("scada-operator-log.png");
+
+  // ---- the widget Person at the controls (spec 044) ----
+  await ev(`ctrl32.api('DELETE', '/api/v1/scada/session').then(() => 1)`);
+  await go("/dashboards/" + fx.slug);
+  expect("the widget offers the sign-in when nobody is at the controls", await until(`!!(${card("who")} && ${card("who")}.querySelector('[data-in]'))`));
+  expect("with the names used on this computer", (await ev(`[...${card("who")}.querySelectorAll("[data-n]")].map(b => b.dataset.n).sort().join(",")`)).includes("peter,veduci"), await ev(`${card("who")}.innerText`));
+  await shot("scada-widget-out.png");
+  await ev(`(${card("who")}.querySelector('[data-n="veduci"]').click(), 1)`);
+  expect("a name opens the sign-in with the name filled in", (await until(scOpen)) && (await ev(`document.querySelector('#scadaDlg form').scname.value`)) === "veduci");
+  await pad("4321"); await ev(`(document.querySelector('#scadaDlg .sc-pad [data-k="OK"]').click(), 1)`);
+  expect("the widget shows who signed in", await until(`!!${card("who")}.querySelector('[data-out]') && ${card("who")}.querySelector('.scw-who b').textContent === 'Milan Horváth'`), await ev(`${card("who")}.innerText`));
+  expect("the groups of the person", (await ev(`${card("who")}.querySelectorAll('.scw-groups .badge').length`)) === 2 && (await until(`![...${card("who")}.querySelectorAll('.scw-groups .badge')].some(b => b.textContent.includes('_'))`)), await ev(`${card("who")}.querySelector('.scw-groups').innerText`));
+  expect("and the time left, counting down", /^\d+:\d\d$/.test(await ev(`${card("who")}.querySelector('[data-left]').textContent`)) && (await (async () => { const a = await ev(`${card("who")}.querySelector('[data-left]').textContent`); await sleep(2300); return a !== (await ev(`${card("who")}.querySelector('[data-left]').textContent`)); })()));
+  expect("the header shows the same person", (await ev(chip)).includes("veduci"));
+  await shot("scada-widget-in.png");
+  await ev(`(${card("who")}.querySelector('[data-out]').click(), 1)`);
+  expect("the widget signs the person out", (await until(`!!${card("who")}.querySelector('[data-in]')`)) && (await ev(`ctrl32.api('GET', '/api/v1/scada/session').then(s => !s.user)`)) === true);
+  await ev(`(${card("who")}.querySelector('[data-in]').click(), 1)`);
+  expect("the large button opens the sign-in", await until(scOpen));
+  await ev(`(document.querySelector('#scadaDlg [data-sc-cancel]').click(), 1)`);
 
   // ---- phone width ----
   await ev(`ctrl32.api('DELETE', '/api/v1/scada/session').then(() => 1)`);

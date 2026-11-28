@@ -4280,5 +4280,14 @@
  "the command is not waiting for approval any more": "команда більше не очікує схвалення",
  "the change request is not waiting any more": "запит на зміну більше не очікує",
  "Curves of the bound datastreams on one time axis, with an axis per unit: drag to move in time, turn the wheel to zoom, click to place a ruler. For a fixed set of curves on a dashboard; the Trends page adds saved views, a second ruler and the export.": "Криві прив'язаних потоків даних на одній осі часу, з окремою віссю для кожної одиниці вимірювання: перетягуйте, щоб рухатися в часі, крутіть коліщатко для масштабування, клацніть, щоб поставити лінійку. Для сталого набору кривих на панелі; сторінка Тренди додає збережені подання, другу лінійку та експорт.",
- "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Партія, що зараз виконується на установці, — її номер, код, рецепт і тривалість дотепер — та останні партії. Клацання відкриває протокол партії."
+ "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Партія, що зараз виконується на установці, — її номер, код, рецепт і тривалість дотепер — та останні партії. Клацання відкриває протокол партії.",
+ "Person at the controls": "Особа на пульті",
+ "Who is signed in at the controls of this computer (SCADA users), with large buttons to sign in and to sign out — for a touch panel. It shows the same person as the chip in the header; what a person may operate is decided by the server.": "Хто увійшов на пульті цього комп'ютера (користувачі SCADA), з великими кнопками для входу та виходу — для сенсорної панелі. Показує ту саму особу, що й позначка в заголовку; що особа може керувати, вирішує сервер.",
+ "Show the groups of the person": "Показувати групи особи",
+ "Show the time left before the sign-out without activity": "Показувати час, що залишився до виходу без активності",
+ "Buttons with the names used on this computer": "Кнопки з іменами, які використовуються на цьому комп'ютері",
+ "Signing in at the controls works for signed-in users in a browser.": "Вхід на пульті працює для користувачів, які увійшли в браузері.",
+ "No SCADA users are set up.": "Користувачів SCADA не налаштовано.",
+ "Signed out without activity in": "Вихід без активності через",
+ "Nobody is signed in at the controls": "На пульті ніхто не увійшов"
 }
