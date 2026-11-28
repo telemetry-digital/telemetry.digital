@@ -4280,5 +4280,14 @@
  "the command is not waiting for approval any more": "příkaz už nečeká na schválení",
  "the change request is not waiting any more": "žádost o změnu už nečeká",
  "Curves of the bound datastreams on one time axis, with an axis per unit: drag to move in time, turn the wheel to zoom, click to place a ruler. For a fixed set of curves on a dashboard; the Trends page adds saved views, a second ruler and the export.": "Křivky navázaných datastreamů na jedné časové ose, s osou pro každou měrnou jednotku: tažením se posouváte v čase, kolečkem měníte přiblížení, kliknutím umístíte pravítko. Pro pevnou sadu křivek na dashboardu; stránka Trendy přidává uložené pohledy, druhé pravítko a export.",
- "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Šarže, která právě běží na jednotce — její číslo, kód, receptura a jak dlouho běží — a poslední šarže. Kliknutí otevře záznam šarže."
+ "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Šarže, která právě běží na jednotce — její číslo, kód, receptura a jak dlouho běží — a poslední šarže. Kliknutí otevře záznam šarže.",
+ "Person at the controls": "Osoba u ovládání",
+ "Who is signed in at the controls of this computer (SCADA users), with large buttons to sign in and to sign out — for a touch panel. It shows the same person as the chip in the header; what a person may operate is decided by the server.": "Kdo je na tomto počítači přihlášen k ovládání (uživatelé SCADA), s velkými tlačítky pro přihlášení a odhlášení — pro dotykový panel. Ukazuje stejnou osobu jako štítek v záhlaví; o tom, co osoba smí ovládat, rozhoduje server.",
+ "Show the groups of the person": "Zobrazit skupiny osoby",
+ "Show the time left before the sign-out without activity": "Zobrazit čas zbývající do odhlášení při nečinnosti",
+ "Buttons with the names used on this computer": "Tlačítka se jmény používanými na tomto počítači",
+ "Signing in at the controls works for signed-in users in a browser.": "Přihlášení k ovládání funguje pro přihlášené uživatele v prohlížeči.",
+ "No SCADA users are set up.": "Nejsou nastaveni žádní uživatelé SCADA.",
+ "Signed out without activity in": "Odhlášení při nečinnosti za",
+ "Nobody is signed in at the controls": "U ovládání není nikdo přihlášen"
 }

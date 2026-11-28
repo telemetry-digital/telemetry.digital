@@ -4280,5 +4280,14 @@
  "the command is not waiting for approval any more": "komento ei enää odota hyväksyntää",
  "the change request is not waiting any more": "muutospyyntö ei enää odota",
  "Curves of the bound datastreams on one time axis, with an axis per unit: drag to move in time, turn the wheel to zoom, click to place a ruler. For a fixed set of curves on a dashboard; the Trends page adds saved views, a second ruler and the export.": "Sidottujen tietovirtojen käyrät yhdellä aika-akselilla, oma akseli kullekin mittayksikölle: vedä liikkuaksesi ajassa, zoomaa rullalla ja aseta viivain napsauttamalla. Kiinteälle käyräjoukolle kojelaudassa; Trendit-sivulla on lisäksi tallennetut näkymät, toinen viivain ja vienti.",
- "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Yksikössä nyt käynnissä oleva erä — sen numero, koodi, resepti ja käyntiaika — sekä viimeisimmät erät. Napsautus avaa erän pöytäkirjan."
+ "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Yksikössä nyt käynnissä oleva erä — sen numero, koodi, resepti ja käyntiaika — sekä viimeisimmät erät. Napsautus avaa erän pöytäkirjan.",
+ "Person at the controls": "Henkilö ohjaimissa",
+ "Who is signed in at the controls of this computer (SCADA users), with large buttons to sign in and to sign out — for a touch panel. It shows the same person as the chip in the header; what a person may operate is decided by the server.": "Kuka on kirjautunut tämän tietokoneen ohjaimiin (SCADA-käyttäjät), suurilla painikkeilla sisään- ja uloskirjautumista varten — kosketuspaneelille. Se näyttää saman henkilön kuin ylätunnisteen merkki; palvelin päättää, mitä henkilö saa ohjata.",
+ "Show the groups of the person": "Näytä henkilön ryhmät",
+ "Show the time left before the sign-out without activity": "Näytä aika, joka on jäljellä ennen uloskirjausta ilman toimintaa",
+ "Buttons with the names used on this computer": "Painikkeet tällä tietokoneella käytetyillä nimillä",
+ "Signing in at the controls works for signed-in users in a browser.": "Kirjautuminen ohjaimiin toimii selaimessa kirjautuneille käyttäjille.",
+ "No SCADA users are set up.": "SCADA-käyttäjiä ei ole määritetty.",
+ "Signed out without activity in": "Uloskirjaus ilman toimintaa ajassa",
+ "Nobody is signed in at the controls": "Kukaan ei ole kirjautunut ohjaimiin"
 }

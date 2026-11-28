@@ -4280,5 +4280,14 @@
  "the command is not waiting for approval any more": "príkaz už nečaká na schválenie",
  "the change request is not waiting any more": "žiadosť o zmenu už nečaká",
  "Curves of the bound datastreams on one time axis, with an axis per unit: drag to move in time, turn the wheel to zoom, click to place a ruler. For a fixed set of curves on a dashboard; the Trends page adds saved views, a second ruler and the export.": "Krivky naviazaných datastreamov na jednej časovej osi, s osou pre každú mernú jednotku: ťahaním sa posúvate v čase, kolieskom meníte priblíženie, kliknutím umiestnite pravítko. Pre pevnú sadu kriviek na dashboarde; stránka Trendy pridáva uložené pohľady, druhé pravítko a export.",
- "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Šarža, ktorá práve beží na jednotke — jej číslo, kód, receptúra a ako dlho beží — a posledné šarže. Kliknutie otvorí záznam šarže."
+ "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "Šarža, ktorá práve beží na jednotke — jej číslo, kód, receptúra a ako dlho beží — a posledné šarže. Kliknutie otvorí záznam šarže.",
+ "Person at the controls": "Osoba pri ovládaní",
+ "Who is signed in at the controls of this computer (SCADA users), with large buttons to sign in and to sign out — for a touch panel. It shows the same person as the chip in the header; what a person may operate is decided by the server.": "Kto je na tomto počítači prihlásený k ovládaniu (používatelia SCADA), s veľkými tlačidlami na prihlásenie a odhlásenie — pre dotykový panel. Ukazuje tú istú osobu ako štítok v hlavičke; o tom, čo osoba smie ovládať, rozhoduje server.",
+ "Show the groups of the person": "Zobraziť skupiny osoby",
+ "Show the time left before the sign-out without activity": "Zobraziť čas zostávajúci do odhlásenia pri nečinnosti",
+ "Buttons with the names used on this computer": "Tlačidlá s menami používanými na tomto počítači",
+ "Signing in at the controls works for signed-in users in a browser.": "Prihlásenie k ovládaniu funguje pre prihlásených používateľov v prehliadači.",
+ "No SCADA users are set up.": "Nie sú nastavení žiadni používatelia SCADA.",
+ "Signed out without activity in": "Odhlásenie pri nečinnosti o",
+ "Nobody is signed in at the controls": "Pri ovládaní nie je nikto prihlásený"
 }

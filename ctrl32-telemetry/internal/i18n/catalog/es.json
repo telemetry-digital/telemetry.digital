@@ -4280,5 +4280,14 @@
  "the command is not waiting for approval any more": "el comando ya no espera aprobación",
  "the change request is not waiting any more": "la solicitud de cambio ya no está en espera",
  "Curves of the bound datastreams on one time axis, with an axis per unit: drag to move in time, turn the wheel to zoom, click to place a ruler. For a fixed set of curves on a dashboard; the Trends page adds saved views, a second ruler and the export.": "Curvas de los flujos de datos vinculados en un solo eje de tiempo, con un eje por unidad de medida: arrastre para moverse en el tiempo, gire la rueda para ampliar, haga clic para colocar una regla. Para un conjunto fijo de curvas en un panel; la página Tendencias añade las vistas guardadas, una segunda regla y la exportación.",
- "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "El lote que está ahora en marcha en una unidad — su número, código, receta y cuánto lleva en marcha — y los últimos lotes. Un clic abre el registro de un lote."
+ "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "El lote que está ahora en marcha en una unidad — su número, código, receta y cuánto lleva en marcha — y los últimos lotes. Un clic abre el registro de un lote.",
+ "Person at the controls": "Persona a los mandos",
+ "Who is signed in at the controls of this computer (SCADA users), with large buttons to sign in and to sign out — for a touch panel. It shows the same person as the chip in the header; what a person may operate is decided by the server.": "Quién tiene la sesión iniciada en los mandos de este ordenador (usuarios SCADA), con botones grandes para iniciar y cerrar sesión — para un panel táctil. Muestra la misma persona que la etiqueta de la cabecera; lo que una persona puede operar lo decide el servidor.",
+ "Show the groups of the person": "Mostrar los grupos de la persona",
+ "Show the time left before the sign-out without activity": "Mostrar el tiempo restante hasta el cierre de sesión por inactividad",
+ "Buttons with the names used on this computer": "Botones con los nombres usados en este ordenador",
+ "Signing in at the controls works for signed-in users in a browser.": "El inicio de sesión en los mandos funciona para los usuarios con sesión iniciada en un navegador.",
+ "No SCADA users are set up.": "No hay usuarios SCADA configurados.",
+ "Signed out without activity in": "Cierre de sesión por inactividad en",
+ "Nobody is signed in at the controls": "Nadie tiene la sesión iniciada en los mandos"
 }

@@ -4280,5 +4280,14 @@
  "the command is not waiting for approval any more": "the command is not waiting for approval any more",
  "the change request is not waiting any more": "the change request is not waiting any more",
  "Curves of the bound datastreams on one time axis, with an axis per unit: drag to move in time, turn the wheel to zoom, click to place a ruler. For a fixed set of curves on a dashboard; the Trends page adds saved views, a second ruler and the export.": "Curves of the bound datastreams on one time axis, with an axis per unit: drag to move in time, turn the wheel to zoom, click to place a ruler. For a fixed set of curves on a dashboard; the Trends page adds saved views, a second ruler and the export.",
- "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch."
+ "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.": "The batch that runs on a unit now — its number, code, recipe and how long it has run — and the last batches. A click opens the record of a batch.",
+ "Person at the controls": "Person at the controls",
+ "Who is signed in at the controls of this computer (SCADA users), with large buttons to sign in and to sign out — for a touch panel. It shows the same person as the chip in the header; what a person may operate is decided by the server.": "Who is signed in at the controls of this computer (SCADA users), with large buttons to sign in and to sign out — for a touch panel. It shows the same person as the chip in the header; what a person may operate is decided by the server.",
+ "Show the groups of the person": "Show the groups of the person",
+ "Show the time left before the sign-out without activity": "Show the time left before the sign-out without activity",
+ "Buttons with the names used on this computer": "Buttons with the names used on this computer",
+ "Signing in at the controls works for signed-in users in a browser.": "Signing in at the controls works for signed-in users in a browser.",
+ "No SCADA users are set up.": "No SCADA users are set up.",
+ "Signed out without activity in": "Signed out without activity in",
+ "Nobody is signed in at the controls": "Nobody is signed in at the controls"
 }

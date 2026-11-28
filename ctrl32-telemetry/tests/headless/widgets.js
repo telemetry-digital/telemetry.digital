@@ -47,8 +47,8 @@ async function json(url) { return new Promise((res, rej) => http.get(url, (r) =>
     const cat = await (await fetch('/api/v1/dashboards/catalog',{credentials:'same-origin'})).json();
     const all = [ds.temp, ds.rh, ds.state];
     // a dashboard holds at most 60 widgets: the object counting widgets (0.71.0) are covered by tests/headless/counting.js,
-    // the trend and batch widgets (0.97.0) by tests/headless/batches.js
-    const widgets = cat.widgets.filter((d) => !/^counting_|^vehicle_speeds$|^trend$|^batches$/.test(d.type)).map((d, i) => ({id: 't' + i, type: d.type, geometry: {x: (i % 3) * 4, y: 20 + Math.floor(i / 3) * 3, w: 4, h: 3},
+    // the trend and batch widgets (0.97.0) by tests/headless/batches.js, the person at the controls by scada_users.js
+    const widgets = cat.widgets.filter((d) => !/^counting_|^vehicle_speeds$|^trend$|^batches$|^scada_user$/.test(d.type)).map((d, i) => ({id: 't' + i, type: d.type, geometry: {x: (i % 3) * 4, y: 20 + Math.floor(i / 3) * 3, w: 4, h: 3},
       bindings: Object.fromEntries((d.binds || []).map((b) => [b, b === 'devices' ? (['map','devices'].includes(d.type) ? [] : [dev.id]) : (d.type === 'radar' ? all : d.type === 'compass' ? [ds.dir, ds.rh] : [ds.temp])])),
       params: Object.assign({title: 'T ' + d.type}, d.type === 'setpoint' || d.type === 'switch' || d.type === 'button' || d.type === 'knob' || d.type === 'slider' || d.type === 'round_switch' ? {key: 'temp'} : {})}));
     widgets.push(

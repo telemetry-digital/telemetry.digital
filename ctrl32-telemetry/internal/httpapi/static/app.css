@@ -1015,4 +1015,14 @@ dialog.scada-dlg .sc-pad .btn { min-height: 46px; font-size: 18px; justify-conte
 .trw-sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }
 .btw-now { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; padding: 6px 10px; border: 1px solid var(--line); border-left: 4px solid var(--ok); border-radius: var(--radius); margin-bottom: 6px; }
 .btw-now.idle { border-left-color: var(--line); }
+.scw { display: flex; flex-direction: column; gap: 8px; height: 100%; justify-content: center; }
+.scw-who { display: flex; align-items: center; gap: 10px; }
+.scw-who > div { display: flex; flex-direction: column; min-width: 0; }
+.scw-who b { font-size: 18px; overflow: hidden; text-overflow: ellipsis; }
+.scw.on .scw-who svg { color: var(--ok); }
+.scw.need .scw-who svg { color: var(--warn); }
+.scw-groups, .scw-names { display: flex; flex-wrap: wrap; gap: 6px; }
+.scw-names .btn { min-height: 40px; padding: 6px 14px; }
+.scw-btn { min-height: 44px; font-size: 15px; }
+.scw-time { font-size: 13px; }
 .btw-now b { font-size: 18px; }
