@@ -517,7 +517,57 @@ func (s *Server) scheduledReportsLoop() {
 	t := time.NewTicker(30 * time.Second)
 	defer t.Stop()
 	for range t.C {
+		s.recoverReports(context.Background())
 		s.runDueReports(context.Background())
+	}
+}
+
+// reportStale is how long a claimed run may go without being recorded before it counts as interrupted. A run mails
+// every recipient with a timeout of a minute, so it is far above an honest run.
+const reportStale = 30 * time.Minute
+
+// recoverReports runs once more the reports whose run was claimed and never recorded: the server stopped between the
+// claim and the record (0.98.1). The mail may have left before the stop, so the repeated mail says so; a run
+// interrupted twice is recorded as failed and not tried again.
+func (s *Server) recoverReports(ctx context.Context) {
+	rows, err := s.pool.Query(ctx, `SELECT id::text, org_id::text, running_at, running_for, running_try FROM core.scheduled_report
+		WHERE running_at IS NOT NULL AND running_at < now() - make_interval(secs => $1) ORDER BY running_at LIMIT 20`, reportStale.Seconds())
+	if err != nil {
+		return
+	}
+	type stale struct {
+		id, org  string
+		at, forT time.Time
+		try      int
+	}
+	var list []stale
+	for rows.Next() {
+		var d stale
+		if rows.Scan(&d.id, &d.org, &d.at, &d.forT, &d.try) == nil {
+			list = append(list, d)
+		}
+	}
+	rows.Close()
+	for _, d := range list {
+		// claim the recovery: one server process takes it
+		ct, err := s.pool.Exec(ctx, `UPDATE core.scheduled_report SET running_at = now(), running_try = running_try + 1 WHERE id = $1::uuid AND running_at = $2`, d.id, d.at)
+		if err != nil || ct.RowsAffected() == 0 {
+			continue
+		}
+		reps, err := s.loadScheduledReports(ctx, d.org, d.id)
+		if err != nil || len(reps) == 0 || !reps[0].Enabled || d.try >= 1 {
+			why := "the run was interrupted twice by a stop of the server; it is not tried again"
+			if d.try < 1 {
+				why = "the run was interrupted by a stop of the server; the report is disabled or archived, so it is not repeated"
+			}
+			_, _ = s.pool.Exec(ctx, `INSERT INTO core.scheduled_report_run (org_id, report_id, started_at, trigger, status, error, actor) VALUES ($1::uuid, $2::uuid, $3, 'schedule', 'failed', $4, 'scheduler')`, d.org, d.id, d.at, why)
+			_, _ = s.pool.Exec(ctx, `UPDATE core.scheduled_report SET running_at = NULL, running_for = NULL, running_try = 0, last_run_at = $2, last_status = 'failed' WHERE id = $1::uuid`, d.id, d.at)
+			s.log.Warn("scheduled report", "report", d.id, "status", "failed", "err", why)
+			continue
+		}
+		s.log.Warn("scheduled report: an interrupted run is repeated", "report", reps[0].Name, "scheduled", d.forT)
+		s.runScheduledReport(ctx, d.org, reps[0], d.forT, "schedule", "scheduler (repeated after an interrupted run)")
+		_, _ = s.pool.Exec(ctx, `UPDATE core.scheduled_report SET running_at = NULL, running_for = NULL, running_try = 0 WHERE id = $1::uuid`, d.id)
 	}
 }
 
@@ -556,11 +606,14 @@ func (s *Server) runDueReports(ctx context.Context) {
 			}
 		}
 		// claim the run (a second server process, e.g. right after a restart, does not send it again)
-		ct, err := s.pool.Exec(ctx, `UPDATE core.scheduled_report SET next_run_at = $2 WHERE id = $1::uuid AND next_run_at = $3`, d.id, next, d.at)
+		// The claim also marks the run as in progress: when the server stops before the run is recorded, recoverReports
+		// repeats it. A report whose earlier run is still marked waits for that recovery.
+		ct, err := s.pool.Exec(ctx, `UPDATE core.scheduled_report SET next_run_at = $2, running_at = now(), running_for = $3, running_try = 0 WHERE id = $1::uuid AND next_run_at = $3 AND running_at IS NULL`, d.id, next, d.at)
 		if err != nil || ct.RowsAffected() == 0 {
 			continue
 		}
 		s.runScheduledReport(ctx, d.org, rp, d.at, "schedule", "scheduler")
+		_, _ = s.pool.Exec(ctx, `UPDATE core.scheduled_report SET running_at = NULL, running_for = NULL, running_try = 0 WHERE id = $1::uuid`, d.id)
 	}
 }
 
@@ -597,6 +650,9 @@ func (s *Server) runScheduledReport(ctx context.Context, org string, rp schedule
 		label := periodLabel(rp.Period, from, to)
 		subject := rp.Name + " — " + label
 		body := fmt.Sprintf("%s\n%s (%s)\n\n%s\n\n%s", rp.Name, label, loc.String(), summary, "Sent automatically by the scheduled report \""+rp.Name+"\". Attachments: "+attachmentNames(files)+".")
+		if strings.Contains(actor, "repeated") {
+			body += "\n\nThis report is sent again: its first run was interrupted by a stop of the server. You may have received it already."
+		}
 		var errs []string
 		sent := 0
 		for _, to := range recipients {

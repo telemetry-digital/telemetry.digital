@@ -27,11 +27,15 @@
 //
 // Delay: the condition must hold for the rule's delay before the alarm is raised (in measurement time between
 // observations; a clock raises a pending alarm when no newer value ended the condition). A value back in band during
-// the delay cancels it. Pending delays are kept in memory: after a restart the delay starts again with the next value.
+// the delay cancels it. The start of a pending delay is stored (core.alarm_pending), so a restart does not start the delay
+// again: the engine takes the stored delays back when it starts and drops those whose condition ended meanwhile.
+//
+// At most one alarm of a rule is open: the database guarantees it (a unique index), not only the locks of a process.
 package alarm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"log/slog"
@@ -39,6 +43,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/telemetry-digital/ctrl32-telemetry/internal/alarmmgmt"
@@ -261,29 +266,33 @@ func (e *Engine) decide(ctx context.Context, o ingest.Observation, r rule, sev s
 	hasActive := err == nil
 
 	if sev == "" {
-		e.mu.Lock()
-		delete(e.wait, r.ID)
-		e.mu.Unlock()
+		e.forget(ctx, r.ID, nil)
 	}
 	switch {
 	case sev != "" && !hasActive:
 		if r.Delay > 0 {
 			e.mu.Lock()
 			p := e.wait[r.ID]
+			store := p == nil
 			if p == nil {
 				p = &pending{since: o.MeasuredAt, r: r}
 				e.wait[r.ID] = p
 			}
+			if worse(p.sev, sev) != p.sev {
+				store = true
+			}
 			p.obs, p.sev, p.v, p.r = o, worse(p.sev, sev), v, r
 			ok := held(p.since, o.MeasuredAt, r.Delay)
-			if ok {
-				sev = p.sev
-				delete(e.wait, r.ID)
-			}
+			since, psev := p.since, p.sev
 			e.mu.Unlock()
 			if !ok {
+				if store {
+					e.remember(ctx, r.ID, o, since, psev, v)
+				}
 				return nil
 			}
+			sev = psev
+			e.forget(ctx, r.ID, nil)
 		}
 		return e.raise(ctx, o, r, sev, v)
 	case sev == "action" && hasActive && curSev == "warning":
@@ -336,8 +345,133 @@ func worse(a, b string) string {
 	return b
 }
 
+// remember stores the start of a delay, so that a restart does not start it again. It is written when the delay
+// begins and when the severity grows, not with every value.
+func (e *Engine) remember(ctx context.Context, ruleID string, o ingest.Observation, since time.Time, sev string, v float64) {
+	if _, err := e.pool.Exec(ctx, `
+		INSERT INTO core.alarm_pending (rule_id, org_id, datastream_id, key, since, severity, value, measured_at)
+		VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8)
+		ON CONFLICT (rule_id) DO UPDATE SET severity = EXCLUDED.severity, value = EXCLUDED.value, measured_at = EXCLUDED.measured_at`,
+		ruleID, o.OrgID, o.DatastreamID, o.Key, since, sev, v, o.MeasuredAt); err != nil && ctx.Err() == nil {
+		e.log.Error("pending alarm not stored: a restart would start its delay again", "rule", ruleID, "err", err)
+	}
+}
+
+// forget ends the delay of a rule, in memory and in the database. only != nil ends it only when it is still that one.
+// The database is touched only when a delay was waiting, so a value in band costs nothing.
+func (e *Engine) forget(ctx context.Context, ruleID string, only *pending) {
+	e.mu.Lock()
+	p := e.wait[ruleID]
+	if p == nil || (only != nil && p != only) {
+		e.mu.Unlock()
+		return
+	}
+	delete(e.wait, ruleID)
+	e.mu.Unlock()
+	if _, err := e.pool.Exec(ctx, `DELETE FROM core.alarm_pending WHERE rule_id = $1::uuid`, ruleID); err != nil && ctx.Err() == nil {
+		e.log.Error("pending alarm not removed", "rule", ruleID, "err", err)
+	}
+}
+
+// restore takes back the delays that were waiting when the server stopped. A delay is dropped when its rule was
+// changed or disabled, when an alarm of the rule is open, or when the newest stored value of the datastream is not in
+// the condition any more (the condition ended while the server was down). For comm_loss the clock decides right
+// after: Run checks the silence before it raises anything.
+func (e *Engine) restore(ctx context.Context) {
+	rows, err := e.pool.Query(ctx, `
+		SELECT p.rule_id::text, p.org_id::text, p.datastream_id::text, p.key, p.since, p.severity, p.value, p.measured_at,
+		       r.type, r.warning::float8, r.action::float8, r.hysteresis::float8, EXTRACT(EPOCH FROM r.delay)::float8,
+		       (r.enabled AND r.valid_to IS NULL AND r.type = ANY($1)
+		         AND NOT EXISTS (SELECT 1 FROM core.alarm a WHERE a.rule_id = p.rule_id AND a.cleared_at IS NULL)),
+		       l.value::float8, l.quality, l.measured_at
+		FROM core.alarm_pending p JOIN core.alarm_rule r ON r.id = p.rule_id
+		LEFT JOIN LATERAL (SELECT o.value, o.quality, o.measured_at FROM core.observation o WHERE o.datastream_id = p.datastream_id ORDER BY o.measured_at DESC LIMIT 1) l ON true`, Evaluated)
+	if err != nil {
+		e.log.Error("pending alarms not restored: their delays start again", "err", err)
+		return
+	}
+	var keep []*pending
+	var drop []string
+	for rows.Next() {
+		p := &pending{}
+		var delay float64
+		var current bool
+		var lv *float64
+		var lq *string
+		var lat *time.Time
+		if err := rows.Scan(&p.r.ID, &p.obs.OrgID, &p.obs.DatastreamID, &p.obs.Key, &p.since, &p.sev, &p.v, &p.obs.MeasuredAt,
+			&p.r.Type, &p.r.Warning, &p.r.Action, &p.r.Hysteresis, &delay, &current, &lv, &lq, &lat); err != nil {
+			e.log.Error("pending alarm not restored", "err", err)
+			continue
+		}
+		p.r.Delay = time.Duration(delay * float64(time.Second))
+		v := p.v
+		p.obs.Value = &v
+		if p.r.Type == "sensor_fault" {
+			p.obs.Quality = FaultQuality
+		}
+		if !current || p.r.Delay <= 0 {
+			drop = append(drop, p.r.ID)
+			continue
+		}
+		if p.r.Type != "comm_loss" && lat != nil && lat.After(p.obs.MeasuredAt) {
+			// a newer value was stored after the row was written: it decides
+			sev, lval, ok := stillHolds(p.r, lv, deref(lq))
+			if !ok {
+				drop = append(drop, p.r.ID)
+				continue
+			}
+			p.sev, p.v, p.obs.MeasuredAt = worse(p.sev, sev), lval, *lat
+			p.obs.Value = &lval
+		}
+		keep = append(keep, p)
+	}
+	rows.Close()
+	e.mu.Lock()
+	for _, p := range keep {
+		if e.wait[p.r.ID] == nil { // a value that came in meanwhile is newer than the stored row
+			e.wait[p.r.ID] = p
+		}
+	}
+	e.mu.Unlock()
+	for _, id := range drop {
+		_, _ = e.pool.Exec(ctx, `DELETE FROM core.alarm_pending WHERE rule_id = $1::uuid`, id)
+	}
+	if len(keep)+len(drop) > 0 {
+		e.log.Info("pending alarm delays restored", "kept", len(keep), "dropped", len(drop))
+	}
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// stillHolds says whether a stored value is in the condition of a rule (not comm_loss), as evaluate would. A value the
+// rule is not evaluated on (no number, a faulty sensor) changes nothing: the delay goes on.
+func stillHolds(r rule, value *float64, quality string) (sev string, v float64, ok bool) {
+	if r.Type == "sensor_fault" {
+		if value != nil {
+			v = *value
+		}
+		return "action", v, quality == FaultQuality
+	}
+	if value == nil || quality == FaultQuality {
+		return "", 0, true
+	}
+	sev = severity(r, *value)
+	return sev, *value, sev != ""
+}
+
 // Run checks on a clock until ctx ends: pending delays whose time has come, and comm_loss rules.
 func (e *Engine) Run(ctx context.Context) {
+	e.restore(ctx)
+	// the silence first: a restored comm_loss delay whose communication came back must not raise
+	if err := e.checkCommLoss(ctx, time.Now()); err != nil && ctx.Err() == nil {
+		e.log.Error("comm_loss check failed", "err", err)
+	}
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 	var lastComm, lastShelf time.Time
@@ -392,11 +526,7 @@ func (e *Engine) raiseDue(ctx context.Context, now time.Time) {
 		// a rule that was changed or disabled in the meantime raises nothing
 		var current bool
 		if err := e.pool.QueryRow(ctx, `SELECT valid_to IS NULL AND enabled FROM core.alarm_rule WHERE id = $1::uuid`, p.r.ID).Scan(&current); err != nil || !current {
-			e.mu.Lock()
-			if e.wait[p.r.ID] == p {
-				delete(e.wait, p.r.ID)
-			}
-			e.mu.Unlock()
+			e.forget(ctx, p.r.ID, p)
 			continue
 		}
 		o := p.obs
@@ -485,7 +615,13 @@ func (e *Engine) raise(ctx context.Context, o ingest.Observation, r rule, sev st
 	err := e.pool.QueryRow(ctx, `
 		INSERT INTO core.alarm (org_id, rule_id, datastream_id, severity, retrospective, value, detail, state, shelved_until)
 		VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6::numeric, jsonb_build_object('key', $7::text, 'measured_at', $8::timestamptz, 'type', $9::text), $10, $11)
+		ON CONFLICT (rule_id) WHERE cleared_at IS NULL DO NOTHING
 		RETURNING id::text`, o.OrgID, r.ID, o.DatastreamID, sev, o.Backfilled, fmtNum(v), o.Key, o.MeasuredAt, r.Type, state, shelved).Scan(&alarmID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// another server process raised the alarm of this rule in the same moment: one open alarm per rule
+		e.log.Info("alarm of the rule is already open", "rule", r.ID)
+		return nil
+	}
 	if err != nil {
 		return err
 	}
