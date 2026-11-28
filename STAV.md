@@ -1,4 +1,4 @@
-# Stav práce (aktualizované 28. 11. 2026, 0.98.0)
+# Stav práce (aktualizované 28. 11. 2026, 0.98.1)
 
 ## Hotové (vo vetve `main`, otestované)
 
@@ -95,6 +95,7 @@
 | 0.96.1 | **Oprava z externého auditu (fáza 9, príkazy):** schválenie a zamietnutie podržaného príkazu v tom istom okamihu mohli uspieť obe a zamietnutý príkaz sa odoslal; rovnaký vzor pri žiadostiach o zmenu a zamietnutí nahratia receptúry. Rozhoduje databáza, druhá požiadavka dostane 409. **Otvorené z auditu:** opätovné doručenie príkazu po strate odpovede pri HTTP pollingu, stav „doručené“, deduplikácia ID príkazov v knižnici C. | e2e `approval_race.sh` 12 (na starom kóde zlyhal) |
 | 0.97.0 | **Záznam šarže a widgety (spec 043).** Jednotky so začiatkom šarže nahratím receptúry alebo tagom z PLC (bit „beží“ / číslo šarže), ručný začiatok a koniec, šarža ako nemazateľný záznam so štatistikami kriviek; stránka *Šarže* so záznamom, trendom, alarmami a porovnaním dvoch šarží; widgety *Trend* a *Šarže*. Opravená chyba 0.96.0: riedke dáta sa v trende nevykreslili. **Tým je hotový celý plán „SCADA ako WinCC“ okrem OPC UA servera a e-podpisu. Otvorené z auditu: opätovné doručenie príkazov a deduplikácia v knižnici C.** | e2e `batches.sh` 49, `recipes.sh` 88, headless `batches.js` (en + sk) |
 | 0.98.0 | Widget Osoba pri ovládaní: prihlásenie a odhlásenie obsluhy (používatelia SCADA) veľkými tlačidlami na dashboarde, mená použité na počítači, skupiny, odpočet do odhlásenia (spec 044) | headless (+9), unit |
+| 0.98.1 | Audit (alarmy, plánované reporty): oneskorenie alarmu prežije reštart (`core.alarm_pending`), najviac jeden otvorený alarm na pravidlo zaručuje databáza (jedinečný index), prerušený beh plánovaného reportu sa raz zopakuje | tests/restart: alarm_restart 12, report_recovery 9; e2e alarms 40, alarms_isa 64, scheduled_reports 38 |
 | 0.87.5 | Živý obraz, ktorý 20 s stojí pri otvorenom spojení, si sám znova otvorí stream (dlaždice, stránka kamery, steny, obrazovky); reset prvku na čas 0 sa už neráta ako pohyb. Podnet: stena BB, 20. 11. stála dlaždica „Vjazd vyjazd kruháč“ do reštartu prehliadačov | headless `video_stall` 8 (nový), `wall_layout` 27, `camera_inventory` |
 
 **Nasadenie 0.87.5 (20. 11. 2026):** portál (API, so zálohou) aj BB (0.86.11 → 0.87.5, cez API tunelom); BB 39/39 kamier online a nahráva, stena 21/21 + 18/18 na 0.87.5. Vydanie s Go 1.27.4 (govulncheck GO-2026-6859 v 1.27.3 zastavil prvé zostavenie); `onnxruntime-linux-aarch64-1.30.0.tgz` vracia na GitHube 404 → `DETECTOR_FROM=dist/0.87.4/analytics` (súbory overené voči pinom). Na tomto PC pri zostavení dochádza pamäť → `GOFLAGS=-p=2`.
